@@ -63,7 +63,7 @@ psanim render examples/hello.ps -o hello.mp4    # 120 frames in about 0.1 s
   `--json`.
 - **A browser build** (`crates/psanim-wasm`, `web/`): the same engine in
   WebAssembly, a `<psanim-player>` element, a playground.
-- **A gallery** (`gallery/`): seven films, each one file. [Index](docs/gallery.md).
+- **A gallery** (`gallery/`): eight films, each one file. [Index](docs/gallery.md).
 - **An agent skill** (`skills/psanim/`) and a documentation site built
   from the same text.
 - **A host API for PSCat**, on a feature branch: what PSCat needed to

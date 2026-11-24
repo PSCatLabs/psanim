@@ -17,6 +17,7 @@ movie; the first 36 in order for a stateful or persistent one):
 | afterglow | pure | 1280x720 | 597 | 1.6 | 19.3 | 22.2 | 57.1 | 10 | 280.6 |
 | paper-boat | pure | 1280x720 | 999 | 1.4 | 29.2 | 59.6 | 32.0 | 10 | 146.9 |
 | orrery | pure | 1080x1080 | 360 | 1.5 | 76.3 | 77.9 | 13.1 | 10 | 57.5 |
+| taiji | pure | 1080x1080 | 720 | 0.8 | 55.5 | 57.3 | 18.0 | 10 | 78.4 |
 | tidewater | persistent | 1280x720 | 576 | 6.7 | 36.6 | 73.4 | 37.9 | 1 | 37.7 |
 | murmuration | stateful | 1280x720 | 780 | 8.2 | 92.4 | 95.5 | 10.9 | 1 | 11.1 |
 
@@ -45,6 +46,7 @@ ffmpeg, time from first frame to finished file.
 | afterglow | 597 | 5.6 s | 10 | 114 | 4.6 MB |
 | paper-boat | 999 | 13.4 s | 10 | 77 | 14.6 MB |
 | orrery | 360 | 9.4 s | 10 | 40 | 40.9 MB |
+| taiji | 720 | 10.9 s | 10 | 67 | 3.5 MB |
 | tidewater | 576 | 21.7 s | 1 | 27 | 0.8 MB |
 | murmuration | 780 | 91.9 s | 1 | 8.5 | 12.8 MB |
 

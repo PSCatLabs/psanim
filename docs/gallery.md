@@ -13,5 +13,6 @@ reproducible from the sources).
 | [Murmuration](../gallery/murmuration/murmuration.ps) | Twelve hundred simulated starlings fold and pour over a fen at dusk. | 26 s, 1280x720, stateful | `psanim render gallery/murmuration/murmuration.ps -o murmuration.mp4` |
 | [Epicycles](../gallery/epicycles/epicycles.ps) | A square wave assembled from rotating circles. | 22 s, 1280x720, pure | `psanim render gallery/epicycles/epicycles.ps -o epicycles.mp4` |
 | [One Frame, Any Time](../gallery/one-frame/one-frame.ps) | How psanim renders a movie: setup, checkpoint, and frames as functions of time. | 40.5 s, 1280x720, pure | `psanim render gallery/one-frame/one-frame.ps -o one-frame.mp4` |
+| [Taiji](../gallery/taiji/taiji.ps) | A yin-yang whose eyes are yin-yangs, turning, all the way down: a seamless 24 second loop. | 24 s, 1080x1080, pure | `psanim render gallery/taiji/taiji.ps -o taiji.mp4` |
 
 Each piece's directory has a README describing its techniques.

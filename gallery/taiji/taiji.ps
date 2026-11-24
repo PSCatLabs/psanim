@@ -1,0 +1,95 @@
+%!PS
+% Poster: 2.5
+% Taiji
+%
+% The yin-yang symbol, turning. Each of its two eyes is not a dot but a
+% whole yin-yang, turning the other way and a little faster, and each of
+% that one's eyes is another, down until a symbol is smaller than a
+% third of a pixel and is drawn as the plain dot it has become.
+%
+% Techniques
+%   - Pure movie and a seamless loop: every level turns a whole number
+%     of times relative to its parent, so everything comes home together.
+%   - One recursive procedure. Each call draws in a unit circle and
+%     hands its children a scaled, translated, rotated CTM; the radius in
+%     canvas units travels on the operand stack to stop the recursion.
+%   - The symbol turned half a turn is its own negative, so the eye in
+%     the dark lobe is the eye in the light lobe turned 180 degrees and
+%     the whole figure keeps the symbol's antisymmetry at every depth.
+
+<< /Size [1080 1080] /Duration 24 /FPS 30 /Loop true
+   /Background [0.62 0.16 0.12]
+   /Title (Taiji)
+   /Description (A yin-yang whose eyes are yin-yangs, turning, all the way down: a seamless 24 second loop.)
+>> animation
+
+/ink   [0.055 0.050 0.060] def
+/paper [0.965 0.945 0.895] def
+/eye   0.32 def      % an eye's radius, as a fraction of its parent's
+/rim   0.07 def      % the ring around an eye, as a fraction of the eye
+/outerrim 0.022 def  % and around the whole symbol
+/minr  0.3 def       % below this radius (canvas units) an eye is a dot
+/R     440 def
+
+/setcol { aload pop setrgbcolor } def
+/disc   { newpath 0 360 arc fill } def          % x y r
+
+% One half of a unit symbol: the right half disc, plus the head
+% that swells to the left at the top, less the dark head at the bottom.
+/halfpath {
+  newpath
+  0 0 1 -90 90 arc
+  0 0.5 0.5 90 270 arc
+  0 -0.5 0.5 90 -90 arcn
+  closepath
+} def
+
+% level -> degrees. Level k makes (k+1) turns per loop relative to its
+% parent, alternately counterclockwise and clockwise, so against the
+% canvas the levels turn +1, -1, +2, -2, +3 ... times.
+/spin {
+  dup 1 add exch 2 mod 0 eq { } { neg } ifelse
+  progress mul 360 mul
+} def
+
+% colA colB rpx level taiji -
+% Draws a unit symbol: a disc of colA with its rim, then the half of
+% colB over it. rpx is the radius on the canvas. The eye in the colB
+% lobe is the same symbol; the eye in the colA lobe is the symbol with
+% its colours exchanged and turned half a turn, which is the same
+% picture, drawn so that no edge has the wrong colour under it.
+/taiji {
+  6 dict begin
+  /lv exch def /rpx exch def /colB exch def /colA exch def
+  gsave
+    lv spin rotate
+    colA setcol 0 0 1 lv 0 eq { outerrim } { rim } ifelse add disc
+    colB setcol halfpath fill
+    rpx eye mul minr lt {
+      colA setcol 0  0.5 eye disc
+      colB setcol 0 -0.5 eye disc
+    } {
+      gsave
+        0 0.5 translate eye dup scale
+        colA colB rpx eye mul lv 1 add taiji
+      grestore
+      gsave
+        0 -0.5 translate eye dup scale 180 rotate
+        colB colA rpx eye mul lv 1 add taiji
+      grestore
+    } ifelse
+  grestore
+  end
+} def
+
+/scene {
+  % a warm light behind the symbol
+  0.5 { 140 { 1 0.62 0.34 setrgbcolor 540 540 R 1.02 mul disc } blurred } faded
+  % its shadow
+  0.55 { 22 { 0.16 0.02 0.02 setrgbcolor 548 526 R 1.02 mul disc } blurred } faded
+  gsave
+    540 540 translate R dup scale
+    ink paper R 0 taiji
+  grestore
+  0.45 vignette
+} def
