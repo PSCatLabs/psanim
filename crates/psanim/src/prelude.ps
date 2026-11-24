@@ -229,5 +229,120 @@ end
   } ifelse
 } bind def
 
+% --- libraries ------------------------------------------------------------------
+% /pkmotion use      load one of psanim's libraries, once. They are part of
+%                    the program, not files: `psanim api --libs` lists them.
+/.pk << /used 16 dict /cur 32 array /depth 0 /beats 1 dict /storylen 0 >> def
+.pk /cur get 0 0 put
+/use {
+  dup type /stringtype eq { cvn } if
+  dup .pk /used get exch known { pop } {
+    dup .pk /used get exch true put
+    .libsource cvx exec
+  } ifelse
+} bind def
+
+% --- viewports: re-basing the canvas for a procedure -------------------------------
+% box proc within     run proc inside the box [x y w h]: the origin is the
+%                     box's corner, drawing is clipped to it, and `width`
+%                     and `height` are the box's. A scene written against
+%                     width and height can be placed in any box.
+/within {
+  exch aload pop gsave
+  4 2 roll translate
+  2 copy 0 0 4 2 roll rectclip
+  .viewpush exec .viewpop
+  grestore
+} bind def
+% box w h proc fitted   run proc, drawn for a canvas w by h, scaled to fit
+%                       the box and centred in it.
+/fitted {
+  8 dict begin
+    /ft-p exch def /ft-h exch def /ft-w exch def
+    aload pop /ft-bh exch def /ft-bw exch def /ft-by exch def /ft-bx exch def
+    /ft-s ft-bw ft-w div ft-bh ft-h div min def
+    gsave
+    ft-bx ft-bw ft-w ft-s mul sub 2 div add
+    ft-by ft-bh ft-h ft-s mul sub 2 div add translate
+    ft-s dup scale
+    0 0 ft-w ft-h rectclip
+    ft-w ft-h .viewpush
+    /ft-p load
+  end
+  exec .viewpop grestore
+} bind def
+
+% --- storyboards: named stretches of the film ------------------------------------------
+% [ /name seconds /name seconds ... ] storyboard     name the film's beats.
+/storyboard {
+  8 dict begin
+    /sb-a exch def /sb-t 0 def
+    sb-a length 2 idiv 1 add dict /sb-d exch def
+    0 2 sb-a length 2 sub { /sb-i exch def
+      sb-d sb-a sb-i get [ sb-t  sb-a sb-i 1 add get sb-t add ] put
+      /sb-t sb-t sb-a sb-i 1 add get add def
+    } for
+    .pk /beats sb-d put  .pk /storylen sb-t put
+  end
+} bind def
+/storylength { .pk /storylen get } bind def
+/.beatget {
+  .pk /beats get 1 index known not { .nobeat } if
+  .pk /beats get exch get
+} bind def
+/beat     { .beatget 0 get } bind def                    % /name -> start time
+/beatspan { .beatget aload pop } bind def                % /name -> start end
+% /name proc inbeat      run proc during the beat, on its own clock,
+%                        whatever time scopes are open.
+/inbeat   { exch beatspan 3 -1 roll [ 4 1 roll /during cvx ] cvx globally } bind def
+% /name proc frombeat    run proc from the beat's start to the end of the film.
+/frombeat { exch beat exch [ 3 1 roll /after cvx ] cvx globally } bind def
+
+% --- scripts: one thing after another -------------------------------------------------
+% A script keeps a cursor: the time the next step starts. `then` runs its
+% body from the cursor on (it stays), `thenfor` only until its time is up,
+% and both move the cursor forward.
+/cursor     { .pk /cur get .pk /depth get get } bind def
+/.setcursor { .pk /cur get .pk /depth get 3 -1 roll put } bind def
+/wait       { cursor add .setcursor } bind def                      % seconds wait
+/then       { exch cursor exch wait exch after } bind def           % seconds proc then
+/thenfor    { exch cursor exch 2 copy add exch wait 3 -1 roll during } bind def
+/script {                                                           % proc script
+  .pk /depth 2 copy get 1 add put  0 .setcursor
+  exec
+  .pk /depth 2 copy get 1 sub put
+} bind def
+
+% --- tempo: time in beats ---------------------------------------------------------------
+% bpm tempo       set the tempo (in setup). n counts -> seconds; kick is 1 on
+%                 every beat of the film's clock, falling to 0 before the next.
+.pk /bpm 120 put
+/tempo    { .pk exch /bpm exch put } bind def
+/counts   { 60 mul .pk /bpm get div } bind def
+/countnow { globaltime .pk /bpm get mul 60 div } bind def
+/kick     { countnow dup floor sub 1 exch sub dup mul dup mul } bind def
+
+% --- rows of things ------------------------------------------------------------------
+% array gap proc cascade    run proc once per element, with `item i` on the
+%                           stack, each gap seconds after the one before.
+/.cascadestep {          % i arr gap proc
+  3 index 3 -1 roll mul 4 1 roll      % delay i arr proc
+  3 1 roll 1 index get exch           % delay proc item i
+  3 -1 roll                           % delay item i proc
+  mark 4 1 roll /exec cvx ] cvx delayed
+} bind def
+/cascade {               % arr gap proc
+  2 index length 1 sub 0 exch 1 exch  % arr gap proc 0 1 n-1
+  6 3 roll                            % 0 1 n-1 arr gap proc
+  [ 4 1 roll /.cascadestep cvx ] cvx
+  for
+} bind def
+% u proc onpath            run proc with the origin at the point u (0..1) of
+%                          the way along the current path and the x axis
+%                          along the direction of travel. The path is kept.
+/onpath {
+  exch pathpoint gsave 3 1 roll translate rotate newpath exec grestore
+} bind def
+
 % Pictures are composed over a transparent page; a program draws its own
 % ground, or declares /Background.

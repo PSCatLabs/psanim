@@ -346,10 +346,22 @@ fn vocabulary() -> impl Iterator<Item = &'static str> {
 
 fn explain(kind: &str, command: Option<&str>) -> Option<String> {
     Some(match (kind, command) {
+        ("undefined", Some(name))
+            if crate::api::lookup(name)
+                .and_then(|e| crate::api::library_of(e.category))
+                .is_some() =>
+        {
+            let lib = crate::api::lookup(name)
+                .and_then(|e| crate::api::library_of(e.category))
+                .unwrap_or_default();
+            format!(
+                "`{name}` is in the {lib} library, which is not loaded. Add `/{lib} use` in setup, after `animation`."
+            )
+        }
         ("undefined", Some(name)) => match closest(name, vocabulary()) {
             Some(near) => format!("`{name}` is not defined. Did you mean `{near}`?"),
             None => format!(
-                "`{name}` is not defined. Check the spelling, and that the library defining it was loaded with `(lib/...) run` in setup."
+                "`{name}` is not defined. Check the spelling, and that the library defining it was loaded in setup: `/pkmotion use` for psanim's, `(lib/artkit.ps) run` for PSCat's."
             ),
         },
         ("stackunderflow", Some(c)) => format!(

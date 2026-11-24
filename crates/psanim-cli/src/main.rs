@@ -295,13 +295,33 @@ fn cmd_frame(rest: &[String]) -> Result<(), Fail> {
         .clone()
         .unwrap_or_else(|| format!("{}_{index:05}.png", name_of(&path)).into());
     let started = Instant::now();
-    let frame = movie.render_frame(index)?;
+    let rendered = movie.render_frame(index).map(|f| {
+        (
+            f.to_png(),
+            f.premultiplied.to_vec(),
+            f.width,
+            f.height,
+            f.time,
+        )
+    });
+    let (png, premultiplied, w, h, time) = match rendered {
+        Ok(r) => r,
+        Err(e) => {
+            // What it printed before failing is the best clue to why.
+            let printed = movie.take_output();
+            if !c.json && !printed.is_empty() {
+                eprint!("{printed}");
+                if !printed.ends_with('\n') {
+                    eprintln!();
+                }
+            }
+            return Err(e.into());
+        }
+    };
     let elapsed = started.elapsed().as_secs_f64();
-    let png = frame.to_png();
     let mut flat = Vec::new();
-    raster::flatten_onto(frame.premultiplied, matte(&meta), &mut flat);
-    let stats = raster::stats(&flat, frame.width as usize, frame.height as usize);
-    let (w, h, time) = (frame.width, frame.height, frame.time);
+    raster::flatten_onto(&premultiplied, matte(&meta), &mut flat);
+    let stats = raster::stats(&flat, w as usize, h as usize);
     write_file(&out, &png)?;
     // What the program printed (`==`, `print`, `pstack`): the debugger.
     let printed = movie.take_output();
@@ -807,18 +827,63 @@ fn cmd_bench(rest: &[String]) -> Result<(), Fail> {
 }
 
 fn cmd_api(rest: &[String]) -> Result<(), Fail> {
-    let c = parse(rest, &["markdown"])?;
+    let c = parse(rest, &["markdown", "libs"])?;
     if c.json {
         println!("{}", psanim::api::to_json());
+        return Ok(());
+    }
+    let libraries = || {
+        for (name, _, what) in psanim::LIBRARIES {
+            println!("  /{name} use    {what}");
+        }
+    };
+    if c.has("libs") {
+        println!("Libraries (load in setup, after `animation`):");
+        libraries();
+        println!("\n`psanim api pkmotion` lists one library's words.");
+        return Ok(());
+    }
+    let named = c
+        .file
+        .as_ref()
+        .map(|w| w.to_string_lossy().trim_start_matches('/').to_string());
+    if let Some(lib) = named
+        .as_deref()
+        .filter(|w| psanim::api::library_of(w).is_some())
+    {
+        if c.has("markdown") {
+            print!("{}", psanim::api::library_markdown(lib).unwrap_or_default());
+            return Ok(());
+        }
+        let (_, title) = psanim::api::CATEGORIES
+            .iter()
+            .find(|c| c.0 == lib)
+            .expect("a library has a category");
+        println!("{title}\n  load with: /{lib} use\n");
+        for e in psanim::api::API.iter().filter(|e| e.category == lib) {
+            println!("  {}", e.stack);
+        }
+        if lib == "pkmotion" {
+            let of = |kind| {
+                psanim::motion::MOTIONS
+                    .iter()
+                    .filter(|m| m.kind == kind)
+                    .map(|m| format!("/{}", m.name))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            };
+            println!("\nEntrances: {}", of(psanim::motion::Kind::Entrance));
+            println!("Emphases: {}", of(psanim::motion::Kind::Emphasis));
+        }
+        println!("\n`psanim api NAME` explains one word.");
         return Ok(());
     }
     if c.has("markdown") {
         print!("{}", psanim::api::to_markdown());
         return Ok(());
     }
-    if let Some(word) = &c.file {
-        let word = word.to_string_lossy();
-        let word = word.trim_start_matches('/');
+    if let Some(word) = &named {
+        let word = word.as_str();
         // The two names a program defines for the engine to call.
         match word {
             "scene" => {
@@ -857,9 +922,15 @@ fn cmd_api(rest: &[String]) -> Result<(), Fail> {
             )));
         };
         println!("{}\n\n  {}\n", e.stack, e.summary);
+        if let Some(lib) = psanim::api::library_of(e.category) {
+            println!("  In the {lib} library: load it with `/{lib} use`.\n");
+        }
         return Ok(());
     }
     for (key, title) in psanim::api::CATEGORIES {
+        if psanim::api::library_of(key).is_some() {
+            continue;
+        }
         println!("{title}");
         for e in psanim::api::API.iter().filter(|e| e.category == *key) {
             println!("  {}", e.stack);
@@ -868,6 +939,8 @@ fn cmd_api(rest: &[String]) -> Result<(), Fail> {
     }
     println!("Easings: {}", psanim::ease::NAMES.join(" "));
     println!("Transitions: {}", psanim::TRANSITIONS.join(" "));
+    println!("\nLibraries (`psanim api pkmotion` lists one's words):");
+    libraries();
     println!(
         "\n`psanim api NAME` explains one word; `psanim api --markdown` prints the full reference."
     );

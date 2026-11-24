@@ -134,6 +134,112 @@ fn box_pass(src: &[u8], dst: &mut [u8], w: usize, h: usize, r: usize, horizontal
     }
 }
 
+/// How [`composite_placed`] puts a layer down: an affine map of pixel
+/// coordinates, an opacity, and two rectangles (exclusive ends).
+#[derive(Clone, Copy, Debug)]
+pub struct Placement {
+    /// Forward map: `x' = m[0] x + m[2] y + m[4]`, `y' = m[1] x + m[3] y + m[5]`.
+    pub m: [f64; 6],
+    pub opacity: f64,
+    /// The part of the source that exists; the rest is treated as empty.
+    pub src: (f64, f64, f64, f64),
+    /// The part of the destination that may be painted.
+    pub clip: (f64, f64, f64, f64),
+}
+
+/// The box of what is painted on a layer: [`ink_box`], public.
+pub fn painted_box(buf: &[u8], w: usize, h: usize) -> Option<(usize, usize, usize, usize)> {
+    ink_box(buf, w, h)
+}
+
+/// Composite `src` over `dst` (both `w` by `h`, premultiplied) moved by
+/// the affine map in `place`, sampling bilinearly. Only the part of the
+/// destination the mapped source box can reach is visited.
+pub fn composite_placed(dst: &mut [u8], src: &[u8], w: usize, h: usize, place: &Placement) {
+    let m = place.m;
+    let det = m[0] * m[3] - m[1] * m[2];
+    let op = place.opacity.clamp(0.0, 1.0);
+    if det.abs() < 1e-9 || op <= 0.0 {
+        return;
+    }
+    let (sx0, sy0, sx1, sy1) = place.src;
+    if sx1 <= sx0 || sy1 <= sy0 {
+        return;
+    }
+    // The destination box: the mapped corners of the source box.
+    let corners = [(sx0, sy0), (sx1, sy0), (sx0, sy1), (sx1, sy1)]
+        .map(|(x, y)| (m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]));
+    let lo = |f: fn(&(f64, f64)) -> f64| corners.iter().map(f).fold(f64::INFINITY, f64::min);
+    let hi = |f: fn(&(f64, f64)) -> f64| corners.iter().map(f).fold(f64::NEG_INFINITY, f64::max);
+    let x0 = (lo(|c| c.0) - 1.0)
+        .floor()
+        .max(place.clip.0.floor())
+        .max(0.0) as usize;
+    let y0 = (lo(|c| c.1) - 1.0)
+        .floor()
+        .max(place.clip.1.floor())
+        .max(0.0) as usize;
+    let x1 = ((hi(|c| c.0) + 1.0)
+        .ceil()
+        .min(place.clip.2.ceil())
+        .min(w as f64))
+    .max(0.0) as usize;
+    let y1 = ((hi(|c| c.1) + 1.0)
+        .ceil()
+        .min(place.clip.3.ceil())
+        .min(h as f64))
+    .max(0.0) as usize;
+    // Inverse map.
+    let inv = [m[3] / det, -m[1] / det, -m[2] / det, m[0] / det];
+    let (ix0, iy0) = (sx0.floor().max(0.0) as i64, sy0.floor().max(0.0) as i64);
+    let (ix1, iy1) = (
+        (sx1.ceil() as i64).min(w as i64),
+        (sy1.ceil() as i64).min(h as i64),
+    );
+    let texel = |x: i64, y: i64| -> [f64; 4] {
+        if x < ix0 || y < iy0 || x >= ix1 || y >= iy1 {
+            return [0.0; 4];
+        }
+        let k = (y as usize * w + x as usize) * 4;
+        [
+            f64::from(src[k]),
+            f64::from(src[k + 1]),
+            f64::from(src[k + 2]),
+            f64::from(src[k + 3]),
+        ]
+    };
+    for y in y0..y1 {
+        for x in x0..x1 {
+            let (px, py) = (x as f64 + 0.5 - m[4], y as f64 + 0.5 - m[5]);
+            let u = inv[0] * px + inv[2] * py - 0.5;
+            let v = inv[1] * px + inv[3] * py - 0.5;
+            let (fu, fv) = (u.floor(), v.floor());
+            let (a, b) = (u - fu, v - fv);
+            let (iu, iv) = (fu as i64, fv as i64);
+            let (p00, p10, p01, p11) = (
+                texel(iu, iv),
+                texel(iu + 1, iv),
+                texel(iu, iv + 1),
+                texel(iu + 1, iv + 1),
+            );
+            let mut s = [0.0f64; 4];
+            for c in 0..4 {
+                let top = p00[c] + (p10[c] - p00[c]) * a;
+                let bot = p01[c] + (p11[c] - p01[c]) * a;
+                s[c] = (top + (bot - top) * b) * op;
+            }
+            if s[3] < 0.5 {
+                continue;
+            }
+            let d = &mut dst[(y * w + x) * 4..(y * w + x) * 4 + 4];
+            let inv_a = 1.0 - s[3] / 255.0;
+            for c in 0..4 {
+                d[c] = (s[c] + f64::from(d[c]) * inv_a).round().min(255.0) as u8;
+            }
+        }
+    }
+}
+
 /// The smallest rectangle holding every pixel that is not fully
 /// transparent black, as `(x0, y0, x1, y1)` with exclusive ends.
 fn ink_box(buf: &[u8], w: usize, h: usize) -> Option<(usize, usize, usize, usize)> {

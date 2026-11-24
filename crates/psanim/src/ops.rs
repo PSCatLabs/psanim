@@ -18,16 +18,16 @@ use crate::ease;
 use crate::pathmath;
 use crate::raster::{self, Blend};
 
-type Shared = Rc<RefCell<Ctx>>;
-type OpResult = Result<(), PsError>;
+pub(crate) type Shared = Rc<RefCell<Ctx>>;
+pub(crate) type OpResult = Result<(), PsError>;
 
 /// Fail with `err`, leaving `hint` for the engine's error report.
-fn fail<T>(ctx: &Shared, err: PsError, hint: impl Into<String>) -> Result<T, PsError> {
+pub(crate) fn fail<T>(ctx: &Shared, err: PsError, hint: impl Into<String>) -> Result<T, PsError> {
     ctx.borrow_mut().hint = Some(hint.into());
     Err(err)
 }
 
-fn reg<F>(interp: &mut Interp, ctx: &Shared, name: &str, f: F)
+pub(crate) fn reg<F>(interp: &mut Interp, ctx: &Shared, name: &str, f: F)
 where
     F: Fn(&mut Interp, &Shared) -> OpResult + 'static,
 {
@@ -92,7 +92,7 @@ fn push_scope(ctx: &Shared, scope: TimeScope) -> OpResult {
 }
 
 /// Linear interpolation of numbers or of equal-length number arrays.
-fn lerp_value(a: &Value, b: &Value, u: f64) -> Option<Value> {
+pub(crate) fn lerp_value(a: &Value, b: &Value, u: f64) -> Option<Value> {
     match (a, b) {
         (Value::Array(x), Value::Array(y)) if x.len() == y.len() => x
             .iter()
@@ -107,7 +107,7 @@ fn lerp_value(a: &Value, b: &Value, u: f64) -> Option<Value> {
     }
 }
 
-fn ease_named(ctx: &Shared, name: &str, x: f64) -> Result<f64, PsError> {
+pub(crate) fn ease_named(ctx: &Shared, name: &str, x: f64) -> Result<f64, PsError> {
     match ease::ease(name, x) {
         Some(v) => Ok(v),
         None => fail(
@@ -193,7 +193,7 @@ fn eval_keys(ctx: &Shared, items: &[Value], t: f64) -> Result<Value, PsError> {
 }
 
 /// The current path, flattened, with a tolerance of about a device pixel.
-fn flat_path(i: &Interp, ctx: &Shared) -> Result<Vec<pathmath::Poly>, PsError> {
+pub(crate) fn flat_path(i: &Interp, ctx: &Shared) -> Result<Vec<pathmath::Poly>, PsError> {
     let path = i.current_path()?;
     let px = ctx.borrow().px_scale.max(1e-6);
     Ok(pathmath::flatten(&path, 1.5 / px))
@@ -201,7 +201,7 @@ fn flat_path(i: &Interp, ctx: &Shared) -> Result<Vec<pathmath::Poly>, PsError> {
 
 /// Take the canvas out of the interpreter, run `f` on its pixels, put it
 /// back.
-fn with_canvas_pixels(
+pub(crate) fn with_canvas_pixels(
     i: &mut Interp,
     ctx: &Shared,
     f: impl FnOnce(&mut [u8], usize, usize, &mut Vec<u8>),
@@ -227,7 +227,7 @@ fn with_canvas_pixels(
     Ok(())
 }
 
-fn begin_layer(i: &mut Interp, ctx: &Shared) -> OpResult {
+pub(crate) fn begin_layer(i: &mut Interp, ctx: &Shared) -> OpResult {
     if ctx.borrow().layers.len() >= MAX_LAYERS {
         return fail(
             ctx,
@@ -295,6 +295,7 @@ fn end_layer(i: &mut Interp, ctx: &Shared, opacity: f64, blend: Blend) -> OpResu
 }
 
 pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
+    crate::vocab::install(interp, ctx);
     // --- declaration ----------------------------------------------------
     reg(interp, ctx, ".animation", |i, ctx| {
         let decl = i.pop_value()?;
@@ -359,11 +360,13 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         Ok(())
     });
     reg(interp, ctx, "width", |i, ctx| {
-        i.push_real(ctx.borrow().width);
+        let c = ctx.borrow();
+        i.push_real(c.views.last().map_or(c.width, |v| v.0));
         Ok(())
     });
     reg(interp, ctx, "height", |i, ctx| {
-        i.push_real(ctx.borrow().height);
+        let c = ctx.borrow();
+        i.push_real(c.views.last().map_or(c.height, |v| v.1));
         Ok(())
     });
     reg(interp, ctx, "movieseed", |i, ctx| {

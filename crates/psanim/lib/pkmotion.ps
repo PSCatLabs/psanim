@@ -1,0 +1,91 @@
+%!PS
+% pkmotion: how things arrive, leave and call attention to themselves.
+%
+% A motion is a name: /fade /rise /pop /drop /mask-up /wipe-right ... (the
+% list is `motionnames`). It applies to any drawing whatever, because the
+% engine draws the body on its own layer, measures what was painted, and
+% places that: "scale about its own centre" needs no anchor from you.
+% While a thing is fully in place it is drawn directly, at no cost.
+%
+% A motion is given as /name, [/name seconds] or [/name seconds /easing].
+%
+%   spec { ... } entering         arrive at the start of the current time scope
+%   spec { ... } leaving          depart at its end
+%   t spec { ... } enters         absent before t, arrives at t, stays
+%   t spec { ... } leaves         there until t, having departed by then
+%   a b in out { ... } onstage    arrive at a, depart by b
+%   in out { ... } staged         arrive at the scope's start, depart at its end
+%   t spec { ... } emphasized     in place throughout; at t it does the motion
+%   u spec { ... } motion         the motion at u (0 absent .. 1 in place), driven by you
+
+% Your own motions: a procedure that takes u and returns a dictionary with
+% any of /dx /dy (canvas units) /dxrel /dyrel (multiples of the drawing's
+% own size) /scale /sx /sy /rotate /alpha /blur /wipe [l b r t] /mask bool
+% /pivot [fx fy].   motions /sink { 1 exch sub -30 mul /dy exch 2 array astore cvx exec ... } put
+/motions 16 dict def
+
+% proc u /name .domotion
+/.domotion {
+  dup motions exch known { motions exch get 1 index exch exec } if
+  .motionbegin
+  dup 0 eq { pop pop } {
+    1 eq { exec } { exec .motionend } ifelse
+  } ifelse
+} bind def
+
+/motion     { 3 1 roll .motionspec .domotion } bind def          % u spec proc
+/entering   { exch .enterspec .domotion } bind def               % spec proc
+/leaving    { exch .leavespec .domotion } bind def               % spec proc
+/emphasized { 3 1 roll .emphspec .domotion } bind def            % t spec proc
+/enters     { [ 3 1 roll /entering cvx ] cvx after } bind def    % t spec proc
+/leaves     { [ 3 1 roll /leaving cvx ] cvx before } bind def    % t spec proc
+% specin specout proc staged     arrive at the start of the current time
+%                                scope and depart at its end
+/staged {
+  [ 3 1 roll /leaving cvx ] cvx
+  entering
+} bind def
+% a b specin specout proc onstage
+/onstage {
+  [ 3 1 roll /leaving cvx ] cvx
+  [ 3 1 roll /entering cvx ] cvx
+  during
+} bind def
+% t spec procA procB swapped     A until t (it leaves, done by t), B from t (it enters)
+/swapped {
+  4 copy pop leaves                    % t spec procA procB
+  exch pop enters
+} bind def
+
+% i n /order rank -> j     where item i of n falls in a cascade: /forward
+%                          /reverse /center (middle first) /edges (ends
+%                          first) /random. Use as the index for `staggered`.
+/rank {
+  4 dict begin
+    /rk-m exch def /rk-n exch def /rk-i exch def
+    rk-m /forward eq { rk-i } {
+    rk-m /reverse eq { rk-n 1 sub rk-i sub } {
+    rk-m /center eq { rk-i rk-n 1 sub 2 div sub abs } {
+    rk-m /edges eq { rk-n 1 sub 2 div  rk-i rk-n 1 sub 2 div sub abs  sub } {
+    rk-m /random eq { [ rk-i rk-n 77 ] hash01 rk-n mul floor } {
+      rk-i
+    } ifelse } ifelse } ifelse } ifelse } ifelse
+  end
+} bind def
+
+% n gap proc echoed      draw proc as it was at n earlier moments, gap
+%                        seconds apart, oldest faintest, then as it is now:
+%                        a trail behind anything that moves, with no state.
+/.echostep {             % k n gap proc
+  4 dict begin
+    /ec-p exch def /ec-g exch def /ec-n exch def /ec-k exch def
+    1 ec-k ec-n 1 add div sub 0.6 mul
+    ec-k ec-g mul /ec-p load
+  end
+  [ 3 1 roll /delayed cvx ] cvx faded
+} bind def
+/echoed {
+  3 copy [ 4 1 roll /.echostep cvx ] cvx
+  4 -1 roll -1 1 4 -1 roll for
+  exch pop exec
+} bind def

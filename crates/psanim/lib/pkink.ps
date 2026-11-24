@@ -1,0 +1,80 @@
+%!PS
+% pkink: marks with a hand in them, and PSCat's media over time.
+%
+%   [w ...] taperpath          (core) the current path becomes a stroke
+%                              whose width follows the list: fill it
+%   u width { ... } revealalong   draw anything only where a pen moving
+%                              along the current path has been: a textured
+%                              stroke that draws itself
+%   n { ... } around           radial repetition
+/pkstage use
+
+% u width proc revealalong -     run proc clipped to a band `width` wide
+%   along the first u of the current path. proc draws the whole mark
+%   (a paintkit brush stroke, a chalk line, a hatched band); only the
+%   part the pen has reached shows. The path is consumed.
+/revealalong {
+  3 1 roll                              % proc u width
+  gsave
+    setlinewidth 1 setlinecap 1 setlinejoin
+    0 exch trimpath strokepath clip newpath
+    exec
+  grestore
+  newpath
+} bind def
+% u0 u1 width proc revealband -     like revealalong, for the stretch of the
+%   path between u0 and u1 only: on a persistent canvas, paint each frame
+%   just what the pen covered since the last (`now dt sub` to `now`), so
+%   a translucent medium is laid down once and not again every frame.
+/revealband {
+  4 1 roll                              % proc u0 u1 width
+  gsave
+    setlinewidth 0 setlinecap 1 setlinejoin
+    trimpath strokepath clip newpath
+    exec
+  grestore
+  newpath
+} bind def
+% n proc around -      run proc n times, turned evenly about the origin,
+%                      with the copy's index on the stack
+/.aroundstep {           % i n proc
+  gsave 3 1 roll 1 index exch 360 exch div mul rotate   % proc i   (rotated i*360/n)
+  exch exec grestore
+} bind def
+/around {
+  1 index 1 sub 0 exch 1 exch           % n proc 0 1 n-1
+  5 3 roll                              % 0 1 n-1 n proc
+  [ 3 1 roll /.aroundstep cvx ] cvx for
+} bind def
+% [w ...] brushstroke -     fill the current path as a stroke whose width
+%                           follows the list ([0 9 0] is a leaf-shaped
+%                           mark, [12 0] a comet), in the current colour
+/brushstroke { taperpath fill } bind def
+% c0 c1 angle gradfillbox      (box on the stack first)
+% box c0 c1 angle boxgradient -     fill the box with a two-colour linear
+%   gradient at that angle (0 runs left to right, 90 bottom to top).
+%   Colours are roles or [r g b].
+/boxgradient {
+  12 dict begin
+    /bg-a exch def [ exch rgbof ] /bg-c1 exch def [ exch rgbof ] /bg-c0 exch def
+    aload pop /bg-h exch def /bg-w exch def /bg-y exch def /bg-x exch def
+    gsave
+      newpath bg-x bg-y bg-w bg-h rectclip
+      bg-x bg-w 2 div add bg-y bg-h 2 div add translate bg-a rotate
+      /bg-r bg-w dup mul bg-h dup mul add sqrt 2 div def
+      % bands along the gradient axis: enough that none shows
+      /bg-n 96 def
+      0 1 bg-n 1 sub { /bg-i exch def
+        bg-i bg-n 1 sub div bg-c0 bg-c1 between aload pop setrgbcolor
+        bg-r neg bg-i bg-n div 2 mul bg-r mul add  bg-r neg
+        bg-r 2 mul bg-n div 1.5 add  bg-r 2 mul rectfill
+      } for
+    grestore
+  end
+} bind def
+% key amount jitter -> dx dy     a small steady offset for a hand-made
+%                                look: the same key always gives the same one
+/jitter {
+  exch dup [ exch 1 ] hash01 0.5 sub 2 mul 2 index mul
+  exch [ exch 2 ] hash01 0.5 sub 2 mul 3 -1 roll mul
+} bind def

@@ -44,7 +44,11 @@ fn every_documented_name_is_defined_in_a_movie() {
             )
         })
         .collect();
-    let src = format!("<< /Size [8 8] >> animation\n{lookups}/scene {{ }} def");
+    let libs: String = psanim::LIBRARIES
+        .iter()
+        .map(|l| format!("/{} use\n", l.0))
+        .collect();
+    let src = format!("<< /Size [8 8] >> animation\n{libs}{lookups}/scene {{ }} def");
     Movie::load(&src, &Options::default()).unwrap_or_else(|e| panic!("{e}"));
 }
 
@@ -80,6 +84,13 @@ fn every_entry_is_complete_and_categories_are_known() {
         );
     }
     assert!(psanim::api::to_markdown().contains("### `tween`"));
+    assert!(!psanim::api::to_markdown().contains("### `enters`"));
+    assert!(
+        psanim::api::library_markdown("pkmotion")
+            .unwrap()
+            .contains("### `enters`")
+    );
+    assert!(psanim::api::library_markdown("tween").is_none());
     assert_eq!(psanim::api::to_json().as_array().unwrap().len(), API.len());
     assert_eq!(psanim::api::lookup("now").unwrap().category, "clock");
 }
@@ -124,6 +135,91 @@ fn transitions_table_matches_the_prelude() {
         psanim::TRANSITIONS.len()
     );
     Movie::load(&src, &Options::default()).unwrap_or_else(|e| panic!("{e}"));
+}
+
+/// The public names a library's source defines at its top level: lines
+/// that start `/name {`, `/name <<`, `/name [` or `/name N dict def`.
+fn public_names(source: &str) -> Vec<&str> {
+    source
+        .lines()
+        .filter_map(|line| {
+            let rest = line.strip_prefix('/')?;
+            if rest.starts_with('.') {
+                return None;
+            }
+            let mut words = rest.split_whitespace();
+            let name = words.next()?;
+            let next = words.next()?;
+            (next.starts_with('{')
+                || next.starts_with("<<")
+                || next.starts_with('[')
+                || rest.ends_with(" def"))
+            .then_some(name)
+        })
+        .collect()
+}
+
+#[test]
+fn every_library_word_is_documented_under_its_library_and_nowhere_else() {
+    let mut owner: std::collections::BTreeMap<&str, &str> = Default::default();
+    for (lib, source, what) in psanim::LIBRARIES {
+        assert!(what.len() > 20, "{lib}: describe it");
+        let defined = public_names(source);
+        assert!(defined.len() >= 4, "{lib}: found only {defined:?}");
+        for name in &defined {
+            let entry = psanim::api::lookup(name).unwrap_or_else(|| {
+                panic!("{lib} defines `{name}` but the reference does not list it")
+            });
+            assert_eq!(
+                entry.category, *lib,
+                "`{name}` is defined by {lib} but documented under {}",
+                entry.category
+            );
+            if let Some(other) = owner.insert(name, lib) {
+                panic!("`{name}` is defined by both {other} and {lib}");
+            }
+        }
+        // And the other way: every word documented under the library is one
+        // its source defines, or a native operator documented with it.
+        let src = format!(
+            "<< /Size [8 8] >> animation\n/{lib} use\n{}/scene {{ }} def",
+            API.iter()
+                .filter(|e| e.category == *lib)
+                .map(|e| format!(
+                    "/{} where {{ pop }} {{ /{} missing }} ifelse\n",
+                    e.name, e.name
+                ))
+                .collect::<String>()
+        );
+        Movie::load(&src, &Options::default()).unwrap_or_else(|e| panic!("{lib}: {e}"));
+    }
+}
+
+#[test]
+fn a_library_loads_once_and_an_unknown_one_is_explained() {
+    let src = "<< /Size [8 8] >> animation
+        /pkchart use /pkchart use (pkchart) use
+        /theme where { pop } { /pkstage-was-not-loaded-by-pkchart missing } ifelse
+        /scene { } def";
+    Movie::load(src, &Options::default()).unwrap_or_else(|e| panic!("{e}"));
+    let err = Movie::load(
+        "<< /Size [8 8] >> animation /pkmagic use /scene { } def",
+        &Options::default(),
+    )
+    .map(|_| ())
+    .expect_err("no such library");
+    assert!(err.to_string().contains("/pkmotion"), "{err}");
+    // A library word used without its library says which library.
+    let mut movie = Movie::load(
+        "<< /Size [8 8] >> animation /scene { 0 /pop { } enters } def",
+        &Options::default(),
+    )
+    .unwrap();
+    let err = movie
+        .render_frame(0)
+        .map(|_| ())
+        .expect_err("enters is not loaded");
+    assert!(err.to_string().contains("/pkmotion use"), "{err}");
 }
 
 /// PSCat's libraries define hundreds of short names. If one of them

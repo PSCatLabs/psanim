@@ -54,6 +54,11 @@ pub(crate) struct Ctx {
     /// its body is done. Kept here, not on the operand stack, so the body
     /// runs with the caller's operands on top.
     pub pending: Vec<LayerEnd>,
+    /// The pose each open motion will place its layer under.
+    pub poses: Vec<crate::motion::Pose>,
+    /// Viewports opened by `within` and `fitted`: the width and height the
+    /// program is told, innermost last.
+    pub views: Vec<(f64, f64)>,
     /// A canvas-sized page kept for operations that need the canvas out of
     /// the interpreter for a moment.
     pub spare: Option<Page>,
@@ -101,6 +106,8 @@ impl Ctx {
             scopes: Vec::new(),
             layers: Vec::new(),
             pending: Vec::new(),
+            poses: Vec::new(),
+            views: Vec::new(),
             spare: None,
             scratch: Vec::new(),
             params: BTreeMap::new(),
@@ -130,6 +137,8 @@ impl Ctx {
             dur: self.duration,
         });
         self.pending.clear();
+        self.poses.clear();
+        self.views.clear();
         self.hint = None;
     }
 }

@@ -1,0 +1,297 @@
+%!PS
+% pkstage: where things go and what they look like.
+%
+%   Boxes    a box is [x y w h]. Words cut the canvas into boxes, find
+%            points on them and frame the camera on them. Because a box is
+%            a plain array, `between` and `keyframes` interpolate boxes.
+%   Themes   colour and type by role (/bg /fg /accent ..., /title /body
+%            /mono ...), so a film's look is one line and changes in one
+%            place.
+%
+% Every word that takes a colour takes a role name or an [r g b] array.
+
+% --- boxes ------------------------------------------------------------------
+/canvasbox { [ 0 0 width height ] } bind def
+% unit of size that follows the canvas: 1 vmin is 1% of its shorter side.
+/vmin { width height min mul 0.01 mul } bind def
+% box m inset -> box           shrink by m on every side (negative grows)
+/inset {
+  exch aload pop
+  6 dict begin
+    /in-h exch def /in-w exch def /in-y exch def /in-x exch def /in-m exch def
+    [ in-x in-m add  in-y in-m add  in-w in-m 2 mul sub  in-h in-m 2 mul sub ]
+  end
+} bind def
+% box mx my insetxy -> box      shrink by mx left and right, my top and bottom
+/insetxy {
+  3 -1 roll aload pop
+  6 dict begin
+    /in-h exch def /in-w exch def /in-y exch def /in-x exch def /in-my exch def /in-mx exch def
+    [ in-x in-mx add  in-y in-my add  in-w in-mx 2 mul sub  in-h in-my 2 mul sub ]
+  end
+} bind def
+% box fx fy fw fh subbox -> box    the part of the box that starts fx, fy of
+%                                  the way across and up and is fw, fh of its size
+/subbox {
+  5 -1 roll aload pop
+  8 dict begin
+    /in-h exch def /in-w exch def /in-y exch def /in-x exch def
+    /in-fh exch def /in-fw exch def /in-fy exch def /in-fx exch def
+    [ in-x in-w in-fx mul add  in-y in-h in-fy mul add  in-w in-fw mul  in-h in-fh mul ]
+  end
+} bind def
+% - aspect -> width/height       above 1 is landscape, below 1 portrait
+/aspect { width height div } bind def
+% box dx dy shifted -> box
+/shifted {
+  3 -1 roll aload pop
+  6 dict begin
+    /in-h exch def /in-w exch def /in-y exch def /in-x exch def /in-dy exch def /in-dx exch def
+    [ in-x in-dx add  in-y in-dy add  in-w in-h ]
+  end
+} bind def
+% box /anchor boxpoint -> x y   a point on the box: /c /n /s /e /w /ne /nw
+%                               /se /sw, or [fx fy] as fractions of it.
+/.anchors <<
+  /c [0.5 0.5] /n [0.5 1] /s [0.5 0] /e [1 0.5] /w [0 0.5]
+  /ne [1 1] /nw [0 1] /se [1 0] /sw [0 0]
+>> def
+/.anchorfrac {
+  dup type /nametype eq { .anchors exch get } if aload pop
+} bind def
+/boxpoint {
+  .anchorfrac 3 -1 roll aload pop      % fx fy x y w h
+  6 dict begin
+    /in-h exch def /in-w exch def /in-y exch def /in-x exch def /in-fy exch def /in-fx exch def
+    in-x in-w in-fx mul add  in-y in-h in-fy mul add
+  end
+} bind def
+% box w h /anchor placed -> box    a box w by h set against that anchor of the box
+/placed {
+  .anchorfrac                          % box w h fx fy
+  6 dict begin
+    /pl-fy exch def /pl-fx exch def /pl-h exch def /pl-w exch def
+    aload pop /pl-bh exch def /pl-bw exch def /pl-by exch def /pl-bx exch def
+    [ pl-bx pl-bw pl-w sub pl-fx mul add
+      pl-by pl-bh pl-h sub pl-fy mul add
+      pl-w pl-h ]
+  end
+} bind def
+% x y w h /anchor boxat -> box     a box w by h whose anchor is at (x, y)
+/boxat {
+  .anchorfrac
+  6 dict begin
+    /pl-fy exch def /pl-fx exch def /pl-h exch def /pl-w exch def /pl-y exch def /pl-x exch def
+    [ pl-x pl-w pl-fx mul sub  pl-y pl-h pl-fy mul sub  pl-w pl-h ]
+  end
+} bind def
+% box n gap cols -> [box ...]      n equal columns, left to right
+/cols {
+  8 dict begin
+    /sp-g exch def /sp-n exch def
+    aload pop /sp-h exch def /sp-w exch def /sp-y exch def /sp-x exch def
+    /sp-cw sp-w sp-g sp-n 1 sub mul sub sp-n div def
+    [ 0 1 sp-n 1 sub { sp-cw sp-g add mul sp-x add [ exch sp-y sp-cw sp-h ] } for ]
+  end
+} bind def
+% box n gap rows -> [box ...]      n equal rows, top to bottom
+/rows {
+  8 dict begin
+    /sp-g exch def /sp-n exch def
+    aload pop /sp-h exch def /sp-w exch def /sp-y exch def /sp-x exch def
+    /sp-rh sp-h sp-g sp-n 1 sub mul sub sp-n div def
+    [ 0 1 sp-n 1 sub { sp-rh sp-g add mul sp-y sp-h add sp-rh sub exch sub [ exch sp-x exch sp-w sp-rh ] } for ]
+  end
+} bind def
+% box ncols nrows gap cells -> [box ...]   row by row from the top left;
+%                                          gap is a number, or [across down]
+/cells {
+  4 dict begin
+    dup type /arraytype eq { aload pop } { dup } ifelse /gr-gy exch def /gr-gx exch def
+    /gr-r exch def /gr-c exch def
+    [ exch gr-r gr-gy rows { gr-c gr-gx cols aload pop } forall ]
+  end
+} bind def
+% box f splitx -> left right       cut at fraction f of the width
+/splitx {
+  exch aload pop                       % f x y w h
+  6 dict begin
+    /sx-h exch def /sx-w exch def /sx-y exch def /sx-x exch def /sx-f exch def
+    [ sx-x sx-y sx-w sx-f mul sx-h ]
+    [ sx-x sx-w sx-f mul add sx-y sx-w 1 sx-f sub mul sx-h ]
+  end
+} bind def
+% box f splity -> top bottom       cut at fraction f of the height, from the top
+/splity {
+  exch aload pop
+  6 dict begin
+    /sx-h exch def /sx-w exch def /sx-y exch def /sx-x exch def /sx-f exch def
+    [ sx-x sx-y sx-h 1 sx-f sub mul add sx-w sx-h sx-f mul ]
+    [ sx-x sx-y sx-w sx-h 1 sx-f sub mul ]
+  end
+} bind def
+% boxA boxB boxunion -> box        the smallest box holding both
+/boxunion {
+  8 dict begin
+    aload pop /bu-h exch def /bu-w exch def /bu-y exch def /bu-x exch def
+    aload pop /bu-h2 exch def /bu-w2 exch def /bu-y2 exch def /bu-x2 exch def
+    /bu-l bu-x bu-x2 min def /bu-b bu-y bu-y2 min def
+    [ bu-l bu-b
+      bu-x bu-w add bu-x2 bu-w2 add max bu-l sub
+      bu-y bu-h add bu-y2 bu-h2 add max bu-b sub ]
+  end
+} bind def
+% box boxpath -     the box as the current path
+/boxpath { aload pop 4 2 roll moveto exch dup 0 rlineto exch 0 exch rlineto neg 0 rlineto closepath } bind def
+% box r roundpath -    the box with rounded corners as the current path
+/roundpath {
+  exch aload pop                       % r x y w h
+  6 dict begin
+    /rp-h exch def /rp-w exch def /rp-y exch def /rp-x exch def
+    /rp-r exch rp-w 2 div min rp-h 2 div min 0 max def
+    rp-x rp-r add rp-y moveto
+    rp-x rp-w add rp-y rp-x rp-w add rp-y rp-h add rp-r arct
+    rp-x rp-w add rp-y rp-h add rp-x rp-y rp-h add rp-r arct
+    rp-x rp-y rp-h add rp-x rp-y rp-r arct
+    rp-x rp-y rp-x rp-w add rp-y rp-r arct
+    closepath
+  end
+} bind def
+% x y r disc -      a filled circle
+/disc { newpath 0 360 arc fill } bind def
+
+% --- the camera, by box -------------------------------------------------------
+% box lookat -      set the transformation so the box fills the frame (all
+%                   of it visible, centred). Wrap in gsave/grestore. A box
+%                   from `keyframes` or `between` makes a camera move.
+/lookat {
+  aload pop                            % x y w h
+  4 dict begin
+    /la-h exch def /la-w exch def /la-y exch def /la-x exch def
+    la-x la-w 2 div add  la-y la-h 2 div add
+    width la-w div height la-h div min
+  end
+  0 camera
+} bind def
+% - visiblebox -> box     the part of the world the frame shows under the
+%                         current transformation: for skipping what is off screen
+/visiblebox {
+  8 dict begin
+    0 0 itransform /vb-y0 exch def /vb-x0 exch def
+    width height itransform /vb-y1 exch def /vb-x1 exch def
+    width 0 itransform /vb-y2 exch def /vb-x2 exch def
+    0 height itransform /vb-y3 exch def /vb-x3 exch def
+    /vb-l vb-x0 vb-x1 min vb-x2 min vb-x3 min def
+    /vb-b vb-y0 vb-y1 min vb-y2 min vb-y3 min def
+    [ vb-l vb-b
+      vb-x0 vb-x1 max vb-x2 max vb-x3 max vb-l sub
+      vb-y0 vb-y1 max vb-y2 max vb-y3 max vb-b sub ]
+  end
+} bind def
+
+% --- themes ---------------------------------------------------------------------
+/themes <<
+  /midnight <<
+    /bg [0.055 0.065 0.10] /surface [0.11 0.13 0.19] /line [0.30 0.34 0.44]
+    /fg [0.93 0.94 0.97] /muted [0.58 0.62 0.72]
+    /accent [1.0 0.76 0.28] /accent2 [0.36 0.78 0.98] /accent3 [0.96 0.45 0.62]
+    /good [0.45 0.85 0.55] /bad [0.98 0.42 0.40]
+    /title /Helvetica-Bold /body /Helvetica /mono /Courier-Bold /display /Helvetica-Bold /serif /Palatino-Roman
+    /corner 10 /stroke 2.5
+  >>
+  /paper <<
+    /bg [0.965 0.95 0.92] /surface [1 0.99 0.97] /line [0.62 0.58 0.52]
+    /fg [0.13 0.12 0.11] /muted [0.45 0.42 0.38]
+    /accent [0.80 0.22 0.16] /accent2 [0.13 0.36 0.62] /accent3 [0.86 0.56 0.10]
+    /good [0.16 0.50 0.28] /bad [0.75 0.15 0.15]
+    /title /Palatino-Bold /body /Palatino-Roman /mono /Courier /display /Bookman-Demi /serif /Palatino-Roman
+    /corner 4 /stroke 2
+  >>
+  /blueprint <<
+    /bg [0.05 0.17 0.36] /surface [0.08 0.23 0.46] /line [0.55 0.72 0.92]
+    /fg [0.92 0.96 1.0] /muted [0.62 0.76 0.92]
+    /accent [1.0 0.86 0.36] /accent2 [0.60 0.95 0.90] /accent3 [1.0 0.60 0.50]
+    /good [0.60 0.95 0.70] /bad [1.0 0.55 0.50]
+    /title /AvantGarde-Demi /body /AvantGarde-Book /mono /Courier-Bold /display /AvantGarde-Demi /serif /NewCenturySchlbk-Roman
+    /corner 2 /stroke 2
+  >>
+  /terminal <<
+    /bg [0.03 0.05 0.04] /surface [0.06 0.10 0.08] /line [0.18 0.42 0.26]
+    /fg [0.72 0.98 0.78] /muted [0.36 0.60 0.44]
+    /accent [0.40 1.0 0.55] /accent2 [0.98 0.86 0.36] /accent3 [0.40 0.85 1.0]
+    /good [0.40 1.0 0.55] /bad [1.0 0.42 0.38]
+    /title /Courier-Bold /body /Courier /mono /Courier-Bold /display /Courier-Bold /serif /Courier
+    /corner 0 /stroke 2
+  >>
+  /poster <<
+    /bg [0.96 0.90 0.20] /surface [0.99 0.96 0.60] /line [0.08 0.08 0.10]
+    /fg [0.07 0.07 0.09] /muted [0.30 0.28 0.20]
+    /accent [0.90 0.16 0.30] /accent2 [0.10 0.25 0.85] /accent3 [0.05 0.55 0.45]
+    /good [0.05 0.50 0.30] /bad [0.85 0.10 0.15]
+    /title /Helvetica-Bold /body /Helvetica /mono /Courier-Bold /display /Helvetica-Bold /serif /Bookman-Demi
+    /corner 0 /stroke 4
+  >>
+  /dusk <<
+    /bg [0.12 0.08 0.16] /surface [0.20 0.13 0.25] /line [0.50 0.38 0.56]
+    /fg [0.98 0.93 0.88] /muted [0.72 0.62 0.70]
+    /accent [1.0 0.55 0.36] /accent2 [0.98 0.80 0.50] /accent3 [0.62 0.58 0.98]
+    /good [0.60 0.88 0.66] /bad [1.0 0.45 0.50]
+    /title /Bookman-Demi /body /Bookman-Light /mono /Courier /display /Bookman-Demi /serif /Palatino-Italic
+    /corner 14 /stroke 2.5
+  >>
+>> def
+% The theme in force: a copy, so a program can change one role.
+/theme 32 dict def
+% /name usetheme -     or  << /accent [1 0 0] ... >> usetheme  to change some roles
+/usetheme {
+  dup type /nametype eq {
+    dup themes exch known not { .notheme } if
+    themes exch get
+  } if
+  { theme 3 1 roll put } forall
+} bind def
+/.notheme {
+  pop /usetheme errordict /rangecheck get exec
+} bind def
+/midnight usetheme
+
+% role-or-[r g b] rgbof -> r g b
+/rgbof {
+  dup type /nametype eq { theme exch get } if aload pop
+} bind def
+% role-or-[r g b] ink -      set the colour
+/ink { rgbof setrgbcolor } bind def
+% role-or-[r g b] role-or-[r g b] u mixink -> [r g b]    a colour between two
+/mixink {
+  4 dict begin
+    /mx-u exch def /mx-b exch def /mx-a exch def
+    mx-u [ mx-a rgbof ] [ mx-b rgbof ] between
+  end
+} bind def
+% /role size face -     select the theme's font for that role (/title /body
+%                       /mono /display /serif), or any font name, at a size
+/face {
+  exch dup theme exch known { theme exch get } if
+  findfont exch scalefont setfont
+} bind def
+% - ground -            fill the canvas with the theme's background
+/ground { /bg rgbof backdrop } bind def
+
+% --- attention ------------------------------------------------------------------
+% box amount spotlight -    wash everything drawn so far, except the box,
+%                           toward the theme's ground: darker on a dark theme, paler on paper
+%                           (amount 0..1), or except several: [ box box ... ].
+%                           Draw the thing to notice before it and anything
+%                           that should stay bright after.
+/spotlight {
+  gsave
+    /bg ink setalpha
+    newpath
+    visiblebox boxpath
+    dup 0 get type /arraytype eq
+      { { theme /corner get 2 mul roundpath } forall }
+      { theme /corner get 2 mul roundpath } ifelse
+    eofill
+    1 setalpha
+  grestore
+} bind def

@@ -1,0 +1,362 @@
+%!PS
+% pktype: type that knows where it is, and type that moves.
+%
+% Set a font first (`/title 48 face`, or findfont/scalefont/setfont); these
+% words measure with it.
+/pkstage use /pkmotion use
+
+% dict /Key default .opt -> value
+/.opt { 3 1 roll 2 copy known { get exch pop } { pop pop } ifelse } bind def
+% - fontsize -> size     the size of the current font
+/fontsize { currentfont /FontMatrix get 0 get 1000 mul } bind def
+% (str) showright -      show ending at the current point
+/showright { dup stringwidth pop neg 0 rmoveto show } bind def
+% Signs the text fonts lack, from the Symbol font. A string with a
+% non-ASCII character in it shows blanks; use these.
+/symbols <<
+  /neq (\271) /le (\243) /ge (\263) /approx (\273) /equiv (\272) /pm (\261)
+  /times (\264) /div (\270) /dot (\327) /infinity (\245) /degree (\260)
+  /arrow (\256) /larrow (\254) /uparrow (\255) /downarrow (\257) /implies (\336)
+  /sum (\345) /product (\325) /sqrt (\326) /integral (\362) /partial (\266)
+  /in (\316) /bullet (\267)
+  /alpha (a) /beta (b) /gamma (g) /delta (d) /epsilon (e) /theta (q) /lambda (l)
+  /mu (m) /pi (p) /rho (r) /sigma (s) /tau (t) /phi (f) /omega (w)
+  /Delta (D) /Sigma (S) /Pi (P) /Omega (W)
+>> def
+% /name sym -          show a sign (/neq /arrow /pi /times ... see `symbols`)
+%                      at the current point, at the current font's size; the
+%                      current font is kept. `(a ) show /neq sym ( b) show`
+/sym {
+  symbols exch get
+  currentfont exch fontsize /Symbol findfont exch scalefont setfont
+  show setfont
+} bind def
+% /name symwidth -> w  the width `sym` will advance by
+/symwidth {
+  symbols exch get
+  currentfont exch fontsize /Symbol findfont exch scalefont setfont
+  stringwidth pop exch setfont
+} bind def
+% (str) textbox -> box   the box the string covers if shown at the current point
+/textbox {
+  stringwidth pop currentpoint         % w x y
+  4 dict begin
+    /tb-y exch def /tb-x exch def /tb-w exch def /tb-s fontsize def
+    [ tb-x  tb-y tb-s 0.22 mul sub  tb-w  tb-s 0.98 mul ]
+  end
+} bind def
+% (str) (part) partbox -> box    the box of the first occurrence of part
+%                                within str, shown at the current point
+/partbox {
+  6 dict begin
+    /pb-p exch def /pb-s exch def
+    pb-s pb-p search {
+      /pb-pre exch def pop pop
+      currentpoint /pb-y exch def /pb-x exch def
+      pb-x pb-pre stringwidth pop add pb-y moveto pb-p textbox
+      pb-x pb-y moveto
+    } { pop pb-s textbox } ifelse
+  end
+} bind def
+% (str) box /anchor showin -     show the string inside the box, set against
+%                                 that anchor (/c centres it both ways)
+/showin {
+  .anchorfrac
+  8 dict begin
+    /si-fy exch def /si-fx exch def
+    aload pop /si-h exch def /si-w exch def /si-y exch def /si-x exch def
+    /si-s exch def /si-cap fontsize 0.72 mul def
+    si-x si-w si-s stringwidth pop sub si-fx mul add
+    si-y si-h si-cap sub si-fy mul add
+    moveto si-s show
+  end
+} bind def
+% (str) box /anchor placetext -     move to where `showin` would start the
+%   string, without showing it: for `kinetic`, `typewrite`, `charpath` or a
+%   run in a box.  (TITLE) box /c placetext (TITLE) /glyphs 0.05 /rise kinetic
+/placetext {
+  .anchorfrac
+  8 dict begin
+    /si-fy exch def /si-fx exch def
+    aload pop /si-h exch def /si-w exch def /si-y exch def /si-x exch def
+    /si-s exch def /si-cap fontsize 0.72 mul def
+    si-x si-w si-s stringwidth pop sub si-fx mul add
+    si-y si-h si-cap sub si-fy mul add
+    moveto
+  end
+} bind def
+% (str) box /role fitface -      select the role's font (or any font name)
+%                                 at the largest size at which the string
+%                                 fits the box
+/fitface {
+  8 dict begin
+    /ff-r exch def
+    aload pop /ff-h exch def /ff-w exch def pop pop
+    /ff-s exch def
+    ff-r 100 face
+    ff-r  ff-w ff-s stringwidth pop 0.001 max div 100 mul  ff-h 0.72 div  min
+  end
+  face
+} bind def
+
+% (text) width wraplines -> [ (line) ... ]    break into lines no wider
+%                                             than width; \n forces a break
+/wraplines {
+  8 dict begin
+    /wl-w exch def
+    [ exch splitlines {
+      /wl-line () def
+      splitwords {
+        /wl-word exch def
+        wl-line length 0 eq { /wl-line wl-word def } {
+          /wl-try wl-line ( ) strcat wl-word strcat def
+          wl-try stringwidth pop wl-w gt
+            { wl-line /wl-line wl-word def }
+            { /wl-line wl-try def } ifelse
+        } ifelse
+      } forall
+      wl-line
+    } forall ]
+  end
+} bind def
+% (text) box opts textlayout -> [ [ (line) x y ] ... ]
+%   opts is an alignment (/left /center /right) or a dictionary:
+%   << /Align /left /Leading 1.3 /VAlign /top >>   (/VAlign /top /middle /bottom)
+/textlayout {
+  12 dict begin
+    dup type /nametype eq { /tl-al exch def /tl-o 0 dict def } { /tl-o exch def /tl-al tl-o /Align /left .opt def } ifelse
+    aload pop /tl-h exch def /tl-w exch def /tl-y exch def /tl-x exch def
+    /tl-lines exch tl-w wraplines def
+    /tl-s fontsize def
+    /tl-L tl-s tl-o /Leading 1.3 .opt mul def
+    /tl-bh tl-lines length 1 sub tl-L mul tl-s 0.72 mul add def
+    /tl-va tl-o /VAlign /top .opt def
+    /tl-top
+      tl-va /top eq { tl-y tl-h add } {
+      tl-va /bottom eq { tl-y tl-bh add } { tl-y tl-h tl-bh add 2 div add } ifelse } ifelse def
+    [ 0 1 tl-lines length 1 sub {
+      /tl-i exch def /tl-str tl-lines tl-i get def
+      [ tl-str
+        tl-x tl-w tl-str stringwidth pop sub
+          tl-al /center eq { 0.5 } { tl-al /right eq { 1 } { 0 } ifelse } ifelse mul add
+        tl-top tl-s 0.72 mul sub tl-i tl-L mul sub ]
+    } for ]
+  end
+} bind def
+% (text) box opts paragraph -     set the text in the box, wrapped
+/paragraph {
+  textlayout { aload pop moveto show } forall
+} bind def
+
+% (str) proc eachword -     like eachglyph, by words: proc runs per word
+%                           with `(word) i` on the stack and the current
+%                           point at the word's origin
+/.wordstep {             % i words xs x0 y0 proc
+  6 dict begin
+    /ws-p exch def /ws-y exch def /ws-x exch def /ws-xs exch def /ws-w exch def /ws-i exch def
+    ws-xs ws-i get ws-x add ws-y moveto
+    ws-w ws-i get ws-i /ws-p load
+  end exec
+} bind def
+/eachword {
+  8 dict begin
+    /ew-p exch def /ew-w exch splitwords def
+    /ew-x 0 def /ew-sp ( ) stringwidth pop def
+    /ew-xs [ ew-w { ew-x exch stringwidth pop ew-x add ew-sp add /ew-x exch def } forall ] def
+    currentpoint /ew-y0 exch def /ew-x0 exch def
+    0 1 ew-w length 1 sub
+    [ ew-w ew-xs ew-x0 ew-y0 /ew-p load /.wordstep cvx ] cvx
+  end
+  for
+} bind def
+
+% (str) /unit gap spec kinetic -     show the string at the current point,
+%     each unit (/glyphs, /words or /whole) entering with the motion, gap
+%     seconds after the one before. Wrap it in `leaving` for the exit.
+/.kn-unit {              % (unit) i     (inside kinetic's dictionary)
+  kn-i0 add /kn-i exch def /kn-c exch def
+  kn-c ( ) ne {
+    kn-i kn-g { kn-s { kn-c show } entering } staggered
+  } if
+} bind def
+/kinetic {
+  8 dict begin
+    /kn-s exch def /kn-g exch def /kn-u exch def /kn-str exch def
+    /kn-i0 where { pop } { /kn-i0 0 def } ifelse
+    kn-u /glyphs eq { kn-str { .kn-unit } eachglyph } {
+    kn-u /words eq { kn-str { .kn-unit } eachword } {
+      kn-str 0 .kn-unit
+    } ifelse } ifelse
+  end
+} bind def
+% - .kn-count: how many units the string had, so a paragraph's stagger runs on
+/.kn-units {             % str unit -> n
+  dup /glyphs eq { pop length } { /words eq { splitwords length } { pop 1 } ifelse } ifelse
+} bind def
+% (text) box opts /unit gap spec kineticparagraph -    a wrapped paragraph
+%     whose glyphs, words or lines (/lines) enter one after another
+/kineticparagraph {
+  12 dict begin
+    /kp-s exch def /kp-g exch def /kp-u exch def
+    /kp-lay 4 1 roll textlayout def
+    /kn-i0 0 def
+    kp-lay {
+      aload pop moveto /kp-str exch def
+      kp-u /lines eq {
+        kp-str /whole kp-g kp-s kinetic /kn-i0 kn-i0 1 add def
+      } {
+        kp-str kp-u kp-g kp-s kinetic
+        /kn-i0 kn-i0 kp-str kp-u .kn-units add def
+      } ifelse
+    } forall
+  end
+} bind def
+
+% box u marker -       a highlighter bar over the first u of the box, in the
+%                      current colour: draw it before the text it marks
+/marker {
+  exch aload pop
+  6 dict begin
+    /mk-h exch def /mk-w exch def /mk-y exch def /mk-x exch def /mk-u exch 0 1 clamp def
+    mk-u 0 gt {
+      gsave newpath [ mk-x mk-h 0.12 mul sub  mk-y  mk-w mk-h 0.24 mul add mk-u mul  mk-h ] mk-h 0.12 mul roundpath fill grestore
+    } if
+  end
+} bind def
+% box u underline -    a rule under the box, drawn on as u goes 0 to 1, in
+%                      the current colour and line width
+/underline {
+  exch aload pop
+  6 dict begin
+    /mk-h exch def /mk-w exch def /mk-y exch def /mk-x exch def /mk-u exch 0 1 clamp def
+    mk-u 0 gt {
+      gsave newpath mk-x mk-y mk-h 0.02 mul sub moveto mk-w mk-u mul 0 rlineto stroke grestore
+    } if
+  end
+} bind def
+% (str) u typewrite -  the first u of the string with a block caret after
+%                      it, blinking once the typing is done
+/typewrite {
+  6 dict begin
+    /tw-u exch def /tw-s exch def
+    tw-s tw-u typed show
+    tw-u 1 lt now 0.9 fmod 0.45 lt or {
+      currentpoint fontsize 0.55 mul fontsize 0.72 mul 4 2 roll
+      exch fontsize 0.06 mul add exch 4 2 roll rectfill
+    } if
+  end
+} bind def
+
+% [ [t0 t1 (text)] ... ] box opts captions -     show the caption whose time
+%     has come, centred at the bottom of the box, on a plate. opts:
+%     << /Size 30 /Role /body /Plate true /Karaoke false >>. With /Karaoke
+%     the words light up across the caption's time.
+/captions {
+  16 dict begin
+    /cp-o exch def /cp-box exch def
+    /cp-size cp-o /Size 4.2 vmin .opt def
+    {
+      aload pop /cp-text exch def /cp-t1 exch def /cp-t0 exch def
+      now cp-t0 ge now cp-t1 lt and {
+        cp-o /Role /body .opt cp-size face
+        /cp-w cp-text stringwidth pop def
+        /cp-b cp-box cp-w cp-size 1.2 mul add cp-size 1.9 mul /s placed def
+        now cp-t0 sub 0.15 div 1 min  cp-t1 now sub 0.15 div 1 min  mul
+        {
+          cp-o /Plate true .opt {
+            gsave /bg ink 0.72 setalpha cp-b cp-size 0.35 mul roundpath fill grestore
+          } if
+          cp-b /c boxpoint exch cp-w 2 div sub exch cp-size 0.36 mul sub moveto
+          cp-o /Karaoke false .opt {
+            /cp-p now cp-t0 sub cp-t1 cp-t0 sub 0.85 mul div def
+            /cp-n cp-text length def /cp-seen 0 def
+            cp-text {
+              pop /cp-wd exch def
+              /cp-a cp-seen cp-n div def
+              /cp-seen cp-seen cp-wd length add 1 add def
+              cp-p cp-seen cp-n div ge { /fg } { cp-p cp-a ge { /accent } { /muted } ifelse } ifelse ink
+              cp-wd show
+            } eachword
+          } { /fg ink cp-text show } ifelse
+        } faded
+      } if
+    } forall
+  end
+} bind def
+
+% --- runs: a line of mixed type, for mathematics ---------------------------------------
+% A run list is an array whose elements are each one of
+%   (text)            in the current font
+%   /name             a sign or Greek letter from `symbols` (/pi /times /neq ...)
+%   [/it (r)]         italic, as variables are set
+%   [/sup x] [/sub x] raised or lowered and smaller; x is (text) or /name
+%   [/frac a b]       a over b; each is (text) or /name
+% e.g.  [ (Area = ) /pi [/it (r)] [/sup (2)] ]
+/.runbase {              % x -> draws (text) or /name at the current point
+  dup type /nametype eq { sym } { show } ifelse
+} bind def
+/.runbasew { dup type /nametype eq { symwidth } { stringwidth pop } ifelse } bind def
+/.runw {                 % run -> width
+  dup type /arraytype ne { .runbasew } {
+    4 dict begin
+      /rn-r exch def /rn-k rn-r 0 get def
+      rn-k /it eq { currentfont /Times-Italic fontsize face rn-r 1 get stringwidth pop exch setfont } {
+      rn-k /frac eq {
+        rn-r 1 get .runbasew rn-r 2 get .runbasew max 0.62 mul fontsize 0.24 mul add
+      } {
+        rn-r 1 get .runbasew 0.62 mul
+      } ifelse } ifelse
+    end
+  } ifelse
+} bind def
+/.rundraw {              % run -     at the current point; advances it
+  dup type /arraytype ne { .runbase } {
+    8 dict begin
+      /rn-r exch def /rn-k rn-r 0 get def /rn-f currentfont def /rn-s fontsize def
+      currentpoint /rn-y exch def /rn-x exch def
+      rn-k /it eq { /Times-Italic rn-s face rn-r 1 get show rn-f setfont } {
+      rn-k /frac eq {
+        /rn-w rn-r .runw def
+        rn-f 0.62 scalefont setfont
+        rn-x rn-w rn-r 1 get .runbasew sub 2 div add rn-y rn-s 0.42 mul add moveto rn-r 1 get .runbase
+        rn-x rn-w rn-r 2 get .runbasew sub 2 div add rn-y rn-s 0.18 mul sub moveto rn-r 2 get .runbase
+        rn-f setfont
+        gsave rn-s 0.05 mul setlinewidth newpath rn-x rn-s 0.06 mul add rn-y rn-s 0.30 mul add moveto
+          rn-w rn-s 0.12 mul sub 0 rlineto stroke grestore
+        rn-x rn-w add rn-y moveto
+      } {
+        rn-f 0.62 scalefont setfont
+        0 rn-k /sup eq { rn-s 0.40 mul } { rn-s -0.16 mul } ifelse rmoveto
+        rn-r 1 get .runbase
+        rn-f setfont currentpoint pop rn-y moveto
+      } ifelse } ifelse
+    end
+  } ifelse
+} bind def
+% runs runwidth -> w
+/runwidth { 0 exch { .runw add } forall } bind def
+% runs showruns -          show the whole line at the current point
+/showruns { { .rundraw } forall } bind def
+% runs i showrun -         show only run i, at the place it has in the line
+%                          that starts at the current point: bring an
+%                          equation in term by term, each with its own motion
+/showrun {
+  4 dict begin
+    /sr-i exch def /sr-r exch def
+    currentpoint /sr-y exch def /sr-x exch def
+    sr-x 0 1 sr-i 1 sub { sr-r exch get .runw add } for sr-y moveto
+    sr-r sr-i get .rundraw
+  end
+} bind def
+% runs i runbox -> box     the box of run i in the line that starts at the
+%                          current point, for a marker, a ring or a note
+/runbox {
+  4 dict begin
+    /sr-i exch def /sr-r exch def
+    currentpoint /sr-y exch def /sr-x exch def
+    [ sr-x 0 1 sr-i 1 sub { sr-r exch get .runw add } for
+      sr-y fontsize 0.22 mul sub
+      sr-r sr-i get .runw
+      fontsize 0.98 mul ]
+  end
+} bind def

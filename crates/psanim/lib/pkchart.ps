@@ -1,0 +1,326 @@
+%!PS
+% pkchart: data that moves.
+%
+% A chart is drawn from numbers every frame, so animating one is
+% animating its numbers: `u valuesA valuesB between` is the chart half-way
+% between two datasets, and every word here takes a /Grow that brings its
+% marks in.
+%
+%   box [x0 x1] [y0 y1] plotframe      where the plot is and what it spans
+%   << ... >> plotaxes                   axes, ticks, grid
+%   [v ...] << /Grow u >> bars         columns        ... hbars: rows, rankable
+%   [[x y] ...] plotline               a path through data: stroke it, trim it
+%   [v ...] box << /Grow u >> donut
+/pkstage use /pkmotion use /pktype use
+
+/.plot << /x 0 /y 0 /w 100 /h 100 /x0 0 /x1 1 /y0 0 /y1 1 >> def
+/chartroles [ /accent /accent2 /accent3 /good /bad /muted ] def
+/.chartrole { chartroles exch chartroles length mod get } bind def
+
+% box [x0 x1] [y0 y1] plotframe -
+/plotframe {
+  aload pop .plot /y1 3 -1 roll put .plot /y0 3 -1 roll put
+  aload pop .plot /x1 3 -1 roll put .plot /x0 3 -1 roll put
+  aload pop .plot /h 3 -1 roll put .plot /w 3 -1 roll put .plot /y 3 -1 roll put .plot /x 3 -1 roll put
+} bind def
+/plotbox { .plot begin [ x y w h ] end } bind def
+% x y plotpoint -> X Y     data to canvas
+/plotpoint {
+  .plot begin
+    y0 sub y1 y0 sub div h mul y add exch
+    x0 sub x1 x0 sub div w mul x add exch
+  end
+} bind def
+% The box given to plotframe is the data rectangle: tick labels and axis
+% titles are drawn outside it (about 3 x /Size to the left and below), so
+% inset the box from the page.
+% << /XTicks 5 /YTicks 5 /Grid true /Draw u /Decimals 0 /XDecimals 0 /Suffix ()
+%    /XValues [ ... ] /YValues [ ... ]   ticks exactly here instead of round numbers
+%    /XNames [ (a) (b) ... ]   names under evenly spaced slots instead of numbers
+%    /XLabel (text) /YLabel (text) /Size s >> plotaxes -
+/plotaxes {
+  24 dict begin
+    /ax-o exch def
+    /ax-u ax-o /Draw 1 .opt 0 1 clamp def
+    /ax-size ax-o /Size 2.1 vmin .opt def
+    /ax-b plotbox def
+    ax-b aload pop /ax-h exch def /ax-w exch def /ax-y exch def /ax-x exch def
+    ax-u 0 gt {
+      gsave
+        theme /stroke get 0.6 mul setlinewidth /body ax-size face
+        % y ticks and grid
+        ax-o /YValues known { ax-o /YValues get } { .plot /y0 get .plot /y1 get ax-o /YTicks 5 .opt niceticks } ifelse {
+          /ax-v exch def
+          0 ax-v plotpoint /ax-ty exch def pop
+          ax-o /Grid true .opt {
+            gsave /line ink 0.28 ax-u mul setalpha
+              newpath ax-x ax-ty moveto ax-w ax-u mul 0 rlineto stroke
+            grestore
+          } if
+          /muted ink ax-u setalpha
+          ax-x ax-size 0.6 mul sub ax-ty ax-size 0.34 mul sub moveto
+          ax-v ax-o /Decimals 0 .opt fmtnum ax-o /Suffix () .opt strcat showright
+        } forall
+        % x names or ticks
+        ax-o /XNames known {
+          /ax-names ax-o /XNames get def
+          0 1 ax-names length 1 sub { /ax-i exch def
+            /muted ink ax-u setalpha
+            ax-x ax-i 0.5 add ax-names length div ax-w mul add  ax-y ax-size 1.5 mul sub moveto
+            ax-names ax-i get showcenter
+          } for
+        } {
+          ax-o /XTicks 5 .opt 0 gt ax-o /XValues known or {
+            ax-o /XValues known { ax-o /XValues get } { .plot /x0 get .plot /x1 get ax-o /XTicks 5 .opt niceticks } ifelse {
+              /ax-v exch def
+              ax-v 0 plotpoint pop /ax-tx exch def
+              /muted ink ax-u setalpha
+              ax-tx ax-y ax-size 1.5 mul sub moveto
+              ax-v ax-o /XDecimals 0 .opt fmtfixed showcenter
+            } forall
+          } if
+        } ifelse
+        % the axes themselves, drawn on
+        /line ink 1 setalpha theme /stroke get setlinewidth 1 setlinecap
+        newpath ax-x ax-y ax-h add moveto ax-x ax-y lineto ax-x ax-w add ax-y lineto
+        0 ax-u trimpath stroke
+        ax-u setalpha /muted ink
+        ax-o /XLabel known {
+          ax-x ax-w 2 div add ax-y ax-size 3.4 mul sub moveto ax-o /XLabel get showcenter
+        } if
+        ax-o /YLabel known {
+          gsave ax-x ax-size 4.6 mul sub ax-y ax-h 2 div add translate 90 rotate
+            0 0 moveto ax-o /YLabel get showcenter grestore
+        } if
+        1 setalpha
+      grestore
+    } if
+  end
+} bind def
+% i n u stagger .growth -> ui    bar i of n's own progress when the whole is at u
+/.growth {
+  4 dict begin
+    /gw-s exch def /gw-u exch def /gw-n exch def /gw-i exch def
+    gw-u 1 gw-s add mul  gw-s gw-i gw-n 1 sub 1 max div mul sub 0 1 clamp /cubic-out ease
+  end
+} bind def
+% role-or-array i .pickrole -> role     one role for all, or one per mark
+/.pickrole {
+  exch dup type /arraytype eq
+    { dup 0 get type /nametype eq { exch 1 index length mod get } { exch pop } ifelse }
+    { exch pop } ifelse
+} bind def
+% [v ...] opts bars -     columns across the plot frame
+%   << /Grow u /Stagger 0.6 /Role /accent  (or /Roles [ ... ], one per bar)
+%      /Gap 0.3 /Values true /Decimals 0 /Prefix () /Suffix ()
+%      /Dim [i ...]  bars to draw muted (to make the others stand out)
+%      /Accent [i ...]  the opposite: every bar muted but these
+%      /Count true   value labels count up as the bars grow (by default they
+%                    show the true value, fading in) >>
+/bars {
+  32 dict begin
+    /bs-o exch def /bs-v exch def
+    /bs-n bs-v length def
+    /bs-u bs-o /Grow 1 .opt 0 1 clamp def
+    plotbox aload pop /bs-h exch def /bs-w exch def /bs-y exch def /bs-x exch def
+    /bs-slot bs-w bs-n div def
+    /bs-bw bs-slot 1 bs-o /Gap 0.3 .opt sub mul def
+    0 .plot /y0 get max 0 exch plotpoint /bs-base exch def pop
+    /bs-size bs-o /Size 2.2 vmin .opt def
+    gsave
+      0 1 bs-n 1 sub { /bs-i exch def
+        /bs-ui bs-i bs-n bs-u bs-o /Stagger 0.6 .opt .growth def
+        bs-ui 0 gt {
+          /bs-val bs-v bs-i get def
+          0 bs-val bs-ui mul plotpoint /bs-top exch def pop
+          /bs-bx bs-x bs-i bs-slot mul add bs-slot bs-bw sub 2 div add def
+          bs-o /Roles known { bs-o /Roles get } { bs-o /Role /accent .opt } ifelse bs-i .pickrole
+          false bs-o /Dim [] .opt { bs-i eq or } forall { pop /line } if
+          bs-o /Accent known { true bs-o /Accent get { bs-i eq { pop false } if } forall { pop /line } if } if
+          ink bs-bx bs-base bs-bw bs-top bs-base sub rectfill
+          bs-o /Values true .opt {
+            /fg ink bs-ui setalpha /title bs-size face
+            bs-bx bs-bw 2 div add  bs-top bs-base ge { bs-top bs-size 0.5 mul add } { bs-top bs-size 1.2 mul sub } ifelse moveto
+            bs-o /Prefix () .opt bs-val bs-o /Count false .opt { bs-ui mul } if bs-o /Decimals 0 .opt fmtnum strcat bs-o /Suffix () .opt strcat showcenter
+            1 setalpha
+          } if
+        } if
+      } for
+    grestore
+  end
+} bind def
+% [v ...] opts hbars -    rows down the plot frame, longest value to the
+%   right; the x range of the frame is the value axis.
+%   << /Grow u /Stagger 0.6 /Role /Roles /Gap 0.3 /Values true /Decimals 0
+%      /Prefix () /Suffix () /Names [ (a) ... ]   written left of the bars
+%      /Ranks [r ...]   the row each bar sits in (fractions slide between
+%                       rows): `values ranks` orders them largest first >>
+/hbars {
+  32 dict begin
+    /bs-o exch def /bs-v exch def
+    /bs-n bs-v length def
+    /bs-u bs-o /Grow 1 .opt 0 1 clamp def
+    plotbox aload pop /bs-h exch def /bs-w exch def /bs-y exch def /bs-x exch def
+    /bs-slot bs-h bs-o /Rows bs-n .opt div def
+    /bs-bh bs-slot 1 bs-o /Gap 0.3 .opt sub mul def
+    /bs-size bs-o /Size bs-bh 0.5 mul 3 vmin min .opt def
+    /bs-ranks bs-o /Ranks [ 0 1 bs-n 1 sub { } for ] .opt def
+    gsave
+      newpath bs-x bs-size 40 mul sub bs-y bs-w bs-size 80 mul add bs-h rectclip
+      0 1 bs-n 1 sub { /bs-i exch def
+        /bs-ui bs-i bs-n bs-u bs-o /Stagger 0.6 .opt .growth def
+        bs-ui 0 gt {
+          /bs-val bs-v bs-i get def
+          bs-val bs-ui mul 0 plotpoint pop /bs-end exch def
+          /bs-by bs-y bs-h add bs-ranks bs-i get 1 add bs-slot mul sub bs-slot bs-bh sub 2 div add def
+          bs-o /Roles known { bs-o /Roles get } { bs-o /Role /accent .opt } ifelse bs-i .pickrole
+          ink bs-x bs-by bs-end bs-x sub 0 max bs-bh rectfill
+          bs-ui setalpha
+          bs-o /Names known {
+            /fg ink /body bs-size face
+            bs-x bs-size 0.5 mul sub bs-by bs-bh bs-size 0.72 mul sub 2 div add moveto
+            bs-o /Names get bs-i get showright
+          } if
+          bs-o /Values true .opt {
+            /fg ink /title bs-size face
+            bs-end bs-size 0.4 mul add bs-by bs-bh bs-size 0.72 mul sub 2 div add moveto
+            bs-o /Prefix () .opt bs-val bs-o /Count false .opt { bs-ui mul } if bs-o /Decimals 0 .opt fmtnum strcat bs-o /Suffix () .opt strcat show
+          } if
+          1 setalpha
+        } if
+      } for
+    grestore
+  end
+} bind def
+% [ [x y] ... ] plotline -     the current path becomes the line through the
+%                              data points. `0 u trimpath stroke` draws it on.
+/plotline {
+  newpath
+  0 exch { aload pop plotpoint 3 -1 roll dup 0 eq { pop moveto } { pop lineto } ifelse 1 } forall pop
+} bind def
+% [ y ... ] seriesline -       the same for values evenly spaced across the
+%                              frame's x range
+/seriesline {
+  4 dict begin
+    /sl-v exch def /sl-n sl-v length def
+    [ 0 1 sl-n 1 sub { /sl-i exch def
+      [ .plot /x0 get .plot /x1 get .plot /x0 get sub sl-i sl-n 1 sub 1 max div mul add  sl-v sl-i get ]
+    } for ]
+  end
+  plotline
+} bind def
+% - plotarea -     close the current line down to the bottom of the frame,
+%                  for filling under a curve
+/plotarea {
+  currentpoint pop .plot /y get lineto
+  .plot /x get .plot /y get lineto closepath
+} bind def
+% [ [x y] ... ] u radius dots -     a dot at each point, popping in one
+%                                   after another as u goes 0 to 1
+/dots {
+  8 dict begin
+    /dt-r exch def /dt-u exch def /dt-p exch def
+    0 1 dt-p length 1 sub { /dt-i exch def
+      /dt-ui dt-i dt-p length dt-u 1.0 .growth def
+      dt-ui 0 gt {
+        dt-p dt-i get aload pop plotpoint dt-r dt-ui /back-out ease mul disc
+      } if
+    } for
+  end
+} bind def
+% [v ...] box opts donut -     a ring of shares, swept on clockwise from the top
+%   << /Grow u /Roles [ ... ] /Inner 0.62 /Gap 2 /Center (text) /CenterRole /fg >>
+/donut {
+  24 dict begin
+    /dn-o exch def
+    aload pop /dn-h exch def /dn-w exch def /dn-y exch def /dn-x exch def
+    /dn-v exch def
+    /dn-u dn-o /Grow 1 .opt 0 1 clamp /cubic-inout ease def
+    /dn-r dn-w dn-h min 2 div def
+    /dn-ri dn-r dn-o /Inner 0.62 .opt mul def
+    /dn-cx dn-x dn-w 2 div add def /dn-cy dn-y dn-h 2 div add def
+    /dn-tot 0 dn-v { add } forall def
+    /dn-a 90 def
+    /dn-gap dn-o /Gap 2 .opt def
+    gsave
+      0 1 dn-v length 1 sub { /dn-i exch def
+        /dn-sw dn-v dn-i get dn-tot div 360 mul dn-u mul def
+        dn-sw dn-gap gt {
+          dn-o /Roles chartroles .opt dn-i .pickrole ink
+          newpath
+          dn-cx dn-cy dn-r  dn-a dn-gap 2 div sub  dn-a dn-sw sub dn-gap 2 div add  arcn
+          dn-cx dn-cy dn-ri dn-a dn-sw sub dn-gap 2 div add  dn-a dn-gap 2 div sub  arc
+          closepath fill
+        } if
+        /dn-a dn-a dn-sw sub def
+      } for
+      dn-o /Center known dn-u 0 gt and { dn-u setalpha
+        dn-o /CenterRole /fg .opt ink
+        dn-o /Center get [ dn-cx dn-ri 0.8 mul sub dn-cy dn-ri 0.3 mul sub dn-ri 1.6 mul dn-ri 0.6 mul ] /title fitface
+        dn-o /Center get [ dn-cx dn-ri sub dn-cy dn-ri sub dn-ri 2 mul dn-ri 2 mul ] /c showin 1 setalpha
+      } if
+    grestore
+  end
+} bind def
+
+% proc inplot -        run proc clipped to the plot frame: for lines whose
+%                      data leaves the range (always, when the range is animated)
+/inplot { gsave newpath plotbox boxpath clip newpath exec grestore } bind def
+% << /Y v (or /X v) /Label (text) /Draw u /Dash true /Role /muted /Size s >> plotrule -
+%                      a reference line across the frame at a data value
+/plotrule {
+  16 dict begin
+    /pr-o exch def
+    /pr-u pr-o /Draw 1 .opt 0 1 clamp def
+    /pr-size pr-o /Size 2.1 vmin .opt def
+    pr-u 0 gt {
+      gsave
+        pr-o /Role /muted .opt ink theme /stroke get 0.6 mul setlinewidth
+        newpath
+        pr-o /Y known {
+          .plot /x0 get pr-o /Y get plotpoint moveto .plot /x1 get pr-o /Y get plotpoint lineto
+        } {
+          pr-o /X get .plot /y0 get plotpoint moveto pr-o /X get .plot /y1 get plotpoint lineto
+        } ifelse
+        gsave pr-o /Dash true .opt { [ pr-size 0.35 mul dup ] 0 setdash } if 0 pr-u trimpath stroke grestore
+        pr-o /Label known {
+          pr-u setalpha /body pr-size face
+          pr-o /Y known {
+            .plot /x1 get pr-o /Y get plotpoint pr-size 0.35 mul add moveto pr-o /Label get showright
+          } {
+            pr-o /X get .plot /y1 get plotpoint pr-size 0.9 mul sub exch pr-size 0.4 mul add exch moveto pr-o /Label get show
+          } ifelse
+          1 setalpha
+        } if
+      grestore
+    } if
+    newpath
+  end
+} bind def
+% x y opts plotmark -      mark a data point: a dot, dashed drop lines to
+%   the axes, and a label on a leader.
+%   << /Label (text) /Side /ne /Draw u /Drop true /Role /accent /Radius r /Size s >>
+/plotmark {
+  16 dict begin
+    /pm-o exch def /pm-y exch def /pm-x exch def
+    /pm-u pm-o /Draw 1 .opt 0 1 clamp def
+    /pm-size pm-o /Size 2.3 vmin .opt def
+    /pm-r pm-o /Radius 0.9 vmin .opt def
+    pm-u 0 gt {
+      gsave
+        pm-o /Drop true .opt {
+          /muted ink theme /stroke get 0.5 mul setlinewidth [ pm-size 0.3 mul dup ] 0 setdash
+          newpath pm-x pm-y plotpoint moveto pm-x .plot /y0 get plotpoint lineto
+          pm-x pm-y plotpoint moveto .plot /x0 get pm-y plotpoint lineto
+          0 pm-u 2 mul 1 min trimeach stroke [] 0 setdash
+        } if
+        pm-o /Role /accent .opt ink
+        pm-x pm-y plotpoint pm-u 3 mul 1 min /back-out ease pm-r mul disc
+        pm-o /Label known {
+          /body pm-size face theme /stroke get 0.6 mul setlinewidth
+          pm-o /Label get [ pm-x pm-y plotpoint 0 0 ] pm-r neg inset pm-o /Side /ne .opt pm-u 0.3 sub 0.7 div 0 1 clamp note
+        } if
+      grestore
+    } if
+  end
+} bind def
