@@ -1,0 +1,224 @@
+%!PS
+% Poster: 36.5
+% Chalk Proof
+%
+% Pythagoras on a green board. A square of side a + b is drawn, a tilted
+% square of side c inside it, and the four triangles left over are
+% shaded; then the area is written two ways, 2ab is struck from both
+% sides, and what is left is boxed. Everything is real chalk from PSCat's
+% dry-media library, and the formulas are TeX laid out by its mathkit.
+%
+% Techniques
+%   - Persistent movie: the board is painted once, on frame 0, and each
+%     frame adds only the chalk laid down since the frame before.
+%   - Strokes as data. In setup every path (lettering from sgpath,
+%     formulas from mkpath and mkalign, the geometry) is split into its
+%     subpaths, one per stroke of the chalk, and scheduled by arc length
+%     at a writing speed, with a short lift between strokes.
+%   - A stroke that takes more than one frame is drawn whole each frame,
+%     clipped to the part of it the chalk covered in that frame. The
+%     chalk's texture is seeded per stroke, so the pieces join exactly.
+%   - `overlay` shows the stick of chalk at the point being written and
+%     is never kept on the board.
+<< /Size [1280 720] /Duration 37 /FPS 30 /Persist true
+   /Background [0.20 0.13 0.08]
+   /Title (Chalk Proof)
+   /Description (Pythagoras on a green board: a square cut two ways, and the algebra beside it, written in chalk a stroke at a time.)
+>> animation
+
+(lib/artkit.ps) run (lib/paintkit.ps) run (lib/drykit.ps) run
+(lib/handscript.ps) run (lib/strokeglyphs.ps) run (lib/drychalk.ps) run
+(lib/mathkit.ps) run
+
+% ------------------------------------------------------------ the board
+/ghost {
+  (\\int_0^1 x^2 \\, dx = \\frac{1}{3}) 830 180 << /Size 40 /Seed 4 >> mkpath
+  (so the limit exists) 560 105 << /Size 30 >> sgpath
+  1090 250 moveto 970 250 120 0 300 arc
+} def
+/board { 28 40 1224 652 << /Surface /greenboard /Tray 14 /Ghost /ghost load >> dcboard } def
+board            % in setup: makes the board the chalk's surface (the paint is not kept)
+
+% ------------------------------------------------------- strokes as data
+% The current path -> an array of procedures, one per subpath (one per
+% stroke of the chalk).
+/capture {
+  mark [
+  { /cp-y exch def /cp-x exch def ] cvx [ cp-x cp-y /moveto cvx }
+  { /lineto cvx } { /curveto cvx } { /closepath cvx } pathforall
+  ] cvx
+  counttomark array astore exch pop
+  dup length 1 sub 1 exch getinterval
+} def
+
+/items 200 array def /nitems 0 def
+/tcur 0.8 def                       % the time the next item starts
+/pause { /tcur exch tcur add def } def
+/liftgap 0.05 def                   % seconds the chalk is off the board between strokes
+
+% /colour opts speed item -    the current path becomes an item: written
+% at `speed` units a second, starting when the item before it ends.
+/item {
+  /it-speed exch def /it-opts exch def /it-col exch def
+  /it-subs capture def newpath
+  /it-n it-subs length def
+  /it-s it-n array def /it-e it-n array def
+  /it-v 0 def
+  0 1 it-n 1 sub { /it-i exch def
+    newpath it-subs it-i get exec pathlength dup 5 lt { pop 5 } if /it-len exch def
+    it-s it-i it-v put  /it-v it-v it-len add def  it-e it-i it-v put
+    /it-v it-v liftgap it-speed mul add def
+  } for
+  newpath
+  items nitems <<
+    /col it-col /opts it-opts /speed it-speed /subs it-subs
+    /starts it-s /ends it-e /total it-v /t0 tcur /id nitems
+  >> put
+  /nitems nitems 1 add def
+  /tcur tcur it-v it-speed div add def
+} def
+
+% ------------------------------------------------------------- the plan
+/x0 120 def /y0 170 def /sa 150 def /sb 250 def /S sa sb add def
+/x1 x0 S add def /y1 y0 S add def
+/pen  << /Width 2.6 /Hand 0.6 >> def
+/thin << /Width 2.0 /Hand 0.5 >> def
+/txt  << /Width 2.0 >> def
+/wr 340 def                         % writing speed
+/dr 700 def                         % drawing speed
+
+% heading
+newpath (Pythagoras) 120 610 << /Size 44 /Seed 2 >> sgpath /white txt wr item
+newpath 118 596 moveto 330 599 lineto /white << /Width 2.4 /Hand 0.7 >> dr item
+0.5 pause
+% the big square, side a + b
+newpath x0 y0 moveto x1 y0 lineto /white pen dr item
+newpath x1 y0 moveto x1 y1 lineto /white pen dr item
+newpath x1 y1 moveto x0 y1 lineto /white pen dr item
+newpath x0 y1 moveto x0 y0 lineto /white pen dr item
+0.4 pause
+% the tilted square inside it, side c
+/p1 [x0 sa add y0] def /p2 [x1 y0 sa add] def /p3 [x1 sa sub y1] def /p4 [x0 y1 sa sub] def
+[ [p1 p2] [p2 p3] [p3 p4] [p4 p1] ] {
+  aload pop exch newpath aload pop moveto aload pop lineto /yellow pen dr item
+} forall
+0.4 pause
+% the four corner triangles, shaded with the side of the stick
+/shade { % [pA] [pB] [pC] n ->  hatch strokes across a triangle (from A's side toward the hypotenuse)
+  /sh-n exch def /sh-c exch def /sh-b exch def /sh-a exch def
+  newpath
+  1 1 sh-n { 0.5 sub sh-n div 0.92 mul 0.06 add /sh-u exch def
+    sh-u sh-a sh-b between aload pop moveto
+    sh-u sh-a sh-c between aload pop lineto
+  } for
+  /blue << /Tilt 86 /Side 6 /Hand 0.5 /Strength 0.3 >> 800 item
+} def
+[x0 y0] p1 p4 5 shade
+[x1 y0] p2 p1 5 shade
+[x1 y1] p3 p2 5 shade
+[x0 y1] p4 p3 5 shade
+0.3 pause
+% labels
+/lab { << /Size 30 /Seed 7 /Irregular 0.6 >> mkpath } def
+newpath (a) x0 sa 2 div add 8 sub y0 34 sub lab /white txt wr item
+newpath (b) x0 sa add sb 2 div add 8 sub y0 36 sub lab /white txt wr item
+newpath (a) x1 14 add y0 sa 2 div add 8 sub lab /white txt wr item
+newpath (b) x1 14 add y0 sa add sb 2 div add 10 sub lab /white txt wr item
+newpath (c) x0 sa add sb 2 div add 34 sub y0 sa 2 div add 30 add lab /yellow txt wr item
+newpath (c^2) x0 S 2 div add 24 sub y0 S 2 div add 10 sub << /Size 44 /Seed 3 >> mkpath /yellow << /Width 2.6 >> wr item
+0.3 pause
+0.6 pause
+
+% the algebra
+/eqink { pop /white << /Width 2.3 >> wr item 0.7 pause } def
+newpath (area, two ways:) 640 610 << /Size 34 /Seed 5 >> sgpath /white txt wr item
+0.4 pause
+newpath [ ((a+b)^2 &= 4 \\cdot \\tfrac{1}{2} ab + c^2) (a^2 + 2ab + b^2 &= 2ab + c^2) ] 900 520
+  << /Size 36 /Seed 11 /Leading 2.3 /Ink /eqink load >> mkalign /recs exch def
+% cancel 2ab on both sides
+newpath 772 420 moveto 852 462 lineto /pink << /Width 2.6 /Hand 0.6 >> dr item
+newpath 928 420 moveto 1010 462 lineto /pink << /Width 2.6 /Hand 0.6 >> dr item
+0.6 pause
+newpath (a^2 + b^2 = c^2) 812 300 << /Size 54 /Seed 21 >> mkpath /white << /Width 3.2 /Strength 0.7 >> wr item
+0.4 pause
+newpath 735 262 moveto 1135 262 lineto 1135 372 lineto 735 372 lineto 735 262 lineto
+/yellow << /Width 3 /Hand 0.8 /Corners /separate >> dr item
+0.5 pause
+newpath 1168 268 moveto 1192 268 lineto 1192 292 lineto 1168 292 lineto 1168 268 lineto
+1170 274 moveto 1190 274 lineto 1170 280 moveto 1190 280 lineto 1170 286 moveto 1190 286 lineto
+/white << /Width 2.4 /Hand 0.4 >> 300 item
+/items items 0 nitems getinterval def
+
+% ------------------------------------------------------------- per frame
+/chalkitem {
+  begin
+  /L0 now dt sub t0 sub speed mul def
+  /L1 now t0 sub speed mul def
+  L1 0 gt L0 total lt and {
+    col dcchalkcolor
+    0 1 subs length 1 sub { /i exch def
+      /s starts i get def /e ends i get def
+      s L1 lt e L0 gt and {
+        /o opts dup length 1 add dict copy dup /Seed id 100 mul i add 1 add put def
+        s L0 ge e L1 le and {
+          newpath subs i get exec o dcchalk
+        } {
+          gsave
+            newpath subs i get exec
+            L0 s sub e s sub div 0 1 clamp  L1 s sub e s sub div 0 1 clamp trimpath
+            44 setlinewidth 1 setlinecap 1 setlinejoin strokepath clip
+            newpath subs i get exec o dcchalk
+          grestore
+        } ifelse
+      } if
+    } for
+  } if
+  end
+} def
+
+/scene {
+  frame 0 eq { board } if
+  items { chalkitem } forall
+} def
+
+% ---------------------------------------------------------- the stick
+% Shown over each frame and not kept: a stub of chalk at the point being
+% written. Between strokes it travels to the start of the next one.
+/sticktints << /white [0.95 0.95 0.92] /yellow [0.96 0.88 0.45] /blue [0.55 0.72 0.90] /pink [0.95 0.62 0.68] >> def
+/pointat {  % i u -> x y   (in an item's dictionary)
+  exch newpath subs exch get exec pathpoint pop newpath
+} def
+/stickat {  % -> x y true | false   (in an item's dictionary)
+  /L now t0 sub speed mul def
+  L 0 ge L total le and {
+    /k 0 def
+    0 1 subs length 1 sub { /i exch def starts i get L le { /k i def } if } for
+    L ends k get le {
+      k L starts k get sub ends k get starts k get sub div pointat
+    } {
+      k 1 add subs length lt {
+        [ k 1 pointat ] [ k 1 add 0 pointat ]
+        L ends k get sub starts k 1 add get ends k get sub div /smooth ease
+        3 1 roll between aload pop
+      } { k 1 pointat } ifelse
+    } ifelse
+    true
+  } { false } ifelse
+} def
+/overlay {
+  items {
+    begin
+    stickat {
+      gsave
+        translate 52 rotate
+        0 0 0 setrgbcolor 0.25 setalpha
+        newpath 3 -5 moveto 64 -9 lineto 64 3 lineto 3 1 lineto closepath fill
+        1 setalpha sticktints col get aload pop setrgbcolor
+        newpath 0 -1 moveto 4 -5.5 lineto 62 -5.5 lineto 62 5.5 lineto 4 5.5 lineto 0 1 lineto closepath fill
+        0 0 0 setrgbcolor 0.18 setalpha
+        newpath 4 -5.5 moveto 62 -5.5 lineto 62 -1.5 lineto 4 -1.5 lineto closepath fill
+      grestore
+    } if
+    end
+  } forall
+} def

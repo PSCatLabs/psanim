@@ -48,6 +48,7 @@ ffmpeg, time from first frame to finished file.
 | orrery | 360 | 9.4 s | 10 | 40 | 40.9 MB |
 | taiji | 720 | 10.9 s | 10 | 67 | 3.5 MB |
 | tidewater | 576 | 21.7 s | 1 | 27 | 0.8 MB |
+| chalk-proof | 1110 | 57.9 s | 1 | 19 | 0.9 MB |
 | murmuration | 780 | 91.9 s | 1 | 8.5 | 12.8 MB |
 
 A 40-second 720p film in 13 seconds; a 12-second 1080-square loop of
