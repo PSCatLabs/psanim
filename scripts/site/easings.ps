@@ -1,0 +1,27 @@
+%!PS
+% The easing curves, drawn by the engine they belong to: a still, rendered
+% with `psanim frame` by scripts/build_site.py for the reference page.
+<< /Size [1200 620] /Duration 1 /FPS 1 /Background [0.071 0.082 0.114] >> animation
+/names [ /linear /smooth /smoother /quad-out /cubic-in /cubic-out /cubic-inout /quint-out
+         /sine-inout /expo-out /expo-inout /circ-out /back-in /back-out /back-inout
+         /elastic-out /bounce-out /spring ] def
+/scene {
+  0 1 names length 1 sub {
+    /k exch def
+    /nm names k get def
+    gsave
+      k 6 mod 198 mul 22 add  2 k 6 idiv sub 204 mul 22 add translate
+      % frame: the unit square is 140 wide, 100 high, with room to overshoot
+      0.15 0.17 0.23 setrgbcolor 0 0 176 180 rectfill
+      0.26 0.29 0.37 setrgbcolor 0.8 setlinewidth
+      18 50 moveto 158 50 lineto stroke 18 150 moveto 158 150 lineto stroke
+      newpath
+      0 1 100 { /i exch def
+        i 100 div dup nm ease 100 mul 50 add exch 140 mul 18 add exch
+        i 0 eq { moveto } { lineto } ifelse } for
+      1 0.79 0.30 setrgbcolor 2.2 setlinewidth 1 setlinejoin 1 setlinecap stroke
+      /Helvetica findfont 15 scalefont setfont 0.93 0.91 0.88 setrgbcolor
+      18 16 moveto nm 20 string cvs show
+    grestore
+  } for
+} def

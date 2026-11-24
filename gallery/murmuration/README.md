@@ -1,15 +1,13 @@
 # Murmuration
 
-Twelve hundred starlings over a fen at dusk: the flock flies in, folds and
-breathes, is split twice by a falcon, re-forms, and funnels down to roost as
-the light goes. 26 s, 1280x720, 30 fps. A **stateful** movie: `step` runs a
-flocking simulation at 60 ticks a second and `scene` only draws it.
+Twelve hundred starlings over a fen at dusk: the flock flies in, folds, is
+split twice by a falcon, re-forms, and funnels down to roost. 26 s, 1280x720,
+30 fps. **Stateful**: `step` runs the flock at 60 ticks/s, `scene` only draws.
 
 ## The simulation
 
-State is four arrays (`px py vx vy`) made in setup. Each tick every bird
-sums these accelerations, integrates, and has its speed held to 140..340
-units/s (birds can neither hover nor sprint):
+State is four arrays (`px py vx vy`) made in setup. Each tick every bird sums
+these accelerations, integrates, and has its speed held to 140..340 units/s:
 
 | Rule | What it does | Parameters |
 |---|---|---|
@@ -22,7 +20,6 @@ units/s (birds can neither hover nor sprint):
 | Walls | soft push back into the sky | `K-WALL` 14 |
 
 Two things give the density its folds:
-
 - **Depth sheets.** Bird `i` lives in sheet `i mod 3`. Birds keep their
   distance only within a sheet but align and cohere with everyone, and each
   sheet follows the attractor 0.3 s later and reads the wind a little further
@@ -33,17 +30,14 @@ Two things give the density its folds:
 ## Keeping the neighbour search cheap
 
 No all-pairs loop. Both grids are rebuilt every tick in O(n):
-
 - a **coarse grid** (44-unit cells) of per-cell sums: count, position,
   velocity. Alignment and cohesion read the 3x3 block around the bird: 9
   lookups, whatever the density;
-- a **fine grid** (16-unit cells, one per sheet) of linked lists
-  (`f-head`, `f-next`). Separation walks the 3x3 block, which holds every
-  bird that can be inside the radius; only used cells are cleared afterwards.
+- a **fine grid** (16-unit cells, one per sheet) of linked lists. Separation
+  walks the 3x3 block, which holds every bird that can be inside the radius.
 
-Cost on one core: about 35 ms per tick on average for 1200 birds (25 when the
-flock is loose, more when it packs), about 45 ms to draw a frame.
-`--param birds=400` runs a lighter flock; `--param debug=1` shows the attractor.
+About 35 ms per tick for 1200 birds (more when the flock packs) and 45 ms to
+draw a frame. `--param birds=400` is lighter; `--param debug=1` shows the attractor.
 
 ## Drawing
 
@@ -57,9 +51,8 @@ cloud are generated once in setup with `hash01` and replayed from arrays.
 
 ## Render
 
+One thread (stateful), about two and a half minutes:
+
 ```sh
-psanim check  gallery/murmuration/murmuration.ps
 psanim render gallery/murmuration/murmuration.ps -o out/murmuration/murmuration.mp4
 ```
-
-Stateful movies render on one thread: about two and a half minutes.

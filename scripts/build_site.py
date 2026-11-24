@@ -287,7 +287,14 @@ def build_reference():
             body.append(f'<div class="word" id="w-{e["name"]}"><pre class="stack">{stack}</pre>'
                         f'<p>{inline(e["summary"], lambda h: h)}</p></div>')
     body.append('<h2 id="easings">Easings</h2><p>For <code>ease</code>, <code>tween</code> and <code>keyframes</code>.</p>')
-    body.append(part("easings.svg.html") if (ROOT / "scripts/site/easings.svg.html").exists() else "")
+    # The chart is a psanim program: the engine draws its own curves.
+    chart = SITE / "easings.png"
+    done = subprocess.run([str(PSANIM), "frame", str(ROOT / "scripts/site/easings.ps"), "-o", str(chart), "-q", "--scale", "2"])
+    if done.returncode == 0:
+        body.append('<figure class="diagram"><img src="easings.png" alt="Eighteen easing curves plotted from 0 to 1" '
+                    'style="width:100%;height:auto;display:block;border-radius:6px">'
+                    '<figcaption>Input left to right, output bottom to top; the lines mark 0 and 1. '
+                    'Drawn by <code>scripts/site/easings.ps</code>, a one-frame psanim program.</figcaption></figure>')
     body.append('<p class="chips">' + " ".join(f"<code>/{n}</code>" for n in easings) + "</p>")
     body.append('<h2 id="transitions">Transitions</h2><p>For <code>reel</code>.</p><p class="chips">'
                 + " ".join(f"<code>/{n}</code>" for n in transitions) + "</p>")

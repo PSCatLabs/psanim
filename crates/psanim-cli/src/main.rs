@@ -653,9 +653,13 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
         let typical = (before + after) / 2.0;
         seam = Some((join, typical));
         if join > typical * 1.25 + 2e-4 {
+            let how = if typical < 1e-5 {
+                "while the frames beside it do not change at all".to_string()
+            } else {
+                format!("{:.1}x the steps beside it ({typical:.4})", join / typical)
+            };
             warnings.push(format!(
-                "the loop does not close cleanly: the step from the last frame to the first is {:.4}, {:.1}x the steps beside it ({:.4}). Something does not return to where it started: check that every angle is a whole number of turns over the loop (`k turns`), allowing for each part's symmetry. `psanim sheet --seam 6` shows the join",
-                join, join / typical.max(1e-9), typical
+                "the loop does not close cleanly: the step from the last frame to the first is {join:.4}, {how}. Something does not return to where it started: check that every angle is a whole number of turns over the loop (`k turns`), allowing for each part's symmetry. `psanim sheet --seam 6` shows the join"
             ));
         }
     }

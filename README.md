@@ -11,7 +11,7 @@ every core.
 
 ```postscript
 %!PS
-<< /Size [640 360] /Duration 4 /FPS 30 /Loop true /Background [0.06 0.07 0.10] >> animation
+<< /Size [640 360] /Duration 4 /FPS 30 /Background [0.06 0.07 0.10] >> animation
 
 /scene {
   % A ring of dots, each starting a little after the last.
