@@ -1,0 +1,346 @@
+%!PS
+% Poster: 60
+% Circle Area: why the area of a circle is pi r squared
+% A disc is cut into concentric rings that straighten into strips and stack
+% into a triangle (base 2 pi r, height r), then into wedges that open like
+% two combs and mesh into a rectangle (pi r by r). Every intermediate shape
+% is exact: a bending ring keeps its mid-length and thickness, so its area
+% never changes; the wedges are rigid.
+
+[ /ask 7  /rings 23  /wedges 24  /close 9 ] storyboard
+<< /Size [1280 720] /Duration storylength /FPS 30
+   /Title (Circle Area)
+   /Description (Why the area of a circle is pi r squared, shown twice: rings unrolled into a triangle, wedges meshed into a rectangle.)
+>> animation
+/pkdiagram use                 % loads pkstage, pkmotion, pktype
+
+% ---------------------------------------------------------------- constants
+/CX 640 def  /CY 400 def  /Rd 150 def
+/WDY -28 def                               % the wedge figure sits a little lower: its halves part as they open
+/PI 3.14159265 def
+/HalfC PI Rd mul def                       % half the circumference, in units
+/ringcolA /accent2 def  /ringcolB /good def
+/rimcol /accent def     /hcol /accent3 def
+
+% ------------------------------------------------- a small maths typesetter
+% A run is [ (text) /kind ... ]: /r roman, /i italic, /g Symbol (p is pi,
+% \327 a centred dot), /u a superscript, /h a stacked one-half, /t and /b the
+% theme's title and body faces.
+/kfont << /r /Times-Roman /i /Times-Italic /g /Symbol /t /title /b /body >> def
+/mfontset {                                % kind size  ->  -
+  exch dup /u eq { pop 0.62 mul /Times-Roman exch face }
+                 { kfont exch get exch face } ifelse
+} def
+/mwidth {                                  % run size  ->  w
+  6 dict begin /sz exch def /segs exch def /acc 0 def
+  0 2 segs length 2 sub { /j exch def
+    segs j 1 add get /h eq
+      { /acc acc sz 0.42 mul add def }
+      { segs j 1 add get sz mfontset
+        /acc segs j get stringwidth pop acc add def } ifelse
+  } for
+  acc end
+} def
+/mshow {                                   % run size  ->  -   at the current point
+  8 dict begin /sz exch def /segs exch def
+  0 2 segs length 2 sub { /j exch def /kk segs j 1 add get def
+    kk /h eq {
+      currentpoint /hy exch def /hx exch def
+      /Times-Roman sz 0.52 mul face
+      hx sz 0.21 mul add hy sz 0.39 mul add moveto (1) showcenter
+      hx sz 0.21 mul add hy sz 0.12 mul sub moveto (2) showcenter
+      gsave newpath sz 0.045 mul setlinewidth 0 setlinecap
+        hx sz 0.03 mul add hy sz 0.30 mul add moveto sz 0.36 mul 0 rlineto stroke
+      grestore
+      hx sz 0.42 mul add hy moveto
+    } {
+      kk sz mfontset
+      kk /u eq { 0 sz 0.40 mul rmoveto segs j get show 0 sz -0.40 mul rmoveto }
+               { segs j get show } ifelse
+    } ifelse
+  } for
+  end
+} def
+/mcenter {                                 % cx y run size  ->  -
+  4 dict begin /sz exch def /segs exch def /yy exch def /xx exch def
+  xx segs sz mwidth 2 div sub yy moveto segs sz mshow end
+} def
+% An equation built term by term: each term is [ run role time ] and rises
+% into its final place, so the line never reflows.
+/eqbuild {                                 % cx y size [ term ... ]  ->  -
+  10 dict begin /terms exch def /sz exch def /ey exch def /ecx exch def
+  /tot 0 def terms { 0 get sz mwidth tot add /tot exch def } forall
+  /ex ecx tot 2 div sub def
+  terms { /tm exch def
+    tm 2 get [/rise 0.5] { tm 1 get ink ex ey moveto tm 0 get sz mshow } enters
+    /ex ex tm 0 get sz mwidth add def
+  } forall
+  end
+} def
+
+/headline {                                % run  ->  -   for the current beat
+  /hd.r exch def
+  [/rise 0.6] [/fade 0.5] { /fg ink 64 640 moveto hd.r 42 mshow } staged
+} def
+/subline {                                 % a b (text)  ->  -
+  3 dict begin /tx exch def /tb exch def /ta exch def
+  ta tb [/rise 0.5] [/fade 0.4] { /body 27 face /muted ink 64 592 moveto tx show } onstage
+  end
+} def
+/fadetail {                                % seconds proc  ->  -   fade out at the scope's end
+  /ft.p exch def /ft.s exch def
+  span ft.s sub span ramp dup 0 gt { 1 exch sub /ft.p load faded } { pop ft.p } ifelse
+} def
+/dimv {                                    % x y0 y1 u  ->  -   a vertical dimension line
+  4 dict begin /du exch def /y1 exch def /y0 exch def /dx exch def
+  newpath dx 7 sub y0 moveto dx 7 add y0 lineto dx y0 moveto dx y1 lineto
+  dx 7 sub y1 moveto dx 7 add y1 lineto 0 du trimpath stroke end
+} def
+
+% ------------------------------------------------------------------- rings
+% One ring of mid-radius rho and thickness lw, u of the way from a circle to
+% a straight strip: an arc of constant length 2 pi rho whose curvature falls
+% to zero, held at its lowest point. Area = length x thickness throughout.
+/ringstrip {                               % rho lw u  ->  -
+  8 dict begin /u exch def /lw exch def /rho exch def
+  /th 360 1 u sub mul def
+  lw setlinewidth 0 setlinecap newpath
+  u 0 le { CX CY rho 0 360 arc closepath } {
+    th 0.2 lt
+      { CX rho PI mul sub CY rho sub moveto CX rho PI mul add CY rho sub lineto }
+      { /rc rho 360 mul th div def
+        CX CY rho sub rc add rc -90 th 2 div sub -90 th 2 div add arc } ifelse
+  } ifelse
+  stroke end
+} def
+% The disc as N rings. sl 0..1 opens the cuts and spreads the colours;
+% uproc maps a ring's index to how far it has unrolled.
+/ringpic {                                 % N sl uproc  ->  -
+  14 dict begin /uproc exch def /sl exch def /NN exch def
+  /w Rd NN div def
+  /gap w 0.1 mul 1.5 2 copy gt { exch } if pop def
+  sl 0 le { ringcolA ink CX CY Rd disc } {
+    0 1 NN 1 sub { /k exch def
+      ringcolA ringcolB k NN 1 sub div sl mul mixink ink
+      k 0.5 add w mul  w 0.6 add 0.6 gap add sl mul sub  k uproc  ringstrip
+    } for
+  } ifelse
+  % the circumference, kept in the accent colour as the outer ring unrolls
+  sl 0 gt {
+    gsave sl setalpha rimcol ink
+      NN 0.5 sub w mul 1.5 sub  3  NN 1 sub uproc
+      % same bend as the outer ring, drawn along its outer edge
+      3 dict begin /u exch def /lw exch def /rho exch def
+        lw setlinewidth 0 setlinecap newpath
+        /th 360 1 u sub mul def
+        u 0 le { CX CY Rd 1.5 sub 0 360 arc closepath } {
+          th 0.2 lt
+            { CX rho PI mul sub CY Rd sub 1.5 add moveto CX rho PI mul add CY Rd sub 1.5 add lineto }
+            { /rc rho 360 mul th div def
+              CX CY Rd sub rc add w 2 div add  rc w 2 div add 1.5 sub
+              -90 th 2 div sub -90 th 2 div add arc } ifelse
+        } ifelse
+        stroke
+      end
+    grestore
+  } if
+  end
+} def
+/uCoarse {                                 % k -> u : ten rings, outer first; then all roll back
+  dup 9 eq { pop 1.8 3.6 /cubic-inout tween }
+           { 8 exch sub 0.15 mul 3.4 add dup 1.4 add /cubic-inout tween } ifelse
+  7.4 8.4 /cubic-inout tween sub
+} def
+/uFine { 49 exch sub 0.03 mul 9.2 add dup 1.6 add /cubic-inout tween } def
+
+% ------------------------------------------------------------------ wedges
+% The disc as N rigid wedges in two halves. u straightens each half's arc
+% (the crusts stay on a curve of length pi r whose curvature falls to zero),
+% v meshes the two combs so the straight edges meet exactly.
+/wedgepic {                                % N sl u v  ->  -
+  24 dict begin /v exch def /u exch def /sl exch def /NN exch def
+  /hf NN 2 idiv def  /da 360 NN div def  /tooth 2 PI mul Rd mul NN div def
+  /cutw tooth 0.045 mul 1.4 2 copy gt { exch } if pop def
+  /hh da 2 div cos Rd mul def  /hs da 2 div sin Rd mul def
+  % while a half opens, its outermost tips swing past the centre line: the
+  % halves part by exactly that much, so the two never overlap
+  /pass 0 def
+  /sep 1 u sub 0.0001 lt { 0 } {
+    /a0 hf 2 div 0.5 sub da mul 1 u sub mul def
+    1 a0 cos sub 1 u sub div a0 cos add 1 sub Rd mul 0 2 copy lt { exch } if pop
+  } ifelse def
+  [ 1 -1 1 -1 ] { /side exch def  /pass pass 1 add def     % wedges first, then every crust on top
+    /fillc side 1 eq { ringcolA rgbof 3 array astore } { ringcolA ringcolB sl mixink } ifelse def
+    gsave CX CY translate 1 side scale
+    side neg v mul hs mul 2 div  v hh mul 2 div sep sub  translate
+    0 1 hf 1 sub { /j exch def
+      /m j 0.5 add hf 2 div sub def
+      /ang m da mul 1 u sub mul def
+      1 u sub 0.0001 lt
+        { /px m tooth mul def /py Rd neg def }
+        { /kap 1 u sub Rd div def
+          /px ang sin kap div def /py 1 ang cos sub kap div Rd sub def } ifelse
+      gsave px py translate ang rotate
+        pass 2 le {
+          newpath 0 Rd moveto 0 Rd Rd -90 da 2 div sub -90 da 2 div add arc closepath
+          fillc ink gsave fill grestore
+          fillc /bg sl mixink ink cutw setlinewidth 1 setlinejoin stroke
+        } {
+          newpath 0 Rd Rd 1.5 sub -90 da 2 div sub -90 da 2 div add arc
+          rimcol ink 3 setlinewidth 0 setlinecap stroke
+        } ifelse
+      grestore
+    } for
+    grestore
+  } forall
+  end
+} def
+
+% ------------------------------------------------------------------- beats
+/askbeat {
+  [ (Why is the area of a circle ) /t (p) /g (r) /i (2) /u (?) /t ] headline
+  % the circle draws itself, then fills
+  /accent2 /fg 0.35 mixink ink 3 setlinewidth 1 setlinecap
+  newpath CX CY Rd 1.5 sub 90 450 arc 0  0.4 1.8 /cubic-inout tween trimpath stroke
+  1.3 2.3 ramp dup 1 lt { { 10 0 { pop 0 } ringpic } faded } { pop 10 0 { pop 0 } ringpic } ifelse
+  0.6 {
+    % the radius
+    /fg ink 3 setlinewidth 1 setlinecap
+    newpath CX CY moveto CX Rd add CY lineto 0  2.5 3.2 /cubic-out tween trimpath stroke
+    2.5 /pop { /fg ink CX CY 6 disc } enters
+    3.0 /fade { /fg ink CX Rd 2 div add CY 14 add [ (r) /i ] 40 mcenter } enters
+    CX 84 54 [
+      [ [ (Area) /r ( = ) /r ] /fg 3.8 ]
+      [ [ (p) /g (r) /i (2) /u ] /fg 4.4 ]
+    ] eqbuild
+  } fadetail
+} def
+
+/ringsbeat {
+  [ (One way: cut it into rings) /t ] headline
+  1.6 7.2  (Each ring straightens into a strip as long as its circumference.) subline
+  7.4 12.2 (Thinner rings: the staircase smooths out.) subline
+  12.4 22  (The strips fill a triangle.) subline
+  0.9 {
+    % the circle that was, left as a ghost
+    gsave 1.8 2.6 ramp setalpha /muted ink 1.5 setlinewidth [ 4 6 ] 0 setdash
+      newpath CX CY Rd 0 360 arc stroke grestore
+    now 8.5 lt { 10  0.5 1.5 /cubic-inout tween  /uCoarse load ringpic } {
+      now 9.0 lt
+        { { 10 1 { pop 0 } ringpic } { 50 1 { pop 0 } ringpic } 8.5 9.0 ramp crossfade }
+        { 50 1 /uFine load ringpic } ifelse
+    } ifelse
+    % the triangle the strips fill
+    /fg ink 2 setlinewidth 1 setlinejoin
+    newpath CX CY moveto CX HalfC sub CY Rd sub lineto CX HalfC add CY Rd sub lineto closepath
+    0  12.4 13.6 /cubic-inout tween trimpath stroke
+    % base: the circumference
+    16.6 /pulse {
+      rimcol ink 3 setlinewidth 1 setlinecap
+      [ CX HalfC sub CY Rd sub HalfC 2 mul Rd ] /s bracepath
+      0  13.4 14.1 /cubic-out tween trimpath stroke
+      13.8 /fade { rimcol ink CX CY Rd sub 86 sub [ (2) /r (p) /g (r) /i ] 40 mcenter
+        /body 24 face /muted ink 14 6 rmoveto (the whole circumference) show } enters
+    } emphasized
+    % height: the radius
+    17.4 /pulse {
+      gsave 14.6 15.0 ramp setalpha /muted ink 1.5 setlinewidth [ 4 6 ] 0 setdash
+        newpath CX CY moveto CX HalfC add 28 add CY lineto stroke grestore
+      hcol ink 3 setlinewidth 1 setlinecap
+      CX HalfC add 28 add CY Rd sub CY  14.6 15.3 /cubic-out tween dimv
+      15.0 /fade { hcol ink CX HalfC add 46 add CY Rd 2 div sub 12 sub moveto [ (r) /i ] 40 mshow } enters
+    } emphasized
+    CX 84 54 [
+      [ [ (Area) /r ( = ) /r ] /fg 15.8 ]
+      [ [ () /h ] /fg 15.8 ]
+      [ [ ( \327 ) /g ] /fg 16.6 ]
+      [ [ (2) /r (p) /g (r) /i ] rimcol 16.6 ]
+      [ [ ( \327 ) /g ] /fg 17.4 ]
+      [ [ (r) /i ] hcol 17.4 ]
+      [ [ ( = ) /r (p) /g (r) /i (2) /u ] /fg 18.8 ]
+    ] eqbuild
+  } fadetail
+} def
+
+/wedgesbeat {
+  [ (Another way: cut it into wedges) /t ] headline
+  1.0 7.8   (Open each half like a comb, then mesh the teeth.) subline
+  8.0 13.6  (Thinner wedges: the bumpy edges flatten.) subline
+  13.8 23   (In the limit it is a rectangle.) subline
+  % the figure itself is not faded at the end: the closing beat carries it off
+  gsave 0 WDY translate
+    /wu 2.4 5.0 /cubic-inout tween 8.8 9.8 /cubic-inout tween sub def
+    /wv 5.3 6.8 /cubic-inout tween 8.0 8.9 /cubic-inout tween sub def
+    /wsl 1.0 2.0 /cubic-inout tween def
+    now 9.8 lt { 12 wsl wu wv wedgepic } {
+      now 10.3 lt
+        { { 12 1 0 0 wedgepic } { 64 1 0 0 wedgepic } 9.8 10.3 ramp crossfade }
+        { 64 1  10.5 12.3 /cubic-inout tween  12.4 13.6 /cubic-inout tween  wedgepic } ifelse
+    } ifelse
+  grestore
+  0.9 {
+    gsave 0 WDY translate
+    % the rectangle it tends to
+    /fg ink 2 setlinewidth 1 setlinejoin
+    newpath CX HalfC 2 div sub CY Rd 2 div sub moveto HalfC 0 rlineto 0 Rd rlineto HalfC neg 0 rlineto closepath
+    0  13.8 15.0 /cubic-inout tween trimpath stroke
+    % width: half the circumference
+    17.2 /pulse {
+      rimcol ink 3 setlinewidth 1 setlinecap
+      [ CX HalfC 2 div sub CY Rd 2 div sub HalfC Rd ] /s bracepath
+      0  14.6 15.3 /cubic-out tween trimpath stroke
+      15.0 /fade {
+        rimcol ink CX CY Rd 2 div sub 86 sub [ (p) /g (r) /i ] 40 mcenter
+        /body 24 face /muted ink 14 6 rmoveto (half the circumference) show
+      } enters
+    } emphasized
+    % height: the radius
+    18.0 /pulse {
+      hcol ink 3 setlinewidth 1 setlinecap
+      CX HalfC 2 div add 36 add CY Rd 2 div sub CY Rd 2 div add  15.8 16.5 /cubic-out tween dimv
+      16.2 /fade { hcol ink CX HalfC 2 div add 54 add CY 12 sub moveto [ (r) /i ] 40 mshow } enters
+    } emphasized
+    grestore
+    CX 84 54 [
+      [ [ (Area) /r ( = ) /r ] /fg 16.6 ]
+      [ [ (p) /g (r) /i ] rimcol 17.2 ]
+      [ [ ( \327 ) /g ] /fg 18.0 ]
+      [ [ (r) /i ] hcol 18.0 ]
+      [ [ ( = ) /r (p) /g (r) /i (2) /u ] /fg 19.2 ]
+    ] eqbuild
+  } fadetail
+} def
+
+% The three shapes at one scale: equal areas, side by side.
+/sized {                                   % x y s proc  ->  -   draw a picture at scale s about (x, y)
+  4 1 roll gsave 3 1 roll translate dup scale CX neg CY neg translate exec grestore
+} def
+/small { 0.5 exch sized } def              % x y proc  ->  -
+/closebeat {
+  /fade { /fg ink 64 640 moveto [ (Two dissections, one formula) /t ] 42 mshow } entering
+  0.4 /pop { 196 450 { ringcolA ink CX CY Rd disc rimcol ink 3 setlinewidth newpath CX CY Rd 1.5 sub 0 360 arc stroke } small } enters
+  1.0 /fade { /muted ink 316 436 [ (=) /r ] 54 mcenter } enters
+  1.0 /rise { 596 487.5 { 50 1 { pop 1 } ringpic } small } enters
+  1.7 /fade { /muted ink 877 436 [ (=) /r ] 54 mcenter } enters
+  % the rectangle arrives from where the last beat left it
+  0.1 1.3 /cubic-inout tween [ CX CY WDY add 1 ] [ 1040 450 0.5 ] between aload pop
+  { 64 1 1 1 wedgepic } sized
+  2.6 /fade {
+    /muted ink 596 340 [ () /h ( \327 ) /g (2) /r (p) /g (r) /i ( \327 ) /g (r) /i ] 34 mcenter
+    1040 340 [ (p) /g (r) /i ( \327 ) /g (r) /i ] 34 mcenter
+  } enters
+  3.4 [/rise 0.7] { /fg ink CX 150 [ (Area) /r ( = ) /r (p) /g (r) /i (2) /u ] 96 mcenter } enters
+  rimcol ink 4 setlinewidth 1 setlinecap
+  newpath CX 150 sub 122 moveto 300 0 rlineto 0  4.0 4.8 /cubic-out tween trimpath stroke
+} def
+
+/scene {
+  ground
+  % the whole disc returns under the fading triangle
+  /wedges beat 0.8 sub /wedges beat
+    { progress { gsave 0 WDY translate 12 0 0 0 wedgepic grestore } faded } during
+  /ask    { askbeat }    inbeat
+  /rings  { ringsbeat }  inbeat
+  /wedges { wedgesbeat } inbeat
+  /close  { closebeat }  inbeat
+} def

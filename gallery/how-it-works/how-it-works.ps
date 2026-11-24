@@ -1,0 +1,361 @@
+%!PS
+% Poster: 25.5
+% How psanim works
+% An architecture explainer of psanim, written in psanim: one program with a
+% scene procedure, a clock set once per frame, time scopes, frames that fan
+% out across cores, and the stack from program to video.
+
+[ /title 4  /program 10.5  /clock 12.5  /scopes 11.5  /fanout 10.5  /stack 12.5  /summary 8 ] storyboard
+<< /Size [1280 720] /Duration storylength /FPS 30
+   /Title (How psanim works)
+   /Description (An animated architecture explainer of psanim itself: a movie is one PostScript program, a frame is a function of its time, time scopes re-base the clock, frames render in any order on every core, and the stack from program to video.)
+>> animation
+
+/pkdiagram use /pkcode use /pktype use
+
+% ---------------------------------------------------------------- places
+/page    canvasbox 6 vmin inset def
+/headbox page 64 0 /nw placed pop page 0 get page 1 get page 3 get add 64 sub page 2 get 64 4 array astore def
+/capbox  [ page 0 get page 1 get page 2 get 56 ] def
+/stagebox [ page 0 get page 1 get 76 add page 2 get page 3 get 64 sub 76 sub 24 sub ] def
+
+/stageband { 0 stagebox 1 get 4 sub width stagebox 3 get 8 add } def     % x y w h, for rectclip under a camera
+
+% ---------------------------------------------------------------- furniture
+% (n) (title) header: the section heading, for the length of the current beat
+/header {
+  4 dict begin /h-title exch def /h-num exch def
+  [/mask-up 0.6] [/fade 0.4] {
+    /mono 24 face /accent ink h-num headbox /w showin
+    /title 40 face /fg ink
+    headbox 0 get 56 add headbox 1 get 18 add moveto h-title show
+  } staged
+  0.3 span 0.3 sub [/unroll 0.7] [/fade 0.3] {
+    /line ink headbox 0 get headbox 1 get 2 sub headbox 2 get 2 rectfill
+  } onstage
+  end
+} def
+
+% [ [t0 t1 (text)] ... ] say: the narration line at the bottom
+/say { capbox << /Size 30 /Plate false >> captions } def
+
+% boxA boxB (text) t elabel: a legible label over the middle of a horizontal edge, from time t
+/elabel {
+  6 dict begin /e-t exch def /e-s exch def /e-B exch def /e-A exch def
+  e-t /fade { /body 21 face /muted ink
+    e-A /e boxpoint pop e-B /w boxpoint pop add 2 div  e-A /c boxpoint exch pop 14 add moveto e-s showcenter } enters
+  end
+} def
+
+% the film's progress, along the bottom edge
+/progress-bar {
+  /surface ink 0 0 width 4 rectfill
+  /accent ink 0 0 width progress mul 4 rectfill
+} def
+
+% the demo movie every section reuses: a ball crossing a w-by-h frame in 2 s
+/demo-len 2 def
+/demo-bg {
+  /surface ink 0 0 width height rectfill
+  /line ink 0 height 0.18 mul width height 0.03 mul rectfill
+} def
+/demo-ball {
+  /accent ink
+  now demo-len div 0 1 clamp 0.12 0.88 between width mul
+  height 0.18 mul height 0.12 mul add
+  now demo-len div 540 mul sin abs height 0.5 mul mul add
+  height 0.12 mul disc
+} def
+/demo { demo-bg demo-ball } def
+% box framed: a thin outline round a little screen
+/framed { /line ink 2 setlinewidth -1 inset 4 roundpath stroke } def
+
+% x y w n lo step decimals tick-ruler: a ruler in the current colour and font
+/tick-ruler {
+  10 dict begin
+  /r-dec exch def /r-step exch def /r-lo exch def /r-n exch def /r-w exch def /r-y exch def /r-x exch def
+  r-x r-y r-w 2 rectfill
+  0 1 r-n { /r-k exch def /r-xx r-x r-w r-k r-n div mul add def
+    r-xx 1 sub r-y 7 sub 2 9 rectfill
+    r-xx r-y 30 sub moveto r-lo r-k r-step mul add r-dec fmtfixed showcenter } for
+  end
+} def
+
+% ---------------------------------------------------------------- 0. title
+/beat-title {
+  /display 92 face /fg ink
+  page /c boxpoint exch (How psanim works) stringwidth pop 2 div sub exch 10 add moveto
+  0.3 span { [/fade 0.5] { (How psanim works) /glyphs 0.04 /mask-up kinetic } leaving } during
+  1.2 span 0.1 sub /rise /fade {
+    /body 32 face /muted ink page /c boxpoint 50 sub moveto (animation as a PostScript program) showcenter
+  } onstage
+  0.9 span 0.1 sub [/unroll 0.8] /fade {
+    /accent ink page /c boxpoint 14 sub exch 60 sub exch 120 4 rectfill
+  } onstage
+} def
+
+% ---------------------------------------------------------------- 1. program
+/src (%!PS\n<< /Size [1280 720] /Duration 2 >> animation\n\n/scene {\n  now 640 mul  360  translate\n  0 0 40 0 360 arc fill\n} def\n) /postscript codetokens def
+/codebox stagebox 0.68 splitx pop  dup 2 get 30 sub 380 /w placed def
+/codeopts << /Title (ball.ps) /Numbers true >> def
+/monbox stagebox 0.68 splitx exch pop 352 198 /e placed 0 14 shifted def
+
+/pg-close codebox /c boxpoint 4 sub 1060 596.25 /c boxat def
+
+/beat-program {
+  (1) (A movie is one PostScript program) header
+  % close on the code while it is typed, then pull back to make room for what it draws
+  gsave
+    stageband rectclip
+    [ 0 pg-close  3.3 pg-close  4.3 canvasbox /cubic-inout ] keyframes lookat
+    src codebox << codeopts { } forall
+      /Reveal 0.5 3.3 ramp
+      /Focus now 6.4 lt { [1] } { [3 4 5 6] } ifelse
+      /FocusAmount [ 0 0  4.0 0  4.5 1  6.1 1  6.4 0  6.9 1 ] keyframes
+    >> codeblock
+  grestore
+  % the frame the declaration describes, then what scene draws in it
+  4.2 span 0.2 sub /fade /fade {
+    monbox framed
+    /mono 22 face /muted ink monbox /s boxpoint 34 sub moveto
+    now 2.6 lt { (1280 x 720, 2 seconds) } { (now = ) now 2.6 sub 3 fmod 2 div 0 1 clamp 2 mul 2 fmtfixed strcat } ifelse showcenter
+  } onstage
+  6.8 span 0.2 sub /fade /fade { monbox { 3 { demo } looped } within } onstage
+  [ [0.4 3.6 (No timeline file, no scene graph: just a program.)]
+    [3.9 6.3 (It declares the movie: its size and its length.)]
+    [6.7 10.3 (And it defines scene, which draws the frame for the current moment.)] ] say
+} def
+
+% ---------------------------------------------------------------- 2. clock
+/ck-row stagebox 0.27 splity pop def
+/ck-slots ck-row 4 100 cols def
+/ck-snap ck-slots 0 get def /ck-clock ck-slots 1 get def
+/ck-scene ck-slots 2 get def /ck-frame ck-slots 3 get def
+/ck-strip [ stagebox 0 get stagebox 1 get 128 add stagebox 2 get 105 ] 6 14.4 cols def
+/ck-t0 2.0 def /ck-p 1.35 def /ck-n 6 def /ck-dt 0.4 def
+/ck-tick { now ck-t0 sub ck-p div floor cvi 0 ck-n 1 sub clamp } def     % which frame is being made
+/ck-pulse {                    % boxA boxB route a b: one message, during a..b of each tick
+  6 dict begin /p-b exch def /p-a exch def /p-r exch def /p-B exch def /p-A exch def
+  p-A p-B p-r connect  /accent ink  now p-a p-b 0 1 remap 0.3 pulse newpath
+  end
+} def
+
+/ck-back {                     % the way back: under the row, from scene to the snapshot
+  newpath ck-scene /s boxpoint 8 sub moveto 0 -26 rlineto
+  ck-snap /s boxpoint pop ck-scene 1 get 34 sub lineto 0 26 rlineto
+} def
+
+/beat-clock {
+  (2) (A frame is a function of its time) header
+  0.7 /pop { (clock) ck-clock << /Fill /surface /Sub (now = ) ck-tick ck-dt mul 2 fmtfixed strcat /SubInk /accent >> node } enters
+  1.0 /pop { (scene) ck-scene << /Fill /accent /Ink /bg /Sub (your procedure) /SubInk /bg >> node } enters
+  1.3 /pop { (frame) ck-frame << /Fill /surface /Sub (a picture) >> node } enters
+  ck-clock ck-scene << /Draw 1.0 1.5 /cubic-inout tween >> edge  ck-clock ck-scene (call) 1.3 elabel
+  ck-scene ck-frame << /Draw 1.3 1.8 /cubic-inout tween >> edge  ck-scene ck-frame (pixels) 1.6 elabel
+  6.0 /pop { () ck-snap << /Shape /cylinder /Fill /surface >> node
+    /title 30 face /fg ink ck-snap /c boxpoint 12 sub moveto (snapshot) showcenter
+    /body 19 face /muted ink ck-snap /c boxpoint 44 sub moveto (setup, run once) showcenter } enters
+  ck-snap ck-clock << /Draw 6.3 6.8 /cubic-inout tween >> edge  ck-snap ck-clock (restore) 6.6 elabel
+  gsave /line ink 2 setlinewidth ck-back 6.6 7.4 /cubic-inout tween arrow grestore
+  7.1 /fade { /body 21 face /muted ink ck-clock /s boxpoint 62 sub moveto (roll back) showcenter } enters
+  % the messages of each frame
+  ck-t0 ck-t0 ck-p ck-n mul add {
+    ck-p {
+      ck-clock ck-scene /straight 0.05 0.40 ck-pulse
+      ck-scene ck-frame /straight 0.40 0.75 ck-pulse
+    } looped
+  } during
+  6.9 ck-t0 ck-p ck-n mul add {
+    ck-p { ck-snap ck-clock /straight -0.25 0.08 ck-pulse
+           ck-snap ck-clock /straight 0.8 1.13 ck-pulse
+           ck-back /accent ink now 0.62 1.0 0 1 remap 0.2 pulse newpath } looped
+  } during
+  % the frames made so far
+  ck-t0 0.75 add {
+    ck-strip ck-p {
+      /c-i exch def /c-b exch def
+      /pop { c-b { c-i ck-dt mul { demo } attime } within
+             /mono 22 face /muted ink c-b /s boxpoint 30 sub moveto (now = ) c-i ck-dt mul 2 fmtfixed strcat showcenter } entering
+    } cascade
+  } after
+  9.6 span 0.2 sub /rise /fade {
+    /mono 40 face /fg ink stagebox /s boxpoint 8 add moveto (frame = scene\( now \)) showcenter
+  } onstage
+  [ [0.5 5.6 (The engine sets the clock, calls scene and keeps the picture: once per frame.)]
+    [6.0 9.2 (Setup ran once. Each frame starts from that snapshot and is rolled back after.)]
+    [9.6 12.3 (Nothing is remembered between frames.)] ] say
+} def
+
+% ---------------------------------------------------------------- 3. scopes
+/sc-rows stagebox 2 30 rows def
+/sc-space sc-rows 0 get def /sc-time sc-rows 1 get def
+/sc-rx stagebox 0 get 400 add def /sc-rw 470 def
+/sc-view [ sc-rx sc-rw add 60 add  sc-time 1 get 40 add  264 148.5 ] def
+/sc-g { 0.2 5.2 ramp 6 mul } def       % the little movie's clock, 0..6 (read inside the step that starts at 5.2)
+
+/beat-scopes {
+  (3) (Time scopes re-base the clock) header
+  % --- space
+  0.6 /fade {
+    /sc-u 1.6 3.0 /cubic-inout tween def
+    /sc-y sc-space 1 get 70 add def
+    /mono 30 face /fg ink sc-space 0 get sc-space 1 get 156 add moveto (300 0 translate) show
+    /body 26 face /muted ink sc-space 0 get sc-space 1 get 112 add moveto (re-bases space) show
+    /mono 24 face /accent2 ink sc-space 0 get sc-space 1 get 66 add moveto
+      (origin at x = ) sc-u 300 mul 0 fmtfixed strcat show
+    /mono 20 face /muted ink sc-rx sc-y sc-rw 6 0 100 0 tick-ruler
+    % the drawing where it was, and where the new origin puts it
+    gsave newpath /muted ink 2 setlinewidth [5 5] 0 setdash sc-rx sc-y 44 add 26 0 360 arc stroke grestore
+    gsave sc-rx sc-u sc-rw 2 div mul add sc-y translate
+      /accent2 ink -1 10 2 96 rectfill  -1 10 130 2 rectfill
+      /mono 20 face 10 90 moveto (0 0) show
+      /accent ink 0 44 26 disc
+    grestore
+  } enters
+  % --- time
+  4.2 /fade {
+    /sc-y sc-time 1 get 62 add def
+    /sc-x { 6 div sc-rw mul sc-rx add } def
+    /mono 30 face /fg ink sc-time 0 get sc-time 1 get 156 add moveto (2 5 { ball } during) show
+    /body 26 face /muted ink sc-time 0 get sc-time 1 get 112 add moveto (re-bases time) show
+    /mono 20 face /muted ink sc-rx sc-y sc-rw 6 0 1 0 tick-ruler
+    sc-rx sc-rw add 14 add sc-y 6 sub moveto (s) show
+    % the window, with its own clock
+    0.3 [/wipe-right 0.6] {
+      /surface ink [ 2 sc-x sc-y 22 add 3 sc-x 0 sc-x sub 50 ] 8 roundpath fill
+      /mono 20 face /accent2 ink
+      0 1 3 { /sc-k exch def 2 sc-k add sc-x sc-k 0 eq { 14 add } if sc-k 3 eq { 14 sub } if
+              sc-y 40 add moveto sc-k 0 fmtfixed showcenter } for
+    } enters
+    sc-view { demo-bg } within  sc-view framed
+  } enters
+  5.2 span 0.2 sub /fade /fade {
+    /sc-y sc-time 1 get 62 add def
+    /sc-x { 6 div sc-rw mul sc-rx add } def
+    /accent ink sc-g sc-x 1.5 sub sc-y 8 sub 3 92 rectfill
+    /mono 24 face /muted ink sc-time 0 get sc-time 1 get 66 add moveto
+      (movie ) sc-g 2 fmtfixed strcat show
+    sc-g 2 ge sc-g 5 lt and {
+      /accent2 ink (   now = ) sc-g 2 sub 2 fmtfixed strcat show
+    } if
+    sc-view { sc-g { 2 5 { demo-len 3 div { demo-ball } timescaled } during } attime } within
+  } onstage
+  [ [0.5 4.0 (translate moves the origin of space: the same drawing, somewhere else.)]
+    [4.3 8.6 (A time scope moves the origin of time: inside during, now starts again from 0.)]
+    [8.9 11.3 (delayed, looped, timescaled, staggered: the same procedure, another time.)] ] say
+} def
+
+% ---------------------------------------------------------------- 4. fan out
+/fo-grid stagebox 560 219 /w placed 0 24 shifted def
+/fo-cells fo-grid 6 4 8 cells def
+/fo-cores [ fo-grid 0 get 670 add stagebox 1 get 60 add 170 stagebox 3 get 80 sub ] 4 26 rows def
+/fo-enc [ fo-grid 0 get 950 add fo-grid 1 get 50 add 180 130 ] def
+/fo-file [ fo-enc 0 get fo-enc 1 get 130 sub 180 64 ] def
+/fo-done {                       % i -> the moment frame i is finished
+  dup 15 eq { pop 3.0 } { dup 7 mul 24 mod 4 idiv 0.5 mul 5.5 add exch 7 2 array astore hash01 0.35 mul add } ifelse
+} def
+
+/beat-fanout {
+  (4) (So any frame renders alone, in any order) header
+  0.6 { fo-cells 0.02 { pop /f-b exch def /fade { /line ink 1.5 setlinewidth f-b 3 roundpath stroke } entering } cascade } after
+  0.8 /fade { /body 24 face /muted ink fo-grid /nw boxpoint 18 add moveto (the frames of ball.ps) show } enters
+  0 1 23 { /f-i exch def
+    f-i fo-done /pop { fo-cells f-i get { f-i 24 div demo-len mul { demo } attime } within } enters
+  } for
+  % one frame, alone
+  1.4 4.6 /fade /fade {
+    /mono 24 face /good ink fo-grid /sw boxpoint 50 sub moveto (psanim frame ball.ps --at 1.25) 0.2 1.4 ramp typewrite
+    /accent3 ink 3 setlinewidth 1 setlinecap
+    fo-cells 15 get -4 inset circled 0 1.6 2.3 /cubic-inout tween trimpath stroke
+  } onstage
+  % every core
+  fo-cores 0.1 { /f-i exch def /f-b exch def
+    4.8 /pop { (core ) f-i 1 add 0 fmtfixed strcat f-b /surface node } enters
+    fo-grid f-b << /Route /straight /Draw 5.0 5.5 /cubic-inout tween /Head false
+       /Pulse now 5.5 gt now 8.6 lt and { 0.5 2 pulsetrain } { [ ] } ifelse >> edge
+    f-b fo-enc << /Route /straight /Draw 5.6 6.1 /cubic-inout tween
+       /Pulse now 6.1 gt now 9.0 lt and { 0.5 2 pulsetrain } { [ ] } ifelse >> edge
+  } cascade
+  5.4 /pop { (ffmpeg) fo-enc << /Fill /accent /Ink /bg /Sub (in order) /SubInk /bg >> node } enters
+  8.4 /pop { (ball.mp4) fo-file << /Fill /surface /Size 24 >> node } enters
+  fo-enc fo-file << /Draw 8.2 8.6 /cubic-inout tween >> edge
+  [ [0.5 4.4 (No frame depends on another, so any one can be rendered alone.)]
+    [4.8 8.0 (So frames fan out across every CPU core, in any order,)]
+    [8.2 10.3 (and reach the encoder in sequence.)] ] say
+} def
+
+% ---------------------------------------------------------------- 5. the stack
+/st-cols [ stagebox 0 get stagebox 1 get 200 add stagebox 2 get 140 ] 5 50 cols def
+/st-prog st-cols 0 get def /st-eng st-cols 1 get def /st-cat st-cols 2 get def
+/st-frames st-cols 3 get def
+/st-outs [ st-cols 4 get 0 get st-cols 4 get 1 get 55 sub st-cols 4 get 2 get 250 ] 2 30 rows def
+/st-chips { [ exch dup 0 get exch dup 1 get 150 sub exch 2 get 130 ] 3 8 rows } def   % box -> three boxes under it
+/st-eng-chips st-eng st-chips def /st-cat-chips st-cat st-chips def
+/st-whole canvasbox def
+% the close-up: the two middle nodes and their parts, framed so they land inside the stage
+/st-detail st-eng st-cat boxunion st-eng-chips 2 get boxunion /c boxpoint 784 441 /c boxat def
+/st-zoom { [ 0 0  3.9 0  5.1 1 /cubic-inout  8.0 1  9.2 0 /cubic-inout ] keyframes } def
+/chip { /mono 15 face << /Shape /pill /Fill /bg /Stroke /line /Ink /fg /Size 15 /Font /mono >> node } def
+
+/beat-stack {
+  (5) (The stack) header
+  gsave
+    stageband rectclip
+    st-zoom st-whole st-detail between lookat
+    0.6 /pop { (ball.ps) st-prog << /Fill /surface /Sub (your program) >> node } enters
+    0.9 /pop { (psanim) st-eng << /Fill /accent /Ink /bg /Sub (engine) /SubInk /bg >> node } enters
+    1.2 /pop { (PSCat) st-cat << /Fill /surface /Sub (PostScript) >> node } enters
+    1.5 /pop { (frames) st-frames << /Fill /surface /Sub (pixels) >> node } enters
+    1.8 /pop { (ffmpeg) st-outs 0 get << /Fill /surface /Sub (mp4, webm, gif) >> node } enters
+    2.0 /pop { (browser) st-outs 1 get << /Fill /surface /Sub (wasm, canvas) >> node } enters
+    /st-flow { now 2.6 gt { 1.1 2 pulsetrain } { [ ] } ifelse } def
+    st-prog st-eng << /Draw 0.9 1.4 /cubic-inout tween /Pulse st-flow >> edge
+    st-eng st-cat << /Draw 1.2 1.7 /cubic-inout tween /Pulse st-flow >> edge
+    st-cat st-frames << /Draw 1.5 2.0 /cubic-inout tween /Pulse st-flow >> edge
+    st-frames st-outs 0 get << /Draw 1.8 2.3 /cubic-inout tween /Pulse st-flow >> edge
+    st-frames st-outs 1 get << /Draw 2.0 2.5 /cubic-inout tween /Pulse st-flow >> edge
+    % the detail only the close-up shows
+    st-zoom 0.5 1 0 1 remap 0 1 clamp {
+      (clock) st-eng-chips 0 get chip (time scopes) st-eng-chips 1 get chip (layers) st-eng-chips 2 get chip
+      (interpreter) st-cat-chips 0 get chip (rasterizer) st-cat-chips 1 get chip (fonts, libraries) st-cat-chips 2 get chip
+      /line ink 1.5 setlinewidth
+      st-eng /s boxpoint moveto st-eng-chips 0 get /n boxpoint lineto stroke
+      st-cat /s boxpoint moveto st-cat-chips 0 get /n boxpoint lineto stroke
+    } faded
+  grestore
+  [ [0.5 3.7 (Your program runs on the psanim engine, built on the PSCat interpreter.)]
+    [4.2 8.0 (psanim owns the clock, the scopes and the layers; PSCat interprets and rasterizes.)]
+    [8.6 12.2 (Frames go to ffmpeg for video, or to a canvas in the browser.)] ] say
+} def
+
+% ---------------------------------------------------------------- 6. summary
+/sm-lines [ (One program, one scene procedure) (A clock set per frame; nothing remembered)
+            (Time scopes re-base the clock) (Any frame, any order, every core) ] def
+/sm-box stagebox 760 250 /c placed 0 -10 shifted def
+/beat-summary {
+  0 span { [/fade 0.6] {
+    /display 60 face /fg ink
+    stagebox /n boxpoint 10 sub exch (A frame is a function of its time.) stringwidth pop 2 div sub exch moveto
+    0.2 { (A frame is a function of its time.) /words 0.09 /mask-up kinetic } after
+    1.4 { sm-box 4 14 rows 0.45 { /s-i exch def /s-b exch def
+      /rise {
+        /mono 26 face /accent ink s-i 1 add 0 fmtfixed s-b /w showin
+        /body 34 face /fg ink sm-lines s-i get s-b 50 0 shifted /w showin } entering
+    } cascade } after
+    3.8 { /mono 26 face /good ink
+      stagebox /s boxpoint 4 sub exch (psanim render ball.ps -o ball.mp4) stringwidth pop 2 div sub exch moveto
+      (psanim render ball.ps -o ball.mp4) 0 1.3 ramp typewrite } after
+  } leaving } during
+} def
+
+/scene {
+  ground
+  progress-bar
+  /title   { beat-title } inbeat
+  /program { beat-program } inbeat
+  /clock   { beat-clock } inbeat
+  /scopes  { beat-scopes } inbeat
+  /fanout  { beat-fanout } inbeat
+  /stack   { beat-stack } inbeat
+  /summary { beat-summary } inbeat
+} def

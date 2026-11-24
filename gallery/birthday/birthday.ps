@@ -1,0 +1,260 @@
+%!PS
+% Poster: 35
+% Twenty-Three
+% A data story about the birthday problem: how many people must be in a
+% room before two of them probably share a birthday. The guess (half the
+% calendar, 183) against the exact curve (23), the reason (253 pairs), and
+% a seeded simulation of 100,000 rooms. Every number comes from data.py.
+
+[ /question 6.5  /guess 9  /truth 9  /zoom 12  /why 14.5  /sim 10  /end 6 ] storyboard
+
+<< /Size [1280 720] /Duration storylength /FPS 30
+   /Title (Twenty-Three)
+   /Description (The birthday problem as a data story: the guess of 183 people, the exact answer of 23, the 253 pairs that explain it, and 100,000 simulated rooms.)
+>> animation
+
+/pkchart use  /pkdiagram use          % these load pkstage, pkmotion, pktype
+
+% ---- data: printed by data.py (percent chance of a shared birthday, n = 0..100) ----
+/bd-exact [
+  0.000 0.000 0.274 0.820 1.636 2.714 4.046 5.624 7.434 9.462
+  11.695 14.114 16.702 19.441 22.310 25.290 28.360 31.501 34.691 37.912
+  41.144 44.369 47.570 50.730 53.834 56.870 59.824 62.686 65.446 68.097
+  70.632 73.045 75.335 77.497 79.532 81.438 83.218 84.873 86.407 87.822
+  89.123 90.315 91.403 92.392 93.289 94.098 94.825 95.477 96.060 96.578
+  97.037 97.443 97.800 98.114 98.388 98.626 98.833 99.012 99.166 99.299
+  99.412 99.509 99.591 99.660 99.719 99.768 99.810 99.844 99.873 99.896
+  99.916 99.932 99.945 99.956 99.965 99.972 99.978 99.982 99.986 99.989
+  99.991 99.993 99.995 99.996 99.997 99.998 99.998 99.999 99.999 99.999
+  99.999 100.000 100.000 100.000 100.000 100.000 100.000 100.000 100.000 100.000
+  100.000
+] def
+/bd-rooms (0100001100101011000010110011011101010010100101100101010001010100011101010010010100110111000100110001) def
+/bd-people [ 5 10 15 20 23 ] def            % a room growing ...
+/bd-pairs  [ 10 45 105 190 253 ] def        % ... and the pairs in it, n(n-1)/2
+/bd-sim-rooms 100000 def  /bd-sim-hits 50686 def
+
+% ---- look ----
+<< /bg [0.055 0.063 0.09] /accent [1 0.72 0.25] /accent2 [0.42 0.72 0.95] >> usetheme
+
+% ---- places ----
+/page canvasbox 6 vmin inset def
+page 0.17 splity /body exch def /head exch def
+/plot [ body 0 get 78 add  body 1 get 62 add  body 2 get 100 sub  body 3 get 104 sub ] def
+body 0.46 splitx /why-r exch def /why-l exch def
+/ring-c [ why-l /c boxpoint 30 add ] def   /ring-r 168 def
+/bars-box [ why-r 0 get 70 add  why-r 1 get 96 add  why-r 2 get 80 sub  why-r 3 get 190 sub ] def
+/grid-box [ body 0 get 20 add  body 1 get 56 add  body 3 get 76 sub dup ] def
+
+% ---- setup geometry ----
+/bd-curve [ 0 1 100 { dup bd-exact exch get 2 array astore } for [365 100] ] def
+/ring-pt { 23 div 360 mul 90 exch sub dup cos ring-r mul ring-c 0 get add
+           exch sin ring-r mul ring-c 1 get add } def            % i -> x y
+/bd-chords [ 0 1 21 { /ci exch def ci 1 add 1 22 { [ ci ring-pt 4 -1 roll ring-pt ] } for } for ] def
+
+% ---- small words ----
+% a b (headline) (subline) hl : a finding at the top of the page, from a to b on this clock
+/hl { 4 dict begin /hl-s exch def /hl-h exch def /hl-b exch def /hl-a exch def
+  hl-a hl-b [/mask-up 0.6] [/fade 0.4]
+    { /title 46 face /fg ink page 0 get 635 moveto hl-h show } onstage
+  hl-a 0.35 add hl-b [/fade 0.6] [/fade 0.4]
+    { /body 26 face /muted ink page 0 get 592 moveto hl-s show } onstage
+  end } def
+
+/dash-on { [7 7] 0 setdash } def
+
+% ---------------------------------------------------------------- the chart
+% One chart, three beats: the clock here starts at the `guess` beat.
+/t-truth 9 def  /t-zoom 18 def
+/chart {
+  /xr t-zoom 1.4 add t-zoom 3.6 add /cubic-inout tween [0 365] [0 80] between def
+  /zoomed t-zoom 3.6 add t-zoom 4.2 add ramp def
+  plot xr [0 100] plotframe
+  << /Draw 0.2 1.4 ramp /YTicks 5 /Size 22 >> plotaxes
+  /body 21 face /muted ink
+  0.6 1.2 ramp setalpha
+  (people in the room) plot /s boxpoint 54 sub moveto showcenter
+  gsave plot /nw boxpoint 14 add moveto (chance that two share a birthday, %) show grestore
+  1 setalpha
+
+  gsave plot boxpath clip newpath
+    % even odds
+    /muted ink 1.5 setlinewidth dash-on
+    [ [0 50] [365 50] ] plotline 0 1.6 2.4 /cubic-out tween trimpath stroke
+    [] 0 setdash
+    % the guess: a straight line, one more person, one more 365th
+    /accent2 /muted t-truth t-truth 1 add ramp 0.55 mul mixink ink 3.5 setlinewidth 1 setlinecap
+    [ [0 0] [365 100] ] plotline 0 1.6 3.4 /cubic-inout tween trimpath stroke
+    % the truth
+    /accent ink 4.5 setlinewidth 1 setlinejoin
+    bd-curve plotline 0 t-truth 1.2 add t-truth 4.2 add /cubic-inout tween trimpath stroke
+    % drop lines to the axes at 23 and at 57
+    /fg ink 1.5 setlinewidth dash-on
+    [ [23 0] [23 50.73] ] plotline 0 t-zoom 5.6 add t-zoom 6.2 add /cubic-out tween trimpath stroke
+    [ [57 0] [57 99.01] ] plotline 0 t-zoom 8.9 add t-zoom 9.4 add /cubic-out tween trimpath stroke
+    [] 0 setdash
+  grestore
+
+  % the guess, marked
+  3.5 t-zoom 1.2 add /pop /fade { /accent2 ink 182.5 50 plotpoint 8 disc } onstage
+  3.7 t-zoom 1.2 add /fade /fade { /body 24 face /accent2 ink
+    (the guess: 183 people) [ 182.5 50 plotpoint 0 0 ] /se 0 0.7 ramp note } onstage
+
+  % the truth, marked
+  t-truth 4.2 add [/pop 0.5] { /fg ink 23 50.73 plotpoint 9 disc
+                               /accent ink 23 50.73 plotpoint 5.5 disc } enters
+  t-truth 4.5 add t-zoom 1.2 add /fade /fade { /title 26 face /accent ink
+    (the truth: 23 people) [ 23 50.73 plotpoint 0 0 ] /se 0 0.7 ramp note } onstage
+
+  % after the zoom: a counter walks up the curve, room by room
+  /rn [ t-zoom 4.2 add 0  t-zoom 5.6 add 23 /cubic-out
+        t-zoom 8.0 add 23  t-zoom 9.0 add 57 /cubic-inout ] keyframes def
+  /rn-i rn round cvi def
+  [ 23 50.73 plotpoint exch 70 sub exch 100 sub 370 160 ]
+  [ t-zoom 5.6 add 0  t-zoom 6.1 add 0.5 /cubic-out  t-zoom 7.6 add 0.5  t-zoom 8.1 add 0 /cubic-in ] keyframes spotlight
+
+  t-zoom 4.0 add /fade {
+    /fg ink  rn  rn dup floor sub  bd-exact rn floor cvi get  bd-exact rn ceiling cvi get  between
+    plotpoint 5 disc
+    /title 28 face /fg ink
+    plot /se boxpoint 182 add moveto rn-i 0 fmtnum ( people) strcat showright
+    /display 62 face /accent ink
+    plot /se boxpoint 118 add moveto bd-exact rn-i get 1 fmtnum (%) strcat showright
+  } enters
+
+  % readings on the curve
+  t-zoom 5.8 add /fade { /title 26 face /accent ink
+    (23 people: 50.7%) [ 23 50.73 plotpoint 0 0 ] /se 0 0.7 ramp note } enters
+  t-zoom 6.6 add /fade { /body 23 face /accent2 ink
+    25.5 16 plotpoint moveto (the guess said 6.3%) show
+    1.2 setlinewidth 23 6.30 plotpoint moveto 25.2 15 plotpoint lineto stroke } enters
+  t-zoom 6.4 add [/pop 0.4] { /accent2 ink 23 6.30 plotpoint 6 disc } enters
+  t-zoom 9.0 add [/pop 0.5] { /fg ink 57 99.01 plotpoint 9 disc
+                              /accent ink 57 99.01 plotpoint 5.5 disc } enters
+  t-zoom 9.3 add /fade { /title 26 face /accent ink
+    (57 people: 99.0%) [ 57 99.01 plotpoint 0 0 ] /se 0 0.7 ramp note } enters
+} def
+
+% ---------------------------------------------------------------- why: pairs
+/ring {
+  % every pair is a line; they are drawn in order, the first person's 22 first
+  /npairs [ 0 0  1.8 0  3.0 22 /cubic-inout  3.8 22  7.2 253 /cubic-inout ] keyframes def
+  gsave
+    1.2 setlinewidth 1 setlinecap
+    0 1 npairs floor cvi 1 sub {
+      /k exch def
+      k 22 lt { /accent ink 0.9 setalpha } { /accent ink 0.3 setalpha } ifelse
+      bd-chords k get aload pop moveto lineto stroke
+    } for
+  grestore
+  [ 0 1 22 { } for ] 0.04 {
+    /i exch def pop
+    0.4 { [/pop 0.4] { i 0 eq { /accent } { /fg } ifelse ink i ring-pt 7 disc } entering } delayed
+  } cascade
+  1.8 /fade {
+    /display 60 face /accent ink
+    ring-c 0 get 8 sub  body 1 get 6 add moveto npairs 0 fmtnum showright
+    /body 26 face /muted ink
+    ring-c 0 get 8 add  body 1 get 14 add moveto (pairs) show
+  } enters
+} def
+
+/pairbars {
+  /u 9.2 10.8 /cubic-inout tween def
+  bars-box [0 5] [ 0 u 30 280 between ] plotframe
+  << /Draw 7.4 8 ramp /XNames [ (5) (10) (15) (20) (23) ] /YTicks 4 /Size 22 >> plotaxes
+  u bd-people bd-pairs between
+  << /Grow 7.6 8.8 ramp /Role /muted /accent u mixink /Values true /Size 22 /Gap 0.35 >> bars
+  /body 21 face /muted ink 7.6 8.2 ramp setalpha
+  bars-box /s boxpoint 58 sub moveto (people in the room) showcenter
+  1 setalpha
+  7.6 9.4 /fade /fade { /title 26 face /muted ink
+    bars-box /nw boxpoint 26 add moveto (people: one step at a time) show } onstage
+  10 /fade { /title 26 face /accent ink
+    bars-box /nw boxpoint 26 add moveto (pairs: faster with every step) show } enters
+} def
+
+/why {
+  0.2 span /fade /fade { ring } onstage
+  0.2 span /fade /fade { pairbars } onstage
+} def
+
+% ---------------------------------------------------------------- simulation
+/sim {
+  /cells-100 grid-box 10 10 6 cells def
+  0.2 span /fade /fade {
+    cells-100 0.012 {
+      /i exch def /cb exch def
+      0.5 { [/pop 0.35] {
+        bd-rooms i get 49 eq { /accent } { /surface } ifelse ink cb 4 roundpath fill } entering } delayed
+    } cascade
+    2.2 /fade { /body 22 face /muted ink
+      grid-box /sw boxpoint 34 sub moveto (the first 100 rooms: 45 with a match) show } enters
+  } onstage
+  /u 3 6 /cubic-inout tween def
+  /col [ grid-box 0 get grid-box 2 get add 90 add  body 1 get
+         body 2 get grid-box 2 get sub 110 sub  body 3 get ] def
+  2.8 span /fade /fade {
+    /rx col 0 get def
+    /display 64 face /fg ink
+    rx 392 moveto u bd-sim-rooms mul 0 fmtnum show
+    /body 24 face /muted ink rx 356 moveto (rooms of 23 random birthdays) show
+    /display 64 face /fg ink
+    rx 262 moveto u bd-sim-hits mul 0 fmtnum show
+    /body 24 face /muted ink rx 226 moveto (had two people sharing a birthday) show
+  } onstage
+  6.3 span [/pop 0.5] /fade { /display 96 face /accent ink col 0 get 96 moveto (50.7%) show } onstage
+  6.9 span /fade /fade { /body 24 face /muted ink
+    col 0 get 330 add 134 moveto (measured) show
+    /fg ink col 0 get 330 add 100 moveto (exact: 50.73%) show } onstage
+} def
+
+% ---------------------------------------------------------------- the film
+/scene {
+  ground
+
+  /question {
+    [/fade 0.5] {
+      /title 60 face /fg ink
+      (How many people must be in a room)
+      [ page 0 get 400 page 2 get 80 ] << /Align /center >> /words 0.09 /rise kineticparagraph
+      1.3 { /title 60 face /accent ink
+        (before two share a birthday?)
+        [ page 0 get 312 page 2 get 80 ] << /Align /center >> /words 0.09 /rise kineticparagraph } after
+      3 /fade { /body 28 face /muted ink 640 232 moveto
+        (more likely than not, that is: a chance above 50%) showcenter } enters
+    } leaving
+  } inbeat
+
+  /guess beat  /why beat  /fade /fade { chart } onstage
+  /g /guess beat def  /w /why beat def  /s /sim beat def  /e /end beat def
+  % a rule under the headline holds the page together across the cuts between beats
+  g 0.4 sub  e 0.4 add  [/wipe-right 0.7] [/fade 0.4]
+    { /line ink page 0 get 574 page 2 get 1.5 rectfill } onstage
+  g           g 9 add     (The guess: half the calendar) (365 possible birthdays, so surely about 183 people) hl
+  g 9 add     g 18 add    (The truth: it takes only 23) (the exact chance passes 50% at 23, not 183) hl
+  g 18 add    g 25.8 add  (23 people is enough) (the same curve, closer in: the first 80 people) hl
+  g 26.2 add  w 0.05 sub  (By 57 it is all but certain) (99.0% at 57 people, with at least 308 days of the year unused) hl
+  w           s 0.05 sub  (Why: 23 people make 253 pairs) () hl
+  s           e 0.05 sub  (We ran it 100,000 times) (a seeded simulation: each square is a room, lit if two people in it share a birthday) hl
+
+  /why {
+    0.5 11.2 /fade /fade { /body 26 face /muted ink page 0 get 592 moveto
+      (any two of them can match, and every pair is its own chance) show } onstage
+    11.4 span /fade /fade { /body 26 face /fg ink page 0 get 592 moveto
+      (253 chances at 1 in 365 each: on their own, that already makes 50.05%) show } onstage
+    why
+  } inbeat
+
+  /sim {
+    sim
+  } inbeat
+
+  e 0.1 add /fade { /title 64 face /fg ink 640 400 moveto (Coincidences count pairs,) showcenter } enters
+  /end {
+    1.1 [/rise 0.6] { /title 64 face /accent ink 640 316 moveto (not people.) showcenter } enters
+    2.2 /fade { /body 28 face /muted ink 640 226 moveto
+      (23 people    253 pairs    50.7%) showcenter } enters
+    /bg ink span 0.7 sub span /cubic-in tween setalpha canvasbox boxpath fill 1 setalpha
+  } inbeat
+} def
