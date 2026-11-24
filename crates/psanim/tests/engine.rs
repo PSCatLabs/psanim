@@ -335,6 +335,27 @@ fn layers_fade_as_a_group_and_blend() {
 }
 
 #[test]
+fn layer_combinator_bodies_see_the_callers_stack() {
+    // The body reaches operands left under the combinator's own.
+    for body in [
+        "20 0.5 { 0 30 48 rectfill } faded",
+        "20 0.5 /normal { 0 30 48 rectfill } blended",
+        "20 0.01 { 0 30 48 rectfill } blurred",
+        "20 0.01 0.01 { 0 30 48 rectfill } glowing",
+    ] {
+        let mut m = load(&format!("/scene {{ pop 1 setgray {body} count 0 ne {{ leftover }} if }} def"));
+        let f = m.render_frame(0).unwrap_or_else(|e| panic!("{body}: {e}"));
+        assert!(px(&f, 30, 10)[0] > 100, "{body}");
+        assert_eq!(px(&f, 10, 10)[0], 0, "{body}");
+    }
+    let mut m = load(
+        "/scene { pop 7 { 1 0 0 setrgbcolor 0 0 64 48 rectfill } { 0 0 1 setrgbcolor 0 0 64 48 rectfill } 0.5 crossfade
+                  7 ne { wrong } if } def",
+    );
+    assert_eq!(px(&m.render_frame(0).unwrap(), 5, 5), [127, 0, 128, 255]);
+}
+
+#[test]
 fn blur_and_glow_spread_light() {
     let mut sharp = load("/scene { 1 setgray 28 20 8 8 rectfill } def");
     let mut soft = load("/scene { 3 { 1 setgray 28 20 8 8 rectfill } blurred } def");
@@ -650,6 +671,32 @@ fn frame_errors_say_which_frame_and_suggest_a_fix() {
     let mut m = load("/scene { 0 1 during } def");
     let e = m.render_frame(0).unwrap_err();
     assert!(e.hint.unwrap().contains("procedure"));
+}
+
+#[test]
+fn frame_errors_show_where_in_the_program() {
+    let mut m = load(
+        "/petal { 0 0 moveto 10 (x) lineto stroke } def
+         /flower { 4 { petal 90 rotate } repeat } def
+         /scene { 32 24 translate 0.2 1.5 { gsave flower grestore } during 1 setgray } def",
+    );
+    let e = m.render_frame(5).unwrap_err();
+    assert_eq!(e.command.as_deref(), Some("lineto"));
+    let names: Vec<Option<&str>> = e.backtrace.iter().map(|t| t.procedure.as_deref()).collect();
+    // petal, the repeat body, flower's caller (the during body), scene.
+    assert_eq!(names.first(), Some(&Some("petal")), "{e}");
+    assert_eq!(names.last(), Some(&Some("scene")), "{e}");
+    assert_eq!(e.backtrace[0].excerpt, "0 0 moveto 10 (x) >>> lineto <<< stroke");
+    // The prelude's own plumbing is not in the way.
+    assert!(e.backtrace.iter().all(|t| !t.excerpt.contains(".timepop")), "{e}");
+    let text = e.to_string();
+    assert!(text.contains("in petal: 0 0 moveto 10 (x) >>> lineto <<< stroke"), "{text}");
+    assert_eq!(e.to_json()["backtrace"][0]["procedure"], "petal");
+    // A scene failing at its very last operator is still located.
+    let mut m = load("/scene { 1 setgray 5 5 moveto (no font) show } def");
+    let e = m.render_frame(0).unwrap_err();
+    assert_eq!(e.backtrace[0].procedure.as_deref(), Some("scene"), "{e}");
+    assert!(e.backtrace[0].excerpt.ends_with(">>> show <<<"));
 }
 
 #[test]

@@ -50,6 +50,10 @@ pub(crate) struct Ctx {
 
     /// Canvases set aside by `beginlayer`, outermost first.
     pub layers: Vec<Page>,
+    /// What each open `faded`/`blended`/`blurred`/`glowing` will do when
+    /// its body is done. Kept here, not on the operand stack, so the body
+    /// runs with the caller's operands on top.
+    pub pending: Vec<LayerEnd>,
     /// A canvas-sized page kept for operations that need the canvas out of
     /// the interpreter for a moment.
     pub spare: Option<Page>,
@@ -63,6 +67,17 @@ pub(crate) struct Ctx {
     /// A plain-language explanation an operator leaves before it fails,
     /// picked up by the engine for the error report.
     pub hint: Option<String>,
+}
+
+/// How a layer combinator finishes its layer.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct LayerEnd {
+    pub opacity: f64,
+    pub blend: crate::raster::Blend,
+    /// Blur radius in canvas units, 0 for none.
+    pub blur: f64,
+    /// Glow radius and strength, strength 0 for none.
+    pub glow: (f64, f64),
 }
 
 pub(crate) const MAX_SCOPES: usize = 256;
@@ -85,6 +100,7 @@ impl Ctx {
             dt: 1.0 / 30.0,
             scopes: Vec::new(),
             layers: Vec::new(),
+            pending: Vec::new(),
             spare: None,
             scratch: Vec::new(),
             params: BTreeMap::new(),
@@ -113,6 +129,7 @@ impl Ctx {
             t,
             dur: self.duration,
         });
+        self.pending.clear();
         self.hint = None;
     }
 }

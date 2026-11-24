@@ -13,7 +13,7 @@ use std::rc::Rc;
 use pscat::host::{PathSegment, Value};
 use pscat::{Interp, Page, PsError};
 
-use crate::ctx::{Ctx, MAX_LAYERS, MAX_SCOPES, Running, TimeScope, hash01, wiggle};
+use crate::ctx::{Ctx, LayerEnd, MAX_LAYERS, MAX_SCOPES, Running, TimeScope, hash01, wiggle};
 use crate::ease;
 use crate::pathmath;
 use crate::raster::{self, Blend};
@@ -186,6 +186,44 @@ fn with_canvas_pixels(
     c.scratch = scratch;
     c.spare = Some(spare);
     Ok(())
+}
+
+fn begin_layer(i: &mut Interp, ctx: &Shared) -> OpResult {
+    if ctx.borrow().layers.len() >= MAX_LAYERS {
+        return fail(ctx, PsError::Limitcheck, format!("more than {MAX_LAYERS} nested layers"));
+    }
+    let (w, h) = i.canvas_size();
+    let spare = ctx.borrow_mut().spare.take();
+    let layer = match spare {
+        Some(mut p) if (p.width(), p.height()) == (w, h) => {
+            p.premultiplied_rgba8_mut().fill(0);
+            p
+        }
+        _ => Page::transparent(w, h).ok_or(PsError::Limitcheck)?,
+    };
+    let below = i.swap_canvas(layer).map_err(|_| PsError::Rangecheck)?;
+    ctx.borrow_mut().layers.push(below);
+    Ok(())
+}
+
+/// Start a layer whose ending is decided now and applied by `.layerend`.
+fn begin_pending(i: &mut Interp, ctx: &Shared, end: LayerEnd) -> OpResult {
+    begin_layer(i, ctx)?;
+    ctx.borrow_mut().pending.push(end);
+    Ok(())
+}
+
+const PLAIN: LayerEnd = LayerEnd { opacity: 1.0, blend: Blend::Normal, blur: 0.0, glow: (0.0, 0.0) };
+
+fn blend_named(ctx: &Shared, name: &str) -> Result<Blend, PsError> {
+    match Blend::from_name(name) {
+        Some(b) => Ok(b),
+        None => fail(
+            ctx,
+            PsError::Rangecheck,
+            format!("unknown blend mode /{name}. Known: /normal /add /screen /multiply"),
+        ),
+    }
 }
 
 fn end_layer(i: &mut Interp, ctx: &Shared, opacity: f64, blend: Blend) -> OpResult {
@@ -633,22 +671,41 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     });
 
     // --- layers -----------------------------------------------------------------
-    reg(interp, ctx, "beginlayer", |i, ctx| {
-        if ctx.borrow().layers.len() >= MAX_LAYERS {
-            return fail(ctx, PsError::Limitcheck, format!("more than {MAX_LAYERS} nested layers"));
-        }
-        let (w, h) = i.canvas_size();
-        let spare = ctx.borrow_mut().spare.take();
-        let layer = match spare {
-            Some(mut p) if (p.width(), p.height()) == (w, h) => {
-                p.premultiplied_rgba8_mut().fill(0);
-                p
-            }
-            _ => Page::transparent(w, h).ok_or(PsError::Limitcheck)?,
+    reg(interp, ctx, "beginlayer", begin_layer);
+    // The native halves of faded / blended / blurred / glowing: take the
+    // operands now, so the body runs with the caller's stack on top.
+    reg(interp, ctx, ".fadebegin", |i, ctx| {
+        let opacity = i.pop_f64()?;
+        begin_pending(i, ctx, LayerEnd { opacity, ..PLAIN })
+    });
+    reg(interp, ctx, ".blendbegin", |i, ctx| {
+        let name = i.pop_name()?;
+        let opacity = i.pop_f64()?;
+        let blend = blend_named(ctx, &name)?;
+        begin_pending(i, ctx, LayerEnd { opacity, blend, ..PLAIN })
+    });
+    reg(interp, ctx, ".blurbegin", |i, ctx| {
+        let blur = i.pop_f64()?;
+        begin_pending(i, ctx, LayerEnd { blur, ..PLAIN })
+    });
+    reg(interp, ctx, ".glowbegin", |i, ctx| {
+        let (strength, radius) = (i.pop_f64()?, i.pop_f64()?);
+        begin_pending(i, ctx, LayerEnd { glow: (radius, strength), ..PLAIN })
+    });
+    reg(interp, ctx, ".layerend", |i, ctx| {
+        let Some(end) = ctx.borrow_mut().pending.pop() else {
+            return fail(ctx, PsError::Rangecheck, "a layer combinator ended without having begun");
         };
-        let below = i.swap_canvas(layer).map_err(|_| PsError::Rangecheck)?;
-        ctx.borrow_mut().layers.push(below);
-        Ok(())
+        let px = ctx.borrow().px_scale;
+        if end.blur > 0.0 {
+            with_canvas_pixels(i, ctx, |p, w, h, scratch| raster::blur(p, w, h, end.blur * px, scratch))?;
+        }
+        if end.glow.1 > 0.0 {
+            with_canvas_pixels(i, ctx, |p, w, h, scratch| {
+                raster::glow(p, w, h, end.glow.0 * px, end.glow.1.clamp(0.0, 2.0), scratch)
+            })?;
+        }
+        end_layer(i, ctx, end.opacity, end.blend)
     });
     reg(interp, ctx, "endlayer", |i, ctx| {
         let opacity = i.pop_f64()?;
@@ -657,13 +714,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     reg(interp, ctx, "endlayerblend", |i, ctx| {
         let name = i.pop_name()?;
         let opacity = i.pop_f64()?;
-        let Some(blend) = Blend::from_name(&name) else {
-            return fail(
-                ctx,
-                PsError::Rangecheck,
-                format!("unknown blend mode /{name}. Known: /normal /add /screen /multiply"),
-            );
-        };
+        let blend = blend_named(ctx, &name)?;
         end_layer(i, ctx, opacity, blend)
     });
     reg(interp, ctx, "blurlayer", |i, ctx| {

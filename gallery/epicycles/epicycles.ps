@@ -1,0 +1,195 @@
+%!PS
+% Epicycles: how a sum of rotating circles draws a square wave.
+%
+% A mathematical explanation in four movements, each a clip of a reel:
+%   1. one circle traces a sine;
+%   2. odd harmonics are added one at a time and the trace squares up;
+%   3. the terms fan out as a spectrum;
+%   4. the formula.
+% Everything is a pure function of `now`: the trace is recomputed each
+% frame from the series itself, so any frame renders on its own.
+<< /Size [1280 720] /Duration 22 /FPS 30 /Background [0.043 0.051 0.075]
+   /Title (Epicycles) /MotionBlur 0
+   /Description (A square wave assembled from rotating circles.) >> animation
+
+/ink    [0.93 0.91 0.86] def      % chalk white
+/dim    [0.36 0.40 0.50] def
+/gold   [1.00 0.78 0.30] def
+/coral  [0.98 0.45 0.38] def
+/teal   [0.30 0.82 0.78] def
+/setc { aload pop setrgbcolor } def
+
+/CX 330 def /CY 380 def           % centre of the circle stack
+/R0 150 def                       % radius of the fundamental (before 4/pi)
+/WX 620 def /WW 560 def           % where the wave is drawn, and how wide
+/OMEGA 100 def                    % degrees of the fundamental per second
+
+% k harmonic -> the k-th odd number
+/harm { 2 mul 1 add } def
+% k rad -> radius of term k:  (4/pi) R0 / n
+/rad { harm R0 1.2732 mul exch div } def
+
+% phase n-terms tip -> x y : end of the chain of circles at a phase.
+% n-terms may be fractional: the last term is scaled in.
+/tip {
+  10 dict begin
+    /nt exch def /ph exch def
+    /x CX def /y CY def
+    0 1 nt ceiling cvi 1 sub {
+      /k exch def
+      /a k harm ph mul def
+      /r k rad  nt k sub 0 1 clamp mul def
+      /x x r a cos mul add def
+      /y y r a sin mul add def
+    } for
+    x y
+  end
+} def
+
+% Draw the chain: circles, radii, and the dot at the tip.
+/chain {                       % phase nterms alpha
+  12 dict begin
+    /al exch def /nt exch def /ph exch def
+    /x CX def /y CY def
+    0 1 nt ceiling cvi 1 sub {
+      /k exch def
+      /a k harm ph mul def
+      /w nt k sub 0 1 clamp def
+      /r k rad w mul def
+      r 0.5 gt {
+        al w mul setalpha
+        dim setc 1.2 setlinewidth
+        x y r 0 360 arc stroke
+        /nx x r a cos mul add def /ny y r a sin mul add def
+        k 0 eq { gold } { k 2 mod 0 eq { teal } { coral } ifelse } ifelse setc
+        2 setlinewidth 1 setlinecap
+        x y moveto nx ny lineto stroke
+        nx ny 3.2 0 360 arc fill
+        /x nx def /y ny def
+      } if
+    } for
+    1 setalpha
+  end
+} def
+
+% The wave: y(tip) plotted against past phase, newest at the left.
+/wave {                        % phase nterms
+  8 dict begin
+    /nt exch def /ph exch def
+    newpath
+    0 1 320 {
+      /i exch def
+      /back i 320 div 720 mul def            % two periods of history
+      ph back sub nt tip exch pop             % y only
+      WX i 320 div WW mul add exch
+      i 0 eq { moveto } { lineto } ifelse
+    } for
+  end
+} def
+
+% (text) y caption: a line of narration that fades in at the head of its
+% clip and out before the clip's transition, so two never overlap.
+/caption {
+  0 0.7 ramp  span 1.6 sub span 1.0 sub ramp 1 exch sub  mul
+  {
+    /Helvetica findfont 26 scalefont setfont ink setc
+    640 exch moveto showcenter
+  } faded
+} def
+
+/axis {
+  dim setc 1 setlinewidth [4 6] 0 setdash
+  WX CY moveto WX WW add CY lineto stroke
+  [] 0 setdash
+} def
+
+% The picture for a given number of terms, with everything fading in at
+% the head of a clip.
+/stage {                       % nterms
+  6 dict begin
+    /nt exch def
+    /ph globaltime OMEGA mul def
+    axis
+    % the link from the tip across to the head of the wave
+    ph nt tip /ty exch def /tx exch def
+    dim setc 0.8 setlinewidth [2 5] 0 setdash
+    tx ty moveto WX ty lineto stroke [] 0 setdash
+    4 1.0 { ph nt wave ink setc 3 setlinewidth 1 setlinejoin 1 setlinecap stroke } glowing
+    ph nt 1 chain
+    gold setc WX ty 5 0 360 arc fill
+  end
+} def
+
+/one {
+  1 stage
+  (One circle, turning steadily, traces a sine wave.) 92 caption
+} def
+
+/many {
+  % terms 1 -> 9, each arriving with a soft ease over its own second
+  [ 0 1   1.2 2 /cubic-inout  2.6 3 /cubic-inout  3.8 4 /cubic-inout  5.0 5 /cubic-inout
+    6.0 6 /cubic-inout 6.9 7 /cubic-inout 7.7 8 /cubic-inout 8.4 9 /cubic-inout ] keyframes
+  /nt exch def
+  nt stage
+  (Add a circle three times as fast and a third the size. Then a fifth, a seventh...) 92 caption
+  % a running count, top right
+  /Helvetica-Bold findfont 64 scalefont setfont gold setc
+  1140 600 moveto nt 0.5 add cvi 3 string cvs showcenter
+  /Helvetica findfont 20 scalefont setfont dim setc
+  1140 572 moveto (terms) showcenter
+} def
+
+/spectrum {
+  % the nine terms as bars: amplitude against harmonic number
+  9 stage
+  0.4 1.2 ramp  span 1.4 sub span 0.9 sub ramp 1 exch sub  mul
+  {
+    0 1 8 {
+      /k exch def
+      k 0.08 {
+        /h k rad 0.5 mul  0.4 1.2 /back-out tween mul def
+        k 0 eq { gold } { k 2 mod 0 eq { teal } { coral } ifelse } ifelse setc
+        716 k 52 mul add 590 30 h rectfill
+        /Helvetica findfont 16 scalefont setfont dim setc
+        731 k 52 mul add 568 moveto k harm 2 string cvs showcenter
+      } staggered
+    } for
+  } faded
+  (Only odd harmonics, each weaker than the last: 1, 1/3, 1/5, 1/7...) 92 caption
+} def
+
+% Text in runs of [font size (string)], centred as one line on x at y.
+/runs {                         % [ [font size str] ... ] x y
+  6 dict begin
+    /y exch def /x exch def /rs exch def
+    /w 0 def
+    rs { aload pop 3 1 roll exch findfont exch scalefont setfont stringwidth pop w add /w exch def } forall
+    x w 2 div sub y moveto
+    rs { aload pop 3 1 roll exch findfont exch scalefont setfont show } forall
+  end
+} def
+
+/formula {
+  9 stage
+  0 1 /cubic-out tween {
+    0.043 0.051 0.075 setrgbcolor 0.8 setalpha 0 0 1280 150 rectfill 1 setalpha
+    ink setc
+    [ [/Times-Italic 44 (square\(t\)  =  )] [/Times-Roman 44 (4/)] [/Symbol 44 (p)]
+      [/Times-Roman 44 (  \( )] [/Times-Italic 44 (sin t  +  sin 3t / 3  +  sin 5t / 5  +  ...)]
+      [/Times-Roman 44 ( \))] ] 640 84 runs
+    /Helvetica findfont 20 scalefont setfont dim setc
+    640 40 moveto (a Fourier series: any periodic shape is a sum of circles) showcenter
+  } faded
+} def
+
+/film [
+  [4.5 /one] [1.0 /dissolve] [10.5 /many] [1.0 /dissolve] [5.0 /spectrum] [1.0 /dissolve] [5.0 /formula]
+] def
+
+/scene {
+  film reel
+  % open and close on black
+  0 0.8 /quad-out tween 1 exch sub dup 0 gt { setalpha 0.043 0.051 0.075 setrgbcolor 0 0 1280 720 rectfill 1 setalpha } { pop } ifelse
+  duration 0.9 sub duration /quad-in tween dup 0 gt { setalpha 0.043 0.051 0.075 setrgbcolor 0 0 1280 720 rectfill 1 setalpha } { pop } ifelse
+  0.35 vignette
+} def

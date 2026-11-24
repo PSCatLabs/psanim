@@ -807,6 +807,19 @@ fn describe(interp: &mut Interp, ctx: &Rc<RefCell<Ctx>>, phase: Phase, err: &PsE
         (Some(c), _, _) => format!("{} in `{c}`", d.name),
         (None, _, _) => d.name.to_string(),
     };
+    // The program's own procedures; the prelude's plumbing (a combinator's
+    // `{ exec .timepop }`) would only be noise between them.
+    e.backtrace = d
+        .backtrace
+        .iter()
+        .filter(|f| {
+            !f.excerpt.split_whitespace().any(|w| {
+                let w = w.trim_start_matches(['{', '>', '-']);
+                w.starts_with('.') && w[1..].starts_with(|c: char| c.is_ascii_alphabetic())
+            }) && f.procedure.as_deref().is_none_or(|n| crate::api::lookup(n).is_none())
+        })
+        .map(|f| crate::error::TraceLine { procedure: f.procedure.clone(), excerpt: f.excerpt.clone() })
+        .collect();
     // What the failing operator was looking at.
     let mut stack = Vec::new();
     while stack.len() < 6 {

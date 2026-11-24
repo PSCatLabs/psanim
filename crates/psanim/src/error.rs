@@ -65,6 +65,20 @@ pub struct Error {
     /// The top of the operand stack when the error happened, topmost last,
     /// as short printed forms: often enough to see which value was wrong.
     pub stack: Vec<String>,
+    /// The program's procedures that were running, innermost first: where
+    /// in the program's own code the error happened.
+    pub backtrace: Vec<TraceLine>,
+}
+
+/// One procedure that was running when an error happened.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TraceLine {
+    /// The procedure's name; `None` for one with no name of its own (a
+    /// loop body, the body given to `during`).
+    pub procedure: Option<String>,
+    /// The element that was running, marked `>>> like this <<<`, among its
+    /// neighbours in the procedure's body.
+    pub excerpt: String,
 }
 
 impl Error {
@@ -79,6 +93,7 @@ impl Error {
             message: message.into(),
             hint: None,
             stack: Vec::new(),
+            backtrace: Vec::new(),
         }
     }
 
@@ -124,6 +139,16 @@ impl Error {
         if !self.stack.is_empty() {
             m.insert("stack".into(), self.stack.clone().into());
         }
+        if !self.backtrace.is_empty() {
+            m.insert(
+                "backtrace".into(),
+                self.backtrace
+                    .iter()
+                    .map(|t| serde_json::json!({"procedure": t.procedure, "excerpt": t.excerpt}))
+                    .collect::<Vec<_>>()
+                    .into(),
+            );
+        }
         o
     }
 }
@@ -141,6 +166,12 @@ impl fmt::Display for Error {
             match &self.file {
                 Some(file) => write!(f, " [line {line} of {file}]")?,
                 None => write!(f, " [line {line}]")?,
+            }
+        }
+        for t in &self.backtrace {
+            match &t.procedure {
+                Some(name) => write!(f, "\n  in {name}: {}", t.excerpt)?,
+                None => write!(f, "\n  in {{...}}: {}", t.excerpt)?,
             }
         }
         if !self.stack.is_empty() {

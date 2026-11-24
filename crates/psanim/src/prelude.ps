@@ -37,12 +37,16 @@
 /sequence   { .sequence   { exec .timepop } if } bind def
 
 % --- layers ------------------------------------------------------------------
-/faded   { beginlayer exec endlayer } bind def               % alpha proc           draw proc as a group at one opacity
-/blended { beginlayer exec endlayerblend } bind def           % alpha /mode proc     ... with a blend mode
-/blurred { beginlayer exec blurlayer 1 endlayer } bind def   % radius proc          draw proc out of focus
-/glowing { beginlayer exec glowlayer 1 endlayer } bind def   % radius strength proc draw proc with a halo
+% The body of each runs with the caller's operands on top: the opacity,
+% radius and so on are taken first and kept by the engine.
+/faded   { exch   .fadebegin  exec .layerend } bind def      % alpha proc           draw proc as a group at one opacity
+/blended { 3 1 roll .blendbegin exec .layerend } bind def    % alpha /mode proc     ... with a blend mode
+/blurred { exch   .blurbegin  exec .layerend } bind def      % radius proc          draw proc out of focus
+/glowing { 3 1 roll .glowbegin  exec .layerend } bind def    % radius strength proc draw proc with a halo
 % procA procB u crossfade: A, with B over it at opacity u.
-/crossfade { 3 -1 roll exec beginlayer exch exec endlayer } bind def
+/crossfade {
+  [ 4 1 roll 3 -1 roll /exec cvx 4 2 roll exch /faded cvx ] cvx exec
+} bind def
 
 % --- the canvas ----------------------------------------------------------------
 % r g b backdrop: fill the whole frame, whatever the CTM and clip are.
