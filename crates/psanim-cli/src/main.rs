@@ -819,6 +819,28 @@ fn cmd_api(rest: &[String]) -> Result<(), Fail> {
     if let Some(word) = &c.file {
         let word = word.to_string_lossy();
         let word = word.trim_start_matches('/');
+        // The two names a program defines for the engine to call.
+        match word {
+            "scene" => {
+                println!(
+                    "-  scene  -     (you define it; the engine calls it)\n\n  Draws one frame. Called once per frame on an empty operand stack, which it must leave empty, with a clean graphics state (no font, no path) and the interpreter's memory as setup left it. Read the time with `now`. Rename it with /Scene in the animation dictionary.\n"
+                );
+                return Ok(());
+            }
+            "step" => {
+                println!(
+                    "-  step  -      (optional; you define it; the engine calls it)\n\n  Advances a simulation by one tick. Defining it makes the movie stateful: it is called at /StepRate ticks per second (default: the FPS), in order, on an empty operand stack, and what it changes persists. Inside it `dt` is the tick length, `now` the tick's start, `frame` the tick index. Frame 0 is drawn before any tick. See the skill's modes.md.\n"
+                );
+                return Ok(());
+            }
+            "overlay" => {
+                println!(
+                    "-  overlay  -   (optional, persistent movies; you define it)\n\n  Drawn over each frame of a /Persist true movie as shown, then discarded: a brush, a caption, a vignette. It cannot change the painting.\n"
+                );
+                return Ok(());
+            }
+            _ => {}
+        }
         let Some(e) = psanim::api::lookup(word) else {
             let near: Vec<&str> = psanim::api::API
                 .iter()

@@ -27,8 +27,8 @@ Reading it:
   worker loading the program). Every pure piece renders faster than it
   plays.
 - **Stateful and persistent movies use one thread.** Murmuration spends
-  its time in the simulation (a 300-bird flock in interpreted
-  PostScript); Tidewater in paintkit's watercolour washes.
+  its time in the simulation (a 1,200-bird flock in interpreted
+  PostScript, two ticks a frame, about 30 ms a tick); Tidewater in paintkit's watercolour washes.
 - **What a frame costs** is mostly layers. One-frame has almost none.
   Orrery has two full-canvas ones (a blurred star field and a glow),
   about two thirds of its 76 ms.
@@ -46,6 +46,7 @@ ffmpeg, time from first frame to finished file.
 | paper-boat | 999 | 13.4 s | 10 | 77 | 14.6 MB |
 | orrery | 360 | 9.4 s | 10 | 40 | 40.9 MB |
 | tidewater | 576 | 21.7 s | 1 | 27 | 0.8 MB |
+| murmuration | 780 | 91.9 s | 1 | 8.5 | 12.8 MB |
 
 A 40-second 720p film in 13 seconds; a 12-second 1080-square loop of
 3,300 marks a frame in under 10.

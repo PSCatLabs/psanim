@@ -37,6 +37,13 @@ whatever *it* changes is rolled back as usual.
 } def
 ```
 
+- `step` and `scene` are called on an empty stack. Inside `step`, `dt`
+  is the tick length, `now` the tick's start time, `frame` the tick
+  index; `hash01`, `wiggle`, `signal` and `rand` all work.
+- **Frame 0 is drawn before any tick has run**: the scene sees the state
+  exactly as setup left it. Frame *k* sees the state after
+  `floor(k / fps × StepRate)` ticks. Initialise everything the scene
+  reads in setup, not in the first `step`.
 - Keep state in arrays or names made in setup. Strings are exempt from
   rollback in PostScript, so do not keep state in strings.
 - The result does not depend on the output frame rate: ticks are fixed.
@@ -44,6 +51,16 @@ whatever *it* changes is rolled back as usual.
 - Seeking backward replays ticks from the nearest checkpoint (the engine
   takes one every two seconds of movie). Frames render on one thread.
 - No motion blur.
+- **Iteration cost.** Every CLI invocation starts from tick 0, so `psanim
+  frame --at 20` simulates twenty seconds before it draws, and a sheet of
+  the last few seconds simulates the whole movie. While tuning, shorten
+  the movie (`--duration`), lower the population with a `param`
+  (`/birds /birds 1200 param def`, then `--param birds=200`), and look at
+  late moments only when the early ones are right. `psanim bench` reports
+  the cost of the first frames in order: ticks and drawing together.
+- An interpreted simulation is slow: budget roughly 30 to 45 microseconds
+  per particle per tick for a flocking rule set, and use a grid for
+  neighbour search rather than all pairs.
 
 ## Persistent: paint over the last frame
 

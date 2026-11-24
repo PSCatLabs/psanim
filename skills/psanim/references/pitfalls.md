@@ -41,6 +41,17 @@ is still the current path and the next `fill` paints it too. Write
 `clip newpath`. Likewise `gsave ... grestore` restores the path that was
 current at the `gsave`.
 
+The same goes for artkit's `gradfill`: it paints the current path with a
+gradient and leaves the path in place. Follow it with `newpath`, or the
+next small `fill` repaints the whole gradient area in a flat colour.
+
+## Things inside `faded` come out fainter than expected
+
+The current `setalpha` applies to what is painted inside a layer, and
+then the layer's own opacity applies to the result. `0.5 setalpha` before
+`0.8 { ... } faded` gives 0.4. Set `1 setalpha` before a layer unless you
+mean it.
+
 ## `stackunderflow` in a combinator
 
 Operands in the wrong order. The procedure is always last:

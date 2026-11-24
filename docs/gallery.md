@@ -10,6 +10,7 @@ reproducible from the sources).
 | [Afterglow](../gallery/afterglow/afterglow.ps) | Opening titles for an imaginary film: credits over a setting sun, and a title that draws itself on. | 19.9 s, 1280x720, pure | `psanim render gallery/afterglow/afterglow.ps -o afterglow.mp4` |
 | [Paper Boat](../gallery/paper-boat/paper-boat.ps) | A paper boat is folded, launched in the rain, lost down a drain, and found again on a calm river under stars. | 41.6 s, 1280x720, pure | `psanim render gallery/paper-boat/paper-boat.ps -o paper-boat.mp4` |
 | [Tidewater](../gallery/tidewater/tidewater.ps) | A watercolour estuary at sunrise that paints itself, wash by wash and stroke by stroke. | 24 s, 1280x720, persistent | `psanim render gallery/tidewater/tidewater.ps -o tidewater.mp4` |
+| [Murmuration](../gallery/murmuration/murmuration.ps) | Twelve hundred simulated starlings fold and pour over a fen at dusk. | 26 s, 1280x720, stateful | `psanim render gallery/murmuration/murmuration.ps -o murmuration.mp4` |
 | [Epicycles](../gallery/epicycles/epicycles.ps) | A square wave assembled from rotating circles. | 22 s, 1280x720, pure | `psanim render gallery/epicycles/epicycles.ps -o epicycles.mp4` |
 | [One Frame, Any Time](../gallery/one-frame/one-frame.ps) | How psanim renders a movie: setup, checkpoint, and frames as functions of time. | 40.5 s, 1280x720, pure | `psanim render gallery/one-frame/one-frame.ps -o one-frame.mp4` |
 
