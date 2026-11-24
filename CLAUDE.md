@@ -4,11 +4,12 @@ Read `docs/HANDOFF.md` first: state, decisions, what is next.
 
 - **What this is**: an animation engine for PostScript programs, built on
   the PSCat interpreter as a Rust library. `README.md` has the map.
-- **PSCat lives beside this repo** at `../pscat-psanim-api`, a git
-  worktree on the local branch `feature/psanim-library-api`. Changes to
-  PSCat go there, as separate commits, following that repository's
-  `AGENTS.md` and `SDLC.md`. Do not push it, merge it, or touch the main
-  PSCat checkout (`../pscat_gpu`) without being asked.
+- **PSCat lives beside this repo** at `../pscat-psanim-api`, a
+  checkout of the branch `feature/psanim-library-api` (draft PR
+  PSCatLabs/pscat#1410). Changes to PSCat go there, as separate commits,
+  following that repository's `AGENTS.md` and `SDLC.md`. Do not push
+  to it, merge it, or touch any other PSCat checkout without being
+  asked.
 - **Build and test**: `cargo build --release`, `cargo test --release`,
   `cargo clippy --all-targets -- -D warnings`, `cargo fmt --all`.
 - **To author or debug a movie**, use the skill in `skills/psanim/`

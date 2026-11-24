@@ -63,7 +63,7 @@ psanim render examples/hello.ps -o hello.mp4    # 120 frames in about 0.1 s
   `--json`.
 - **A browser build** (`crates/psanim-wasm`, `web/`): the same engine in
   WebAssembly, a `<psanim-player>` element, a playground.
-- **A gallery** (`gallery/`): thirteen films, each one file. [Index](docs/gallery.md).
+- **A gallery** (`gallery/`): thirteen films, each one file. [Index, with stills](docs/gallery.md).
 - **An agent skill** (`skills/psanim/`) and a documentation site built
   from the same text.
 - **A host API for PSCat**, on a feature branch: what PSCat needed to
@@ -75,8 +75,8 @@ psanim render examples/hello.ps -o hello.mp4    # 120 frames in about 0.1 s
 psanim builds against a PSCat feature branch checked out beside it.
 
 ```sh
-# 1. PSCat, as a sibling worktree on the feature branch
-git -C /path/to/pscat worktree add ../pscat-psanim-api feature/psanim-library-api
+# 1. PSCat's feature branch, checked out beside this repository
+git clone -b feature/psanim-library-api https://github.com/PSCatLabs/pscat ../pscat-psanim-api
 
 # 2. psanim
 cargo build --release                # target/release/psanim
@@ -123,7 +123,8 @@ the frame, the command, the procedure and the element, and suggest a fix;
 ## Status
 
 A first version: the engine, CLI, browser build, gallery and docs work
-and are tested on macOS. It depends on an unmerged PSCat branch, is not
+and are tested on macOS. It depends on a PSCat branch under review
+([PSCatLabs/pscat#1410](https://github.com/PSCatLabs/pscat/pull/1410)), is not
 published, and has the limits listed in [the roadmap](docs/roadmap.md).
 
 ## License

@@ -10,8 +10,8 @@ PSCat to grow, and how the two repositories are built together.
 |---|---|
 | PSCat repository | https://github.com/PSCatLabs/pscat |
 | Upstream base | `feature/0.7.1` at `72a2c4e` (the active development branch; `main` was 64 commits behind it on 2026-11-23) |
-| Feature branch | `feature/psanim-library-api` (local only: not pushed, not merged) |
-| Tested revision | `b1c1f8a` |
+| Feature branch | `feature/psanim-library-api` (pushed; draft PR [#1410](https://github.com/PSCatLabs/pscat/pull/1410), issue [#1403](https://github.com/PSCatLabs/pscat/issues/1403); not merged) |
+| Tested revision | `f6ed4e7` |
 | PSCat version | 0.7.0-rc.5 |
 | Local checkout | a git worktree at `../pscat-psanim-api`, beside this repository |
 
@@ -23,9 +23,9 @@ require.
 ## Building both together
 
 ```sh
-# once: the PSCat feature branch as a sibling worktree
-git -C /path/to/pscat worktree add -b feature/psanim-library-api ../pscat-psanim-api origin/feature/0.7.1
-#   (or, from a clone that already has the branch: git worktree add ../pscat-psanim-api feature/psanim-library-api)
+# once: the PSCat feature branch, beside this repository
+git clone -b feature/psanim-library-api https://github.com/PSCatLabs/pscat ../pscat-psanim-api
+#   (or, from an existing PSCat clone: git fetch origin && git worktree add ../pscat-psanim-api feature/psanim-library-api)
 
 # then, in psanim
 cargo build --release          # builds pscat from ../pscat-psanim-api as a path dependency

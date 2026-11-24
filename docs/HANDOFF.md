@@ -17,10 +17,10 @@ Working and tested on macOS (Apple silicon):
 - `gallery/`: thirteen pieces. `skills/psanim/`: the agent skill.
   `docs/` + `scripts/build_site.py`: Markdown docs and the HTML site.
 - PSCat branch `feature/psanim-library-api` in `../pscat-psanim-api`:
-  three commits on top of `feature/0.7.1` @ `72a2c4e`. Full PSCat suite
-  green (3688 passed). **Local only: not pushed, not merged, no issue or
-  PR opened.** That is the owner's call; `notes/psanim-library-api.md` in
-  that branch is the write-up to open one from.
+  on top of `feature/0.7.1` @ `72a2c4e`. Full PSCat suite green (3688
+  passed). **Pushed, with a draft PR (PSCatLabs/pscat#1410, issue
+  #1403); not reviewed, not merged.** `notes/1403-psanim-library-api.md`
+  in that branch is the write-up.
 
 ## Decisions worth knowing before changing things
 

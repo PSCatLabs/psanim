@@ -25,6 +25,9 @@ for name in "${names[@]}"; do
   at=$(sed -n 's/^% *Poster: *\([0-9.]*\).*/\1/p' "$src" | head -1)
   [ -n "$at" ] || at=$(python3 -c "import json;print(json.load(open('$out/info.json'))['movie']['duration']*0.6)")
   $P frame "$src" --at "$at" -o "$out/poster.png" -q
+  # A small still for docs/gallery.md, which is kept in git.
+  mkdir -p docs/img/gallery
+  ffmpeg -v error -y -i "$out/poster.png" -vf scale=480:-2 -q:v 4 "docs/img/gallery/$name.jpg"
   $P sheet "$src" -o "$out/sheet.png" --count 12 --cols 4 --thumb 400 -q
   $P render "$src" -o "$out/$name.mp4" $scale --json > "$out/render.json"
   # An animated GIF too: 480 wide at 20 fps keeps it a few megabytes.

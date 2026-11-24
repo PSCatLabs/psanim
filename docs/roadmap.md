@@ -42,7 +42,8 @@ What psanim does not do today, stated plainly, and what would come next.
   have not been run.
 - The browser build is tested in Node and Chromium only, runs on the
   main thread, and has no time limit (step limit only).
-- Not published to crates.io; depends on an unmerged PSCat branch.
+- Not published to crates.io; depends on a PSCat branch that is in review and not merged
+  (PSCatLabs/pscat#1410).
 
 **Safety**
 
