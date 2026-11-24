@@ -1,0 +1,858 @@
+%!PS
+% Paper Boat
+%
+% A wordless short film in five scenes. A sheet of paper folds itself into
+% a boat on a table by a rainy window; a child in a yellow raincoat sets it
+% on the gutter stream; it rides through the town at dusk while the weather
+% turns; it is swept into a storm drain and through the dark; it comes out
+% on a wide calm river under clearing stars, and the camera rises to find
+% the boat again as a constellation.
+%
+% Techniques
+%   - a `reel` of five clip procedures; two custom transitions added to the
+%     `transitions` dictionary (a rain-slanted wipe that sweeps in the
+%     direction of travel, and an iris that closes on the drain mouth,
+%     wherever the camera has put it) and two dissolves;
+%   - recurring elements (boat, water, rain, ripples, houses, lamps) are
+%     procedures against `now`, placed by `camera` and by time scopes;
+%   - the boat rides the same wave function that draws the water, so it
+%     bobs and tilts with the surface it sits on;
+%   - parallax: each depth layer gets its own `camera` (pcam);
+%   - `morphpath` for the folding, `trimpath` for the constellation,
+%     `keyframes` for camera moves, `glowing` / `blurred` / `faded` layers
+%     for light and depth, `hash01` / `wiggle` for stable randomness;
+%   - palettes are dictionaries; the town scene interpolates a whole
+%     palette (dusk -> storm) with `between` as the weather turns.
+% A pure movie: no `step`, no Persist. Any frame renders on its own.
+
+/film [
+  [6.0  /c-fold]    [1.0 /dissolve]
+  [6.5  /c-launch]  [0.9 /t-follow]
+  [14.5 /c-town]    [1.3 /t-drain]
+  [7.0  /c-dark]    [2.2 /dissolve]
+  [13.0 /c-river]
+] def
+
+<< /Size [1280 720] /Duration film reelduration /FPS 24
+   /Background [0.03 0.03 0.05]
+   /Title (Paper Boat)
+   /Description (A paper boat is folded, launched in the rain, lost down a drain, and found again on a calm river under stars.)
+>> animation
+
+% ---------------------------------------------------------------- palettes
+% One dictionary per scene; a clip `begin`s its own. P-town and P-storm
+% have the same keys so that c-town can blend between them.
+
+/P-fold <<
+  /tbl [0.29 0.18 0.17] /tbl2 [0.23 0.14 0.14] /lite [0.40 0.39 0.55] /drop [0.31 0.29 0.44]
+  /cream [0.86 0.80 0.70] /tea [0.42 0.22 0.13] /pencil [0.96 0.76 0.22] /warm [1.0 0.76 0.36]
+  /b-light [0.97 0.94 0.86] /b-shade [0.80 0.77 0.74] /b-dark [0.60 0.56 0.58]
+>> def
+
+/P-town <<
+  /sky-a [0.16 0.17 0.33] /sky-b [0.27 0.24 0.42] /sky-c [0.50 0.34 0.47] /sky-d [0.84 0.52 0.42]
+  /far [0.30 0.27 0.45] /mid [0.21 0.21 0.37]
+  /wall1 [0.15 0.17 0.30] /wall2 [0.20 0.18 0.32] /wall3 [0.12 0.15 0.26] /roof [0.08 0.09 0.19]
+  /glass [0.25 0.28 0.45] /warm [1.0 0.78 0.38] /trim [0.31 0.31 0.48]
+  /walk [0.34 0.35 0.52] /curb [0.21 0.22 0.37] /road [0.10 0.11 0.22]
+  /water1 [0.22 0.33 0.53] /water2 [0.31 0.45 0.64] /waterhi [0.68 0.80 0.92] /rainc [0.78 0.83 0.97]
+  /b-light [0.97 0.94 0.87] /b-shade [0.76 0.75 0.80] /b-dark [0.50 0.50 0.60]
+>> def
+
+/P-storm <<
+  /sky-a [0.06 0.08 0.14] /sky-b [0.09 0.12 0.19] /sky-c [0.13 0.17 0.24] /sky-d [0.19 0.24 0.30]
+  /far [0.10 0.13 0.20] /mid [0.08 0.10 0.17]
+  /wall1 [0.07 0.09 0.15] /wall2 [0.09 0.10 0.16] /wall3 [0.06 0.08 0.13] /roof [0.035 0.045 0.08]
+  /glass [0.11 0.14 0.21] /warm [0.95 0.68 0.32] /trim [0.14 0.18 0.25]
+  /walk [0.17 0.21 0.29] /curb [0.10 0.13 0.20] /road [0.05 0.06 0.11]
+  /water1 [0.11 0.22 0.30] /water2 [0.17 0.31 0.39] /waterhi [0.55 0.74 0.78] /rainc [0.72 0.80 0.90]
+  /b-light [0.86 0.89 0.90] /b-shade [0.58 0.63 0.71] /b-dark [0.36 0.40 0.50]
+>> def
+
+/P-dark <<
+  /dk0 [0.04 0.05 0.08] /dkm [0.02 0.025 0.04] /dk1 [0.10 0.125 0.18]
+  /dk2 [0.05 0.10 0.15] /dk3 [0.07 0.14 0.20] /waterhi [0.30 0.46 0.56]
+  /n0 [0.20 0.27 0.46] /n1 [0.12 0.17 0.33] /eye [1.0 0.72 0.25]
+  /b-light [0.50 0.56 0.66] /b-shade [0.30 0.35 0.47] /b-dark [0.18 0.22 0.30]
+>> def
+
+/P-river <<
+  /n0 [0.20 0.27 0.46] /n1 [0.12 0.17 0.33] /n2 [0.07 0.10 0.23] /n3 [0.04 0.055 0.14]
+  /bank [0.05 0.075 0.16] /wat0 [0.09 0.14 0.30] /wat1 [0.11 0.17 0.35] /wat2 [0.07 0.11 0.25]
+  /moon [0.98 0.95 0.82] /starc [0.90 0.93 1.0] /warm [1.0 0.78 0.38] /cloud [0.08 0.10 0.19]
+  /waterhi [0.55 0.66 0.88] /rainc [0.72 0.80 0.95] /reed [0.025 0.035 0.08]
+  /b-light [0.95 0.95 0.96] /b-shade [0.64 0.69 0.83] /b-dark [0.40 0.46 0.62]
+>> def
+
+% the child (the one saturated accent of the film)
+/coat [0.97 0.76 0.20] def /coat-sh [0.84 0.58 0.14] def
+/boot [0.66 0.22 0.20] def /skin [0.94 0.74 0.62] def /ink [0.10 0.09 0.16] def
+
+% ----------------------------------------------------------------- helpers
+
+/setc { aload pop setrgbcolor } def
+/fillframe { setc 0 0 1280 720 rectfill } def       % (not `backdrop`: it ignores a transition's clip)
+/fmod { 2 copy div floor mul sub } def              % a b -> a mod b, for reals, in 0..b
+
+% cx cy rx ry ell : append an ellipse to the path (the CTM is put back, so
+% a stroke keeps an even width)
+/ell {
+  matrix currentmatrix 5 1 roll
+  4 2 roll translate scale 1 0 moveto 0 0 1 0 360 arc closepath
+  setmatrix
+} def
+
+% dictA dictB u mixpal dict : every colour u of the way from A to B
+/mixpal {
+  5 dict begin /u exch def /pb exch def /pa exch def
+    /out pa length dict def
+    pa { pop /k exch def  out k  u pa k get pb k get between  put } forall
+    out
+  end
+} def
+
+% ------------------------------------------------------------------- water
+% One wave function draws every water surface and floats the boat on it.
+
+% x amp wl ph wave2 dy : two sines; ph is the travel phase in degrees
+/wave2 {
+  4 dict begin /ph exch def /wl exch def /amp exch def /x exch def
+    x wl div 360 mul ph sub sin 0.65 mul
+    x wl 0.41 mul div 360 mul ph 1.6 mul sub 70 add sin 0.35 mul add
+    amp mul
+  end
+} def
+
+% x0 x1 y ybot amp wl ph strip : a band with a wavy edge at y, filled to ybot
+/strip {
+  8 dict begin /ph exch def /wl exch def /amp exch def /yb exch def /y0 exch def /x1 exch def /x0 exch def
+    newpath x0 yb moveto
+    x0 12 x1 { /sx exch def  sx  y0 sx amp wl ph wave2 add  lineto } for
+    x1  y0 x1 amp wl ph wave2 add  lineto
+    x1 yb lineto closepath fill
+  end
+} def
+
+% The current stream is described by W-y W-amp W-wl W-ph (set by the clip).
+% x floatpose x y angle : where the surface is at x, and how it slopes
+/floatpose {
+  4 dict begin /x exch def
+    /y x W-amp W-wl W-ph wave2 W-y add def
+    /a x 26 add W-amp W-wl W-ph wave2  x 26 sub W-amp W-wl W-ph wave2 sub  52 atan def
+    a 180 gt { /a a 360 sub def } if
+    x y a 0.8 mul
+  end
+} def
+
+% n seed glints : short highlights that ride the surface and drift with the
+% flow (W-fl is the distance the water has travelled); world range vx0..vx1
+/glints {
+  8 dict begin /seed exch def /n exch def
+    /L 2000 def
+    newpath
+    0 1 n 1 sub { /i exch def
+      /gx [i seed 1] hash01 L mul W-fl add vx0 sub L fmod vx0 add def
+      /gy W-y 14 sub [i seed 2] hash01 34 mul sub  gx W-amp W-wl W-ph wave2 0.6 mul add def
+      gx gy moveto 12 [i seed 3] hash01 22 mul add 0 rlineto
+    } for
+    2.2 setlinewidth 1 setlinecap stroke
+  end
+} def
+
+% -------------------------------------------------------------------- rain
+
+% n len lw speed seed rain : slanted streaks in screen space. Each drop's
+% column and phase come from hash01, so the pattern is stable frame to frame.
+/rain {
+  10 dict begin /seed exch def /spd exch def /lw exch def /len exch def /n exch def
+    /sl 0.28 def
+    newpath
+    0 1 n 1 sub { /i exch def
+      /yy 790 now spd mul [i seed 2] hash01 900 mul add 900 fmod sub def
+      /xx [i seed 1] hash01 1750 mul 260 sub 790 yy sub sl mul add def
+      xx yy moveto len sl mul neg len rlineto
+    } for
+    lw setlinewidth 1 setlinecap stroke
+  end
+} def
+
+% k rains : three depths of rain, k scales how hard it comes down
+/rain-far  { rainc setc 0.20 setalpha  90 mul cvi 20 1.0 520 1 rain 1 setalpha } def
+/rain-near {
+  dup rainc setc 0.34 setalpha  60 mul cvi 44 1.5 800 2 rain
+      rainc setc 0.50 setalpha  22 mul cvi 84 2.6 1150 3 rain 1 setalpha
+} def
+
+% n y0 y1 seed ripples : rain rings on the ground between y0 and y1
+/ripples {
+  12 dict begin /seed exch def /y1 exch def /y0 exch def /n exch def
+    1.6 setlinewidth
+    0 1 n 1 sub { /i exch def
+      /per 0.9 [i seed 1] hash01 0.9 mul add def
+      /tt now [i seed 2] hash01 per mul add def
+      /cyc tt per div floor def
+      /u tt cyc per mul sub 0.55 div def
+      u 1 lt {
+        /rx [i seed cyc 3] hash01 2000 mul vx0 sub 2000 fmod vx0 add def
+        1 u sub 0.55 mul setalpha
+        newpath rx  y0 [i seed cyc 4] hash01 y1 y0 sub mul add  3 u 17 mul add  dup 0.3 mul ell stroke
+      } if
+    } for
+    1 setalpha
+  end
+} def
+
+% -------------------------------------------------------------------- boat
+% Drawn at the origin with the waterline on y = 0, about 124 units long.
+% Colours b-light b-shade b-dark come from the scene's palette.
+
+/boat {
+  b-light setc newpath -62 22 moveto -34 -14 lineto 0 -14 lineto 0 22 lineto closepath fill
+  b-shade setc newpath 0 22 moveto 0 -14 lineto 34 -14 lineto 62 22 lineto closepath fill
+  b-light setc newpath -22 22 moveto 0 56 lineto 0 22 lineto closepath fill
+  b-shade setc newpath 0 22 moveto 0 56 lineto 22 22 lineto closepath fill
+  b-dark setc 1.6 setlinewidth 0 setlinecap
+  newpath -60 21.2 moveto 60 21.2 lineto stroke
+} def
+/drawboat { gsave 4 2 roll translate exch rotate dup scale boat grestore } def   % x y angle scale
+
+% the same silhouette as one closed outline: for the fold and the constellation
+/boatoutline {
+  newpath -34 -14 moveto 34 -14 lineto 62 22 lineto 22 22 lineto 0 56 lineto -22 22 lineto -62 22 lineto closepath
+} def
+
+% The four stages of the fold, 120 points each, built once.
+/S0 newpath -150 -200 moveto 150 -200 lineto 150 200 lineto -150 200 lineto closepath 120 resamplepath def
+/S1 newpath -150 -200 moveto 150 -200 lineto 150 0 lineto -150 0 lineto closepath 120 resamplepath def
+/S2 newpath -150 -200 moveto 150 -200 lineto 150 -160 lineto 0 -10 lineto -150 -160 lineto closepath 120 resamplepath def
+% (resamplepath answers in the user space current when it is called, so the
+% boat outline is written out here at three times its size)
+/S3 newpath -102 -200 moveto 102 -200 lineto 186 -92 lineto 66 -92 lineto 0 10 lineto
+    -66 -92 lineto -186 -92 lineto closepath 120 resamplepath def
+newpath
+/SS [S0 S1 S2 S3] def
+
+% ----------------------------------------------------------------- the town
+/GY 300 def            % the foot of the houses; pavement 250..300, water about 200
+
+% p pcam : the camera for a layer at parallax p (1 = the street itself),
+% and the world range vx0..vx1 that layer has to cover
+/pcam {
+  /pp exch def
+  /vx0 camx pp mul 1040 sub def /vx1 camx pp mul 1040 add def
+  camx pp mul   camy 360 sub pp mul 360 add   camz 1 sub pp mul 1 add   camr  camera
+} def
+
+% seed pitch base hmin hvar skyline : a row of distant roofs
+/skyline {
+  10 dict begin /hvar exch def /hmin exch def /base exch def /pitch exch def /seed exch def
+    vx0 pitch div floor cvi 1 vx1 pitch div ceiling cvi {
+      /k exch def
+      /bh hmin [k seed 1] hash01 hvar mul add def
+      /bx k pitch mul def
+      bx base pitch 1 add bh rectfill
+      [k seed 2] hash01 0.4 lt {
+        newpath bx base bh add moveto bx pitch add base bh add lineto
+        bx pitch 2 div add base bh add pitch 0.45 mul add lineto closepath fill } if
+      [k seed 3] hash01 0.10 lt {
+        bx pitch 0.4 mul add base pitch 0.2 mul bh pitch 0.9 mul add rectfill
+        newpath bx pitch 0.32 mul add base bh add pitch 0.9 mul add moveto bx pitch 0.68 mul add base bh add pitch 0.9 mul add lineto
+        bx pitch 0.5 mul add base bh add pitch 1.5 mul add lineto closepath fill } if
+    } for
+  end
+} def
+% seed pitch base hmin hvar size skylights : a few lit windows in that row
+/skylights {
+  10 dict begin /sz exch def /hvar exch def /hmin exch def /base exch def /pitch exch def /seed exch def
+    vx0 pitch div floor cvi 1 vx1 pitch div ceiling cvi {
+      /k exch def
+      /bh hmin [k seed 1] hash01 hvar mul add def
+      0 1 1 { /j exch def
+        [k seed j 5] hash01 0.45 lt {
+          k pitch mul [k seed j 6] hash01 0.7 mul 0.1 add pitch mul add
+          base [k seed j 7] hash01 0.6 mul 0.25 add bh mul add  sz sz 1.3 mul rectfill } if
+      } for
+    } for
+  end
+} def
+
+% i mode house : house i of the terrace (240 units each). mode 0 draws the
+% body, mode 1 only what is lit, so all the light can share one glow layer.
+/house {
+  20 dict begin /mode exch def /i exch def
+    /hx i 240 mul def
+    [i 10] hash01 0.17 lt i home-i ne and {
+      mode 0 eq {                       % a gap: garden wall and a tree
+        roof setc hx 114 add GY 60 add 12 170 rectfill
+        hx 120 add GY 262 add 66 0 360 arc fill
+        hx 74 add GY 222 add 46 0 360 arc fill
+        hx 170 add GY 230 add 50 0 360 arc fill
+        wall3 setc hx GY 240 76 rectfill
+        trim setc hx GY 76 add 240 7 rectfill
+      } if
+    } {
+      /floors 2 [i 11] hash01 2 mul floor cvi add def
+      /hh floors 100 mul 36 add def
+      /wc [wall1 wall2 wall3] [i 12] hash01 2.999 mul floor cvi get def
+      mode 0 eq {
+        wc setc hx GY 240 hh rectfill
+        roof setc
+        [i 13] hash01 0.55 lt {
+          newpath hx 10 sub GY hh add moveto hx 250 add GY hh add lineto hx 120 add GY hh add 84 add lineto closepath fill
+        } { hx 8 sub GY hh add 256 18 rectfill } ifelse
+        hx 176 add GY hh add 26 [i 14] hash01 36 mul 52 add rectfill
+      } if
+      0 1 floors 1 sub { /f exch def
+        0 1 1 { /c exch def
+          /wx hx 40 add c 104 mul add def
+          /wy GY 44 add f 100 mul add def
+          f 0 eq c 0 eq and {
+            mode 0 eq { roof setc wx 2 add GY 52 88 rectfill  trim setc wx 2 sub GY 88 add 60 6 rectfill } if
+            mode 1 eq i home-i eq and { warm setc wx 2 add GY 52 88 rectfill } if
+          } {
+            /lit [i f c 15] hash01 0.36 lt def
+            mode 0 eq {
+              lit not { glass setc wx wy 56 64 rectfill } if
+              trim setc wx 4 sub wy 7 sub 64 7 rectfill
+            } if
+            mode 1 eq lit and {
+              warm setc wx wy 56 64 rectfill
+              wc setc wx 26 add wy 4 64 rectfill  wx wy 30 add 56 4 rectfill
+            } if
+          } ifelse
+        } for
+      } for
+    } ifelse
+  end
+} def
+
+/lamp {                                 % x mode
+  4 dict begin /mode exch def /lx exch def
+    mode 0 eq {
+      roof setc lx 4 sub GY 8 300 rectfill  lx 9 sub GY 18 30 rectfill
+      lx 16 sub GY 296 add 32 8 rectfill
+      newpath lx 17 sub GY 342 add moveto lx 17 add GY 342 add lineto lx GY 360 add lineto closepath fill
+    } { warm setc lx 11 sub GY 304 add 22 38 rectfill } ifelse
+  end
+} def
+/eachlamp {                             % proc(x) : every lamp in view
+  /lp exch def
+  vx0 130 sub 560 div floor cvi 1 vx1 130 sub 560 div ceiling cvi { 560 mul 130 add lp } for
+} def
+
+% the sky and the two far rows, each on its own camera
+/town-sky {
+  sky-a fillframe
+  sky-b setc -60 1340 650 0 16 640 now 5 mul strip
+  sky-c setc -60 1340 575 0 20 520 now 4 mul 90 add strip
+  sky-d setc -60 1340 500 0 14 760 now 3 mul 200 add strip
+  gsave 0.3 pcam
+    2.5 { far setc 31 150 250 150 190 skyline } blurred
+    warm setc 0.55 setalpha 31 150 250 150 190 7 skylights 1 setalpha
+  grestore
+} def
+/town-mid {
+  gsave 0.55 pcam
+    mid setc 57 190 250 110 150 skyline
+    warm setc 0.75 setalpha 57 190 250 110 150 9 skylights 1 setalpha
+  grestore
+} def
+
+% the street: houses, lamps, pavement, kerb and road (inside `1 pcam`)
+/town-street {
+  vx0 240 div floor cvi 1 vx1 240 div ceiling cvi { 0 house } for
+  walk setc vx0 250 vx1 vx0 sub 50 rectfill
+  trim setc vx0 244 vx1 vx0 sub 6 rectfill
+  curb setc vx0 150 vx1 vx0 sub 94 rectfill
+  road setc vx0 -700 vx1 vx0 sub 850 rectfill
+  { 0 lamp } eachlamp
+} def
+/water-back  { water1 setc vx0 vx1 W-y 5 add 150 W-amp W-wl W-ph 40 add strip } def
+/water-front {
+  water2 setc vx0 vx1 W-y 6 sub 150 W-amp W-wl W-ph strip
+  waterhi setc 0.55 setalpha 34 7 glints 1 setalpha
+} def
+% everything that gives light, in one glow layer (drawn before the people,
+% so they stand in front of the windows); then the soft light and the wet
+/town-glow {
+  10 0.8 {
+    vx0 240 div floor cvi 1 vx1 240 div ceiling cvi { 1 house } for
+    { 1 lamp } eachlamp
+  } glowing
+} def
+/town-wet {
+  0.10 { 16 { warm setc
+    { /cx0 exch def newpath cx0 GY 322 add moveto cx0 150 sub 250 lineto cx0 150 add 250 lineto closepath fill
+      cx0 22 sub -700 44 850 rectfill } eachlamp        % cone of light, and its smear on the wet road
+  } blurred } faded
+  waterhi setc 14 20 140 5 ripples
+} def
+
+% ------------------------------------------------------------------ people
+
+% hx hy tilt child : crouching, facing right; origin at the feet. (hx, hy)
+% is where the hand is, tilt turns the head.
+/child {
+  8 dict begin /tilt exch def /hy exch def /hx exch def
+    boot setc -26 0 36 20 rectfill  10 0 40 20 rectfill
+    coat setc newpath -50 16 moveto -60 72 -32 124 4 128 curveto 36 130 54 100 56 60 curveto
+      58 38 52 22 46 16 curveto closepath fill
+    coat-sh setc newpath -50 16 moveto -60 72 -32 124 4 128 curveto -18 100 -26 52 -18 16 curveto closepath fill
+    gsave 12 128 translate tilt rotate                     % the hooded head
+      coat setc 0 26 35 0 360 arc fill
+      newpath -24 46 moveto -52 62 lineto -30 22 lineto closepath fill
+      skin setc 11 22 22 0 360 arc fill
+      ink setc 21 26 2.8 0 360 arc fill
+      coat setc 8 setlinewidth newpath 6 26 30 20 115 arc stroke
+    grestore
+    coat setc 21 setlinewidth 1 setlinecap 1 setlinejoin    % the arm, bent at the elbow
+    newpath 14 98 moveto  14 hx add 2 div 12 add  98 hy add 2 div 22 sub  lineto  hx hy lineto stroke
+    skin setc hx hy 9.5 0 360 arc fill
+  end
+} def
+
+% a passer-by under an umbrella, walking left; origin at the feet
+/walker {
+  6 dict begin
+    /ph now 330 mul def
+    gsave 0 ph 2 mul sin abs 3 mul translate
+      roof setc 9 setlinewidth 1 setlinecap
+      newpath 0 74 moveto ph sin 24 mul 0 lineto stroke
+      newpath 0 74 moveto ph sin -24 mul 0 lineto stroke
+      newpath -19 62 moveto 19 62 lineto 14 150 lineto -14 150 lineto closepath fill
+      0 166 14 0 360 arc fill
+      3 setlinewidth newpath -8 120 moveto -8 214 lineto stroke
+      boot setc newpath -8 204 66 0 180 arc closepath fill
+      roof setc 2 setlinewidth newpath -8 270 moveto -8 280 lineto stroke
+    grestore
+  end
+} def
+
+% ------------------------------------------------------------- transitions
+% procA procB u, as the reel calls them.
+
+% The next scene sweeps in behind an edge slanted like the rain, moving the
+% way the boat is travelling.
+transitions /t-follow {
+  4 dict begin /u exch def /pb exch def /pa exch def
+    pa
+    /e u /sine-inout ease -20 1500 between def
+    gsave newpath -10 -10 moveto e -10 lineto e 205 sub 730 lineto -10 730 lineto closepath clip
+      pb
+    grestore
+  end
+} put
+
+% An iris that closes on the drain: the dark comes in from the edges, and
+% waits a moment as a small circle before it shuts. c-town leaves the mouth
+% of the drain, in device space, in /iris-dev.
+userdict /iris-dev [640 360] put
+transitions /t-drain {
+  6 dict begin /u exch def /pb exch def /pa exch def
+    pa
+    userdict /iris-dev get aload pop itransform /cy exch def /cx exch def
+    /r u [0 1150  0.5 245 /cubic-out  0.7 228 /linear  1 0 /cubic-in] keyat def
+    gsave
+      newpath -10 -10 moveto 1290 -10 lineto 1290 730 lineto -10 730 lineto closepath
+      r 0.5 gt { cx r add cy moveto cx cy r 0 360 arc closepath } if
+      eoclip
+      pb
+    grestore
+  end
+} put
+
+% ============================================================ 1. the fold
+% Seen from above: a table by a window, rain shadows crossing the patch of
+% window light, and a sheet that folds itself.
+
+/c-fold {
+  P-fold begin 16 dict begin
+  tbl fillframe
+  gsave
+    640 360  0 6 /sine-inout tween 1.0 1.07 between  0 camera
+    tbl2 setc 3 setlinewidth
+    [86 262 444 628] { newpath -100 exch dup 3 1 roll moveto 1400 exch lineto stroke } forall
+    % window light: four panes, sheared, with the rain's shadow running down them
+    gsave
+      [1 0 0.32 1 130 60] concat
+      0.55 {
+        lite setc
+        120 60 330 270 rectfill 470 60 330 270 rectfill
+        120 350 330 270 rectfill 470 350 330 270 rectfill
+      } faded
+      gsave newpath 120 60 680 560 rectclip
+        tbl setc 0.6 setalpha 120 54 5 170 4 rain 1 setalpha
+        tbl setc 450 40 20 600 rectfill 100 330 720 20 rectfill
+      grestore
+    grestore
+    % lamp light from beyond the corner
+    0.30 { 70 { warm setc 1240 40 330 0 360 arc fill } blurred } faded
+    % a few things on the table
+    gsave -30 500 translate 14 rotate                       % spare sheets
+      b-dark setc -160 -110 330 240 rectfill
+      gsave 12 18 translate -9 rotate b-shade setc -150 -110 320 230 rectfill grestore
+    grestore
+    gsave 1085 560 translate                                 % a cup, from above
+      tbl2 setc 8 -10 86 0 360 arc fill
+      cream setc 0 0 84 0 360 arc fill
+      b-dark setc 0 0 58 0 360 arc fill
+      cream setc 0 0 52 0 360 arc fill
+      tea setc 0 0 44 0 360 arc fill
+      cream setc 13 setlinewidth 1 setlinecap newpath 50 -30 moveto 78 -52 lineto stroke
+    grestore
+    gsave 1010 190 translate -28 rotate                      % a pencil
+      tbl2 setc -106 -12 220 13 rectfill
+      pencil setc -110 -6 190 13 rectfill
+      cream setc newpath 80 -6 moveto 104 0.5 lineto 80 7 lineto closepath fill
+      b-dark setc -122 -6 14 13 rectfill
+    grestore
+
+    % ---- the sheet. m runs 0..3 through the four stages, with a rest at each
+    /m [0 0  1.2 0  1.8 1 /cubic-inout  2.3 1  2.9 2 /cubic-inout  3.4 2  4.1 3 /cubic-inout] keyframes def
+    /lift 4.6 6 /sine-inout tween def                        % picked up at the end
+    /seg m floor cvi 2 min def
+    /w1 1 m 1 sub abs 4 mul sub 0 1 clamp def
+    /w2 1 m 2 sub abs 4 mul sub 0 1 clamp def
+    /w3 m 2.75 sub 0.25 div 0 1 clamp def
+    gsave
+      600 350 m 0 1 clamp 100 mul add translate
+      lift -7 mul rotate  lift 1 1.13 between dup scale
+      gsave lift 12 46 between dup neg translate            % its shadow on the table
+        SS seg get SS seg 1 add get m seg sub morphpath
+        tbl2 setc lift 0.6 0.3 between setalpha fill 1 setalpha
+      grestore
+      SS seg get SS seg 1 add get m seg sub morphpath b-light setc fill
+      % creases and shaded flaps, each faded in around its own stage
+      1 m sub 0 1 clamp 0.5 mul {
+        b-shade setc 1.5 setlinewidth [9 7] 0 setdash
+        newpath -150 0 moveto 150 0 lineto stroke [] 0 setdash } faded
+      w1 { b-shade setc -150 -12 300 12 rectfill } faded
+      w2 {
+        b-shade setc newpath 0 -160 moveto 0 -10 lineto 150 -160 lineto closepath fill
+        b-dark setc 1.2 setlinewidth newpath -150 -160 moveto 150 -160 lineto stroke
+        b-shade setc 0 -200 150 40 rectfill
+      } faded
+      w3 { gsave 0 -158 translate 3 3 scale boat grestore } faded
+    grestore
+  grestore
+  % a small title, lower left, gone before the last fold
+  0.7 1.5 /quad-out tween  3.0 3.7 /quad-in tween 1 exch sub  mul {
+    /Palatino-Italic findfont 34 scalefont setfont cream setc
+    96 84 moveto (paper boat) show
+  } faded
+  end end
+} def
+
+% ========================================================= 2. the launch
+
+/c-launch {
+  P-town begin 30 dict begin
+  /home-i 1 def /chx 500 def
+  /W-y 200 def /W-amp 4 def /W-wl 230 def /W-ph now 200 mul def /W-fl now 130 mul def
+  [0 [560 322]  2.2 [560 322]  6.5 [840 345] /sine-inout] keyframes aload pop /camy exch def /camx exch def
+  /camz [0 1.42  2.2 1.42  6.5 1.0 /sine-inout] keyframes def
+  /camr 0 def
+  town-sky  0.8 rain-far  town-mid
+  gsave 1 pcam
+    town-street town-glow
+    % warm light spilling from the open door
+    warm setc 0.30 setalpha newpath 282 300 moveto 334 300 lineto 430 250 lineto 236 250 lineto closepath fill 1 setalpha
+    % the hand lowers the boat to the water, lets go, comes up and waves
+    /hand [0 [66 64]  0.5 [66 64]  1.5 [98 -48] /cubic-inout  1.95 [98 -48]
+           2.7 [72 34] /cubic-inout  3.5 [58 150] /back-out] keyframes def
+    /wav 3.4 3.9 /quad-out tween now 520 mul sin mul 15 mul def
+    gsave chx 262 translate
+      hand 0 get wav add  hand 1 get  [0 -15  2 -15  4.6 7 /sine-inout] keyframes  child
+    grestore
+    /fx chx 128 add now 1.85 sub 0 max 4 div dup mul 1080 mul add def
+    /go 1.5 1.95 /sine-inout tween def                    % 0 in the hand, 1 afloat
+    fx floatpose /fa exch def /fy exch def pop
+    water-back
+    go chx hand 0 get add 30 add fx between
+    go 262 hand 1 get add 6 sub fy between
+    go [0 -16 1.5 -3 /cubic-inout] keyframes fa between
+    0.86 drawboat
+    water-front
+    town-wet
+  grestore
+  0.8 rain-near
+  end end
+} def
+
+% ============================================= 3. through the town, to the drain
+% One travelling shot. From t = 8.5 the dusk palette slides to the storm
+% palette, the street tips downhill (camera roll), the water quickens and
+% the boat is pulled ahead of the camera into the drain mouth at AX.
+
+/AX 2982 def
+/archpath { newpath AX 95 sub 100 moveto AX 95 sub 215 lineto AX 215 95 180 0 arcn AX 95 add 100 lineto closepath } def
+
+/c-town {
+  /storm 8.5 13 /sine-inout tween def
+  P-town P-storm storm mixpal begin 36 dict begin
+  /home-i -99 def
+  /tt now def
+  % camera: a steady 212 units/s, braking to a stop over the last 2 s
+  /camx tt 12.5 lt { tt 212 mul } { tt 12.5 sub dup dup mul -53 mul exch 212 mul add 2650 add } ifelse def
+  /camz [0 0.9  2.5 0.9  9 1.08 /sine-inout  14 1.5 /sine-inout] keyframes def
+  /camy [0 385  9 360 /sine-inout  14 262 /sine-inout] keyframes def
+  /camr 9 12.5 /sine-inout tween -3.5 mul def
+  % boat: catches the camera up, rides beside it, then accelerates away
+  /bx tt 9 lt { camx [0 -820  3.2 -150 /sine-out  9 60 /sine-inout] keyframes add }
+              { tt 9 sub dup dup mul 11 mul exch 212 mul add 1968 add } ifelse def
+  /quick tt 9 sub 0 max dup mul def                        % (t-9)^2: the water speeding up
+  /W-y 200 def /W-wl 230 def
+  /W-amp 9 13 /sine-inout tween 4 8.5 between def
+  /W-ph tt 200 mul quick 24 mul add def
+  /W-fl tt 130 mul quick 16 mul add def
+  town-sky  0.8 storm 0.9 mul add rain-far  town-mid
+  gsave 1 pcam
+    town-street town-glow
+    gsave 1420 tt 62 mul sub 262 translate walker grestore
+    % the wall at the bottom of the hill, and the drain in it
+    wall3 setc AX 121 sub -700 3000 1230 rectfill
+    roof setc 0.5 setalpha 2 setlinewidth
+    [330 400 470] { newpath AX 121 sub exch dup 3 1 roll moveto AX 2000 add exch lineto stroke } forall
+    1 setalpha
+    trim setc AX 133 sub 530 3000 20 rectfill
+    roof setc 5 setlinewidth newpath AX 110 sub 600 moveto AX 2000 add 600 lineto stroke
+    3 setlinewidth 0 1 20 { 44 mul AX 100 sub add dup 550 moveto 600 lineto stroke } for
+    0.02 0.025 0.04 setrgbcolor archpath fill
+    AX 215 transform 2 array astore userdict /iris-dev 3 -1 roll put
+    % white water where the stream drops in
+    waterhi setc 0.8 setalpha
+    0 1 4 { /i exch def
+      AX 128 sub i 100 mul 1 add 3 9 wiggle add  W-y 2 add i 100 mul 2 add 3 7 wiggle add  5 i add 0 360 arc fill } for
+    1 setalpha
+    % water and boat show left of the wall and inside the drain only
+    gsave
+      newpath vx0 -700 moveto AX 121 sub -700 lineto AX 121 sub 1500 lineto vx0 1500 lineto closepath
+      AX 95 sub 100 moveto AX 95 sub 215 lineto AX 215 95 180 0 arcn AX 95 add 100 lineto closepath
+      clip
+      water-back
+      bx AX 70 add lt {
+        bx floatpose
+        9 13 /quad-in tween -9 mul add                       % nose down as it is pulled in
+        7101 0.9 3 wiggle add
+        1.2 drawboat
+      } if
+      water-front
+      % the dark takes it in three steps
+      0.02 0.025 0.04 setrgbcolor 0.5 setalpha
+      AX 95 sub 90 300 300 rectfill  AX 40 sub 90 300 300 rectfill  AX 15 add 90 300 300 rectfill
+      1 setalpha
+    grestore
+    % the stone ring
+    roof setc 28 setlinewidth 0 setlinecap
+    newpath AX 108 sub 100 moveto AX 108 sub 215 lineto AX 215 108 180 0 arcn AX 108 add 100 lineto stroke
+    trim setc 22 setlinewidth [34 5] 0 setdash
+    newpath AX 108 sub 100 moveto AX 108 sub 215 lineto AX 215 108 180 0 arcn AX 108 add 100 lineto stroke
+    [] 0 setdash
+    town-wet
+  grestore
+  0.8 storm 1.1 mul add rain-near
+  end end
+} def
+
+% ============================================================ 4. the dark
+% Screen space. Pipe rings slide past and slow; the boat drops in, rides
+% the rough water; a pair of eyes; then the way out grows on the right.
+
+/c-dark {
+  P-dark begin 30 dict begin
+  dk0 fillframe
+  /sc [0 0  7 2300 /sine-out] keyframes def              % how far we have come
+  /ex [0 1700  2.6 1650  7 1000 /sine-inout] keyframes def   % the way out: centre and radius
+  /er [0 40  2.6 70  7 440 /sine-inout] keyframes def
+  /W-y 236 def /W-wl 250 def /W-ph now 300 mul def /W-fl sc 0.6 mul def
+  /W-amp [0 13  2.5 9  7 3.5 /sine-inout] keyframes def
+  /vx0 -40 def /vx1 1320 def
+  % rings of the pipe
+  dk1 setc 9 setlinewidth
+  0 1 9 { 340 mul sc sub 3400 fmod 500 sub  newpath 330 46 350 ell stroke } for
+  % the opening: night sky and river beyond, with a rim of light
+  n0 setc newpath ex 330 er 0 360 arc fill
+  14 0.9 { 0.45 0.55 0.80 setrgbcolor 4 setlinewidth newpath ex 330 er 0 360 arc stroke } glowing
+  gsave newpath ex 330 er 0 360 arc clip newpath
+    n1 setc 0 430 1280 400 rectfill
+    0.9 0.93 1 setrgbcolor
+    0 1 16 { /i exch def
+      [i 1] hash01 1280 mul  [i 2] hash01 300 mul 400 add  [i 3] hash01 1.4 mul 0.8 add 0 360 arc fill } for
+  grestore
+  % eyes in the dark, sliding by with the wall
+  1.3 4.2 {
+    /blink now 0.2 sub 1.3 fmod 0.12 lt now 0.25 lt or def
+    blink not {
+      6 1.0 { eye setc
+        /exx 2110 sc sub def
+        exx 452 4 0 360 arc fill exx 17 add 454 4 0 360 arc fill } glowing
+    } if
+  } during
+  % drips from the roof
+  dk3 setc 2.2 setlinewidth 1 setlinecap
+  0 1 4 { /i exch def
+    /per 1.7 [i 1] hash01 1.3 mul add def
+    /age now [i 2] hash01 per mul add per fmod def
+    /dx [i 3] hash01 1100 mul 90 add def
+    age 0.62 lt {
+      /dy 600 age dup mul 950 mul sub def
+      newpath dx dy moveto 0 14 rlineto stroke
+    } {
+      /u age 0.62 sub 0.5 div def
+      u 1 lt { 1 u sub 0.7 mul setalpha newpath dx 228 4 u 22 mul add dup 0.3 mul ell stroke 1 setalpha } if
+    } ifelse
+  } for
+  % water, and the boat on it
+  dk2 setc vx0 vx1 W-y 5 add 0 W-amp W-wl W-ph 40 add strip
+  /bx [0 380  4.8 600 /sine-inout  7 608] keyframes def
+  /drop 1.5 2.8 /bounce-out tween def                    % it comes down the drain
+  now 1.5 ge {
+    bx floatpose
+    301 1.3 [0 14 3 6 7 2] keyframes wiggle add  1 drop sub -70 mul add
+    3 1 roll 1 drop sub 330 mul add 3 -1 roll
+    1.0 drawboat
+  } if
+  dk3 setc vx0 vx1 W-y 6 sub 0 W-amp W-wl W-ph strip
+  % light from the opening lying on the water
+  3 7 /sine-inout tween 0.5 mul {
+    n0 setc newpath ex er 0.8 mul sub 236 moveto 1300 236 lineto 1300 120 lineto ex er 1.6 mul sub 120 lineto closepath fill
+  } faded
+  waterhi setc 0.5 setalpha 22 9 glints 1 setalpha
+  dkm setc vx0 vx1 70 0 6 400 now 40 mul strip
+  end end
+} def
+
+% =========================================================== 5. the river
+% World: water at y = 262, sky to y = 1500. The camera starts close on the
+% boat, pulls back to the whole river, then rises into the stars.
+
+/star4 {                                  % x y r : a four-point sparkle
+  3 dict begin /r exch def /sy exch def /sx exch def
+    newpath sx r sub sy moveto sx sy r 0.16 mul add lineto sx r add sy lineto sx sy r 0.16 mul sub lineto closepath fill
+    newpath sx sy r sub moveto sx r 0.16 mul add sy lineto sx sy r add lineto sx r 0.16 mul sub sy lineto closepath fill
+  end
+} def
+
+/c-river {
+  P-river begin 36 dict begin
+  /W-y 262 def /W-wl 320 def /W-amp 2.6 def /W-ph now 70 mul def /W-fl now 30 mul def
+  /bx [0 300  13 720 /sine-out] keyframes def
+  % the camera opens where the last scene left the boat on screen, so the
+  % dissolve lays one boat over the other
+  /camx 2.2 7 /sine-inout tween bx 20 add 640 between def
+  /camy [0 333  2.2 333  7 385 /sine-inout  11.3 800 /sine-inout] keyframes def
+  /camz [0 1.75  2.2 1.75  7 1.0 /sine-inout] keyframes def
+  /camr 0 def
+  n3 fillframe
+  gsave 1 pcam
+    /vx0 -900 def /vx1 2200 def
+    n2 setc vx0 vx1 1010 200 26 900 now 2 mul strip
+    n1 setc vx0 vx1 700 200 20 760 now 2 mul 120 add strip
+    n0 setc vx0 vx1 452 200 14 620 now 2 mul 240 add strip
+    % stars: more of them, and brighter, the higher we look
+    starc setc
+    0 1 259 { /i exch def
+      /sy [i 2] hash01 0.8 exp 1240 mul 300 add def
+      /tw [i 4] hash01 360 mul now [i 5] hash01 140 mul 60 add mul add sin 0.3 mul 0.7 add def
+      sy 300 sub 500 div 0.25 add 1 min tw mul setalpha
+      [i 1] hash01 2700 mul 700 sub sy
+      [i 3] hash01 dup 0.93 gt { pop 7 tw mul 3 add star4 } { 1.7 mul 0.8 add 0 360 arc fill } ifelse
+    } for
+    1 setalpha
+    % the boat again, drawn among the stars as the camera arrives
+    /cu 8.3 10.6 /sine-inout tween def
+    cu 0 gt {
+      matrix currentmatrix 640 800 translate 3.4 3.4 scale boatoutline setmatrix
+      gsave 0 cu trimpath starc setc 0.55 setalpha 1.6 setlinewidth 1 setlinejoin stroke grestore
+      1 setalpha
+      [-34 -14 34 -14 62 22 22 22 0 56 -22 22 -62 22]
+      0 2 12 { /j exch def
+        dup j get 3.4 mul 640 add  1 index j 1 add get 3.4 mul 800 add
+        /py exch def /px exch def
+        j 14 div 0.9 mul cu lt { px py 11 star4 } if
+      } for pop
+    } if
+    newpath
+    % a shooting star
+    9.2 10.0 {
+      starc setc 1 progress sub setalpha 2 setlinewidth 1 setlinecap
+      newpath 980 1090 moveto 820 1010 lineto
+      progress 0.25 sub 0 max progress trimpath stroke 1 setalpha
+    } during
+    % moon
+    0.10 { moon setc 965 560 104 0 360 arc fill } faded
+    26 0.9 { moon setc 965 560 56 0 360 arc fill } glowing
+    n0 setc 0.25 setalpha 948 574 13 0 360 arc fill 985 540 8 0 360 arc fill 960 532 5 0 360 arc fill 1 setalpha
+    % the last of the rain cloud, leaving
+    0 6 {
+      1 progress sub 0.9 mul {
+        cloud setc -900 2200 560 now 26 mul add 1600 40 520 now 8 mul strip
+      } faded
+    } during
+    % far bank, the town it came from, and the outfall
+    bank setc vx0 vx1 286 250 9 1500 30 strip
+    /vx0 -700 def /vx1 560 def
+    bank setc 91 44 262 34 70 skyline
+    7 0.8 { warm setc 91 44 262 34 70 4 skylights } glowing
+    /vx0 -900 def /vx1 2200 def
+    n1 setc newpath 150 258 moveto 150 276 lineto 172 276 22 180 0 arcn 194 258 lineto closepath fill
+    ink setc newpath 156 258 moveto 156 276 lineto 172 276 16 180 0 arcn 188 258 lineto closepath fill
+    % water
+    wat0 setc vx0 -900 vx1 vx0 sub 1162 rectfill
+    wat1 setc vx0 vx1 212 150 5 800 now 20 mul strip
+    wat2 setc vx0 vx1 120 -900 8 1100 now 14 mul 90 add strip
+    % reflections: the moon in broken bars, the town in short warm ones
+    moon setc
+    0 1 13 { /i exch def
+      /rw 12 i 6 mul add [i 3] hash01 0.9 mul 0.5 add mul i 100 mul 1 add 0.5 8 wiggle add def
+      1 i 14 div sub 0.45 mul setalpha
+      965 rw 2 div sub i 100 mul 2 add 0.4 12 wiggle add  250 i i mul 0.5 mul sub i 7 mul sub  rw 3.5 rectfill } for
+    warm setc
+    0 1 11 { /i exch def
+      0.35 setalpha
+      [i 7] hash01 520 mul -60 add i 100 mul 8 add 0.5 4 wiggle add  254 [i 9] hash01 22 mul sub  14 2.5 rectfill } for
+    1 setalpha
+    % the boat, its reflection and its wake
+    bx floatpose /fa exch def /fy exch def pop
+    0.22 { gsave bx fy 17 sub translate 1 -1 scale 0 0 fa 0.6 drawboat grestore } faded
+    waterhi setc 0.5 setalpha 1.6 setlinewidth 1 setlinecap
+    newpath bx 40 sub fy 4 sub moveto bx 150 sub 101 0.4 3 wiggle add fy 10 sub lineto stroke
+    newpath bx 46 sub fy 12 sub moveto bx 120 sub fy 20 sub 201 0.4 3 wiggle add lineto stroke
+    1 setalpha
+    bx fy fa 0.6 drawboat
+    waterhi setc 0.4 setalpha 30 5 glints 1 setalpha
+  grestore
+  % reeds, close to us
+  gsave 1.5 pcam
+    reed setc 1 setlinecap
+    0 1 21 { /i exch def
+      /rx i 11 lt { 250 i 22 mul add } { 1330 i 11 sub 22 mul add } ifelse [i 1] hash01 16 mul add def
+      /rh 150 [i 2] hash01 150 mul add def
+      /sw i 100 mul 3 add 0.3 12 wiggle [i 4] hash01 30 mul 15 sub add def
+      5 setlinewidth
+      newpath rx -80 moveto rx 60 rx sw 0.4 mul add rh 0.7 mul rx sw add rh curveto stroke
+      i 3 mod 0 eq { 11 setlinewidth newpath rx sw 0.8 mul add rh 34 sub moveto rx sw add rh lineto stroke } if
+    } for
+  grestore
+  % the last drops
+  0 3.4 { 1 progress sub { 0.5 rain-near } faded } during
+  % fin
+  10.5 11.4 /quad-out tween {
+    /Palatino-Italic findfont 38 scalefont setfont starc setc
+    640 196 moveto (fin) showcenter
+  } faded
+  end end
+} def
+
+% ================================================================== scene
+
+/scene {
+  film reel
+  % open from black, close to black
+  0 1.0 /quad-out tween 1 exch sub dup 0 gt
+    { setalpha 0.03 0.03 0.05 setrgbcolor 0 0 1280 720 rectfill 1 setalpha } { pop } ifelse
+  duration 1.1 sub duration 0.1 sub /quad-in tween dup 0 gt
+    { setalpha 0.03 0.03 0.05 setrgbcolor 0 0 1280 720 rectfill 1 setalpha } { pop } ifelse
+  0.32 vignette
+  0.045 filmgrain
+} def

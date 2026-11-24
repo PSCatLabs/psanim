@@ -7,8 +7,8 @@ only when the piece needs what they give.
 ## Stateful: a simulation with `step`
 
 Define `step` and the movie becomes stateful. The engine calls `step` at
-a fixed rate (`/StepRate`, default the FPS) with the tick length on the
-stack; what it `def`s **persists**. `scene` then draws the state, and
+a fixed rate (`/StepRate`, default the FPS); inside it `dt` is the tick
+length, and what it `def`s **persists**. `scene` then draws the state, and
 whatever *it* changes is rolled back as usual.
 
 ```postscript
@@ -20,8 +20,8 @@ whatever *it* changes is rolled back as usual.
   px i 320 put  py i 300 put
   vx i [i 1] hash01 0.5 sub 400 mul put
   vy i [i 2] hash01 200 mul put } for
-/step {                       % h: seconds per tick
-  /h exch def
+/step {
+  /h dt def                   % seconds per tick
   0 1 N 1 sub { /i exch def
     vy i vy i get 500 h mul sub put                        % gravity
     px i px i get vx i get h mul add put

@@ -52,8 +52,8 @@ demo from something worth watching.
 - Two faces at most; one weight for emphasis.
 - Sizes on a 1280x720 canvas: captions 24 to 30, body 36 to 48, titles 72
   and up. Smaller than 22 will not survive video compression.
-- Letterspace capitals a little (draw with `eachglyph` and add a few
-  units per letter).
+- Letterspace capitals a little: `(TITLE) 8 { pop show } eachspaced`,
+  centred with `spacedwidth`.
 - Never animate every property of text at once. Position *or* opacity
   *or* a draw-on.
 

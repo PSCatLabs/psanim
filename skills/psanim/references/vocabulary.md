@@ -14,7 +14,7 @@ Transitions (for `reel`): cut dissolve dip wipe-left wipe-right wipe-up wipe-dow
 
 `dict  animation  -`
 
-Declare the movie. The first statement of a program. Keys, all optional: /Size [w h] (canvas units, default [1280 720]), /Duration seconds (5), /FPS (30), /Seed (1), /Background [r g b] or /transparent (black), /Title, /Description, /Loop bool, /Scene /name (scene), /Step /name (step), /StepRate ticks per second (FPS), /Persist bool, /MotionBlur samples, /Shutter 0..1 (0.5).
+Declare the movie. Put it before anything that takes time or draws (definitions it needs, such as a reel array for `reelduration`, may come first). Keys, all optional: /Size [w h] (canvas units, default [1280 720]), /Duration seconds (5), /FPS (30), /Seed (1), /Background [r g b] or /transparent (black), /Title, /Description, /Loop bool, /Scene /name (scene), /Step /name (step), /StepRate ticks per second (FPS), /Persist bool, /MotionBlur samples, /Shutter 0..1 (0.5).
 
 ## The clock
 
@@ -84,6 +84,12 @@ The canvas height in units.
 
 The movie's seed.
 
+### `turns`
+
+`k  turns  degrees`
+
+k whole turns spread over the current window: k * 360 * (now / span). The angle for anything that must come home when a loop closes; k must be a whole number (or a whole number divided by the part's rotational symmetry).
+
 ## Time scopes: re-basing the clock for a procedure
 
 ### `during`
@@ -140,6 +146,12 @@ Run proc with now running 0 to period, back to 0, and so on.
 
 Run proc with now running backward through the current window.
 
+### `globally`
+
+`proc  globally  -`
+
+Run proc with now set back to the movie time, whatever time scopes are open. For a value shared by things in different scopes (a sun that the whole film sees): `{ [ ... ] keyframes } globally`.
+
 ### `attime`
 
 `t proc  attime  -`
@@ -156,7 +168,7 @@ Run proc with now set to t in a window dur seconds long.
 
 `[ dur proc dur proc ... ]  sequence  -`
 
-Play procs one after another, each for its duration, each with its own clock from 0. A proc may be given by name: /intro.
+Play procs one after another, each for its duration, each with its own clock from 0. A proc may be given by name (/intro); `null` in place of a proc is a gap.
 
 ## Values over time
 
@@ -202,6 +214,12 @@ Like keyframes, at time t instead of now.
 
 x limited to lo..hi.
 
+### `fmod`
+
+`x m  fmod  r`
+
+x modulo m for reals, always in 0..m (PostScript's mod is integers only): the wrap-around every repeating particle needs.
+
 ### `smoothstep`
 
 `e0 e1 x  smoothstep  u`
@@ -218,7 +236,13 @@ Map x from the range a..b to the range c..d, linearly, unclamped.
 
 `key freq amp  wiggle  v`
 
-Smooth random motion: a value wandering in -amp..amp about freq times a second. Different keys give independent wanderings; the same key always gives the same one.
+Smooth random motion: a value wandering in -amp..amp about freq times a second. Different keys (a number, or an array of numbers) give independent wanderings; the same key always gives the same one.
+
+### `loopnoise`
+
+`key radius  loopnoise  v`
+
+Smooth random motion in -1..1 (key is a number or an array of numbers) that returns exactly to its start at the end of the current window: noise sampled around a circle. A larger radius wanders more. For organic drift in a seamless loop, where wiggle would not close.
 
 ### `hash01`
 
@@ -256,13 +280,19 @@ Like trimpath, but every subpath is trimmed to the same fractions of its own len
 
 `n  resamplepath  array`
 
-n points evenly spaced along the current path, as [x0 y0 x1 y1 ...]. Does not change the path.
+n points evenly spaced along the current path, as [x0 y0 x1 y1 ...], in the user space current now (y up, like every coordinate). Does not change the path.
+
+### `polypath`
+
+`array  polypath  -`
+
+Replace the current path by the open polyline through [x0 y0 x1 y1 ...], in the current user space. Follow with closepath for a polygon. The fast way to replay geometry computed in setup: build the array once, then translate/rotate and polypath it each frame.
 
 ### `morphpath`
 
 `arrayA arrayB u  morphpath  -`
 
-Replace the current path by the closed polygon u of the way from A to B, two arrays from resamplepath with the same n.
+Replace the current path by the closed polygon u of the way from A to B, two arrays from resamplepath with the same n. The points are placed in the current user space, so the transformation in force applies to them as to any path.
 
 ## Layers and effects
 
@@ -294,7 +324,7 @@ Blur everything drawn on the current layer so far (Gaussian, radius in canvas un
 
 `radius strength  glowlayer  -`
 
-Add a soft halo around everything on the current layer: a blurred copy added back, strength 0..2.
+Add a soft halo around everything on the current layer: a blurred copy added back, strength 0..2. The halo's light is the shape's own, spread out: a thin line needs a larger radius and a strength above 1 to show.
 
 ### `faded`
 
@@ -318,7 +348,7 @@ Draw proc out of focus.
 
 `radius strength proc  glowing  -`
 
-Draw proc with a halo of light.
+Draw proc with a halo of light. Try 8 1 for solid shapes, 24 1.6 for thin strokes.
 
 ### `crossfade`
 
@@ -344,7 +374,7 @@ Add film grain to everything drawn so far, 0..1. The grain changes every frame.
 
 `r g b  backdrop  -`
 
-Fill the whole frame with a colour, whatever the transformation and clip are.
+Fill the canvas rectangle (0 0 width height) with a colour, in the current coordinates and inside the current clip. Call it first, before any camera. A clip that starts with a backdrop can be wiped, pushed or irised by a reel's transitions.
 
 ### `camera`
 
@@ -370,7 +400,25 @@ Show the string centred horizontally on the current point.
 
 `string proc  eachglyph  -`
 
-Run proc once per character with `(c) i` on the stack (the character as a one-character string, and its index) and the current point at that character's origin. The font must be set. proc consumes both operands; `{ pop show }` reproduces show.
+Run proc once per character with `(c) i` on the stack (the character as a one-character string, and its index) and the current point at that character's origin. The font must be set. proc consumes both operands; `{ pop show }` reproduces show. The current point is set afresh before each call, so proc may move it, build paths and paint; graphics state it changes (colour, CTM) stays changed, so wrap transforms in gsave/grestore.
+
+### `spacedwidth`
+
+`string track  spacedwidth  w`
+
+The width of the string when letterspaced: track extra units after each character but the last. For centring text drawn with eachspaced.
+
+### `eachspaced`
+
+`string track proc  eachspaced  -`
+
+Like eachglyph, letterspaced: each character's origin is track units further along than its natural place. `(TITLE) 6 { pop show } eachspaced` sets spaced capitals.
+
+### `eachonpath`
+
+`string u0 proc  eachonpath  -`
+
+Set the string along the current path, starting u0 (0..1) of the way along. proc runs per character with `(c) i` on the stack, in coordinates whose origin is the character's place on the path and whose x axis follows the path, with the current point at the character's origin. The path is left as it was. `{ pop show }` sets the text.
 
 ## Reels: clips and transitions
 
@@ -378,19 +426,19 @@ Run proc once per character with `(c) i` on the stack (the character as a one-ch
 
 `[ [dur proc] [dur /transition] [dur proc] ... ]  reel  -`
 
-Play clips in order with transitions between them. A transition overlaps the end of the clip before it and the start of the clip after it. Transitions: /cut /dissolve /dip /wipe-left /wipe-right /wipe-up /wipe-down /iris /push-left /push-right /zoom.
+Play clips in order with transitions between them. A transition overlaps the end of the clip before it and the start of the clip after it. Transitions: /cut /dissolve /dip /wipe-left /wipe-right /wipe-up /wipe-down /iris /push-left /push-right /zoom. A clip need not paint a ground: clips that draw only their own subject transition over whatever the scene drew before the reel.
 
 ### `reelduration`
 
 `[ ... ]  reelduration  seconds`
 
-The total length of a reel array: use it for /Duration.
+The total length of a reel array: the clips' durations added up, minus the transitions' (a transition overlaps the clips on both sides, so a clip's own duration includes the transitions into and out of it). Use it for /Duration: define the reel array first, then `<< /Duration film reelduration ... >> animation`.
 
 ### `transitions`
 
 `-  transitions  dict`
 
-The dictionary of transitions. Add `procA procB u` procedures under names starting with t- to define your own.
+The dictionary of transitions. To define your own, put a procedure there: `transitions /shutter { ... } put`, then use `[dur /shutter]` in a reel. It is called with `procA procB u`: draw the frame that is u (0 to 1, linear) of the way from A to B. A and B are ready-made procedures that draw each clip with its own clock still running; call them inside gsave/grestore with whatever clip, transform or layer the transition needs.
 
 ## Parameters, signals and events
 

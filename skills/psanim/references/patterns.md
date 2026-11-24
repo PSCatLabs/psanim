@@ -11,6 +11,8 @@ starts with `%!PS` is a whole movie; any other block is the body of a
 - [A row of things, one after another](#a-row-of-things-one-after-another)
 - [Draw a line on; write text on](#draw-a-line-on-write-text-on)
 - [Letters that arrive one by one](#letters-that-arrive-one-by-one)
+- [Spaced capitals, and type along a curve](#spaced-capitals-and-type-along-a-curve)
+- [A value the whole film shares](#a-value-the-whole-film-shares)
 - [Follow a path](#follow-a-path)
 - [Morph one shape into another](#morph-one-shape-into-another)
 - [A camera](#a-camera)
@@ -123,6 +125,44 @@ the current point at the character's origin.
 } eachglyph
 ```
 
+### Spaced capitals, and type along a curve
+
+`eachspaced` is `eachglyph` with letterspacing; `spacedwidth` measures it
+for centring. `eachonpath` sets type along the current path, each letter
+in its own rotated frame.
+
+```postscript
+% tracked capitals, centred, arriving letter by letter
+/AvantGarde-Book findfont 34 scalefont setfont
+320 (AFTERGLOW) 10 spacedwidth 2 div sub 200 moveto
+(AFTERGLOW) 10 {
+  /i exch def /c exch def
+  i 0.06 { 0 0.5 /quad-out tween { 0.95 0.92 0.85 setrgbcolor c show } faded } staggered
+} eachspaced
+
+% a line of italic riding an arc
+/Palatino-Italic findfont 20 scalefont setfont 1 0.75 0.4 setrgbcolor
+newpath 320 -120 280 120 60 arcn
+(the last light of the longest day) 0.5 3 /sine-inout tween 0.05 0.25 between { pop show } eachonpath
+newpath
+```
+
+## A value the whole film shares
+
+`tween` and `keyframes` read the *local* clock. Inside a `during` that is
+what you want for the thing being animated, and wrong for something the
+whole film shares (a sun setting behind every card). Read shared values
+on the movie's clock with `globally`:
+
+```postscript
+/sun-y { { [ 0 300  4 60 /sine-inout ] keyframes } globally } def
+0.9 0.5 0.2 setrgbcolor 480 sun-y 30 0 360 arc fill           % at top level
+1 3 {                                                        % inside a scope: same sun
+  1 setgray 480 sun-y 44 add moveto
+  /Helvetica findfont 14 scalefont setfont (sol) showcenter
+} during
+```
+
 ## Follow a path
 
 `u pathpoint` gives a point and heading on the current path without
@@ -158,8 +198,11 @@ gsave 320 180 translate
 grestore
 ```
 
-Both arrays are plain `[x y x y ...]`; compute them in setup when the
-shapes do not change, and only call `morphpath` in the scene.
+Both arrays are plain `[x y x y ...]` in the user space that was current
+when they were sampled (y up, like everything). `morphpath` and `polypath`
+place points in the user space current when *they* run, so an array made
+once in setup can be drawn many times under different `translate`s and
+`rotate`s: that is the cheap way to draw eight copies of a gear.
 
 ## A camera
 
@@ -188,9 +231,14 @@ grestore
 1 0.8 0.3 setrgbcolor 360 110 120 120 rectfill
 ```
 
+A halo is the shape's own light spread out, so a solid shape glows at
+`8 1` and a thin stroke needs something like `24 1.6` to show at all.
+Radii are in canvas units whatever the CTM is.
+
 Finish a frame with `0.3 vignette` and a little `0.06 filmgrain` when the
 piece wants a filmic surface. Both act on what is already drawn, so they
-go last.
+go last. (Grain and fine gradients look patterned in a contact sheet's
+small thumbnails; judge them with `psanim frame`.)
 
 ## Particles without state
 
@@ -219,10 +267,9 @@ is then a formula in its age. No simulation, any frame on its own.
 
 ## A seamless loop
 
-Declare `/Loop true` and make everything a function of `progress` through
-whole turns: `progress 360 mul` as an angle, `sin`/`cos` of it, or a
-`looped` scope. `check` warns if the last frame does not lead into the
-first.
+Declare `/Loop true`. The last frame must lead into the first exactly as
+any frame leads into the next, so every moving thing has to be back where
+it started when `progress` reaches 1.
 
 ```postscript
 %!PS
@@ -232,14 +279,36 @@ first.
   0 1 35 { /i exch def
     gsave
       i 10 mul rotate
-      /ph progress 360 mul i 20 mul add def      % each arm a little out of phase
-      120 ph sin 60 mul add 0 translate
+      /ph 1 turns i 20 mul add def               % one whole turn over the loop, each arm out of phase
+      120 ph sin 60 mul add  [i 7] 0.9 loopnoise 14 mul add  0 translate
       i 36 div 0.7 1 sethsbcolor
       0 0 6 ph cos 3 mul add 0 360 arc fill
     grestore
   } for
 } def
 ```
+
+The rules that make a loop close:
+
+- **Whole turns.** `k turns` is `k × 360 × progress`: use it for every
+  angle, with `k` a whole number. Different whole `k` for different parts
+  gives relative motion that still closes.
+- **Symmetry buys slowness.** A part with n-fold symmetry (a 12-tooth
+  gear, a 6-pointed star) looks the same after 1/n of a turn, so
+  `1 n div turns` closes too, and that is the only way to have slow
+  motion in a short loop. Then *everything drawn on that part* must share
+  the symmetry: one odd mark and the join shows.
+- **A half turn is not home for a tilted thing.** An ellipse (a ring seen
+  at an angle) comes back to the same outline after half a turn, but its
+  near and far sides have swapped.
+- **Noise must loop too.** `wiggle` does not come back. `key radius
+  loopnoise` does: it walks noise around a circle. For a noise *field*,
+  do the same by hand: `x y  1 turns cos R mul  gnoise3`-style, moving
+  the third coordinate around a circle (two looping coordinates need two
+  circles added together).
+- **Prove it.** `psanim check` measures the join against the steps beside
+  it and warns if it is larger. `psanim sheet --seam 6` shows the last six
+  frames and the first six side by side.
 
 ## Several scenes: sequence and reel
 
@@ -265,7 +334,10 @@ total from `reelduration`.
 ```
 
 Transitions: `/cut /dissolve /dip /wipe-left /wipe-right /wipe-up
-/wipe-down /iris /push-left /push-right /zoom`. Fade a clip's own text
+/wipe-down /iris /push-left /push-right /zoom`. A clip need not paint a
+ground: draw the shared world first, then `film reel` with clips that
+draw only type or a subject, and they transition over it. In a
+`sequence`, `null` in place of a procedure is a pause. Fade a clip's own text
 out before its transition (see "Enter, hold, leave") so two captions
 never overlap in a dissolve.
 

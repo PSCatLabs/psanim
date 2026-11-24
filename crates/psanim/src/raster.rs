@@ -130,9 +130,31 @@ fn box_pass(src: &[u8], dst: &mut [u8], w: usize, h: usize, r: usize, horizontal
     }
 }
 
+/// The smallest rectangle holding every pixel that is not fully
+/// transparent black, as `(x0, y0, x1, y1)` with exclusive ends.
+fn ink_box(buf: &[u8], w: usize, h: usize) -> Option<(usize, usize, usize, usize)> {
+    let row_has = |y: usize| buf[y * w * 4..(y + 1) * w * 4].iter().any(|b| *b != 0);
+    let y0 = (0..h).find(|y| row_has(*y))?;
+    let y1 = (y0..h).rev().find(|y| row_has(*y))? + 1;
+    let (mut x0, mut x1) = (w, 0);
+    for y in y0..y1 {
+        let row = &buf[y * w * 4..(y + 1) * w * 4];
+        if let Some(first) = row.chunks_exact(4).position(|p| p != [0, 0, 0, 0]) {
+            x0 = x0.min(first);
+            let last = row.chunks_exact(4).rposition(|p| p != [0, 0, 0, 0]).unwrap_or(first);
+            x1 = x1.max(last + 1);
+        }
+    }
+    Some((x0, y0, x1, y1))
+}
+
 /// Blur `buf` in place with an approximately Gaussian kernel of standard
 /// deviation `sigma` pixels: three box blurs, the classic approximation.
 /// `scratch` is reused between calls and resized as needed.
+///
+/// Only the part of the image the blur can change is processed: the box
+/// around what is drawn, grown by the kernel's reach. A layer with one
+/// small bright thing on it costs a fraction of a full frame.
 pub fn blur(buf: &mut [u8], w: usize, h: usize, sigma: f64, scratch: &mut Vec<u8>) {
     if !(sigma.is_finite() && sigma > 0.05) || w == 0 || h == 0 {
         return;
@@ -140,10 +162,39 @@ pub fn blur(buf: &mut [u8], w: usize, h: usize, sigma: f64, scratch: &mut Vec<u8
     // Three boxes of radius r have variance r(r+1): pick r to match sigma^2.
     let ideal = ((4.0 * sigma * sigma + 1.0).sqrt() - 1.0) / 2.0;
     let r = (ideal.round() as usize).clamp(1, w.max(h));
-    scratch.resize(buf.len(), 0);
+    let Some((x0, y0, x1, y1)) = ink_box(buf, w, h) else {
+        return; // nothing drawn: nothing to blur
+    };
+    // Three passes each reach r pixels.
+    let reach = 3 * r;
+    let (x0, y0) = (x0.saturating_sub(reach), y0.saturating_sub(reach));
+    let (x1, y1) = ((x1 + reach).min(w), (y1 + reach).min(h));
+    let (cw, ch) = (x1 - x0, y1 - y0);
+    if cw == w && ch == h {
+        scratch.resize(buf.len(), 0);
+        for _ in 0..3 {
+            box_pass(buf, scratch, w, h, r, true);
+            box_pass(scratch, buf, w, h, r, false);
+        }
+        return;
+    }
+    // Work on a copy of the region. Its edges are transparent (the region
+    // was grown by the kernel's reach), so repeating the border there is
+    // the same as the transparency beyond it; where the region meets the
+    // image's own edge it repeats that edge, as the full blur does.
+    let mut region = vec![0u8; cw * ch * 4];
+    for y in 0..ch {
+        let src = ((y0 + y) * w + x0) * 4;
+        region[y * cw * 4..(y + 1) * cw * 4].copy_from_slice(&buf[src..src + cw * 4]);
+    }
+    scratch.resize(region.len(), 0);
     for _ in 0..3 {
-        box_pass(buf, scratch, w, h, r, true);
-        box_pass(scratch, buf, w, h, r, false);
+        box_pass(&region, scratch, cw, ch, r, true);
+        box_pass(scratch, &mut region, cw, ch, r, false);
+    }
+    for y in 0..ch {
+        let dst = ((y0 + y) * w + x0) * 4;
+        buf[dst..dst + cw * 4].copy_from_slice(&region[y * cw * 4..(y + 1) * cw * 4]);
     }
 }
 
@@ -398,6 +449,39 @@ mod tests {
         let before = img.clone();
         blur(&mut img, w, h, 0.0, &mut scratch);
         assert_eq!(img, before);
+    }
+
+    #[test]
+    fn blurring_a_region_equals_blurring_the_whole_image() {
+        // A small subject off-centre, and one touching an edge: the cropped
+        // blur must give the bytes a full-frame blur gives.
+        let (w, h) = (96, 64);
+        for (sx, sy) in [(40usize, 30usize), (0, 10), (90, 60)] {
+            let mut img = vec![0u8; w * h * 4];
+            for y in sy..(sy + 5).min(h) {
+                for x in sx..(sx + 6).min(w) {
+                    img[(y * w + x) * 4..(y * w + x) * 4 + 4].copy_from_slice(&[200, 120, 40, 255]);
+                }
+            }
+            let mut whole = img.clone();
+            let mut scratch = Vec::new();
+            let r = 2usize; // sigma 2.5 -> box radius 2
+            whole_blur(&mut whole, w, h, r, &mut scratch);
+            blur(&mut img, w, h, 2.5, &mut scratch);
+            assert_eq!(img, whole, "subject at {sx},{sy}");
+        }
+        // An empty layer stays empty and costs nothing.
+        let mut empty = vec![0u8; w * h * 4];
+        blur(&mut empty, w, h, 4.0, &mut Vec::new());
+        assert!(empty.iter().all(|b| *b == 0));
+    }
+
+    fn whole_blur(buf: &mut [u8], w: usize, h: usize, r: usize, scratch: &mut Vec<u8>) {
+        scratch.resize(buf.len(), 0);
+        for _ in 0..3 {
+            box_pass(buf, scratch, w, h, r, true);
+            box_pass(scratch, buf, w, h, r, false);
+        }
     }
 
     #[test]

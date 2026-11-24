@@ -1,0 +1,478 @@
+%!PS
+% Murmuration: a flock of starlings over a fen at dusk.
+%
+% Five hundred birds are simulated with the three classic flocking rules
+% (separation, alignment, cohesion), a wandering attractor that leads the
+% flock about the sky, a field of coherent turbulence that makes it ripple,
+% and a falcon that twice stoops through it so that the flock pours, splits
+% and re-forms. At the end the birds funnel down toward the roost. They are
+% drawn as small dark marks along their velocity, with a short motion streak,
+% over a banded evening sky; where birds overlap the marks add up, so the
+% dense folds of the flock read darker than its fringes.
+%
+% Techniques
+%   - a STATEFUL movie: positions and velocities live in arrays made in
+%     setup, `step` advances them 60 times a second, `scene` only draws;
+%   - neighbour search without all-pairs: a coarse grid of per-cell sums
+%     (count, position, velocity) gives alignment and cohesion in O(n), and a
+%     fine grid of linked lists gives each bird only the handful of birds
+%     close enough to collide with;
+%   - native gradient noise (`gnoise3`) as a wind field;
+%   - artkit shadings (`axialsh`, `radialsh`) for the sky, blurred and
+%     screen-blended layers for cloud and afterglow;
+%   - scenery (trees, spire, reeds, cloud) generated once in setup with
+%     `hash01` and replayed from arrays every frame.
+<< /Size [1280 720] /Duration 26 /FPS 30 /StepRate 60
+   /Background [0.05 0.05 0.09]
+   /Title (Murmuration)
+   /Description (Five hundred simulated starlings fold and pour over a fen at dusk.)
+>> animation
+
+(lib/artkit.ps) run
+
+% ---------------------------------------------------------------- palette
+/c-zenith  [0.15 0.20 0.40] def
+/c-high    [0.30 0.33 0.55] def
+/c-mid     [0.62 0.45 0.58] def
+/c-rose    [0.90 0.55 0.48] def
+/c-amber   [0.99 0.70 0.38] def
+/c-glow    [1.00 0.86 0.60] def
+/c-land    [0.045 0.04 0.07] def
+/c-bird    [0.04 0.03 0.06] def
+/setc { aload pop setrgbcolor } bind def
+/box { 4 2 roll moveto 1 index 0 rlineto 0 exch rlineto neg 0 rlineto closepath } bind def   % x y w h
+
+/HORIZON 132 def
+
+% ============================================================ SIMULATION
+/N /birds 1200 param cvi def            % psanim ... --param birds=300
+
+% --- the rules and their strengths (units: canvas units, seconds) ---
+/V-MIN   140 def      % a bird never flies slower than this ...
+/V-MAX   340 def      % ... or faster than this
+/SEP-R    12 def      % separation: birds closer than this push apart (the
+                      %   radius itself varies from 0.5x to 1.6x: see step)
+/K-SEP    70 def      %   strength (per unit of overlap)
+/K-ALI   2.4 def      % alignment: turn toward the local mean velocity (1/s)
+/K-COH   2.2 def      % cohesion: accelerate toward the local centre (1/s^2)
+/K-LEAD  1.3 def      % steering toward the wandering attractor (1/s)
+/V-LEAD  250 def      %   the speed at which a bird wants to close on it
+/LEAD-R  220 def      %   inside this distance the steering fades to nothing
+/K-WIND  300 def      % turbulence: amplitude of the noise wind (units/s^2)
+/FEAR-R  160 def      % a bird this close to the falcon flees it
+/K-FEAR 2200 def      %   strength at zero distance, falling to 0 at FEAR-R
+/K-WALL   14 def      % soft walls: push back per unit beyond the sky's edge
+/SHEETS    3 def      % depth sheets (see below)
+
+% The sky is a volume and the picture is its projection: real flocks look
+% dense where the line of sight runs along a sheet of birds. Simulating depth
+% in full would triple the neighbour search, so depth is quantised instead:
+% bird i lives in sheet i mod SHEETS. Birds only keep their distance from
+% birds of their own sheet, but align and cohere with everyone, and each
+% sheet feels the wind and the attractor a little out of phase. The sheets
+% therefore slide over one another, and where two or three overlap the flock
+% goes dark.
+
+% --- state: one slot per bird ---
+/px N array def /py N array def /vx N array def /vy N array def
+0 1 N 1 sub { /i exch def
+  % the flock starts as a long skein off the left edge, flying in
+  /q [i 1] hash01 def
+  px i -640 q 560 mul add put
+  py i  380 [i 2] hash01 0.5 sub 150 mul q 0.5 add mul add  q 150 mul add put
+  vx i  240 [i 3] hash01 40 mul add put
+  vy i  [i 4] hash01 0.5 sub 60 mul put
+} for
+% the falcon: parked far away until its first pass
+/fx 4000 def /fy 900 def /fu 0 def /fv 0 def /f-home 0 def
+% the attractor seen by each sheet
+/lead-x [ SHEETS { 0 } repeat ] def /lead-y [ SHEETS { 0 } repeat ] def
+/DEBUG /debug 0 param cvi def
+
+% --- the two grids ---
+% Coarse grid: per-cell sums. A bird reads the 3x3 block of cells around it,
+% so its "neighbourhood" for alignment and cohesion is about 1.5 cells wide.
+/CS 44 def /GX0 -700 def /GY0 40 def
+/CC 50 def /CR 19 def /CN CC CR mul def
+/c-n  CN array def /c-px CN array def /c-py CN array def
+/c-vx CN array def /c-vy CN array def
+% Fine grid, one per sheet: a linked list of birds per cell (f-head = first
+% bird in the cell or -1, f-next = the bird after this one). Cells are just
+% wider than the separation radius, so the 3x3 block around a bird holds
+% every bird that can be within SEP-R of it.
+/FS 23 def /FC 96 def /FR 37 def /FN FC FR mul def
+/f-head FN SHEETS mul array def 0 1 FN SHEETS mul 1 sub { f-head exch -1 put } for
+/f-next N array def /f-cell N array def
+
+% x y -> index of the coarse cell (kept one cell inside the border so the
+% 3x3 block never needs a bounds test)
+/coarse-cell {
+  GY0 sub CS div cvi dup 1 lt { pop 1 } if dup CR 2 sub gt { pop CR 2 sub } if CC mul
+  exch GX0 sub CS div cvi dup 1 lt { pop 1 } if dup CC 2 sub gt { pop CC 2 sub } if add
+} bind def
+/fine-cell {
+  GY0 sub FS div cvi dup 1 lt { pop 1 } if dup FR 2 sub gt { pop FR 2 sub } if FC mul
+  exch GX0 sub FS div cvi dup 1 lt { pop 1 } if dup FC 2 sub gt { pop FC 2 sub } if add
+} bind def
+
+% Where the attractor is at time t: a slow wandering sum of sines, then a
+% descent to the roost in the reeds for the finale.
+/ROOST-T 20.5 def
+/lead-at {                              % t -> x y
+  4 dict begin /t exch def
+  /lx 640 t 29 mul 205 add sin 340 mul add  t 73 mul sin 90 mul add def
+  /ly 435 t 47 mul 60 add sin 105 mul add  t 101 mul 30 add sin 35 mul add def
+  /k t ROOST-T sub 3.0 div 0 1 clamp dup dup mul exch 2 mul 3 exch sub mul def
+  lx 1 k sub mul 800 k mul add
+  ly 1 k sub mul 200 k mul add
+  end
+} bind def
+
+% Send the falcon in from (x, y) toward the flock.
+/launch {                               % x y
+  /fy exch def /fx exch def
+  /dx mx fx sub def /dy my fy sub def
+  /d dx dx mul dy dy mul add sqrt 1 add def
+  /fu dx d div 520 mul def /fv dy d div 520 mul def
+  /f-home tsec 1.5 add def              % it corrects its aim for this long
+} bind def
+
+/step {
+  /h dt def                             % seconds per tick
+  /tsec frame h mul def
+
+  % ---- 1. rebuild both grids from the current positions ----
+  0 1 CN 1 sub { /k exch def
+    c-n k 0 put c-px k 0 put c-py k 0 put c-vx k 0 put c-vy k 0 put } for
+  /mx 0 def /my 0 def
+  0 1 N 1 sub { /i exch def
+    /x px i get def /y py i get def
+    /k x y coarse-cell def
+    c-n  k c-n  k get 1 add put
+    c-px k c-px k get x add put
+    c-py k c-py k get y add put
+    c-vx k c-vx k get vx i get add put
+    c-vy k c-vy k get vy i get add put
+    /k x y fine-cell i SHEETS mod FN mul add def
+    f-cell i k put
+    f-next i f-head k get put           % push bird i on the cell's list
+    f-head k i put
+    /mx mx x add def /my my y add def
+  } for
+  /mx mx N div def /my my N div def     % centre of the whole flock
+
+  % ---- 2. the attractor and the falcon ----
+  0 1 SHEETS 1 sub { /k exch def        % each sheet follows it a little later
+    tsec k 0.3 mul sub lead-at lead-y k 3 -1 roll put lead-x k 3 -1 roll put } for
+  % Two stoops, each one straight pass through the flock: it homes on the
+  % flock's centre for a second and a half, then cannot turn and flies on out.
+  frame  6.5 60 mul cvi eq { 1420 740 launch } if
+  frame 14.5 60 mul cvi eq { -140 660 launch } if
+  tsec f-home lt {
+    /dx mx fx sub def /dy my fy sub def
+    /d dx dx mul dy dy mul add sqrt 1 add def
+    /fu fu dx d div 520 mul fu sub 3 h mul mul add def
+    /fv fv dy d div 520 mul fv sub 3 h mul mul add def
+  } if
+  /fx fx fu h mul add def /fy fy fv h mul add def
+
+  % ---- 3. every bird: sum the accelerations, then move ----
+  /wt tsec 0.32 mul def
+  /wall-l tsec 4.5 gt { 90 } { -3000 } ifelse def    % no left wall while they fly in
+  /floor-y tsec ROOST-T gt { 150 } { 240 } ifelse def  % the floor drops for the roost
+  0 1 N 1 sub { /i exch def
+    /x px i get def /y py i get def /u vx i get def /v vy i get def
+    /sh i SHEETS mod def
+    /ax 0 def /ay 0 def
+
+    % SEPARATION: every bird of the same sheet within the radius pushes
+    % this one directly away, harder the closer it is. Only the 3x3 fine
+    % cells around the bird are searched.
+    % The radius is not constant: it follows a slow noise field in space
+    % and time, so bands where the birds pack tight travel through the
+    % flock. These are the dark waves of a real murmuration.
+    /sep2 x 0.0065 mul y 0.0065 mul tsec 0.55 mul 40 add gnoise3
+          0.78 mul 1.05 add dup 0.5 lt { pop 0.5 } if SEP-R mul dup mul def
+    /k0 f-cell i get def
+    -1 1 1 { FC mul k0 add /kr exch def
+      kr 1 sub 1 kr 1 add {
+        f-head exch get
+        {                                 % walk the list; j is on the stack
+          dup 0 lt { pop exit } if
+          dup i ne {
+            /dx x px 3 index get sub def /dy y py 3 index get sub def
+            /d dx dx mul dy dy mul add def
+            d sep2 lt {
+              /w 1 d sep2 div sub K-SEP mul def
+              /ax ax dx w mul add def /ay ay dy w mul add def
+            } if
+          } if
+          f-next exch get
+        } loop
+      } for
+    } for
+
+    % ALIGNMENT and COHESION from the 3x3 coarse cells around the bird:
+    % the mean velocity and mean position of everything in them.
+    /cn 0 def /sx 0 def /sy 0 def /su 0 def /sv 0 def
+    /k0 x y coarse-cell def
+    -1 1 1 { CC mul k0 add /kr exch def
+      kr 1 sub 1 kr 1 add { /k exch def
+        c-n k get dup 0 gt {
+          cn add /cn exch def
+          /sx sx c-px k get add def /sy sy c-py k get add def
+          /su su c-vx k get add def /sv sv c-vy k get add def
+        } { pop } ifelse
+      } for
+    } for
+    cn 1 gt {                             % (the sums include the bird itself)
+      /cn cn 1 sub def
+      /ax ax  su u sub cn div u sub K-ALI mul add
+              sx x sub cn div x sub K-COH mul add def
+      /ay ay  sv v sub cn div v sub K-ALI mul add
+              sy y sub cn div y sub K-COH mul add def
+    } if
+
+    % THE ATTRACTOR: steer so as to be flying toward the wandering point
+    % at V-LEAD (a velocity-matching pull, which follows without orbiting).
+    % Inside LEAD-R it fades out, so the flock mills about the point freely.
+    /dx lead-x sh get x sub def /dy lead-y sh get y sub def
+    /d dx dx mul dy dy mul add sqrt 1 add def
+    /w d LEAD-R div dup 1 gt { pop 1 } if K-LEAD mul def
+    /ax ax dx d div V-LEAD mul u sub w mul add def
+    /ay ay dy d div V-LEAD mul v sub w mul add def
+
+    % WIND: two samples of smooth 3-D noise (x, y, time). Neighbours feel
+    % nearly the same gust, which is what sends waves through the flock;
+    % each sheet reads the field a little further on.
+    /wz wt sh 0.17 mul add def
+    /ax ax x 0.0050 mul y 0.0050 mul wz gnoise3 K-WIND mul add def
+    /ay ay x 0.0050 mul 31.7 add y 0.0050 mul 11.3 add wz gnoise3 K-WIND mul add def
+
+    % THE FALCON: flee straight away from it, hardest when it is closest.
+    /dx x fx sub def /dy y fy sub def
+    /d dx dx mul dy dy mul add sqrt def
+    d FEAR-R lt {
+      /w 1 d FEAR-R div sub K-FEAR mul d 1 add div def
+      /ax ax dx w mul add def /ay ay dy w mul add def
+    } if
+
+    % SOFT WALLS keep the flock in the sky and above the trees.
+    x wall-l lt { /ax ax wall-l x sub K-WALL mul add def } if
+    x 1190 gt   { /ax ax 1190 x sub K-WALL mul add def } if
+    y floor-y lt { /ay ay floor-y y sub K-WALL mul add def } if
+    y 615 gt    { /ay ay 615 y sub K-WALL mul add def } if
+
+    % integrate; then hold the speed between V-MIN and V-MAX (birds cannot
+    % hover and cannot sprint: this is what keeps it from looking like gas)
+    /u u ax h mul add def /v v ay h mul add def
+    /d u u mul v v mul add sqrt 0.001 add def
+    d V-MIN lt { /u u V-MIN d div mul def /v v V-MIN d div mul def } if
+    d V-MAX gt { /u u V-MAX d div mul def /v v V-MAX d div mul def } if
+    vx i u put vy i v put
+    px i x u h mul add put py i y v h mul add put
+  } for
+
+  % ---- 4. empty the fine grids again (only the cells that were used) ----
+  0 1 N 1 sub { f-cell exch get f-head exch -1 put } for
+} bind def
+
+% ================================================================ SCENERY
+% Everything below is built once here and only replayed in the scene.
+
+% --- cloud: bands of flattened puffs  [x y rx ry warmth] ---
+/puffs [
+  0 1 5 { /b exch def
+    /by [300 236 372 455 540 610] b get def
+    /bx [330 760 980 250 820 480] b get def
+    /bl [420 520 380 460 560 380] b get def
+    /bt [10 8 13 12 15 13] b get def
+    0 1 21 { /j exch def
+      /q [b j 7] hash01 def
+      /taper 1 q 0.5 sub 2 mul dup mul 0.7 mul sub def     % thin toward the ends
+      [ bx  q 0.5 sub bl mul add
+        by  [b j 2] hash01 0.5 sub bt mul add  q 0.5 sub bl mul 0.02 mul add
+        40 [b j 3] hash01 110 mul add taper mul
+        bt 0.3 [b j 4] hash01 0.6 mul add mul taper mul
+        1 by 236 sub 380 div 0 1 clamp sub ]
+    } for
+  } for
+] def
+
+% --- bare trees: recursive branching, stored as [x0 y0 x1 y1 width] ---
+/twigs 4000 array def /ntwigs 0 def /hk 0 def
+/hnext { /hk hk 1 add def [hk 99] hash01 } def
+/branch {                               % x y angle length depth
+  8 dict begin
+  /dp exch def /ln exch def /an exch def /y0 exch def /x0 exch def
+  /x1 x0 an cos ln mul add def /y1 y0 an sin ln mul add def
+  twigs ntwigs [x0 y0 x1 y1 dp dp mul 0.11 mul 0.5 add] put
+  /ntwigs ntwigs 1 add store
+  dp 1 gt {
+    x1 y1 an 14 hnext 22 mul add add  ln 0.66 hnext 0.16 mul add mul  dp 1 sub branch
+    x1 y1 an 14 hnext 22 mul add sub  ln 0.66 hnext 0.16 mul add mul  dp 1 sub branch
+    dp 3 gt hnext 0.5 gt and {
+      x1 y1 an hnext 0.5 sub 16 mul add ln 0.7 mul dp 2 sub branch } if
+  } if
+  end
+} def
+[ [ 96 24 7] [171 17 6] [1085 27 7] [1168 19 6] [1232 15 6] [560 13 5] [612 16 6] [700 11 5] ]
+{ aload pop /td exch def /tl exch def /tx exch def
+  tx HORIZON 6 sub 90 hnext 0.5 sub 8 mul add tl td branch } forall
+
+% --- the skyline: a far hedge line, as one closed path of points ---
+/skyline [
+  0 4 1280 { /x exch def
+    x
+    HORIZON
+      x 0.011 mul 3.1 4 0.5 2 fbm2 9 mul add
+      x 0.09 mul 7.7 gnoise2 abs 9 mul add
+  } for
+] def
+
+% --- reeds in the foreground: [x height lean] ---
+/reeds [
+  0 1 139 { /i exch def
+    [ [i 21] hash01 1280 mul
+      34 [i 22] hash01 62 mul add  [i 21] hash01 6.3 mul 57.3 mul sin 14 mul add
+      [i 23] hash01 0.5 sub 26 mul ]
+  } for
+] def
+
+/STAR-X 1042 def /STAR-Y 612 def
+
+% ================================================================ DRAWING
+/sky {
+  % the vertical wash: amber at the horizon up to a blue zenith
+  newpath 0 0 1280 720 box
+  0 HORIZON 20 sub 0 720 [ c-amber c-rose c-mid c-high c-zenith ] axialsh gradfill newpath
+  % afterglow where the sun went down, added as light
+  1 /screen {
+    newpath 0 0 1280 720 box
+    385 HORIZON 0  385 HORIZON 560
+    [ [0.62 0.44 0.22] [0.34 0.16 0.09] [0.10 0.04 0.04] [0 0 0] ] radialsh gradfill newpath
+  } blended
+  % the light drains as the scene goes on
+  0.10 0.12 0.30 setrgbcolor  0 duration /linear tween 0.26 mul setalpha
+  0 0 1280 720 rectfill 1 setalpha
+} def
+
+/star {
+  0 6 /quad-out tween 0.35 mul 0.65 add
+  now 140 mul sin 0.08 mul add
+  {
+    5 1.2 { 1 0.97 0.88 setrgbcolor STAR-X STAR-Y 1.9 0 360 arc fill } glowing
+  } faded
+} def
+
+/clouds {
+  7 {
+    puffs { aload pop /warm exch def /ry exch def /rx exch def /y exch def /x exch def
+      /x x now 3.2 mul add def                % a slow drift on the upper wind
+      % lit underside first, then the body over it, a little higher
+      0.55 setalpha
+      c-glow c-rose 1 warm sub mix3 setrgbcolor
+      newpath x y ry 0.45 mul sub rx ry ellipse fill
+      0.62 setalpha
+      [0.46 0.30 0.40] [0.22 0.22 0.40] 1 warm sub mix3 setrgbcolor
+      newpath x 6 add y ry 0.25 mul add rx 0.94 mul ry ellipse fill
+    } forall
+    1 setalpha
+  } blurred
+} def
+
+/land {
+  c-land setc
+  % ground and the far hedge
+  newpath 0 0 moveto
+  0 2 skyline length 2 sub { /k exch def skyline k get skyline k 1 add get lineto } for
+  1280 0 lineto closepath fill
+  % a strip of standing water that still holds the sky
+  gsave
+    newpath 250 62 moveto 420 72 640 74 830 66 curveto 990 60 1100 52 1180 44 curveto
+    1000 38 760 34 560 40 curveto 420 44 300 52 250 62 curveto clip
+    newpath 0 0 1280 140 box
+    0 30 0 80 [ c-high c-rose c-amber ] axialsh gradfill newpath
+    0.05 0.04 0.07 setrgbcolor 0.35 setalpha 0 0 1280 140 rectfill 1 setalpha
+  grestore
+  c-land setc
+  % the church: nave, tower and spire
+  newpath 905 HORIZON 4 sub moveto 905 HORIZON 22 add lineto 931 HORIZON 34 add lineto
+  957 HORIZON 22 add lineto 957 HORIZON 4 sub lineto closepath fill
+  952 HORIZON 4 sub 22 58 rectfill
+  newpath 950 HORIZON 54 add moveto 963 HORIZON 124 add lineto 976 HORIZON 54 add lineto closepath fill
+  0.9 setlinewidth 963 HORIZON 120 add moveto 963 HORIZON 134 add lineto stroke
+  960 HORIZON 129 add moveto 966 HORIZON 129 add lineto stroke
+  % trees
+  1 setlinecap
+  0 1 ntwigs 1 sub { twigs exch get aload pop setlinewidth moveto lineto stroke } for
+  % reeds, swaying a little, each with a seed head
+  reeds { aload pop /lean exch def /rh exch def /rx exch def
+    /sway rx 0.7 mul now 50 mul add sin 4 mul lean add def
+    1.3 setlinewidth
+    rx -4 moveto rx sway 0.3 mul add rh 0.5 mul rx sway 0.8 mul add rh 0.8 mul rx sway add rh curveto stroke
+    2.6 setlinewidth
+    rx sway 0.86 mul add rh 0.86 mul moveto rx sway add rh lineto stroke
+  } forall
+} def
+
+% One starling: a body along the velocity, a wing bar across it whose length
+% beats, and a faint streak back along the path just flown. Every mark is
+% translucent and painted on its own, so marks that overlap add up: the
+% picture darkens where the flock is deep. Far sheets are drawn first,
+% smaller and fainter.
+/flock {
+  c-bird setc 1 setlinecap
+  SHEETS 1 sub -1 0 { /sh exch def
+    /near 1 sh SHEETS 1 sub div sub def            % 1 = nearest sheet
+    /sz0 0.56 near 0.28 mul add def
+    /al 0.62 near 0.26 mul add def
+    sh SHEETS N 1 sub { /i exch def
+      /x px i get def /y py i get def /u vx i get def /v vy i get def
+      /sp u u mul v v mul add sqrt 0.001 add def
+      /ux u sp div def /uy v sp div def
+      /sz sz0 0.85 [i 9] hash01 0.3 mul add mul def
+      al 0.22 mul setalpha 1.3 sz mul setlinewidth
+      x u 0.055 mul sub y v 0.055 mul sub moveto x y lineto stroke
+      al setalpha 2.2 sz mul setlinewidth
+      x ux 3.0 sz mul mul sub y uy 3.0 sz mul mul sub moveto
+      x ux 2.0 sz mul mul add y uy 2.0 sz mul mul add lineto stroke
+      % wings: a chevron swept back from the shoulders, its span beating
+      /wl now 760 mul [i 8] hash01 360 mul add sin abs 2.9 mul 0.9 add sz mul def
+      /bk wl 0.45 mul 0.6 add def
+      1.1 sz mul setlinewidth 1 setlinejoin
+      x uy wl mul sub ux bk mul sub  y ux wl mul add uy bk mul sub moveto
+      x ux 0.8 sz mul mul add y uy 0.8 sz mul mul add lineto
+      x uy wl mul add ux bk mul sub  y ux wl mul sub uy bk mul sub lineto stroke
+    } for
+  } for
+  1 setalpha
+} def
+
+% The falcon: larger, swept wings.
+/falcon {
+  fx -60 gt fx 1340 lt and fy 780 lt and {
+    gsave
+      fx fy translate fv fu atan rotate
+      c-bird setc
+      newpath 11 0 moveto -3 2.2 lineto -11 0 lineto -3 -2.2 lineto closepath fill
+      newpath 3 0 moveto -2 13 lineto -7 15 lineto -2 0 lineto -7 -15 lineto -2 -13 lineto closepath fill
+    grestore
+  } if
+} def
+
+/scene {
+  sky
+  star
+  clouds
+  land
+  flock
+  falcon
+  DEBUG 1 eq { 1 0 0 setrgbcolor 0 1 SHEETS 1 sub { /k exch def lead-x k get lead-y k get 5 0 360 arc fill } for } if
+  % open from dark, close to dark
+  0 1.4 /quad-out tween 1 exch sub dup 0 gt
+    { setalpha 0.05 0.05 0.09 setrgbcolor 0 0 1280 720 rectfill 1 setalpha } { pop } ifelse
+  duration 1.6 sub duration /quad-in tween dup 0 gt
+    { setalpha 0.05 0.05 0.09 setrgbcolor 0 0 1280 720 rectfill 1 setalpha } { pop } ifelse
+  0.32 vignette
+} def

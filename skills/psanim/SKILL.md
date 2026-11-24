@@ -35,7 +35,8 @@ psanim render movie.ps -o movie.mp4    # 4. the film (also .webm, .gif, or a dir
 - `check` is cheap (milliseconds per frame) and catches most mistakes
   before you look at anything: errors with the frame number and a
   backtrace through your own procedures, blank frames, a movie that never
-  moves, abrupt pops, a loop that does not close. Add `--json` for data.
+  moves, abrupt pops, and for a `/Loop true` movie whether the join is
+  as smooth as the steps beside it. Add `--json` for data.
 - A contact sheet shows *composition over time*. To judge *motion* (an
   easing, an overlap, a pop) sample densely around the moment:
   `psanim sheet movie.ps --from 2.0 --to 3.0 --count 12`.
@@ -71,6 +72,10 @@ psanim render movie.ps -o movie.mp4    # 4. the film (also .webm, .gif, or a dir
   frame `def`s is gone on the next frame; that is what makes frames
   independent. Compute constants in setup (the top level), per-frame
   values in `scene`.
+- **`scene` runs on an empty operand stack and must leave it empty.**
+  The time is not an operand: read `now`. A value left behind is reported
+  as an error with the values shown, because it is nearly always a
+  mistake (an operand some operator was meant to take).
 - **Combinators take their procedure last**: `0 2 { ... } during`.
 - **Stack discipline**: a body must leave the stack as it found it. Use
   a local dictionary for names (`8 dict begin ... end`) so recursion and
@@ -98,7 +103,9 @@ error in frame 45 (t=1.500s): typecheck in `lineto`
   hint: `lineto` got an operand of the wrong type. ...
 ```
 
-Reproduce with `psanim frame movie.ps --frame 45`. Read
+Reproduce with `psanim frame movie.ps --frame 45`. To see a value,
+print it: `now ==` or `(here) =` in the program shows up in the output of
+`psanim frame` and `psanim check`. Read
 [references/pitfalls.md](references/pitfalls.md) for the common causes.
 
 ## Reference, by need
@@ -114,4 +121,7 @@ Reproduce with `psanim frame movie.ps --frame 45`. Read
 
 For drawing itself (brushes, palettes, L-systems, text layout, charts),
 use the `psart` and `pscat` skills: everything they describe works inside
-a scene.
+a scene. Worth knowing without opening them, because they need no library:
+`a setalpha` (opacity 0..1 for what is painted next), the native noise
+operators (`x y z gnoise3`, `x y z oct gain lac fbm3`: drive z with time),
+and gradients through `shfill` (artkit's `axialsh`/`radialsh` wrap it).

@@ -227,7 +227,7 @@ mod tests {
     #[test]
     fn stateful_movies_render_on_one_thread() {
         let src = "<< /Size [8 8] /Duration 1 /FPS 10 >> animation /x 0 def
-                   /step { pop /x x 1 add def } def /scene { x 10 div setgray 0 0 8 8 rectfill } def";
+                   /step { /x x 1 add def } def /scene { x 10 div setgray 0 0 8 8 rectfill } def";
         let movie = Movie::load(src, &Options::default()).unwrap();
         assert_eq!(effective_threads(movie.meta(), 8, 10), 1);
         let mut shades = Vec::new();

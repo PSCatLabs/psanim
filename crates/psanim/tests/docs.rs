@@ -57,7 +57,16 @@ fn exercise(what: &str, source: &str, dir: Option<&Path>) -> Result<(), String> 
     let mut movie = Movie::load(source, &options).map_err(|e| format!("{what}: {e}"))?;
     let frames = movie.meta().frames;
     let mut any_ink = false;
-    for k in psanim::sheet::spread(frames, 7) {
+    // A pure movie is sampled across its length. One whose frames depend on
+    // the ones before would have to render everything up to each sample, so
+    // its opening second stands for it here (`scripts/build_gallery.sh`
+    // renders the whole of every piece).
+    let picks = if movie.meta().mode == psanim::Mode::Pure {
+        psanim::sheet::spread(frames, 7)
+    } else {
+        (0..frames.min(24)).step_by(4).collect()
+    };
+    for k in picks {
         let f = movie.render_frame(k).map_err(|e| format!("{what}: {e}"))?;
         let first = &f.premultiplied[..4];
         any_ink |= f.premultiplied.chunks_exact(4).any(|p| p != first);

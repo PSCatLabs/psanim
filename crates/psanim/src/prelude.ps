@@ -31,6 +31,7 @@
 /attime     { .attime     exec .timepop } bind def         % t proc       now is frozen at t
 /timewindow { .timewindow exec .timepop } bind def         % t dur proc   now is t, in a window dur long
 /reversed   { .reversed   exec .timepop } bind def         % proc         now runs backward through the window
+/globally   { .globally   exec .timepop } bind def         % proc         now is the movie time again, whatever scopes are open
 % i gap proc staggered: item i of a row starts gap seconds after item i-1.
 /staggered  { 3 1 roll mul exch delayed } bind def
 % [ dur proc dur proc ... ] sequence: play the procs one after another.
@@ -49,9 +50,12 @@
 } bind def
 
 % --- the canvas ----------------------------------------------------------------
-% r g b backdrop: fill the whole frame, whatever the CTM and clip are.
+% r g b backdrop: fill the canvas rectangle, 0 0 width height, in the current
+% coordinates and inside the current clip. Call it before any camera. Because
+% it respects both, a clip that starts with a backdrop can be wiped, pushed
+% or irised by a transition.
 /backdrop {
-  gsave initmatrix initclip setrgbcolor 0 0 width height rectfill grestore
+  gsave setrgbcolor 0 0 width height rectfill grestore
 } bind def
 % cx cy zoom angle camera: look at (cx, cy), magnified, rotated. Draw the
 % world after it; wrap in gsave/grestore to come back to frame coordinates.
@@ -88,11 +92,65 @@
   for
 } bind def
 
+% (str) track spacedwidth -> w   the width of the string set with `track`
+%                               extra units after every character but the last
+/spacedwidth {
+  exch dup stringwidth pop exch length 1 sub 0 max 3 -1 roll mul add
+} bind def
+% (str) track proc eachspaced   like eachglyph, letterspaced: each character's
+%                               origin is `track` units further along than
+%                               its natural place.
+/.spacedstep {           % i str track proc x0 y0
+  5 index 5 index exch 0 exch getinterval stringwidth pop   % i str track proc x0 y0 wprefix
+  6 index 5 index mul add                                     % ... wprefix + i*track
+  3 -1 roll add exch moveto                                   % i str track proc
+  exch pop                                                    % i str proc
+  3 1 roll 1 index 1 getinterval exch                         % proc (c) i
+  3 -1 roll exec
+} bind def
+/eachspaced {            % str track proc
+  currentpoint                                 % str track proc x0 y0
+  4 index length 1 sub 0 exch 1 exch           % str track proc x0 y0 0 1 n-1
+  8 3 roll                                     % 0 1 n-1 str track proc x0 y0
+  [ 6 1 roll /.spacedstep cvx ] cvx
+  for
+} bind def
+% (str) u0 proc eachonpath      set the string along the current path, starting
+%                               u0 (0..1) of the way along it. proc runs once
+%                               per character with `(c) i` on the stack, in a
+%                               coordinate system whose origin is the
+%                               character's place on the path and whose x axis
+%                               is the path's direction there; the current
+%                               point is the character's origin. The current
+%                               path is left as it was. `{ pop show }` sets the
+%                               text.
+/.onpathstep {           % i str u0 proc len
+  4 index 4 index exch 0 exch getinterval stringwidth pop    % i str u0 proc len wprefix
+  4 index 6 index 1 getinterval stringwidth pop 2 div        % ... wprefix halfw
+  dup 3 1 roll add                                            % i str u0 proc len halfw centre
+  2 index div 4 index add                                     % i str u0 proc len halfw u
+  pathpoint                                                   % i str u0 proc len halfw x y ang
+  gsave
+    3 1 roll translate rotate newpath
+    neg 0 moveto                                              % i str u0 proc len
+    pop exch pop                                              % i str proc
+    3 1 roll 1 index 1 getinterval exch                       % proc (c) i
+    3 -1 roll exec
+  grestore
+} bind def
+/eachonpath {            % str u0 proc
+  pathlength                                   % str u0 proc len
+  3 index length 1 sub 0 exch 1 exch           % str u0 proc len 0 1 n-1
+  7 3 roll                                     % 0 1 n-1 str u0 proc len
+  [ 5 1 roll /.onpathstep cvx ] cvx
+  for
+} bind def
+
 % --- reels: clips joined by transitions ---------------------------------------------
 % A transition is a procedure `procA procB u name`: draw the frame that is
 % u (0..1) of the way from clip A to clip B. A and B are ready to run: each
-% sets its own clock. Add one by putting it in `transitions` under a name
-% that starts with `t-`.
+% sets its own clock. Add one by putting it in `transitions` under any name;
+% a reel entry [dur /thatname] then uses it.
 % A B x y w h .wipe: A, then B clipped to the rectangle.
 /.wipe {
   6 -1 roll exec

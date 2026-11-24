@@ -42,6 +42,7 @@ SELECTING FRAMES
   --frame K[,K...]    frame indices             (frame, sheet)
   --count N           N frames spread evenly    (sheet; default 12)
   --from T --to T     a time range              (sheet, render, check)
+  --seam N            the last N frames then the first N: a loop's join   (sheet)
 
 SIZE AND TIMING
   --scale F           pixels per canvas unit (0.5 for a half-size preview)
@@ -170,6 +171,11 @@ fn select_frames(c: &Common, meta: &Meta, default_count: usize) -> Result<Vec<u6
     if let Some(list) = c.extra.get("frame") {
         return Ok(number_list(list, "--frame").map_err(usage)?.iter().map(|k| (*k as u64).min(last)).collect());
     }
+    if let Some(n) = c.extra_num::<u64>("seam").map_err(usage)? {
+        // The last n frames, then the first n: the join of a loop.
+        let n = n.clamp(1, meta.frames / 2);
+        return Ok((meta.frames - n..meta.frames).chain(0..n).collect());
+    }
     if let Some(list) = c.extra.get("at") {
         return Ok(number_list(list, "--at").map_err(usage)?.iter().map(|t| meta.frame_at(*t)).collect());
     }
@@ -239,11 +245,19 @@ fn cmd_frame(rest: &[String]) -> Result<(), Fail> {
     let stats = raster::stats(&flat, frame.width as usize, frame.height as usize);
     let (w, h, time) = (frame.width, frame.height, frame.time);
     write_file(&out, &png)?;
+    // What the program printed (`==`, `print`, `pstack`): the debugger.
+    let printed = movie.take_output();
+    if !c.json && !printed.is_empty() {
+        eprint!("{printed}");
+        if !printed.ends_with('\n') {
+            eprintln!();
+        }
+    }
     if c.json {
         println!(
             "{}",
             json!({"ok": true, "output": out, "frame": index, "time": time, "width": w, "height": h,
-                   "render_seconds": elapsed, "stats": stats_json(&stats)})
+                   "render_seconds": elapsed, "stats": stats_json(&stats), "printed": printed})
         );
     } else if !c.quiet {
         eprintln!("wrote {} (frame {index}, t={time:.3}s, {w}x{h}, {:.1} ms)", out.display(), elapsed * 1e3);
@@ -258,7 +272,7 @@ fn stats_json(s: &raster::Stats) -> serde_json::Value {
 }
 
 fn cmd_sheet(rest: &[String]) -> Result<(), Fail> {
-    let c = parse(rest, &["at", "frame", "count", "from", "to", "cols", "thumb"])?;
+    let c = parse(rest, &["at", "frame", "count", "from", "to", "cols", "thumb", "seam"])?;
     let (path, source) = c.source().map_err(usage)?;
     let thumb: u32 = c.extra_num("thumb").map_err(usage)?.unwrap_or(320);
     // Render at thumbnail size directly unless a size was asked for: a
@@ -314,7 +328,9 @@ fn cmd_render(rest: &[String]) -> Result<(), Fail> {
     let mut done = 0usize;
     let mut flat = Vec::new();
     let mut last_report = Instant::now();
-    let show = !c.quiet && !c.json;
+    // A progress line is for a person at a terminal; in a pipe or a log it
+    // is noise, so only the final summary is printed there.
+    let show = !c.quiet && !c.json && std::io::IsTerminal::is_terminal(&std::io::stderr());
     render_frames(&source, &opts, &frames, threads, |f: Rendered| {
         raster::flatten_onto(&f.premultiplied, matte, &mut flat);
         encoder.write(&flat, || {
@@ -355,8 +371,11 @@ fn cmd_render(rest: &[String]) -> Result<(), Fail> {
                    "frames_per_second": total as f64 / render_secs.max(1e-9), "bytes": bytes})
         );
     } else if !c.quiet {
+        if show {
+            eprintln!();
+        }
         eprintln!(
-            "\nwrote {} ({}, {total} frames, {}x{}, {:.1} s on {threads} thread{}, {:.1} fps{})",
+            "wrote {} ({}, {total} frames, {}x{}, {:.1} s on {threads} thread{}, {:.1} fps{})",
             out.display(),
             format.name(),
             meta.pixel_width,
@@ -397,31 +416,77 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
     let mut samples: Vec<Sample> = Vec::new();
     let mut flat = Vec::new();
     let mut next = Vec::new();
+    // A movie whose frames depend on the ones before pays, at each sample,
+    // for every frame since the last sample: divide that out, so the
+    // figure is the cost of one frame.
+    let sequential = meta.mode != psanim::Mode::Pure;
+    let consecutive = picks.windows(2).all(|w| w[1] == w[0] + 1) && picks.len() > 1;
+    let mut prev: Option<Vec<u8>> = None;
     for &index in &picks {
         let started = Instant::now();
         let frame = movie.render_frame(index)?;
-        let millis = started.elapsed().as_secs_f64() * 1e3;
+        let mut millis = started.elapsed().as_secs_f64() * 1e3;
         let time = frame.time;
         raster::flatten_onto(frame.premultiplied, matte, &mut flat);
-        // The frame after it, to measure motion (the first frame again at
-        // the end of a loop).
-        let after = if index + 1 < meta.frames { index + 1 } else { 0 };
-        let motion = if index + 1 < meta.frames || meta.looping {
-            let f2 = movie.render_frame(after)?;
+        if sequential {
+            millis /= movie.last_frame_ticks().max(1) as f64;
+        }
+        let stats = raster::stats(&flat, w, h);
+        if consecutive {
+            // Every frame is sampled: motion is the difference between
+            // neighbours, with no extra rendering.
+            if let (Some(p), Some(last)) = (&prev, samples.last_mut()) {
+                last.motion = raster::difference(p, &flat);
+            }
+            prev = Some(flat.clone());
+            samples.push(Sample { index, time, millis, stats, motion: 0.0 });
+            continue;
+        }
+        // The frame after it, to measure motion.
+        let motion = if index + 1 < meta.frames {
+            let f2 = movie.render_frame(index + 1)?;
             raster::flatten_onto(f2.premultiplied, matte, &mut next);
             raster::difference(&flat, &next)
         } else {
             0.0
         };
-        samples.push(Sample { index, time, millis, stats: raster::stats(&flat, w, h), motion });
+        samples.push(Sample { index, time, millis, stats, motion });
     }
     // Judgements an agent would otherwise have to look at pixels to make.
     let mut warnings: Vec<String> = Vec::new();
-    let blank: Vec<u64> = samples.iter().filter(|s| s.stats.coverage < 0.002).map(|s| s.index).collect();
-    if blank.len() == samples.len() {
+    // A run of blank frames at the very start or end is a fade from or to
+    // the ground, which is how films open and close: a note. Blank frames
+    // in the middle, or nothing but blank frames, are a warning.
+    let is_blank = |s: &Sample| s.stats.coverage < 0.002;
+    let lead = samples.iter().take_while(|s| is_blank(s)).count();
+    let trail = samples.iter().rev().take_while(|s| is_blank(s)).count();
+    let mut notes: Vec<String> = Vec::new();
+    if lead == samples.len() {
         warnings.push("every sampled frame is blank: the scene draws nothing visible (check colours against the background, and coordinates against the canvas size)".into());
-    } else if !blank.is_empty() {
-        warnings.push(format!("blank frames at {blank:?}: nothing is visible there (intended only for a fade from/to the background)"));
+    } else {
+        let middle: Vec<u64> = samples[lead..samples.len() - trail].iter().filter(|s| is_blank(s)).map(|s| s.index).collect();
+        if !middle.is_empty() {
+            warnings.push(format!("blank frames in the middle of the movie at {middle:?}: nothing is visible there"));
+        }
+        let long = |n: usize| n > 1 && samples.len() >= 8 && n * 4 > samples.len();
+        if long(lead) {
+            warnings.push(format!("the first {lead} sampled frames are blank: the movie is slow to show anything (until about t={:.1}s)", samples[lead].time));
+        } else if lead > 0 {
+            notes.push("opens from the background".into());
+        }
+        if long(trail) {
+            warnings.push(format!("the last {trail} sampled frames are blank: the movie ends early (after about t={:.1}s)", samples[samples.len() - trail - 1].time));
+        } else if trail > 0 {
+            notes.push("closes to the background".into());
+        }
+    }
+    if !meta.shadowed.is_empty() {
+        warnings.push(format!(
+            "the program redefines psanim's own word{} {}: its code now gets its definition, not the engine's. Rename (for example /{}-x)",
+            if meta.shadowed.len() == 1 { "" } else { "s" },
+            meta.shadowed.iter().map(|w| format!("`{w}`")).collect::<Vec<_>>().join(", "),
+            meta.shadowed[0]
+        ));
     }
     let moving = samples.iter().filter(|s| s.motion > 1e-5).count();
     if samples.len() > 1 && moving == 0 {
@@ -432,12 +497,34 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
     let median = motions.get(motions.len() / 2).copied().unwrap_or(0.0);
     for s in &samples {
         if s.motion > 0.08 && s.motion > 8.0 * median.max(1e-4) {
-            let seam = s.index + 1 >= meta.frames;
-            warnings.push(if seam {
-                format!("the loop does not close: the last frame differs from the first by {:.3} (typical step {median:.4})", s.motion)
-            } else {
-                format!("abrupt change after frame {} (t={:.2}s): difference {:.3} against a typical {median:.4}. A hard cut is fine if intended; otherwise something pops", s.index, s.time, s.motion)
-            });
+            if s.index + 1 >= meta.frames {
+                continue; // the loop's join is judged below
+            }
+            warnings.push(format!("abrupt change after frame {} (t={:.2}s): difference {:.3} against a typical {median:.4}. A hard cut is fine if intended; otherwise something pops", s.index, s.time, s.motion));
+        }
+    }
+    // A loop's join, measured directly whatever was sampled: the step from
+    // the last frame to the first against the steps on either side of it.
+    let mut seam = None;
+    if meta.looping && meta.frames >= 4 {
+        let mut step = |a: u64, b: u64| -> Result<f64, Fail> {
+            let fa = movie.render_frame(a)?;
+            raster::flatten_onto(fa.premultiplied, matte, &mut flat);
+            let fb = movie.render_frame(b)?;
+            raster::flatten_onto(fb.premultiplied, matte, &mut next);
+            Ok(raster::difference(&flat, &next))
+        };
+        let last = meta.frames - 1;
+        let join = step(last, 0)?;
+        let before = step(last - 1, last)?;
+        let after = step(0, 1)?;
+        let typical = (before + after) / 2.0;
+        seam = Some((join, typical));
+        if join > typical * 1.25 + 2e-4 {
+            warnings.push(format!(
+                "the loop does not close cleanly: the step from the last frame to the first is {:.4}, {:.1}x the steps beside it ({:.4}). Something does not return to where it started: check that every angle is a whole number of turns over the loop (`k turns`), allowing for each part's symmetry. `psanim sheet --seam 6` shows the join",
+                join, join / typical.max(1e-9), typical
+            ));
         }
     }
     let slowest = samples.iter().max_by(|a, b| a.millis.total_cmp(&b.millis));
@@ -449,7 +536,8 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
                 "ok": true, "file": path, "movie": meta.to_json(), "load_ms": load_ms,
                 "mean_frame_ms": mean_ms,
                 "slowest_frame": slowest.map(|s| json!({"frame": s.index, "ms": s.millis})),
-                "warnings": warnings,
+                "loop_seam": seam.map(|(join, typical)| json!({"step": join, "typical_step": typical})),
+                "warnings": warnings, "notes": notes, "printed": movie.take_output(),
                 "samples": samples.iter().map(|s| json!({
                     "frame": s.index, "time": s.time, "ms": (s.millis * 100.0).round() / 100.0,
                     "motion": (s.motion * 1e5).round() / 1e5, "stats": stats_json(&s.stats)})).collect::<Vec<_>>(),
@@ -463,7 +551,7 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
         meta.width, meta.height, meta.duration, meta.fps, meta.frames, meta.mode.name()
     );
     println!("  loaded in {load_ms:.1} ms; {} frames sampled at {}x{}", samples.len(), meta.pixel_width, meta.pixel_height);
-    println!("  frame    time    ms   luma  cover  motion");
+    println!("  frame    time    ms   luma  cover  motion   (motion: difference from the next frame)");
     for s in &samples {
         println!(
             "  {:5} {:6.2}s {:5.1}  {:5.3}  {:5.3}  {:6.4}",
@@ -472,6 +560,19 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
     }
     if let Some(s) = slowest {
         println!("  mean {mean_ms:.1} ms/frame; slowest frame {} at {:.1} ms (at preview size)", s.index, s.millis);
+    }
+    if let Some((join, typical)) = seam {
+        println!("  loop join: step {join:.4} against {typical:.4} beside it");
+    }
+    for n in &notes {
+        println!("  note: {n}");
+    }
+    let printed = movie.take_output();
+    if !printed.is_empty() {
+        println!("  printed by the program:");
+        for line in printed.lines().take(40) {
+            println!("    {line}");
+        }
     }
     if warnings.is_empty() {
         println!("  ok: no problems found");
@@ -491,7 +592,14 @@ fn cmd_bench(rest: &[String]) -> Result<(), Fail> {
     let load_ms = started.elapsed().as_secs_f64() * 1e3;
     let meta = movie.meta().clone();
     let count: usize = c.extra_num("count").map_err(usage)?.unwrap_or(48);
-    let picks = sheet::spread(meta.frames, count);
+    // A pure movie is timed at frames spread over its length. One whose
+    // frames depend on the ones before is timed over its first frames in
+    // order, since reaching a later frame costs every frame before it.
+    let picks: Vec<u64> = if meta.mode == psanim::Mode::Pure {
+        sheet::spread(meta.frames, count)
+    } else {
+        (0..meta.frames.min(count as u64)).collect()
+    };
     let mut times = Vec::new();
     for &k in &picks {
         let t = Instant::now();
@@ -521,9 +629,10 @@ fn cmd_bench(rest: &[String]) -> Result<(), Fail> {
     } else {
         println!("{} at {}x{} ({}), {} frames timed", name_of(&path), meta.pixel_width, meta.pixel_height, meta.mode.name(), picks.len());
         println!("  load           {load_ms:8.1} ms");
-        println!("  frame mean     {:8.2} ms   median {:.2}   p95 {:.2}   max {:.2}", serial_total / times.len() as f64, pct(0.5), pct(0.95), pct(1.0));
-        println!("  1 thread       {:8.1} frames/s", result["serial_fps"].as_f64().unwrap_or(0.0));
+        println!("  frame median   {:8.2} ms   mean {:.2}   p95 {:.2}   max {:.2}", pct(0.5), serial_total / times.len() as f64, pct(0.95), pct(1.0));
+        if threads > 1 {
         println!("  {threads} thread{}      {:8.1} frames/s  ({:.1}x, load included)", if threads == 1 { " " } else { "s" }, result["parallel_fps"].as_f64().unwrap_or(0.0), result["speedup"].as_f64().unwrap_or(0.0));
+        }
     }
     Ok(())
 }

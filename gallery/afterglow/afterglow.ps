@@ -4,7 +4,7 @@
 % A sun goes down behind a flat horizon while four credit cards pass on
 % the left of the frame; when the last light has gone the main title
 % draws itself on from its outlines, fills, takes one sweep of light and
-% holds, its final O burning in the one accent colour of the piece.
+% holds, its O burning in the one accent colour of the piece.
 %
 % Techniques
 %   - `sequence` gives each card its own clock; one `card` procedure is
@@ -17,7 +17,7 @@
 %   - a clipped light sweep, `glowing` on the sun and then on the O only,
 %     a slow `camera` push-in, `vignette` and a little `filmgrain`.
 % Everything is a pure function of `now`.
-<< /Size [1280 720] /Duration 19.5 /FPS 30 /Background [0.035 0.040 0.065]
+<< /Size [1280 720] /Duration 19.9 /FPS 30 /Background [0.035 0.040 0.065]
    /Title (Afterglow)
    /Description (Opening titles for an imaginary film: credits over a setting sun, and a title that draws itself on.)
 >> animation
@@ -26,6 +26,7 @@
 /night [0.035 0.040 0.065] def
 /earth [0.022 0.024 0.040] def
 /ink   [0.95 0.91 0.84] def
+/paper [0.84 0.80 0.73] def      % the title at rest, so the sweep has somewhere to go
 /dim   [0.56 0.55 0.60] def
 /ghost [0.115 0.125 0.185] def
 /ember [1.00 0.47 0.20] def
@@ -36,12 +37,13 @@
 /HY 216 def                       % the horizon
 /SX 930 def /SR 62 def            % the sun: x and radius
 /LX 150 def                       % left edge of the credit cards
-/T-TITLE 14.3 def                 % when the main title begins
+/T-TITLE 13.4 def                 % when the main title begins
 /TSIZE 124 def /TTRK 20 def       % main title size and letterspacing
 /TY 318 def                       % main title baseline
 
-% the sun's height: it touches the horizon near t=9 and is gone by 13
-/suny { [ 0 452  13.2 136 /sine-inout ] keyframes } def
+% the sun's height: it touches the horizon near t=8 and is gone by 12
+% (read from `globaltime`, so it is the same inside any time scope)
+/suny { globaltime [ 0 452  12.4 136 /sine-inout ] keyat } def
 % 0 -> 1 as the sun goes under: drives the warmth of the sky
 /sunk { 1  HY SR sub HY SR add suny smoothstep  sub } def
 
@@ -51,7 +53,7 @@
 % ---- the world behind the type ----
 /sky {
   8 dict begin
-    /k 0.35 sunk 0.65 mul add  0 2.5 /quad-out tween mul def   % warmth
+    /k 0.35 sunk 0.65 mul add  globaltime 2.5 div 0 1 clamp /quad-out ease mul def   % warmth
     % sky: 132 bands, warm at the horizon, night above
     0 1 131 { /i exch def
       /u 1 i 131 div sub 3 exp k mul def
@@ -69,14 +71,15 @@
       newpath -40 HY 1360 600 rectclip
       26 0.9 { ember setc newpath SX y SR 0 360 arc fill } glowing
     grestore
-    % its reflection: a few broken strokes on the ground, fading as it sets
+    % its reflection: broken dashes on the ground that shimmer and thin
+    % out with distance, and go when the sun does
     gsave
-      ember setc 1 setlinecap
-      0 1 5 { /i exch def
-        /w 78 i 9 mul sub  i 70 add 0.4 5 wiggle add def
-        1 sunk sub 0.5 mul  1 i 7 div sub mul  0 2.5 ramp mul setalpha
-        2.2 setlinewidth
-        SX w sub HY 12 sub i 11 mul sub moveto w 2 mul 0 rlineto stroke
+      ember setc 1 setlinecap 1.6 setlinewidth
+      0 1 6 { /i exch def
+        /w 70 i 8 mul sub def
+        1 sunk sub 0.42 mul  1 i 8 div sub mul  globaltime 0 2.5 0 1 remap 0 1 clamp mul setalpha
+        [ 14 i 2 mul sub  9 i add ] now 6 i add mul i 37 mul add setdash
+        SX w sub HY 10 sub i i 1 add mul 1.6 mul sub moveto w 2 mul 0 rlineto stroke
       } for
       1 setalpha
     grestore
@@ -88,7 +91,7 @@
   newpath -40 HY moveto 1320 HY lineto
   0.2 2.4 /cubic-inout tween /u exch def
   0.5 u 2 div sub  0.5 u 2 div add  trimpath
-  0.5 sunk between  dim ember between setc 0.55 setalpha
+  sunk dim ember between setc 0.6 setalpha
   1.6 setlinewidth stroke 1 setalpha
 } def
 
@@ -112,7 +115,8 @@
   10 dict begin
     /y suny def
     /Palatino-Italic findfont 23 scalefont setfont
-    /n TAG length def
+    % the line goes out as the sun meets the horizon, before the clip can cut a letter
+    /gone HY 24 sub HY 36 add y smoothstep def
     gsave
       newpath -40 HY 4 add 1360 600 rectclip
       % the path the type sits on: an arc over the top of the sun, left to right
@@ -124,7 +128,7 @@
         /i exch def /c exch def
         /adv TAG 0 i getinterval stringwidth pop def
         i 0.045 {
-          0 0.5 /quad-out tween dup 0 gt {
+          0 0.5 /quad-out tween gone mul dup 0 gt {
             setalpha
             x0 adv add len div pathpoint       % x y angle (path is kept)
             gsave
@@ -216,7 +220,7 @@
 /maintitle {
   12 dict begin
     % 1. outlines draw on, letter after letter, every contour at once
-    1 2.2 2.9 /quad-in tween sub dup 0 gt {
+    1 2.3 3.1 /quad-in tween sub dup 0 gt {
       {
         ink setc 1.3 setlinewidth 1 setlinejoin
         { i 0.11 {
@@ -225,18 +229,21 @@
           } staggered } titleglyphs
       } faded
     } { pop } ifelse
-    % 2. the fill comes up under them; the last letter is the accent
-    1.9 2.9 /quad-inout tween dup 0 gt {
+    % 2. the fill comes up under them; the O is the accent
+    % (each letter stays a little brighter once the sweep of step 4 has crossed it)
+    /s 3.1 4.6 /sine-inout tween def
+    1.8 2.9 /quad-inout tween dup 0 gt {
       {
-        { i 7 eq { ember } { ink } ifelse setc 0 0 moveto c show } titleglyphs
+        { i 7 eq { ember setc }
+                 { i 0.11 mul 0.02 add dup 0.12 add s smoothstep paper ink between setc } ifelse
+          0 0 moveto c show } titleglyphs
       } faded
     } { pop } ifelse
     % 3. the O takes the light the sun left behind
-    2.6 4.2 /sine-inout tween dup 0 gt {
-      22 exch 0.95 mul { { i 7 eq { ember setc 0 0 moveto c show } if } titleglyphs } glowing
+    2.5 3.9 /sine-inout tween dup 0 gt {
+      30 exch 1.5 mul { { i 7 eq { ember setc 0 0 moveto c show } if } titleglyphs } glowing
     } { pop } ifelse
     % 4. one sweep of light across the letters, clipped to their shapes
-    3.3 4.9 /sine-inout tween /s exch def
     s 0 gt s 1 lt and {
       gsave
         newpath
@@ -251,14 +258,14 @@
         s 120 1100 between TY translate -24 rotate
         1 1 1 setrgbcolor
         -12 1 12 { /k exch def
-          k 6 div dup mul neg 2.718 exch exp 0.16 mul setalpha
+          k 4.5 div dup mul neg 2.718 exch exp 0.8 mul setalpha
           k 7 mul -80 7.2 320 rectfill
         } for
       grestore
       1 setalpha
     } if
     % 5. a quiet line beneath
-    3.6 4.6 /quad-out tween dup 0 gt {
+    3.4 4.4 /quad-out tween dup 0 gt {
       {
         /AvantGarde-Book findfont 22 scalefont setfont dim setc
         640 (A MERIDIAN & VANE PICTURE) 7 trackw 2 div sub 150 moveto
@@ -269,7 +276,7 @@
   end
 } def
 
-/credits [ 0.9 /rest  3.3 /card1  0.15 /rest  3.3 /card2  0.15 /rest  3.6 /card3  0.15 /rest  2.8 /card4 ] def
+/credits [ 0.8 /rest  3.0 /card1  0.15 /rest  3.0 /card2  0.15 /rest  3.4 /card3  0.15 /rest  2.8 /card4 ] def
 
 /scene {
   gsave
@@ -279,12 +286,12 @@
     farlayer
     sun
     horizon
-    4.6 11.5 /limbtext during
+    3.6 10.0 /limbtext during
     credits sequence
     T-TITLE /maintitle after
   grestore
   % open from black, close to black
-  1  0 1.2 /quad-out tween  duration 0.9 sub duration /quad-in tween 1 exch sub  mul  sub
+  1  0 1.2 /quad-out tween  duration 0.8 sub duration /quad-in tween 1 exch sub  mul  sub
   dup 0 gt { setalpha 0 setgray 0 0 1280 720 rectfill 1 setalpha } { pop } ifelse
   0.4 vignette
   0.05 filmgrain

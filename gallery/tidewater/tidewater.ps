@@ -1,0 +1,522 @@
+%!PS
+% Tidewater: a watercolour that paints itself.
+%
+% An estuary at low tide, a little after sunrise. The picture is built the
+% way a painter builds it: the paper, a warm wash pulled through sky and
+% water, rose and blue laid into it while it is wet, the sun lifted out,
+% clouds, the far shore, the mudflats that leave the channel as bare
+% reflected sky, and last the dark accents: a grounded boat, the withies
+% that mark the channel, birds, reeds, a glitter of light and a signature.
+%
+% Techniques
+%   - /Persist true: the canvas is kept from frame to frame, so a frame
+%     paints only the part of each stroke that is due. Nothing is redrawn.
+%   - The painting is a plan: an ordered list of strokes made in setup,
+%     each with a start time, a duration and a way of travelling. `scene`
+%     walks the plan and, for every stroke in progress, clips to the sliver
+%     between where its front was last frame and where it is now, then runs
+%     the stroke's paint procedure. Slivers are disjoint and tile the
+%     stroke exactly, so translucent washes never double up.
+%   - Determinism: every stroke owns a seed and `srand`s it before it
+%     paints, so the same stroke lays the same texture in every frame it
+%     spans, whatever the engine's per-frame reseeding does.
+%   - PSCat paintkit: pkpaper (ground), pkwash (wet washes, pooled rims,
+%     granulation, lifted lights), pkdry (dry-brush edges and glitter),
+%     pkliner (rigging, withies, reeds, birds).
+%   - The last 2.3 seconds paint nothing: a hold on the finished picture.
+<< /Size [1280 720] /Duration 24 /FPS 24 /Persist true
+   /Background [0.972 0.962 0.936]
+   /Title (Tidewater)
+   /Description (A watercolour estuary at sunrise that paints itself, wash by wash and stroke by stroke.)
+>> animation
+
+(lib/artkit.ps) run
+(lib/paintkit.ps) run
+
+% ---- palette: six pigments and the paper --------------------------------
+/c-paper  [0.972 0.962 0.936] def
+/c-naples [0.985 0.800 0.470] def     % the warm of the low sky
+/c-rose   [0.900 0.560 0.500] def
+/c-cobalt [0.400 0.500 0.700] def     % the cool of the high sky and near water
+/c-violet [0.470 0.430 0.580] def     % clouds and the far shore
+/c-umber  [0.300 0.230 0.260] def     % mud
+/c-sepia  [0.130 0.100 0.120] def     % the darks
+/c-red    [0.720 0.240 0.130] def     % one accent
+/ink { aload pop setrgbcolor } def
+
+% The painted block. Everything is clipped to it: the taped edge.
+/BX0 52 def /BY0 52 def /BX1 1228 def /BY1 668 def
+/HZ 296 def                           % the horizon
+/SUNX 780 def /SUNY 346 def
+
+/band {                               % x0 y0 x1 y1: a rectangle as the path
+  4 dict begin /y1 exch def /x1 exch def /y0 exch def /x0 exch def
+  newpath x0 y0 moveto x1 y0 lineto x1 y1 lineto x0 y1 lineto closepath end
+} def
+
+% ---- the plan vocabulary --------------------------------------------------
+% A stroke is [kind t0 dur ease a b c seed proc].
+%   sweep: a = angle of travel, b = bulge of the brush front, c = [x0 y0 x1 y1]
+%          the box the stroke lives in. The front crosses the box along `a`.
+%   bloom: a b = centre, c = radius. The mark spreads outward from a point.
+% These words leave records on the stack, so the plan is written between
+% [ and ] in the order the painter works.
+/sweep { /sweep 9 1 roll 9 array astore } def   % t0 dur ease ang bulge box seed proc
+/bloom { /bloom 9 1 roll 9 array astore } def   % t0 dur ease cx cy r seed proc
+
+% t0 dur nrows bulge [x0 y0 x1 y1] seed proc  rows  rec...
+% A wash laid as a painter lays one: level passes of a big brush, top first,
+% each pass back the other way. Every pass runs the same procedure with the
+% same seed under a different clip, so the passes join into one wash with
+% no seam. The line between two passes wanders (rowclip), and both passes
+% compute it from the same height, so they still meet exactly.
+/rows {
+  14 dict begin
+    /pp exch def /sd exch def
+    aload pop /y1 exch def /x1 exch def /y0 exch def /x0 exch def
+    /bg exch def /nr exch def /du exch def /t0 exch def
+    /rh y1 y0 sub nr div def
+    /rd du nr div def
+    0 1 nr 1 sub {
+      /k exch def
+      /ylo y1 k 1 add rh mul sub def
+      /yhi y1 k rh mul sub def
+      t0 k rd mul add  rd 1.25 mul  /sine-inout
+      k 2 mod 0 eq { 0 } { 180 } ifelse  bg
+      [ x0 ylo 14 sub x1 yhi 14 add ]
+      sd
+      [ k nr 1 sub eq { -9999 } { ylo } ifelse      % outer edges stay open
+        k 0 eq { 9999 } { yhi } ifelse
+        /rowclip cvx /pp load /exec cvx ] cvx
+      sweep
+    } for
+  end
+} def
+/wavy {                                % x ybase -> x y : where a pass edge runs
+  2 copy 5 mul exch 0.8 mul add sin 8 mul
+  3 copy pop 11 mul exch 2.3 mul add sin 3 mul add add
+} def
+/rowclip {                             % ylo yhi -
+  4 dict begin /rc-hi exch def /rc-lo exch def
+  newpath -60 rc-lo wavy moveto
+  -40 20 1340 { rc-lo wavy lineto } for
+  1340 -20 -60 { rc-hi wavy lineto } for
+  closepath clip newpath end
+} def
+
+% ---- what gets painted ----------------------------------------------------
+% Each procedure paints one whole element. It never looks at the clock:
+% the plan decides when, and the clip decides how much.
+
+% colour y0 y1 fdown fup n alpha wet  graded  -
+% A graded wash: n thin washes of one pigment, the first on y0..y1 and each
+% later one reaching further down and up, so the strength falls away from
+% the core in soft wandering steps instead of ending at an edge.
+/graded {
+  12 dict begin
+    /gw exch def /ga exch def /gn exch def /gu exch def /gd exch def
+    /gy1 exch def /gy0 exch def /gc exch def
+    0 1 gn 1 sub {
+      gn 1 sub div /gt exch def
+      gc ink
+      -60 gy0 gd gt mul sub 1340 gy1 gu gt mul add band
+      << /Alpha ga /Layers 1 /Wet gw /Bloom 0 /Grain gt 0 eq { 0.35 } { 0 } ifelse >> pkwash
+    } for
+  end
+} def
+
+/p-warm {      % the first wash, pulled through sky and water alike
+  c-naples 284 322 200 170 7 0.058 24 graded
+} def
+/p-rose {      % laid into the warm while it is wet
+  c-rose 404 440 80 120 6 0.046 28 graded
+} def
+/p-blue {      % the top of the sky, with a little granulation
+  c-cobalt 610 760 170 0 7 0.068 30 graded
+  c-violet ink -60 560 1340 760 band
+  << /Alpha 0.05 /Layers 1 /Wet 30 /Bloom 0 /Grain 0.5 >> pkwash
+} def
+/p-glow {      % warmth around the sun: rings of thin colour, so it has no edge
+  0 1 6 {
+    /gi exch def
+    c-naples ink newpath SUNX SUNY 26 gi 24 mul add 0 360 arc closepath
+    << /Alpha 0.05 /Layers 1 /Wet 6 gi 3 mul add /Bloom 0 >> pkwash
+  } for
+} def
+/p-sun {       % lifted out with a tissue: back to nearly bare paper
+  1 0.985 0.93 setrgbcolor  newpath SUNX SUNY 26 0 360 arc closepath
+  << /Alpha 0.14 /Layers 1 /Wet 5 /Bloom 0 >> pkwash
+  newpath SUNX SUNY 15 0 360 arc closepath
+  << /Alpha 0.5 /Layers 2 /Wet 1.6 /Bloom 0 >> pkwash
+} def
+
+% A long lens with round ends (a cusp would kink under the wash's wobble).
+% cx cy halfwidth halfheight
+/lens {
+  6 dict begin /hh exch def /hw exch def /cy exch def /cx exch def
+  newpath cx hw sub cy moveto
+  cx hw sub cy hh 1.3 mul add  cx hw add cy hh 1.1 mul add  cx hw add cy curveto
+  cx hw add cy hh 0.8 mul sub  cx hw sub cy hh 0.7 mul sub  cx hw sub cy curveto
+  closepath end
+} def
+/cloud {       % cx cy hw hh: soft violet, denser toward the core, warm below
+  8 dict begin /hh exch def /hw exch def /cy exch def /cx exch def
+  c-violet ink cx cy hw hh lens
+  << /Alpha 0.06 /Layers 2 /Wet 22 /Bloom 0 >> pkwash
+  cx hw 0.06 mul sub cy hw 0.78 mul hh 0.62 mul lens
+  << /Alpha 0.07 /Layers 2 /Wet 12 /Bloom 0 >> pkwash
+  cx hw 0.12 mul sub cy hh 0.1 mul add hw 0.5 mul hh 0.3 mul lens
+  << /Alpha 0.07 /Layers 1 /Wet 7 /Bloom 0.05 >> pkwash
+  c-rose ink cx hw 0.12 mul add cy hh 0.7 mul sub hw 0.6 mul hh 0.32 mul lens
+  << /Alpha 0.06 /Layers 3 /Wet 10 /Bloom 0 >> pkwash
+  end
+} def
+/p-cloud1 { 340 590 300 30 cloud } def
+/p-cloud2 { 930 538 290 22 cloud } def
+/p-cloud3 { 560 478 210 13 cloud } def
+/p-cloud4 { 1085 436 150 9 cloud } def
+/p-cloud5 { 225 430 140 8 cloud } def
+
+/p-coolwater { % the near water takes the top of the sky
+  c-cobalt -40 70 0 120 6 0.05 26 graded
+} def
+/p-rosewater {
+  c-rose 150 180 50 50 4 0.04 24 graded
+} def
+/p-ripples {   % a few level strokes to lay the near water flat
+  c-cobalt ink
+  [ [1090 150 120 4] [1010 118 170 5] [1120 92 100 4] [1040 70 150 5] [900 62 60 3] ] {
+    aload pop lens << /Alpha 0.10 /Layers 2 /Wet 3 /Bloom 0.1 >> pkwash
+  } forall
+} def
+
+/p-farleft {   % the far shore, left: soft on top, a hard foot on the water
+  c-violet ink
+  newpath 0 HZ moveto 0 338 lineto
+  90 352 170 346 250 330 curveto
+  330 316 380 322 450 310 curveto
+  520 302 560 300 640 HZ curveto closepath
+  << /Alpha 0.22 /Layers 2 /Wet 5 /Bloom 0.3 >> pkwash
+} def
+/p-farright {  % and right, lower and paler: further off
+  c-violet ink
+  newpath 1280 HZ moveto 1280 318 lineto
+  1200 324 1130 312 1060 308 curveto
+  1010 305 980 300 930 HZ curveto closepath
+  << /Alpha 0.15 /Layers 2 /Wet 4 /Bloom 0.25 >> pkwash
+} def
+/p-nearleft {  % a nearer headland in front of the far one
+  c-violet ink
+  newpath 0 HZ 2 sub moveto 0 322 lineto
+  60 330 120 318 190 312 curveto
+  250 306 290 302 350 HZ 2 sub curveto closepath
+  << /Alpha 0.30 /Layers 2 /Wet 3 /Bloom 0.4 /Grain 0.3 >> pkwash
+} def
+
+% The mudflats. What they leave unpainted is the channel.
+/m-far {       % a long bar from the left, just under the horizon
+  newpath 0 289 moveto 260 291 470 287 640 278 curveto
+  520 270 360 265 0 262 curveto closepath
+} def
+/m-mid {       % a tongue from the right
+  newpath 1280 262 moveto 1120 262 980 252 880 236 curveto
+  980 216 1120 196 1280 188 curveto closepath
+} def
+/m-near {      % the near bank: a spit reaching right, toward the light
+  newpath 0 0 moveto 0 194 lineto
+  170 198 330 188 470 174 curveto
+  590 162 730 136 850 104 curveto
+  800 100 750 96 716 88 curveto
+  748 62 768 30 780 0 curveto closepath
+} def
+/p-mfar  { c-umber ink m-far
+  << /Alpha 0.28 /Layers 2 /Wet 2.5 /Bloom 0.4 /Grain 0.3 >> pkwash } def
+/p-mmid  { c-umber ink m-mid
+  << /Alpha 0.34 /Layers 2 /Wet 3.5 /Bloom 0.5 /Grain 0.5 >> pkwash } def
+/p-mmid-dry {  % the tip dragged out dry, so the edge breaks on the paper's tooth
+  gsave 0.55 setalpha c-umber ink
+  newpath 960 238 moveto 900 238 840 236 780 237 curveto
+  << /Width 9 /Bristles 12 /Load 0.35 /Dropout 0.6 >> pkdry
+  newpath 1010 226 moveto 950 222 900 222 850 224 curveto
+  << /Width 7 /Bristles 9 /Load 0.3 /Dropout 0.65 >> pkdry
+  grestore
+} def
+/p-mmid-refl { % its reflection, pulled down into the wet
+  c-umber ink
+  newpath 1280 190 moveto 1120 198 990 216 900 232 curveto
+  1000 206 1130 172 1280 160 curveto closepath
+  << /Alpha 0.10 /Layers 3 /Wet 9 /Bloom 0 >> pkwash
+} def
+/p-mnear { c-umber ink m-near
+  << /Alpha 0.36 /Layers 3 /Wet 4 /Bloom 0.5 /Grain 0.7 >> pkwash } def
+/p-mnear2 {    % darker charges dropped in while it is wet: the same shape,
+  c-sepia ink  % stepped away from the light, so the bank deepens toward us
+  m-near clip newpath
+  1 1 5 {
+    /gi exch def
+    gsave gi -34 mul gi -20 mul translate m-near
+    << /Alpha 0.075 /Layers 1 /Wet 12 /Bloom 0 /Grain 0.4 >> pkwash grestore
+  } for
+} def
+/p-mnear-drag { % a nearly dry brush dragged level across it, for the tooth
+  gsave 0.2 setalpha c-sepia ink
+  [ [60 168 420 162 10] [200 132 640 118 12] [40 100 380 92 14] [330 70 700 60 12] [520 150 760 122 7] ] {
+    aload pop /dw exch def
+    newpath 4 2 roll moveto lineto
+    << /Width dw /Bristles 12 /Load 0.3 /Dropout 0.6 >> pkdry
+  } forall
+  grestore
+} def
+/p-mnear-dry { % the spit's tip, dragged
+  gsave 0.5 setalpha c-umber ink
+  newpath 770 122 moveto 820 110 870 102 925 100 curveto
+  << /Width 8 /Bristles 11 /Load 0.35 /Dropout 0.6 >> pkdry
+  grestore
+} def
+/p-pool {      % standing water on the bank, lifted back to the sky's colour
+  0.97 0.84 0.66 setrgbcolor
+  440 140 100 5 lens << /Alpha 0.40 /Layers 2 /Wet 1.5 /Bloom 0 >> pkwash
+  620 120 46 3 lens << /Alpha 0.34 /Layers 2 /Wet 1.2 /Bloom 0 >> pkwash
+  260 98 70 4 lens << /Alpha 0.18 /Layers 2 /Wet 1.5 /Bloom 0 >> pkwash
+} def
+
+/p-boat {      % grounded on the far bar, heeled over
+  gsave 330 281 translate -7 rotate
+    c-sepia ink
+    newpath -50 11 moveto -40 -7 32 -9 48 11 curveto closepath
+    << /Alpha 0.62 /Layers 2 /Wet 1.2 /Bloom 0.3 >> pkwash
+    c-red ink
+    newpath -48 11 moveto 48 11 lineto 46 15.5 lineto -46 15.5 lineto closepath
+    << /Alpha 0.62 /Layers 1 /Wet 0.6 /Bloom 0 >> pkwash
+    c-sepia ink
+    newpath -12 15 moveto 10 15 lineto 9 26 lineto -9 26 lineto closepath
+    << /Alpha 0.5 /Layers 1 /Wet 0.8 /Bloom 0.2 >> pkwash
+  grestore
+} def
+/p-mast {
+  gsave 330 281 translate -7 rotate c-sepia ink
+    newpath -2 24 moveto -1 98 lineto
+    << /Width 2.8 /Taper 0.5 /Waver 0.3 /Depletion 0.1 >> pkliner
+    0.6 setalpha
+    newpath -1 94 moveto -28 54 -42 28 -49 13 curveto      % a stay
+    << /Width 1.1 /Taper 0.2 /Waver 0.3 /Depletion 0.3 >> pkliner
+  grestore
+} def
+/p-farrefl {   % the bar and the mast, let down into the wet below them
+  c-umber ink
+  newpath 0 264 moveto 360 267 520 272 640 279 curveto 500 262 340 252 0 248 curveto closepath
+  << /Alpha 0.07 /Layers 3 /Wet 7 /Bloom 0 >> pkwash
+  gsave 0.3 setalpha c-sepia ink
+  newpath 320 262 moveto 324 236 316 214 319 190 curveto
+  << /Width 2.6 /Taper 0.8 /Waver 2.4 /Depletion 0.6 >> pkliner
+  grestore
+} def
+/p-farboat {   % a second boat a long way off, afloat, for scale
+  gsave 0.55 setalpha c-sepia ink
+  newpath 1052 297 moveto 1068 297 lineto << /Width 3.2 /Taper 0.2 /Waver 0 /Depletion 0 >> pkliner
+  newpath 1061 298 moveto 1062 316 lineto << /Width 1.2 /Taper 0.4 /Waver 0.2 /Depletion 0 >> pkliner
+  grestore
+} def
+/p-boatshadow {
+  c-sepia ink
+  newpath 278 272 moveto 310 266 362 266 392 272 curveto 362 261 310 260 278 272 curveto closepath
+  << /Alpha 0.3 /Layers 2 /Wet 3 /Bloom 0 >> pkwash
+} def
+
+% A withy: a post, with its reflection.   x ybase height width
+/withy {
+  6 dict begin /wd exch def /ht exch def /yb exch def /wx exch def
+  c-sepia ink
+  newpath wx yb moveto wx ht 0.04 mul add yb ht add lineto
+  << /Width wd /Taper 0.45 /Waver 0.5 /Depletion 0.15 >> pkliner
+  gsave 0.4 setalpha
+  newpath wx yb moveto wx ht 0.05 mul sub yb ht 0.75 mul sub lineto
+  << /Width wd /Taper 0.9 /Waver 2.2 /Depletion 0.7 >> pkliner
+  grestore
+  end
+} def
+/p-withy1 { 950 158 86 4.4 withy } def
+/p-withy2 { 858 204 54 3.3 withy } def
+/p-withy3 { 700 240 32 2.4 withy } def
+/p-withy4 { 668 262 19 1.8 withy } def
+
+/p-birds {
+  c-sepia ink
+  [ [520 506 12] [560 520 8] [606 498 6] ] {
+    aload pop /bs exch def /by exch def /bx exch def
+    newpath bx bs sub by bs 0.35 mul add moveto
+    bx bs 0.5 mul sub by bs 0.7 mul add  bx by bs 0.1 mul add  bx by curveto
+    << /Width 1.8 /Taper 0.3 /Waver 0.2 /Depletion 0 >> pkliner
+    newpath bx by moveto
+    bx bs 0.1 mul add by bs 0.6 mul add  bx bs 0.6 mul add by bs 0.7 mul add  bx bs 1.1 mul add by bs 0.3 mul add curveto
+    << /Width 1.8 /Taper 0.8 /Waver 0.2 /Depletion 0 >> pkliner
+  } forall
+} def
+
+% Reeds on the near bank, flicked upward with the liner.   x0 x1 n hmax
+/reeds {
+  10 dict begin /hm exch def /rn exch def /rx1 exch def /rx0 exch def
+  c-sepia ink
+  1 1 rn { pop
+    /rx rx0 frnd rx1 rx0 sub mul add def
+    /rt frnd dup mul def
+    /rh hm 0.3 mul rt hm 0.7 mul mul add def
+    /lean frnd 0.5 sub 0.5 mul 0.14 add rh mul def
+    /ry 52 frnd 30 mul add def
+    newpath rx ry moveto
+    rx lean 0.2 mul add ry rh 0.5 mul add  rx lean 0.6 mul add ry rh 0.85 mul add  rx lean add ry rh add curveto
+    << /Width 1.6 frnd 1.8 mul add /Taper 0.95 /Waver 0.5 /Depletion 0.2 >> pkliner
+  } for
+  end
+} def
+/p-reeds1 { 66 300 24 140 reeds } def
+/p-reeds2 { 110 230 12 215 reeds } def
+
+/p-column {    % the sun's road on the water, a warm glaze first
+  c-naples ink
+  0 1 3 {
+    /gi exch def /gs 1 gi 0.28 mul sub def       % four glazes, each narrower
+    newpath SUNX 22 gs mul sub 292 moveto SUNX 22 gs mul add 292 lineto
+    SUNX 84 gs mul add 150 lineto SUNX 84 gs mul sub 150 lineto closepath
+    << /Alpha 0.045 /Layers 1 /Wet 14 /Bloom 0 >> pkwash
+  } for
+} def
+/p-glitter {   % then body colour on a dry brush, dragged level
+  gsave 1 0.975 0.9 setrgbcolor
+  0 1 9 {
+    /gi exch def
+    /gy 289 gi gi 0.55 mul 10.5 add mul sub def
+    /gw 9 gi 6.5 mul add def
+    newpath SUNX gw sub frnd 0.5 sub gw mul 0.5 mul add gy moveto
+            SUNX gw add frnd 0.5 sub gw mul 0.5 mul add gy frnd 2 mul add lineto
+    << /Width 1.6 gi 0.42 mul add /Bristles 7 /Load 0.55 /Dropout 0.45 /ColorJitter 0.02 >> pkdry
+  } for
+  grestore
+} def
+
+/p-sign {
+  c-sepia ink
+  /ZapfChancery-MediumItalic findfont 25 scalefont setfont
+  gsave 0.8 setalpha 1090 70 moveto (Tidewater) show grestore
+} def
+/p-flourish {
+  c-sepia ink gsave 0.8 setalpha
+  newpath 1084 64 moveto 1124 58 1174 62 1210 66 curveto
+  << /Width 1.6 /Taper 0.9 /Waver 0.4 /Depletion 0.2 >> pkliner
+  grestore
+} def
+
+% ---- the plan ---------------------------------------------------------------
+/plan [
+  % sky and water, wet in wet
+  0.6 2.4 5 70 [-10 60 1290 510] 11 /p-warm load rows
+  2.8 1.6 3 70 [-10 300 1290 590] 12 /p-rose load rows
+  4.0 1.8 3 70 [-10 410 1290 720] 13 /p-blue load rows
+  5.6 1.0 /quad-out SUNX SUNY 240 14 /p-glow load bloom
+  6.4 0.5 /quad-out SUNX SUNY 40 15 /p-sun load bloom
+  % clouds, each one stroke of a big soft brush
+  6.7 1.0 /sine-inout   0 30 [-20 520 720 660] 21 /p-cloud1 load sweep
+  7.4 1.0 /sine-inout 180 30 [580 480 1290 600] 22 /p-cloud2 load sweep
+  8.1 0.8 /sine-inout   0 24 [290 430 830 520] 23 /p-cloud3 load sweep
+  8.7 0.7 /sine-inout 180 20 [880 395 1290 475] 24 /p-cloud4 load sweep
+  9.1 0.6 /sine-inout   0 20 [30 390 420 468] 25 /p-cloud5 load sweep
+  % the near water
+  9.6 1.2 2 60 [-10 -10 1290 230] 31 /p-coolwater load rows
+  10.5 0.8 /sine-inout 0 60 [-10 60 1290 270] 32 /p-rosewater load sweep
+  % the far shore
+  11.2 1.0 /sine-inout   0 14 [-10 280 660 370] 41 /p-farleft load sweep
+  12.0 0.8 /sine-inout 180 12 [900 280 1290 340] 42 /p-farright load sweep
+  12.6 0.7 /sine-inout   0 10 [-10 280 370 345] 43 /p-nearleft load sweep
+  % the mud
+  13.2 0.9 /sine-inout   0 12 [-10 250 660 300] 51 /p-mfar load sweep
+  13.9 1.0 /sine-inout 180 20 [860 175 1290 275] 52 /p-mmid load sweep
+  14.7 0.5 /quad-out   180 0 [760 210 1030 250] 55 /p-mmid-dry load sweep
+  15.0 0.7 /sine-inout 180 20 [880 140 1290 240] 56 /p-mmid-refl load sweep
+  15.5 1.6 3 40 [-10 -10 880 215] 53 /p-mnear load rows
+  16.7 0.8 /sine-inout   0 40 [-10 -10 880 215] 54 /p-mnear2 load sweep
+  17.0 0.6 /linear       0 0 [20 40 780 185] 60 /p-mnear-drag load sweep
+  17.3 0.4 /quad-out     0 0 [750 85 945 135] 57 /p-mnear-dry load sweep
+  17.4 0.6 /sine-inout   0 6 [150 80 680 160] 58 /p-pool load sweep
+  17.6 0.6 /sine-inout 180 6 [820 50 1240 165] 59 /p-ripples load sweep
+  % accents
+  18.0 0.5 /sine-inout 0 4 [270 255 392 318] 61 /p-boat load sweep
+  18.4 0.5 /quad-out 90 0 [262 290 360 400] 62 /p-mast load sweep
+  18.7 0.3 /sine-inout 0 4 [270 250 400 276] 63 /p-boatshadow load sweep
+  18.8 0.6 /sine-inout 270 6 [-10 170 660 285] 77 /p-farrefl load sweep
+  18.9 0.35 /quad-out 270 0 [920 80 985 252] 64 /p-withy1 load sweep
+  19.15 0.30 /quad-out 270 0 [836 150 884 264] 65 /p-withy2 load sweep
+  19.4 0.25 /quad-out 270 0 [684 206 718 278] 66 /p-withy3 load sweep
+  19.6 0.2 /quad-out 270 0 [656 240 682 286] 67 /p-withy4 load sweep
+  19.6 0.5 /linear 0 0 [500 490 630 540] 69 /p-birds load sweep
+  19.5 0.3 /linear 0 0 [1040 290 1080 322] 70 /p-farboat load sweep
+  19.8 0.7 /quad-out 90 0 [40 40 360 260] 71 /p-reeds1 load sweep
+  20.2 0.6 /quad-out 90 0 [80 40 300 310] 72 /p-reeds2 load sweep
+  19.9 0.6 /sine-inout 270 20 [680 110 880 300] 76 /p-column load sweep
+  20.4 0.7 /linear 270 0 [640 110 920 300] 73 /p-glitter load sweep
+  20.9 0.6 /linear 0 0 [1070 56 1226 104] 74 /p-sign load sweep
+  21.4 0.25 /quad-out 0 0 [1070 50 1226 80] 75 /p-flourish load sweep
+] def
+
+% ---- the painter --------------------------------------------------------------
+% Clip to the part of a sweep's box between the brush front at ua and at ub.
+% The front is a shallow parabola (the belly of the brush leads), measured
+% along the direction of travel; s runs along it, v across it.
+/sweepclip {
+  td-c aload pop /Y1 exch def /X1 exch def /Y0 exch def /X0 exch def
+  /ca td-a cos def /sa td-a sin def
+  /smin 1e9 def /smax -1e9 def /vmin 1e9 def /vmax -1e9 def
+  [ X0 Y0 X1 Y0 X1 Y1 X0 Y1 ] /cs exch def
+  0 2 6 {
+    /ci exch def
+    /s cs ci get ca mul cs ci 1 add get sa mul add def
+    /v cs ci 1 add get ca mul cs ci get sa mul sub def
+    s smin lt { /smin s def } if  s smax gt { /smax s def } if
+    v vmin lt { /vmin v def } if  v vmax gt { /vmax v def } if
+  } for
+  /fa smin td-ua smax smin sub td-b add mul add def
+  /fb smin td-ub smax smin sub td-b add mul add def
+  newpath
+  0 1 8 { 8 div /w exch def
+    fa td-b 2 w mul 1 sub dup mul mul sub  vmin w vmax vmin sub mul add  sv-pt
+    w 0 eq { moveto } { lineto } ifelse } for
+  8 -1 0 { 8 div /w exch def
+    fb td-b 2 w mul 1 sub dup mul mul sub  vmin w vmax vmin sub mul add  sv-pt lineto } for
+  closepath clip newpath
+} def
+/sv-pt {                                % s v -> x y
+  2 copy sa mul exch ca mul exch sub    % x = s ca - v sa
+  3 1 roll ca mul exch sa mul add       % y = s sa + v ca
+} def
+/bloomclip {                            % the ring between two radii
+  newpath td-a td-b td-c td-ub mul 0 360 arc closepath
+  td-a td-b td-c td-ua mul 0 360 arc closepath
+  eoclip newpath
+} def
+
+% Paint what is due of one stroke in this frame.
+/paintdue {
+  40 dict begin
+    aload pop
+    /td-p exch def /td-seed exch def /td-c exch def /td-b exch def /td-a exch def
+    /td-ease exch def /td-dur exch def /td-t0 exch def /td-kind exch def
+    /td-ua frame 1 sub fps div td-t0 sub td-dur div 0 1 clamp td-ease ease def
+    /td-ub frame       fps div td-t0 sub td-dur div 0 1 clamp td-ease ease def
+    td-ub td-ua gt {
+      gsave
+        td-kind /sweep eq { sweepclip } { bloomclip } ifelse
+        td-seed srand               % the stroke's own texture, every frame
+        td-p
+      grestore
+    } if
+  end
+} def
+
+/scene {
+  frame 0 eq {
+    0 0 1280 720 << /Tone c-paper /Grain 0.7 /Alpha 0.24 /Fiber 0.25 /Seed 9 >> pkpaper
+  } if
+  gsave
+    BX0 BY0 BX1 BX0 sub BY1 BY0 sub rectclip
+    plan { paintdue } forall
+  grestore
+} def

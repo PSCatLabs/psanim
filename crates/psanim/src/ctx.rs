@@ -167,6 +167,21 @@ pub(crate) fn wiggle(seed: i64, key: f64, x: f64) -> f64 {
     (octave(x, 0.0) + 0.5 * octave(x * 2.03 + 17.0, 1.0)) / 1.5
 }
 
+/// Smooth two-dimensional value noise in `[-1, 1]`: two octaves. Sampled
+/// on a circle it gives a wandering value that returns to its start.
+pub(crate) fn noise2(seed: i64, key: f64, x: f64, y: f64) -> f64 {
+    let octave = |x: f64, y: f64, salt: f64| {
+        let (ix, iy) = (x.floor(), y.floor());
+        let (fx, fy) = (x - ix, y - iy);
+        let at = |dx: f64, dy: f64| hash01(seed, &[key, salt, ix + dx, iy + dy]) * 2.0 - 1.0;
+        let (sx, sy) = (fx * fx * (3.0 - 2.0 * fx), fy * fy * (3.0 - 2.0 * fy));
+        let top = at(0.0, 0.0) + (at(1.0, 0.0) - at(0.0, 0.0)) * sx;
+        let bottom = at(0.0, 1.0) + (at(1.0, 1.0) - at(0.0, 1.0)) * sx;
+        top + (bottom - top) * sy
+    };
+    (octave(x, y, 0.0) + 0.5 * octave(x * 2.03 + 17.0, y * 2.03 - 5.0, 1.0)) / 1.5
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

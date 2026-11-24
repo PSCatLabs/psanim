@@ -194,6 +194,9 @@ pub struct Meta {
     /// The parameters the program asked for during setup, with the
     /// defaults it gave, printed as PostScript.
     pub params: BTreeMap<String, String>,
+    /// psanim words the program redefined in setup (`/width 300 def`).
+    /// Its own code then gets its definition instead of the engine's.
+    pub shadowed: Vec<String>,
 }
 
 impl Meta {
@@ -226,6 +229,7 @@ impl Meta {
             "tick_rate": self.tick_rate,
             "motion_blur": self.motion_blur.map(|m| serde_json::json!({"samples": m.samples, "shutter": m.shutter})),
             "params": self.params,
+            "shadowed": self.shadowed,
         })
     }
 }
@@ -287,7 +291,25 @@ pub struct Movie {
     frame_limits: Limits,
     /// Interpreter steps the last frame took, when a step limit is set.
     last_steps: u64,
+    /// What the program printed and nobody has collected yet.
+    output: String,
+    /// The persistent canvas, set aside while a frame's overlay is shown.
+    kept: Option<Page>,
+    /// The overlay procedure of a persistent movie, if it defines one.
+    overlay: Option<String>,
+    /// Simulation ticks the last render had to apply.
+    last_ticks: u64,
 }
+
+/// The vocabulary's native operators that a program is likely to shadow
+/// by accident: short, ordinary words.
+const NATIVE_WORDS: &[&str] = &[
+    "now", "progress", "span", "frame", "fps", "dt", "duration", "width", "height", "turns", "ease", "tween",
+    "ramp", "between", "clamp", "remap", "signal", "param", "grain", "vignette", "wiggle", "fmod",
+];
+
+/// The most printed text a movie keeps between calls of `take_output`.
+const MAX_OUTPUT: usize = 64 * 1024;
 
 fn short_repr(v: &Value) -> String {
     let s = match v {
@@ -468,6 +490,17 @@ impl Movie {
             .hint("motion blur renders several moments per frame, which a simulation or a persistent canvas cannot rewind for"));
         }
         let tick_rate = if mode == Mode::Persistent { decl.declared_fps } else { decl.step_rate };
+        // A persistent movie may define `overlay`: drawn over each frame
+        // shown, never kept.
+        let overlay = (mode == Mode::Persistent && is_proc(&interp, "overlay")).then(|| "overlay".to_string());
+        // Native words the program has redefined: its own code gets its
+        // definition, which is rarely what was meant.
+        let shadowed: Vec<String> = crate::api::API
+            .iter()
+            .filter(|e| NATIVE_WORDS.contains(&e.name))
+            .filter(|e| !matches!(interp.lookup(e.name), Some(Value::Other(o)) if o.type_name() == "operatortype"))
+            .map(|e| e.name.to_string())
+            .collect();
 
         interp.clear_operands();
         interp
@@ -478,6 +511,8 @@ impl Movie {
             .pop_value()
             .map_err(|_| Error::new(Phase::Setup, "internal", "no checkpoint was taken"))?;
 
+        let setup_output = String::from_utf8_lossy(interp.captured_stdout()).into_owned();
+        interp.capture_stdout();
         let frames = ((decl.duration * decl.fps - 1e-9).ceil().max(1.0)) as u64;
         // Checkpoints about every two seconds, and never more than 64 deep.
         let total_ticks = (decl.duration * tick_rate).ceil().max(1.0);
@@ -504,6 +539,7 @@ impl Movie {
                 tick_rate,
                 motion_blur: decl.motion_blur,
                 params,
+                shadowed,
             },
             scene: decl.scene,
             step,
@@ -514,6 +550,10 @@ impl Movie {
             blurred: Vec::new(),
             frame_limits: options.budget.frame,
             last_steps: 0,
+            output: setup_output,
+            kept: None,
+            overlay,
+            last_ticks: 0,
         };
         if mode == Mode::Persistent {
             movie.reset_canvas()?;
@@ -530,6 +570,14 @@ impl Movie {
     /// a frame is.
     pub fn last_frame_steps(&self) -> u64 {
         self.last_steps
+    }
+
+    /// Simulation ticks (or, for a persistent movie, painted frames) the
+    /// most recent render had to apply to reach its moment: 0 for a pure
+    /// movie. Rendering frames in order applies a frame's worth each time;
+    /// jumping ahead or back applies everything in between.
+    pub fn last_frame_ticks(&self) -> u64 {
+        self.last_ticks
     }
 
     /// Replace the value of signal `name` from now on: what a live host
@@ -554,6 +602,12 @@ impl Movie {
     fn render(&mut self, index: u64, time: f64) -> Result<Frame<'_>, Error> {
         let phase = Phase::Frame { index, time };
         self.last_steps = 0;
+        self.last_ticks = 0;
+        // The frame shown last time may have been the painting plus an
+        // overlay: put the painting itself back before anything else.
+        if let Some(kept) = self.kept.take() {
+            let _ = self.interp.swap_canvas(kept);
+        }
         let mut from_accum = false;
         match self.meta.mode {
             Mode::Pure => match self.meta.motion_blur {
@@ -578,7 +632,9 @@ impl Movie {
                 self.exec(phase, "save")?;
                 let guard = self.pop_save(phase)?;
                 self.begin(Running::Frame, index as i64, time, 1.0 / self.meta.fps);
-                let drawn = self.exec(phase, &self.draw_program(true, time));
+                let drawn = self
+                    .exec(phase, &self.draw_program(true))
+                    .and_then(|()| self.check_stack(phase, &self.scene.clone()));
                 self.interp.clear_operands();
                 self.interp.push_value(&guard);
                 self.exec(phase, "cleardictstack restore")?;
@@ -589,6 +645,26 @@ impl Movie {
                 // Frame j of the declared rate is painted by tick j.
                 let ticks = (time * self.meta.tick_rate + 1e-9).floor().max(0.0) as u64 + 1;
                 self.seek(ticks)?;
+                if let Some(overlay) = self.overlay.clone() {
+                    // Draw the overlay on a copy; the painting is set aside.
+                    let (w, h) = self.interp.canvas_size();
+                    let copy = Page::from_premultiplied_rgba8(w, h, self.interp.canvas_premultiplied_rgba8().to_vec())
+                        .ok_or_else(|| Error::new(phase, "internal", "the canvas could not be copied"))?;
+                    self.kept = self.interp.swap_canvas(copy).ok();
+                    self.exec(phase, "cleardictstack save")?;
+                    let guard = self.pop_save(phase)?;
+                    self.begin(Running::Frame, index as i64, time, 1.0 / self.meta.fps);
+                    let program = format!(
+                        "clear cleardictstack grestoreall initgraphics {} srand {overlay}",
+                        self.meta.seed
+                    );
+                    let drawn = self.exec(phase, &program).and_then(|()| self.check_stack(phase, &overlay));
+                    self.interp.clear_operands();
+                    self.interp.push_value(&guard);
+                    self.exec(phase, "cleardictstack restore")?;
+                    drawn?;
+                    self.check_layers(phase)?;
+                }
             }
         }
         let (width, height) = self.interp.canvas_size();
@@ -612,10 +688,57 @@ impl Movie {
 
     fn exec(&mut self, phase: Phase, program: &str) -> Result<(), Error> {
         let r = run(&mut self.interp, &self.ctx, phase, program);
+        let printed = self.interp.captured_stdout();
+        if !printed.is_empty() {
+            if self.output.len() < MAX_OUTPUT {
+                self.output.push_str(&String::from_utf8_lossy(printed));
+                if self.output.len() >= MAX_OUTPUT {
+                    self.output.push_str("\n[output truncated]\n");
+                }
+            }
+            self.interp.capture_stdout();
+        }
         if self.frame_limits.max_steps.is_some() {
             self.last_steps += self.interp.steps_used();
         }
         r
+    }
+
+    /// A scene or step is called on an empty operand stack and must leave
+    /// it empty. Anything left is a bug in the program more often than not
+    /// (an operand a later operator was meant to take), and it would
+    /// otherwise pass unseen.
+    fn check_stack(&mut self, phase: Phase, who: &str) -> Result<(), Error> {
+        let left = self.interp.operand_count();
+        if left == 0 {
+            return Ok(());
+        }
+        let mut stack = Vec::new();
+        while stack.len() < 6 {
+            match self.interp.pop_value() {
+                Ok(v) => stack.push(short_repr(&v)),
+                Err(_) => break,
+            }
+        }
+        stack.reverse();
+        self.interp.clear_operands();
+        let mut e = Error::new(
+            phase,
+            "stackleft",
+            format!("`{who}` left {left} operand{} on the stack", if left == 1 { "" } else { "s" }),
+        )
+        .hint(format!(
+            "`{who}` is called on an empty stack and must leave it empty. Something pushed a value nothing used: look for the values shown above. (The time is not passed as an operand; read it with `now`.)"
+        ));
+        e.stack = stack;
+        Err(e)
+    }
+
+    /// What the program has printed (`print`, `=`, `==`, `pstack`) since
+    /// the last call, as text. Printing is how a program is debugged:
+    /// `psanim frame` shows it.
+    pub fn take_output(&mut self) -> String {
+        std::mem::take(&mut self.output)
     }
 
     fn pop_save(&mut self, phase: Phase) -> Result<Value, Error> {
@@ -639,15 +762,14 @@ impl Movie {
     }
 
     /// The PostScript that draws one frame: a clean graphics state, the
-    /// seed, optionally a fresh canvas, then the scene with the time on the
-    /// stack (a scene may take it with `/t exch def` or ignore it and read
-    /// `now`).
-    fn draw_program(&self, fresh_canvas: bool, time: f64) -> String {
+    /// seed, optionally a fresh canvas, then the scene, on an empty operand
+    /// stack. The scene reads the time with `now`.
+    fn draw_program(&self, fresh_canvas: bool) -> String {
         let mut p = String::from("clear cleardictstack grestoreall initgraphics ");
         if fresh_canvas {
             p.push_str(&self.ground());
         }
-        p.push_str(&format!("{} srand {time:?} {}", self.meta.seed, self.scene));
+        p.push_str(&format!("{} srand {}", self.meta.seed, self.scene));
         p
     }
 
@@ -670,8 +792,9 @@ impl Movie {
     fn draw_pure(&mut self, index: u64, time: f64, phase: Phase) -> Result<(), Error> {
         self.begin(Running::Frame, index as i64, time, 1.0 / self.meta.fps);
         self.rollback(0, phase)?;
-        let program = self.draw_program(true, time);
+        let program = self.draw_program(true);
         self.exec(phase, &program)?;
+        self.check_stack(phase, &self.scene.clone())?;
         self.check_layers(phase)
     }
 
@@ -709,6 +832,7 @@ impl Movie {
         }
         while self.cursor < target {
             self.tick()?;
+            self.last_ticks += 1;
         }
         Ok(())
     }
@@ -725,15 +849,17 @@ impl Movie {
         let seed = (mix64(self.meta.seed as u64 ^ tick.wrapping_mul(0x9E37_79B9_7F4A_7C15)) >> 33) as i64;
         if let Some(step) = self.step.clone() {
             self.begin(Running::Step, tick as i64, time, dt);
-            self.exec(phase, &format!("clear cleardictstack grestoreall initgraphics {seed} srand {dt:?} {step}"))?;
-            self.interp.clear_operands();
+            self.exec(phase, &format!("clear cleardictstack grestoreall initgraphics {seed} srand {step}"))?;
+            self.check_stack(phase, &step)?;
         }
         if self.meta.mode == Mode::Persistent {
             let phase = Phase::Frame { index: tick, time };
             self.exec(phase, "cleardictstack save")?;
             let guard = self.pop_save(phase)?;
             self.begin(Running::Frame, tick as i64, time, dt);
-            let drawn = self.exec(phase, &self.draw_program(false, time));
+            let drawn = self
+                .exec(phase, &self.draw_program(false))
+                .and_then(|()| self.check_stack(phase, &self.scene.clone()));
             self.interp.clear_operands();
             self.interp.push_value(&guard);
             self.exec(phase, "cleardictstack restore")?;

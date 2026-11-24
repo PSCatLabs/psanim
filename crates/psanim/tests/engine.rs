@@ -145,13 +145,122 @@ fn frames_are_time_addressable() {
 
 #[test]
 fn scene_gets_the_time_on_the_stack_and_from_now() {
-    assert_eq!(eval_at("", "/t exch def t", 5), 0.5);
-    assert_eq!(eval_at("", "pop now", 5), 0.5);
-    assert_eq!(eval_at("", "pop globaltime", 15), 1.5);
-    assert_eq!(eval_at("", "pop frame", 7), 7.0);
-    assert_eq!(eval_at("", "pop progress", 5), 0.25);
-    assert_eq!(eval_at("", "pop duration fps add dt add width add height add", 0), 2.0 + 10.0 + 0.1 + 64.0 + 48.0);
-    assert_eq!(eval_at("", "pop span", 0), 2.0);
+    assert_eq!(eval_at("", "now", 5), 0.5);
+    assert_eq!(eval_at("", "now", 5), 0.5);
+    assert_eq!(eval_at("", "globaltime", 15), 1.5);
+    assert_eq!(eval_at("", "frame", 7), 7.0);
+    assert_eq!(eval_at("", "progress", 5), 0.25);
+    assert_eq!(eval_at("", "duration fps add dt add width add height add", 0), 2.0 + 10.0 + 0.1 + 64.0 + 48.0);
+    assert_eq!(eval_at("", "span", 0), 2.0);
+}
+
+#[test]
+fn a_scene_must_leave_the_stack_empty() {
+    // An operand nothing used is reported, with its value: it is usually
+    // the trace of a mistake that would otherwise draw the wrong thing.
+    let mut m = load("/scene { 7 1 setgray 0 0 64 48 rectfill } def");
+    let e = m.render_frame(3).unwrap_err();
+    assert_eq!(e.kind, "stackleft");
+    assert_eq!(e.phase, Phase::Frame { index: 3, time: 0.3 });
+    assert!(e.message.contains("`scene` left 1 operand"), "{e}");
+    assert!(e.hint.unwrap().contains("`now`"));
+    // One operand short is now an error too, where the old contract
+    // (the time passed as an operand) let it eat the engine's value.
+    let mut m = load("/scene { 0.5 0.25 between pop } def");
+    assert_eq!(m.render_frame(0).unwrap_err().kind, "stackunderflow");
+    // The movie is still usable.
+    let mut ok = load("/scene { 1 setgray 0 0 64 48 rectfill } def");
+    assert!(ok.render_frame(0).is_ok());
+    // The same for a step.
+    let mut m = Movie::load(
+        "<< /Size [8 8] /Duration 1 /FPS 10 >> animation /step { 42 } def /scene { } def",
+        &Options::default(),
+    )
+    .unwrap();
+    let e = m.render_frame(2).unwrap_err();
+    assert_eq!((e.kind.as_str(), e.stack.as_slice()), ("stackleft", &["42".to_string()][..]));
+    assert!(matches!(e.phase, Phase::Step { tick: 0, .. }));
+}
+
+#[test]
+fn what_a_program_prints_is_collected() {
+    let mut m = load("(setup says hi) = /scene { frame 2 eq { now == (x) print } if } def");
+    assert_eq!(m.take_output(), "setup says hi\n");
+    m.render_frame(1).unwrap();
+    assert_eq!(m.take_output(), "");
+    m.render_frame(2).unwrap();
+    assert_eq!(m.take_output(), "0.2\nx");
+    assert_eq!(m.take_output(), "");
+}
+
+#[test]
+fn globally_reads_movie_time_inside_a_scope() {
+    assert_eq!(eval_at("", "-1 0.5 2 { pop { now } globally } during", 9), 0.9);
+    assert_eq!(eval_at("", "-1 0.5 2 { pop { 0 2 /linear tween } globally } during", 10), 0.5);
+    // ...and the scope it was called from is back afterwards.
+    assert_eq!(eval_at("", "-1 0.5 2 { pop { } globally now } during", 9), 0.4);
+}
+
+#[test]
+fn spaced_and_path_text() {
+    let font = "/Helvetica findfont 10 scalefont setfont";
+    // spacedwidth = natural width + track * (n - 1)
+    assert_eq!(
+        eval_at("", &format!("{font} (ABCD) 3 spacedwidth (ABCD) stringwidth pop sub"), 0),
+        9.0
+    );
+    assert_eq!(eval_at("", &format!("{font} (A) 3 spacedwidth (A) stringwidth pop sub"), 0), 0.0);
+    // eachspaced: track 0 is eachglyph; a positive track spreads the origins.
+    let mut plain = load(&format!("/scene {{ {font} 1 setgray 4 20 moveto (WAVE) {{ pop show }} eachglyph }} def"));
+    let mut zero = load(&format!("/scene {{ {font} 1 setgray 4 20 moveto (WAVE) 0 {{ pop show }} eachspaced }} def"));
+    let a = plain.render_frame(0).unwrap().premultiplied.to_vec();
+    assert_eq!(zero.render_frame(0).unwrap().premultiplied, &a[..]);
+    let spread = "(WAVE) 4 { exch pop 3 eq { currentpoint pop } if } eachspaced";
+    let natural = "(WAVE) 0 { exch pop 3 eq { currentpoint pop } if } eachspaced";
+    let d = eval_at("", &format!("{font} 4 20 moveto {spread}"), 0) - eval_at("", &format!("{font} 4 20 moveto {natural}"), 0);
+    assert!((d - 12.0).abs() < 0.01, "{d}");
+    // eachonpath: along a horizontal line it is plain text, shifted by u0.
+    let mut on = load(&format!(
+        "/scene {{ {font} 1 setgray newpath 4 20 moveto 60 20 lineto (WAVE) 0 {{ pop show }} eachonpath }} def"
+    ));
+    let b = on.render_frame(0).unwrap().premultiplied.to_vec();
+    let lit = |buf: &[u8]| buf.chunks(4).filter(|p| p[0] > 128).count() as f64;
+    assert!((lit(&a) - lit(&b)).abs() / lit(&a) < 0.05, "{} vs {}", lit(&a), lit(&b));
+    // On a vertical line the text runs upward: tall, not wide.
+    let mut up = load(&format!(
+        "/scene {{ {font} 1 setgray newpath 30 4 moveto 30 44 lineto (WAVE) 0 {{ pop show }} eachonpath
+                  pathlength 40 ne {{ 1 }} if }} def"
+    ));
+    let f = up.render_frame(0).unwrap().premultiplied.to_vec();
+    let cols = (0..64).filter(|x| (0..48).any(|y| f[(y * 64 + x) * 4] > 128)).count();
+    let rows = (0..48).filter(|y| (0..64).any(|x| f[(y * 64 + x) * 4] > 128)).count();
+    assert!(rows > 2 * cols, "{rows} rows, {cols} cols");
+}
+
+#[test]
+fn sequence_gap_and_wiggle_array_key() {
+    let seq = "-1 [ 0.5 null 1 { pop 20 now add } ] sequence";
+    assert_eq!(eval_at("", seq, 2), -1.0);
+    assert_eq!(eval_at("", seq, 7), 20.2);
+    let w = eval_at("", "[3 7] 2 50 wiggle", 4);
+    assert!((-50.0..=50.0).contains(&w));
+    assert_ne!(w, eval_at("", "[3 8] 2 50 wiggle", 4));
+    assert_eq!(w, eval_at("", "[3 7] 2 50 wiggle", 4));
+}
+
+#[test]
+fn polypath_turns_and_loopnoise() {
+    assert_eq!(eval_at("", "[0 0 10 0 10 10] polypath pathlength", 0), 20.0);
+    // In the current user space, like any path.
+    assert_eq!(eval_at("", "3 3 scale [0 0 10 0] polypath pathlength", 0), 10.0);
+    assert_eq!(eval_at("", "gsave 2 2 scale [0 0 10 0] polypath grestore 5 5 moveto pathlength", 0), 0.0);
+    assert_eq!(eval_at("", "2 turns", 5), 180.0);
+    assert_eq!(eval_at("", "0 1 { 3 turns } during", 5), 540.0);
+    // loopnoise closes: its value just before the end is close to its value at the start.
+    let at = |k| eval_at("", "4 0.8 loopnoise 1000 mul", k);
+    assert!((-1000.0..=1000.0).contains(&at(7)));
+    assert!((at(19) - at(0)).abs() < 2.0 * (at(1) - at(0)).abs() + 1.0, "{} {} {}", at(19), at(0), at(1));
+    assert_ne!(at(3), at(11));
 }
 
 #[test]
@@ -168,40 +277,40 @@ fn render_at_takes_any_time() {
 #[test]
 fn time_scopes_rebase_the_clock() {
     // during: live only inside the window, local clock from 0.
-    assert_eq!(eval_at("", "pop -1 0.5 1.5 { pop now } during", 2), -1.0);
-    assert_eq!(eval_at("", "pop -1 0.5 1.5 { pop now } during", 7), 0.2);
-    assert_eq!(eval_at("", "pop -1 0.5 1.5 { pop progress } during", 10), 0.5);
-    assert_eq!(eval_at("", "pop -1 0.5 1.5 { pop span } during", 10), 1.0);
-    assert_eq!(eval_at("", "pop -1 0.5 1.5 { pop now } during", 15), -1.0);
+    assert_eq!(eval_at("", "-1 0.5 1.5 { pop now } during", 2), -1.0);
+    assert_eq!(eval_at("", "-1 0.5 1.5 { pop now } during", 7), 0.2);
+    assert_eq!(eval_at("", "-1 0.5 1.5 { pop progress } during", 10), 0.5);
+    assert_eq!(eval_at("", "-1 0.5 1.5 { pop span } during", 10), 1.0);
+    assert_eq!(eval_at("", "-1 0.5 1.5 { pop now } during", 15), -1.0);
     // after / before
-    assert_eq!(eval_at("", "pop -1 0.5 { pop now } after", 3), -1.0);
-    assert_eq!(eval_at("", "pop -1 0.5 { pop now } after", 9), 0.4);
-    assert_eq!(eval_at("", "pop -1 0.5 { pop progress } before", 2), 0.4);
-    assert_eq!(eval_at("", "pop -1 0.5 { pop now } before", 5), -1.0);
+    assert_eq!(eval_at("", "-1 0.5 { pop now } after", 3), -1.0);
+    assert_eq!(eval_at("", "-1 0.5 { pop now } after", 9), 0.4);
+    assert_eq!(eval_at("", "-1 0.5 { pop progress } before", 2), 0.4);
+    assert_eq!(eval_at("", "-1 0.5 { pop now } before", 5), -1.0);
     // delayed, staggered, timescaled
-    assert_eq!(eval_at("", "pop 0.3 { now } delayed", 5), 0.2);
-    assert_eq!(eval_at("", "pop 3 0.1 { now } staggered", 5), 0.2);
-    assert_eq!(eval_at("", "pop 2 { now } timescaled", 5), 1.0);
+    assert_eq!(eval_at("", "0.3 { now } delayed", 5), 0.2);
+    assert_eq!(eval_at("", "3 0.1 { now } staggered", 5), 0.2);
+    assert_eq!(eval_at("", "2 { now } timescaled", 5), 1.0);
     // looped, pingpong
-    assert_eq!(eval_at("", "pop 0.4 { now } looped", 9), 0.1);
-    assert_eq!(eval_at("", "pop 0.4 { progress } looped", 9), 0.25);
-    assert_eq!(eval_at("", "pop 0.4 { now } pingpong", 3), 0.3);
-    assert_eq!(eval_at("", "pop 0.4 { now } pingpong", 5), 0.3);
-    assert_eq!(eval_at("", "pop 0.4 { now } pingpong", 6), 0.2);
+    assert_eq!(eval_at("", "0.4 { now } looped", 9), 0.1);
+    assert_eq!(eval_at("", "0.4 { progress } looped", 9), 0.25);
+    assert_eq!(eval_at("", "0.4 { now } pingpong", 3), 0.3);
+    assert_eq!(eval_at("", "0.4 { now } pingpong", 5), 0.3);
+    assert_eq!(eval_at("", "0.4 { now } pingpong", 6), 0.2);
     // attime, timewindow, reversed
-    assert_eq!(eval_at("", "pop 1.25 { now } attime", 3), 1.25);
-    assert_eq!(eval_at("", "pop 0.5 2 { progress } timewindow", 3), 0.25);
-    assert_eq!(eval_at("", "pop { now } reversed", 5), 1.5);
+    assert_eq!(eval_at("", "1.25 { now } attime", 3), 1.25);
+    assert_eq!(eval_at("", "0.5 2 { progress } timewindow", 3), 0.25);
+    assert_eq!(eval_at("", "{ now } reversed", 5), 1.5);
     // Scopes nest, and the clock comes back afterwards.
-    assert_eq!(eval_at("", "pop 0.5 2 { 0.2 { now } delayed } during", 9), 0.2);
-    assert_eq!(eval_at("", "pop 0.5 2 { 0.2 { } delayed } during now", 9), 0.9);
+    assert_eq!(eval_at("", "0.5 2 { 0.2 { now } delayed } during", 9), 0.2);
+    assert_eq!(eval_at("", "0.5 2 { 0.2 { } delayed } during now", 9), 0.9);
     // A procedure can be given by name.
-    assert_eq!(eval_at("/lt { now } def", "pop 0.3 /lt delayed", 5), 0.2);
+    assert_eq!(eval_at("/lt { now } def", "0.3 /lt delayed", 5), 0.2);
 }
 
 #[test]
 fn sequence_plays_clips_in_turn() {
-    let seq = "pop -1 [ 0.5 { pop 10 now add } 1 { pop 20 now add } 0.5 /third ] sequence";
+    let seq = "-1 [ 0.5 { pop 10 now add } 1 { pop 20 now add } 0.5 /third ] sequence";
     let setup = "/third { pop 30 progress add } def";
     assert_eq!(eval_at(setup, seq, 2), 10.2);
     assert_eq!(eval_at(setup, seq, 5), 20.0);
@@ -219,51 +328,53 @@ fn sequence_plays_clips_in_turn() {
 
 #[test]
 fn tween_ease_between_and_friends() {
-    assert_eq!(eval_at("", "pop 0.5 1.5 /linear tween", 10), 0.5);
-    assert_eq!(eval_at("", "pop 0.5 1.5 /linear tween", 2), 0.0);
-    assert_eq!(eval_at("", "pop 0.5 1.5 /linear tween", 19), 1.0);
-    assert_eq!(eval_at("", "pop 0.5 1.5 /quad-in tween", 10), 0.25);
-    assert_eq!(eval_at("", "pop 0.5 1.5 ramp", 10), 0.5);
-    assert_eq!(eval_at("", "pop 0.5 /cubic-out ease", 0), 0.875);
-    assert_eq!(eval_at("", "pop 0.25 100 200 between", 0), 125.0);
-    assert_eq!(eval_at("", "pop 0.5 [0 10] [4 20] between aload pop add", 0), 17.0);
-    assert_eq!(eval_at("", "pop 1.5 0 100 between", 0), 150.0); // unclamped
-    assert_eq!(eval_at("", "pop 7 0 5 clamp", 0), 5.0);
-    assert_eq!(eval_at("", "pop 0 10 5 smoothstep", 0), 0.5);
-    assert_eq!(eval_at("", "pop 5 0 10 100 200 remap", 0), 150.0);
+    assert_eq!(eval_at("", "0.5 1.5 /linear tween", 10), 0.5);
+    assert_eq!(eval_at("", "0.5 1.5 /linear tween", 2), 0.0);
+    assert_eq!(eval_at("", "0.5 1.5 /linear tween", 19), 1.0);
+    assert_eq!(eval_at("", "0.5 1.5 /quad-in tween", 10), 0.25);
+    assert_eq!(eval_at("", "0.5 1.5 ramp", 10), 0.5);
+    assert_eq!(eval_at("", "0.5 /cubic-out ease", 0), 0.875);
+    assert_eq!(eval_at("", "0.25 100 200 between", 0), 125.0);
+    assert_eq!(eval_at("", "0.5 [0 10] [4 20] between aload pop add", 0), 17.0);
+    assert_eq!(eval_at("", "1.5 0 100 between", 0), 150.0); // unclamped
+    assert_eq!(eval_at("", "7 0 5 clamp", 0), 5.0);
+    assert_eq!(eval_at("", "2.75 1 fmod", 0), 0.75);
+    assert_eq!(eval_at("", "-0.25 1 fmod", 0), 0.75);
+    assert_eq!(eval_at("", "0 10 5 smoothstep", 0), 0.5);
+    assert_eq!(eval_at("", "5 0 10 100 200 remap", 0), 150.0);
     // The idiom: tween piped into between.
-    assert_eq!(eval_at("", "pop 0 2 /linear tween 100 300 between", 5), 150.0);
+    assert_eq!(eval_at("", "0 2 /linear tween 100 300 between", 5), 150.0);
 }
 
 #[test]
 fn keyframes_interpolate_and_hold() {
-    let k = "pop [ 0.5 10  1.0 20  1.5 0 /quad-in ] keyframes";
+    let k = "[ 0.5 10  1.0 20  1.5 0 /quad-in ] keyframes";
     assert_eq!(eval_at("", k, 0), 10.0); // before the first key
     assert_eq!(eval_at("", k, 5), 10.0);
     assert_eq!(eval_at("", k, 7), 14.0);
     assert_eq!(eval_at("", k, 10), 20.0);
     assert_eq!(eval_at("", k, 12), 20.0 - 20.0 * 0.16); // quad-in at u=0.4
     assert_eq!(eval_at("", k, 19), 0.0); // after the last
-    assert_eq!(eval_at("", "pop 0.75 [ 0.5 [0 0] 1.0 [8 4] ] keyat aload pop add", 0), 6.0);
+    assert_eq!(eval_at("", "0.75 [ 0.5 [0 0] 1.0 [8 4] ] keyat aload pop add", 0), 6.0);
 }
 
 #[test]
 fn hash01_and_wiggle_are_stable_across_frames_and_seeds_differ() {
-    let a = eval_at("", "pop 5 hash01", 0);
-    assert_eq!(a, eval_at("", "pop 5 hash01", 13));
-    assert_ne!(a, eval_at("", "pop 6 hash01", 0));
-    assert_ne!(a, eval_at("", "pop [5 1] hash01", 0));
+    let a = eval_at("", "5 hash01", 0);
+    assert_eq!(a, eval_at("", "5 hash01", 13));
+    assert_ne!(a, eval_at("", "6 hash01", 0));
+    assert_ne!(a, eval_at("", "[5 1] hash01", 0));
     assert!((0.0..1.0).contains(&a));
-    let w = eval_at("", "pop 1 2 50 wiggle", 4);
+    let w = eval_at("", "1 2 50 wiggle", 4);
     assert!((-50.0..=50.0).contains(&w));
-    assert_ne!(w, eval_at("", "pop 1 2 50 wiggle", 5));
-    assert_ne!(w, eval_at("", "pop 2 2 50 wiggle", 4));
+    assert_ne!(w, eval_at("", "1 2 50 wiggle", 5));
+    assert_ne!(w, eval_at("", "2 2 50 wiggle", 4));
 }
 
 #[test]
 fn rand_is_reseeded_every_frame() {
     // The same scatter on every frame: no flicker.
-    assert_eq!(eval_at("", "pop rand 1000 mod", 0), eval_at("", "pop rand 1000 mod", 17));
+    assert_eq!(eval_at("", "rand 1000 mod", 0), eval_at("", "rand 1000 mod", 17));
     let mut a = Movie::load(&format!("{HEAD}/scene {{ rand 255 mod 255 div dup dup setrgbcolor 0 0 64 48 rectfill }} def"), &Options::default()).unwrap();
     let mut b = Movie::load(
         &format!("{HEAD}/scene {{ rand 255 mod 255 div dup dup setrgbcolor 0 0 64 48 rectfill }} def"),
@@ -276,24 +387,24 @@ fn rand_is_reseeded_every_frame() {
 #[test]
 fn path_operators() {
     let sq = "newpath 0 0 moveto 10 0 lineto 10 10 lineto 0 10 lineto closepath";
-    assert_eq!(eval_at("", &format!("pop {sq} pathlength"), 0), 40.0);
-    assert_eq!(eval_at("", &format!("pop {sq} 0.375 pathpoint pop exch pop"), 0), 5.0);
-    assert_eq!(eval_at("", &format!("pop {sq} 0.375 pathpoint 3 1 roll pop pop"), 0), 90.0);
+    assert_eq!(eval_at("", &format!("{sq} pathlength"), 0), 40.0);
+    assert_eq!(eval_at("", &format!("{sq} 0.375 pathpoint pop exch pop"), 0), 5.0);
+    assert_eq!(eval_at("", &format!("{sq} 0.375 pathpoint 3 1 roll pop pop"), 0), 90.0);
     // trimpath changes the path's length in proportion, under a transform too.
-    assert_eq!(eval_at("", &format!("pop 3 3 scale {sq} 0.25 0.75 trimpath pathlength"), 0), 20.0);
-    assert_eq!(eval_at("", &format!("pop {sq} 0 1 trimpath pathlength"), 0), 40.0);
+    assert_eq!(eval_at("", &format!("3 3 scale {sq} 0.25 0.75 trimpath pathlength"), 0), 20.0);
+    assert_eq!(eval_at("", &format!("{sq} 0 1 trimpath pathlength"), 0), 40.0);
     assert_eq!(
-        eval_at("", "pop newpath 0 0 moveto 10 0 lineto 0 5 moveto 10 5 lineto 0 0.5 trimeach pathlength", 0),
+        eval_at("", "newpath 0 0 moveto 10 0 lineto 0 5 moveto 10 5 lineto 0 0.5 trimeach pathlength", 0),
         10.0
     );
     // resample + morph: halfway between a small and a large square.
     let morph = format!(
-        "pop {sq} 4 resamplepath
+        "{sq} 4 resamplepath
          newpath 0 0 moveto 30 0 lineto 30 30 lineto 0 30 lineto closepath 4 resamplepath
          0.5 morphpath pathlength"
     );
     assert_eq!(eval_at("", &morph, 0), 80.0);
-    assert_eq!(eval_at("", &format!("pop {sq} 8 resamplepath length"), 0), 16.0);
+    assert_eq!(eval_at("", &format!("{sq} 8 resamplepath length"), 0), 16.0);
 }
 
 #[test]
@@ -343,13 +454,13 @@ fn layer_combinator_bodies_see_the_callers_stack() {
         "20 0.01 { 0 30 48 rectfill } blurred",
         "20 0.01 0.01 { 0 30 48 rectfill } glowing",
     ] {
-        let mut m = load(&format!("/scene {{ pop 1 setgray {body} count 0 ne {{ leftover }} if }} def"));
+        let mut m = load(&format!("/scene {{ 1 setgray {body} }} def"));
         let f = m.render_frame(0).unwrap_or_else(|e| panic!("{body}: {e}"));
         assert!(px(&f, 30, 10)[0] > 100, "{body}");
         assert_eq!(px(&f, 10, 10)[0], 0, "{body}");
     }
     let mut m = load(
-        "/scene { pop 7 { 1 0 0 setrgbcolor 0 0 64 48 rectfill } { 0 0 1 setrgbcolor 0 0 64 48 rectfill } 0.5 crossfade
+        "/scene { 7 { 1 0 0 setrgbcolor 0 0 64 48 rectfill } { 0 0 1 setrgbcolor 0 0 64 48 rectfill } 0.5 crossfade
                   7 ne { wrong } if } def",
     );
     assert_eq!(px(&m.render_frame(0).unwrap(), 5, 5), [127, 0, 128, 255]);
@@ -382,7 +493,7 @@ fn an_unclosed_layer_is_reported_and_does_not_poison_the_next_frame() {
 #[test]
 fn backdrop_camera_vignette_grain() {
     let mut m = load(
-        "/scene { 30 rotate 0.2 0.4 0.6 backdrop } def",
+        "/scene { 0.2 0.4 0.6 backdrop } def",
     );
     let f = m.render_frame(0).unwrap();
     assert_eq!(px(&f, 0, 0), [51, 102, 153, 255]);
@@ -406,12 +517,12 @@ fn backdrop_camera_vignette_grain() {
 
 #[test]
 fn text_helpers() {
-    assert_eq!(eval_at("", "pop (abcdefgh) 0.5 typed length", 0), 4.0);
-    assert_eq!(eval_at("", "pop (abc) 0 typed length", 0), 0.0);
-    assert_eq!(eval_at("", "pop (abc) 9 typed length", 0), 3.0);
+    assert_eq!(eval_at("", "(abcdefgh) 0.5 typed length", 0), 4.0);
+    assert_eq!(eval_at("", "(abc) 0 typed length", 0), 0.0);
+    assert_eq!(eval_at("", "(abc) 9 typed length", 0), 3.0);
     // eachglyph visits every character in order, at advancing positions.
     let setup = "/acc 0 def /lastx -1 def /ok 1 def";
-    let expr = "pop /Helvetica findfont 10 scalefont setfont 5 5 moveto (HELLO) {
+    let expr = "/Helvetica findfont 10 scalefont setfont 5 5 moveto (HELLO) {
         exch pop                           % i
         acc add /acc exch def
         currentpoint pop dup lastx le { /ok 0 def } if /lastx exch def
@@ -471,6 +582,54 @@ fn every_transition_starts_on_a_and_ends_on_b() {
         let blue = late.premultiplied.chunks(4).filter(|p| p[2] > p[0]).count();
         assert!(blue as f64 > 0.6 * 800.0, "{name} at u=0.9 shows {blue} blue pixels");
     }
+}
+
+#[test]
+fn clips_that_start_with_backdrop_can_be_wiped_and_pushed() {
+    let mut m = Movie::load(
+        "<< /Size [40 20] /Duration 3 /FPS 10 >> animation
+         /a { 1 0 0 backdrop } def /b { 0 0 1 backdrop } def
+         /scene { [ [1.5 /a] [1 /wipe-right] [1.5 /b] ] reel } def",
+        &Options::default(),
+    )
+    .unwrap();
+    let f = m.render_frame(10).unwrap();
+    assert_eq!(px(&f, 2, 10), [0, 0, 255, 255]);
+    assert_eq!(px(&f, 37, 10), [255, 0, 0, 255], "the outgoing clip's backdrop is still there");
+    let mut m = Movie::load(
+        "<< /Size [40 20] /Duration 3 /FPS 10 >> animation
+         /a { 1 0 0 backdrop } def /b { 0 0 1 backdrop } def
+         /scene { [ [1.5 /a] [1 /push-left] [1.5 /b] ] reel } def",
+        &Options::default(),
+    )
+    .unwrap();
+    let f = m.render_frame(10).unwrap();
+    assert_eq!(px(&f, 2, 10), [255, 0, 0, 255]);
+    assert_eq!(px(&f, 37, 10), [0, 0, 255, 255]);
+}
+
+#[test]
+fn a_program_can_add_a_transition_and_bad_names_fail_early() {
+    // Any name put in `transitions` is one; the reel's length accounts for it.
+    let src = |entry: &str| {
+        format!(
+            "/a {{ 1 0 0 backdrop }} def /b {{ 0 0 1 backdrop }} def
+             transitions /halves {{ pop exch gsave 0 0 20 20 rectclip exec grestore gsave 20 0 20 20 rectclip exec grestore }} put
+             /film [ [1.5 /a] [1 /{entry}] [1.5 /b] ] def
+             << /Size [40 20] /Duration film reelduration /FPS 10 >> animation
+             /scene {{ film reel }} def"
+        )
+    };
+    let mut m = Movie::load(&src("halves"), &Options::default()).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(m.meta().duration, 2.0);
+    let f = m.render_frame(10).unwrap();
+    assert_eq!(px(&f, 5, 10), [255, 0, 0, 255]);
+    assert_eq!(px(&f, 30, 10), [0, 0, 255, 255]);
+    // A name that is neither is refused as soon as the reel plays, on the
+    // first frame, not only when that entry's turn comes.
+    let mut m = Movie::load(&src("nosuchthing"), &Options::default()).unwrap();
+    let e = m.render_frame(0).unwrap_err();
+    assert!(e.hint.unwrap().contains("/nosuchthing is neither a transition"), "hint names it");
 }
 
 #[test]
@@ -548,7 +707,7 @@ fn params_signals_and_events_reach_the_program() {
 
 const BOUNCE: &str = "<< /Size [64 48] /Duration 4 /FPS 10 /StepRate 50 >> animation
     /x 5 def /vx 40 def /bounces 0 def
-    /step { /h exch def
+    /step { /h dt def
       /x x vx h mul add def
       x 60 gt { /vx vx neg def /bounces bounces 1 add def } if
       x 4 lt  { /vx vx neg def } if
@@ -607,6 +766,35 @@ fn persistent_movies_accumulate_and_seek() {
     let mut cold = Movie::load(TRAIL, &Options::default()).unwrap();
     let a = cold.render_frame(30).unwrap().premultiplied.to_vec();
     assert_eq!(m.render_frame(30).unwrap().premultiplied, &a[..]);
+}
+
+#[test]
+fn a_persistent_movie_can_show_an_overlay_that_is_not_kept() {
+    // The painting adds one column per frame; the overlay is a marker at
+    // the brush, which must not be left behind in the painting.
+    let src = "<< /Size [64 48] /Duration 3 /FPS 10 /Persist true /Background [0 0 0] >> animation
+        /scene { 1 setgray frame 0 1 20 rectfill } def
+        /overlay { 1 0 0 setrgbcolor frame 24 4 4 rectfill } def";
+    let mut m = Movie::load(src, &Options::default()).unwrap();
+    let f = m.render_frame(10).unwrap();
+    assert_eq!(px(&f, 11, 21), [255, 0, 0, 255], "the overlay is shown");
+    assert_eq!(px(&f, 5, 40)[0], 255, "over the painting");
+    let f = m.render_frame(20).unwrap();
+    assert_eq!(px(&f, 11, 21), [0, 0, 0, 255], "and an earlier frame's overlay is gone");
+    assert_eq!(px(&f, 21, 21), [255, 0, 0, 255]);
+    // Seeking back still gives the same frame.
+    let again = m.render_frame(10).unwrap().premultiplied.to_vec();
+    let mut cold = Movie::load(src, &Options::default()).unwrap();
+    assert_eq!(cold.render_frame(10).unwrap().premultiplied, &again[..]);
+    assert_eq!(cold.last_frame_ticks(), 11);
+}
+
+#[test]
+fn redefining_a_psanim_word_is_reported() {
+    let m = load("/width 300 def /frame { } def /scene { 1 setgray 0 0 8 8 rectfill } def");
+    assert_eq!(m.meta().shadowed, ["frame", "width"]);
+    let m = load("/scene { 1 setgray 0 0 8 8 rectfill } def");
+    assert!(m.meta().shadowed.is_empty());
 }
 
 #[test]
@@ -785,8 +973,8 @@ fn showpage_in_a_scene_is_harmless_and_the_wall_clock_is_the_movie_clock() {
     for k in 0..3 {
         assert_eq!(px(&m.render_frame(k).unwrap(), 5, 5)[0], 255);
     }
-    assert_eq!(eval_at("", "pop realtime", 5), 500.0);
-    assert_eq!(eval_at("", "pop usertime", 5), 500.0);
+    assert_eq!(eval_at("", "realtime", 5), 500.0);
+    assert_eq!(eval_at("", "usertime", 5), 500.0);
 }
 
 #[test]

@@ -55,6 +55,24 @@ fn pop_proc(i: &mut Interp, ctx: &Shared, who: &str) -> Result<Value, PsError> {
     }
 }
 
+/// Pop a noise key: a number, or an array of numbers folded to one number
+/// that differs for different arrays. Every word that takes a key takes
+/// both forms.
+fn pop_key(i: &mut Interp, ctx: &Shared, usage: &str) -> Result<f64, PsError> {
+    let key = match i.pop_value()? {
+        Value::Array(a) => a
+            .iter()
+            .map(Value::as_f64)
+            .collect::<Option<Vec<f64>>>()
+            .map(|k| hash01(0, &k) * 1.0e6),
+        v => v.as_f64(),
+    };
+    match key {
+        Some(k) => Ok(k),
+        None => fail(ctx, PsError::Typecheck, format!("{usage}, where key is a number or an array of numbers")),
+    }
+}
+
 fn push_scope(ctx: &Shared, scope: TimeScope) -> OpResult {
     let mut c = ctx.borrow_mut();
     if c.scopes.len() >= MAX_SCOPES {
@@ -410,6 +428,16 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         i.push_value(&body);
         Ok(())
     });
+    reg(interp, ctx, ".globally", |i, ctx| {
+        let body = pop_proc(i, ctx, "globally")?;
+        let (t, dur) = {
+            let c = ctx.borrow();
+            (c.global_t, c.duration)
+        };
+        push_scope(ctx, TimeScope { t, dur })?;
+        i.push_value(&body);
+        Ok(())
+    });
     reg(interp, ctx, ".reversed", |i, ctx| {
         let body = pop_proc(i, ctx, "reversed")?;
         let s = ctx.borrow().scope();
@@ -439,6 +467,9 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 return fail(ctx, PsError::Typecheck, "sequence: each pair starts with a duration in seconds");
             };
             if s.t >= start && s.t < start + dur {
+                if matches!(pair[1], Value::Null) {
+                    break; // a gap: nothing plays
+                }
                 i.push_value(&pair[1]);
                 let body = pop_proc(i, ctx, "sequence")?;
                 push_scope(ctx, TimeScope { t: s.t - start, dur })?;
@@ -460,7 +491,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             return fail(ctx, PsError::Typecheck, "reel takes an array of [dur proc] and [dur /transition]");
         };
         let t = ctx.borrow().scope().t;
-        let plan = match reel_plan(&items) {
+        let plan = match plan_reel(i, &items, true) {
             Ok(p) => p,
             Err(msg) => return fail(ctx, PsError::Rangecheck, msg),
         };
@@ -504,7 +535,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let Value::Array(items) = i.pop_value()? else {
             return fail(ctx, PsError::Typecheck, "reelduration takes a reel array");
         };
-        match reel_plan(&items) {
+        match plan_reel(i, &items, false) {
             Ok(plan) => {
                 i.push_real(plan.last().map_or(0.0, |c| c.start + c.dur));
                 Ok(())
@@ -557,6 +588,15 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         i.push_real(x.max(lo).min(hi));
         Ok(())
     });
+    reg(interp, ctx, "fmod", |i, ctx| {
+        let (m, x) = (i.pop_f64()?, i.pop_f64()?);
+        if m == 0.0 {
+            return fail(ctx, PsError::UndefinedResult, "fmod: the modulus is 0");
+        }
+        // Always in 0..m for a positive m, unlike a remainder: -0.25 1 fmod is 0.75.
+        i.push_real(x.rem_euclid(m));
+        Ok(())
+    });
     reg(interp, ctx, "smoothstep", |i, _| {
         let (x, e1, e0) = (i.pop_f64()?, i.pop_f64()?, i.pop_f64()?);
         let u = if e1 != e0 { ((x - e0) / (e1 - e0)).clamp(0.0, 1.0) } else if x >= e1 { 1.0 } else { 0.0 };
@@ -588,9 +628,26 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         Ok(())
     });
     reg(interp, ctx, "wiggle", |i, ctx| {
-        let (amp, freq, key) = (i.pop_f64()?, i.pop_f64()?, i.pop_f64()?);
+        let (amp, freq) = (i.pop_f64()?, i.pop_f64()?);
+        let key = pop_key(i, ctx, "wiggle: key freq amp")?;
         let c = ctx.borrow();
         i.push_real(wiggle(c.seed, key, c.scope().t * freq) * amp);
+        Ok(())
+    });
+    reg(interp, ctx, "turns", |i, ctx| {
+        let k = i.pop_f64()?;
+        let s = ctx.borrow().scope();
+        let u = if s.dur > 0.0 && s.dur.is_finite() { s.t / s.dur } else { 0.0 };
+        i.push_real(k * 360.0 * u);
+        Ok(())
+    });
+    reg(interp, ctx, "loopnoise", |i, ctx| {
+        let radius = i.pop_f64()?;
+        let key = pop_key(i, ctx, "loopnoise: key radius")?;
+        let c = ctx.borrow();
+        let s = c.scope();
+        let a = if s.dur > 0.0 && s.dur.is_finite() { s.t / s.dur } else { 0.0 } * std::f64::consts::TAU;
+        i.push_real(crate::ctx::noise2(c.seed, key, radius * a.cos(), radius * a.sin()));
         Ok(())
     });
     reg(interp, ctx, "hash01", |i, ctx| {
@@ -667,6 +724,19 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             path.push(if k == 0 { PathSegment::MoveTo(x, y) } else { PathSegment::LineTo(x, y) });
         }
         path.push(PathSegment::Close);
+        i.set_current_path(&path)
+    });
+
+    reg(interp, ctx, "polypath", |i, ctx| {
+        let pts = i.pop_numbers()?;
+        if pts.len() < 4 || pts.len() % 2 != 0 {
+            return fail(ctx, PsError::Rangecheck, "polypath takes [x0 y0 x1 y1 ...] with at least two points");
+        }
+        let path: Vec<PathSegment> = pts
+            .chunks(2)
+            .enumerate()
+            .map(|(k, p)| if k == 0 { PathSegment::MoveTo(p[0], p[1]) } else { PathSegment::LineTo(p[0], p[1]) })
+            .collect();
         i.set_current_path(&path)
     });
 
@@ -833,9 +903,32 @@ pub(crate) struct ReelClip<'a> {
     pub lead: Option<(String, f64)>,
 }
 
+/// Plan a reel against the interpreter's current definitions: a name is a
+/// transition if the prelude's `transitions` dictionary has it (so one a
+/// program adds is recognised), else it must be a procedure.
+///
+/// `strict` also requires every clip named to be a procedure now. Playing a
+/// reel is strict; measuring one (`reelduration`, usually in the
+/// declaration, before the clips are defined) is not.
+fn plan_reel<'a>(i: &Interp, items: &'a [Value], strict: bool) -> Result<Vec<ReelClip<'a>>, String> {
+    let known: Vec<String> = match i.lookup("transitions") {
+        Some(Value::Dict(entries)) => entries.into_iter().map(|(k, _)| k).collect(),
+        _ => TRANSITIONS.iter().map(|t| t.to_string()).collect(),
+    };
+    reel_plan(
+        items,
+        &|n| known.iter().any(|k| k == n),
+        &|n| !strict || matches!(i.lookup(n), Some(Value::Other(o)) if o.is_procedure()),
+    )
+}
+
 /// Lay a reel's clips out in time: each clip follows the last, pulled
 /// earlier by the length of the transition between them.
-pub(crate) fn reel_plan(items: &[Value]) -> Result<Vec<ReelClip<'_>>, String> {
+pub(crate) fn reel_plan<'a>(
+    items: &'a [Value],
+    is_transition: &dyn Fn(&str) -> bool,
+    is_procedure: &dyn Fn(&str) -> bool,
+) -> Result<Vec<ReelClip<'a>>, String> {
     let mut plan: Vec<ReelClip> = Vec::new();
     let mut pending: Option<(String, f64)> = None;
     let mut cursor = 0.0;
@@ -849,13 +942,23 @@ pub(crate) fn reel_plan(items: &[Value]) -> Result<Vec<ReelClip<'_>>, String> {
         // A transition is named by one of the names in the prelude's
         // `transitions` dictionary; anything else names a clip procedure.
         match what {
-            Value::Name(n) if TRANSITIONS.contains(&n.as_str()) || n.starts_with("t-") => {
+            Value::Name(n) if is_transition(n) => {
                 if plan.is_empty() || pending.is_some() {
                     return Err("reel: a transition must come between two clips".into());
                 }
                 pending = Some((n.clone(), dur));
             }
             _ => {
+                match what {
+                    Value::Name(n) if !is_procedure(n) => {
+                        return Err(format!(
+                            "reel: /{n} is neither a transition (a key of the `transitions` dictionary) nor a procedure"
+                        ));
+                    }
+                    Value::Name(_) => {}
+                    Value::Other(o) if o.is_procedure() => {}
+                    _ => return Err("reel: the second element of an entry is a clip procedure or a transition's name".into()),
+                }
                 let lead = pending.take();
                 let overlap = lead.as_ref().map_or(0.0, |(_, d)| *d);
                 if let Some(prev) = plan.last()
@@ -875,8 +978,8 @@ pub(crate) fn reel_plan(items: &[Value]) -> Result<Vec<ReelClip<'_>>, String> {
     Ok(plan)
 }
 
-/// The transitions the prelude defines. A user-defined one is named
-/// `/t-something` so a reel can tell it from a clip procedure's name.
+/// The transitions the prelude defines. A program adds its own by putting
+/// a procedure in the `transitions` dictionary under any name.
 pub const TRANSITIONS: &[&str] = &[
     "cut", "dissolve", "dip", "wipe-left", "wipe-right", "wipe-up", "wipe-down", "iris", "push-left",
     "push-right", "zoom",

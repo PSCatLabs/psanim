@@ -1,0 +1,339 @@
+%!PS
+% One Frame, Any Time: how psanim renders a movie, explained by a movie.
+%
+% A technical presentation in six clips: a movie is a program; setup runs
+% once and the interpreter's memory is checkpointed; every frame rolls
+% back, sets the clock and draws; so frames are independent, can be made
+% in any order, and can be shared among cores.
+%
+% Techniques: a reel with dissolves; `typed` for code appearing; `tween`
+% piped into `between` for every move; `trimpath` for arrows that draw
+% themselves; `looped` for the render cycle; `hash01` for the shuffled
+% order; a miniature movie (`mini`) drawn inside the diagram at whatever
+% time each cell stands for, which is the idea being explained.
+
+/film [
+  [4.0 /c-title] [0.7 /dissolve]
+  [7.5 /c-program] [0.7 /dissolve]
+  [8.0 /c-setup] [0.7 /dissolve]
+  [10.0 /c-cycle] [0.7 /dissolve]
+  [9.5 /c-order] [0.7 /dissolve]
+  [5.0 /c-end]
+] def
+
+<< /Size [1280 720] /Duration film reelduration /FPS 30
+   /Background [0.055 0.063 0.086]
+   /Title (One Frame, Any Time)
+   /Description (How psanim renders a movie: setup, checkpoint, and frames as functions of time.)
+>> animation
+
+% --- palette -------------------------------------------------------------
+/ground [0.055 0.063 0.086] def
+/panel  [0.105 0.120 0.160] def
+/line   [0.26 0.29 0.37] def
+/dim    [0.50 0.54 0.64] def
+/ink    [0.93 0.92 0.88] def
+/amber  [1.00 0.78 0.30] def
+/teal   [0.30 0.82 0.78] def
+/coral  [0.98 0.45 0.38] def
+/violet [0.64 0.56 0.98] def
+/setc { aload pop setrgbcolor } def
+/workers [ amber teal coral violet ] def
+
+% --- small tools -----------------------------------------------------------
+% x y w h r rbox: a rounded rectangle path
+/rbox {
+  6 dict begin
+    /r exch def /h exch def /w exch def /y exch def /x exch def
+    newpath x r add y moveto
+    x w add y x w add y h add r arcto 4 { pop } repeat
+    x w add y h add x y h add r arcto 4 { pop } repeat
+    x y h add x y r arcto 4 { pop } repeat
+    x y x w add y r arcto 4 { pop } repeat
+    closepath
+  end
+} def
+/sans  { /Helvetica findfont exch scalefont setfont } def
+/bold  { /Helvetica-Bold findfont exch scalefont setfont } def
+/mono  { /Courier-Bold findfont exch scalefont setfont } def
+% t0 proc appear: fade proc in over half a second starting at t0
+/appear { exch dup 0.5 add /cubic-out tween exch faded } def
+% (text) y headline: the sentence each clip is about, in and out with the clip
+/headline {
+  0.2 0.9 ramp  span 1.5 sub span 0.8 sub ramp 1 exch sub mul
+  { 34 sans ink setc 640 exch moveto showcenter } faded
+} def
+% x1 y1 x2 y2 u arrow: a line that draws itself, with a head once it arrives
+/arrow {
+  8 dict begin
+    /u exch def /y2 exch def /x2 exch def /y1 exch def /x1 exch def
+    u 0 gt {
+      newpath x1 y1 moveto x2 y2 lineto 0 u trimpath
+      2 setlinewidth 1 setlinecap stroke
+      u 0.98 ge {
+        gsave x2 y2 translate y2 y1 sub x2 x1 sub atan rotate
+          newpath 0 0 moveto -12 6 lineto -12 -6 lineto closepath fill
+        grestore
+      } if
+    } if
+  end
+} def
+
+% The movie inside the movie: tau w h mini draws the sample scene at time
+% tau into a w x h box at the origin. Any cell of the diagram can show any
+% moment, because the picture depends on tau alone.
+/mini {
+  6 dict begin
+    /h exch def /w exch def /tau exch def
+    0.08 0.09 0.13 setrgbcolor 0 0 w h rectfill
+    gsave
+      0 0 w h rectclip
+      w 2 div h 2 div translate
+      tau 90 mul rotate
+      tau 0.12 mul 0.08 add dup floor sub 0.75 1 sethsbcolor
+      /s w h lt { w } { h } ifelse 0.26 mul def
+      s neg s neg s 2 mul s 2 mul rectfill
+    grestore
+  end
+} def
+
+% Interpreter memory, as a grid of cells. state k -> 0 empty, 1 set up,
+% 2 dirtied by a frame.
+/cellxy { % k -> x y   (6 columns, 4 rows, in a 216 x 144 block at the origin)
+  dup 6 mod 36 mul exch 6 idiv 3 exch sub 36 mul
+} def
+/memory {              % proc: k -> state
+  4 dict begin
+    /statef exch def
+    0 1 23 {
+      /k exch def
+      /st k statef def
+      k cellxy 30 30 4 rbox
+      st 0 eq { panel setc fill } if
+      st 1 eq { amber setc 0.85 setalpha fill 1 setalpha } if
+      st 2 eq { coral setc fill } if
+    } for
+  end
+} def
+
+% --- clip 1: title ----------------------------------------------------------
+/c-title {
+  0.3 1.4 /cubic-out tween
+  {
+    84 bold ink setc
+    640 372 moveto (One frame, any time) showcenter
+  } faded
+  % an underline that draws itself
+  newpath 300 340 moveto 980 340 lineto 0 0.9 2.0 /cubic-inout tween trimpath
+  amber setc 3 setlinewidth 1 setlinecap stroke
+  1.6 { 30 sans dim setc 640 286 moveto (how psanim renders a movie) showcenter } appear
+} def
+
+% --- clip 2: a movie is a program ---------------------------------------------
+/code [
+  (<< /Size [640 360] /Duration 4 >> animation)
+  ()
+  (/scene {)
+  (  320 180 translate)
+  (  now 90 mul rotate)
+  (  now 0.12 mul 0.75 1 sethsbcolor)
+  (  -47 -47 94 94 rectfill)
+  (} def)
+] def
+/c-program {
+  (A movie is a program.) 628 headline
+  % the listing, typed line by line
+  50 140 700 420 10 rbox panel setc fill
+  0 1 code length 1 sub {
+    /i exch def
+    25 mono
+    code i get  0.6 i 0.45 mul add dup 0.5 add ramp typed
+    dup length 0 gt {
+      i 4 eq i 5 eq or { amber } { ink } ifelse setc
+      78 506 i 46 mul sub moveto show
+    } { pop } ifelse
+  } for
+  % its output, live, beside it
+  4.4 {
+    gsave
+      800 262 translate
+      0 0 432 243 8 rbox gsave clip now 432 243 mini grestore
+      line setc 1.5 setlinewidth 0 0 432 243 8 rbox stroke
+      22 sans dim setc 216 -38 moveto (scene, called once per frame) showcenter
+    grestore
+  } appear
+  4.9 { 26 sans amber setc 640 84 moveto (now is the only thing that changes) showcenter } appear
+} def
+
+% --- clip 3: setup, then a checkpoint ---------------------------------------------
+/c-setup {
+  (Setup runs once. Then memory is checkpointed.) 628 headline
+  gsave 640 395 translate 1.1 dup scale -650 -395 translate
+  % program
+  0.3 {
+    120 330 220 130 10 rbox panel setc fill
+    24 bold ink setc 230 404 moveto (movie.ps) showcenter
+    19 sans dim setc 230 372 moveto (libraries, tables,) showcenter
+    230 349 moveto (procedures) showcenter
+  } appear
+  ink setc 350 395 470 395 1.0 1.7 /cubic-inout tween arrow
+  % the interpreter, its memory filling as setup runs
+  1.2 {
+    480 250 320 290 10 rbox panel setc fill
+    line setc 1.5 setlinewidth 480 250 320 290 10 rbox stroke
+    22 bold ink setc 640 508 moveto (interpreter) showcenter
+    gsave 532 290 translate
+      { 2.0 4.2 ramp 24 mul lt { 1 } { 0 } ifelse } memory
+    grestore
+    19 sans dim setc 640 262 moveto (memory) showcenter
+  } appear
+  % save
+  amber setc 810 395 930 395 4.6 5.2 /cubic-inout tween arrow
+  5.0 {
+    940 290 240 210 10 rbox panel setc fill
+    amber setc 2 setlinewidth 940 290 240 210 10 rbox stroke
+    22 bold amber setc 1060 466 moveto (save) showcenter
+    gsave 975 318 translate 0.78 dup scale { pop 1 } memory grestore
+  } appear
+  5.6 { 22 sans dim setc 1060 252 moveto (PostScript's own checkpoint) showcenter } appear
+  grestore
+} def
+
+% --- clip 4: the cycle ----------------------------------------------------------------
+/CYC 1.9 def
+/c-cycle {
+  (Every frame: roll back, set the clock, draw.) 628 headline
+  gsave 640 330 translate 1.1 dup scale -640 -330 translate
+  /idx now 0.9 sub CYC div floor cvi dup 0 lt { pop 0 } if def     % which frame is being made
+  /times [ 0.00 1.25 2.50 3.75 5.00 ] def
+  idx 4 gt { /idx 4 def } if
+  % the film strip the frames land on
+  0.4 {
+    0 1 4 {
+      /k exch def
+      290 k 148 mul add 120 132 78 6 rbox
+      gsave panel setc fill grestore line setc 1.2 setlinewidth stroke
+      19 sans dim setc 328 k 148 mul add 92 moveto
+      (t = ) show times k get 20 string cvs show
+    } for
+  } appear
+  % frames already delivered
+  0 1 idx 1 sub {
+    /k exch def
+    gsave 293 k 148 mul add 123 translate times k get 126 72 mini grestore
+  } for
+  now 0.9 ge {
+    0.9 {
+      CYC {
+        /tau times idx get def
+        % checkpoint, left
+        120 330 230 200 10 rbox panel setc fill
+        amber setc 2 setlinewidth 120 330 230 200 10 rbox stroke
+        20 bold amber setc 235 500 moveto (checkpoint) showcenter
+        gsave 152 352 translate 0.76 dup scale { pop 1 } memory grestore
+        % interpreter, centre: cells dirty during draw, clean after rollback
+        470 300 300 260 10 rbox panel setc fill
+        line setc 1.5 setlinewidth 470 300 300 260 10 rbox stroke
+        20 bold ink setc 620 530 moveto (interpreter) showcenter
+        /dirty 0.55 0.95 ramp def                  % how far the draw has got
+        /clean 0.0 0.22 ramp def                   % how far the rollback has got
+        gsave 512 330 translate
+          { /k exch def
+            % the cells last frame dirtied are restored left to right...
+            [k idx 1 sub] hash01 0.35 lt  idx 0 gt and  k 24 div clean ge and { 2 }
+            % ...and this frame dirties its own
+            { [k idx] hash01 0.35 lt  [k idx 9] hash01 dirty lt and { 2 } { 1 } ifelse } ifelse
+          } memory
+        grestore
+        % restore arrow
+        amber setc 350 430 462 430 0.0 0.2 /cubic-inout tween arrow
+        18 sans amber setc 406 446 moveto 0 0.2 ramp 0 gt { (restore) showcenter } if
+        % the clock
+        0.22 { 20 sans dim setc 620 266 moveto (now = ) show
+               24 bold teal setc tau 20 string cvs show } appear
+        % the frame being drawn, right
+        890 330 270 200 10 rbox panel setc fill
+        20 bold ink setc 1025 500 moveto (frame) showcenter
+        0.5 0.9 /quad-out tween { gsave 908 348 translate tau 234 132 mini grestore } faded
+        ink setc 778 430 882 430 0.42 0.6 /cubic-inout tween arrow
+        % ...and it drops into the strip at the end of the cycle
+        1.45 1.85 /cubic-in tween /fly exch def
+        fly 0 gt {
+          gsave
+            fly [908 348] [293 idx 148 mul add 123] between aload pop translate
+            fly 1 0.538 between dup scale
+            tau 234 132 mini
+          grestore
+        } if
+      } looped
+    } after
+  } if
+  grestore
+} def
+
+% --- clip 5: any order, many cores ---------------------------------------------------------
+/NC 48 def                               % cells in the strip: 12 x 4
+/cell-xy { % k -> x y
+  dup 12 mod 92 mul 94 add exch 12 idiv 3 exch sub 62 mul 250 add
+} def
+/c-order {
+  now 4.6 lt
+    { (So frames do not depend on each other.) 628 headline }
+    { 4.6 { (And cores can share the work.) 628 headline } after } ifelse
+  0 1 NC 1 sub {
+    /k exch def
+    /tau k 0.21 mul def
+    k cell-xy 84 52 5 rbox
+    gsave panel setc fill grestore line setc 1 setlinewidth stroke
+    now 4.6 lt {
+      % shuffled: each cell appears at its own random moment
+      /born 0.7 k hash01 3.0 mul add def
+      born dup 0.35 add /back-out tween /u exch def
+      u 0 gt {
+        gsave k cell-xy translate 42 26 translate u dup scale -42 -26 translate
+          2 2 translate tau 80 48 mini grestore
+      } if
+    } {
+      % four workers, each taking the next free frame
+      /w k 4 mod def
+      /born 5.0 k 4 idiv 0.30 mul add w 0.06 mul add def
+      born dup 0.3 add /cubic-out tween /u exch def
+      gsave k cell-xy translate
+        u { 2 2 translate tau 80 48 mini } faded
+        u 0 gt { workers w get setc 2.5 setlinewidth 0 0 84 52 5 rbox stroke } if
+      grestore
+    } ifelse
+  } for
+  now 4.6 lt {
+    1.2 { 24 sans dim setc 640 190 moveto (rendered in a shuffled order: every one is right) showcenter } appear
+  } {
+    5.0 {
+      0 1 3 {
+        /w exch def
+        workers w get setc
+        430 w 120 mul add 190 16 16 3 rbox fill
+        22 sans dim setc 454 w 120 mul add 191 moveto (core ) show w 1 add 2 string cvs show
+      } for
+    } appear
+  } ifelse
+} def
+
+% --- clip 6: the idea ---------------------------------------------------------------------------
+/c-end {
+  0.3 1.3 /cubic-out tween {
+    /Times-Italic findfont 120 scalefont setfont ink setc
+    640 370 moveto (frame = f\(time\)) showcenter
+  } faded
+  newpath 360 330 moveto 920 330 lineto 0 1.0 2.0 /cubic-inout tween trimpath
+  amber setc 3 setlinewidth 1 setlinecap stroke
+  1.9 { 26 sans dim setc 640 270 moveto (psanim: programmable animation in PostScript) showcenter } appear
+} def
+
+/scene {
+  film reel
+  % in from the ground at the start, out to it at the end
+  0 0.6 ramp 1 exch sub dup 0 gt
+    { setalpha ground setc 0 0 1280 720 rectfill 1 setalpha } { pop } ifelse
+  duration 0.8 sub duration ramp dup 0 gt
+    { setalpha ground setc 0 0 1280 720 rectfill 1 setalpha } { pop } ifelse
+} def

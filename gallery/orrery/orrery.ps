@@ -1,0 +1,364 @@
+%!PS
+% Orrery
+%
+% An astronomical instrument made of light, seen from above, that returns
+% exactly to its starting state every twelve seconds. At the core is a
+% true planetary gear train (a 24-tooth sun, eight 12-tooth planets on a
+% carrier, a fixed 48-tooth ring) whose teeth really mesh; in its hub a
+% guilloche rosette fans open and closed. Around it four graduated orbit
+% rings tilt and precess like the hoops of an armillary sphere, each
+% carrying bodies with comet trails and moons. Behind them two families
+% of string-art chords weave an envelope that is bent by looping noise,
+% and a field of stars shimmers out of focus. Nothing is a rigid
+% rotation of the whole: every part turns at its own rate, and the rates
+% are chosen so that every part comes home at the same instant.
+%
+% Techniques
+%   - Pure movie: every frame is a function of `progress` alone.
+%   - Loop closure by symmetry: a part with n-fold symmetry turns a whole
+%     multiple of 360/n over the loop, so slow motion still closes.
+%   - Planetary gear kinematics (Willis equation) with tooth phases
+%     solved so sun, planets and ring mesh on every frame.
+%   - Looping noise: `gnoise3` sampled on a circle in noise space
+%     (cos T, sin T) drives the chord envelope and the star shimmer.
+%   - Tick scales as dashed circles; tilted rings by a squashed CTM.
+%   - Gear outlines precomputed in setup as point arrays.
+%   - One `blurred` back layer, one `glowing` layer, a `vignette`.
+
+<< /Size [1080 1080] /Duration 12 /FPS 30 /Loop true
+   /Background [0.028 0.032 0.066]
+   /Title (Orrery)
+   /Description (A planetary gear train, precessing orbit rings and noise-bent string art: a seamless 12 second loop.)
+>> animation
+
+% ---------------------------------------------------------------- palette
+/ground [0.028 0.032 0.066] def
+/metal  [0.070 0.072 0.120] def     % gear bodies: the ground, lifted
+/gold   [0.98 0.76 0.36] def
+/ivory  [0.97 0.94 0.86] def
+/teal   [0.24 0.80 0.78] def
+/coral  [0.98 0.43 0.36] def        % the accent
+/violet [0.50 0.45 0.92] def
+/setc { aload pop setrgbcolor } def
+/mixc { 3 1 roll between aload pop setrgbcolor } def      % [a] [b] u mixc
+
+% ------------------------------------------------------- gear geometry
+% Sun 24 teeth, planets 12, ring 48; pitch radius = 2.5 * teeth, laid out
+% at half size and drawn under `GS GS scale`. With the ring fixed and the
+% carrier turning wc, the sun turns ws = 3 wc and each planet spins
+% wp = -3 wc (Willis). wc = 90 degrees a loop moves the carrier on by two
+% planets, the sun by 18 teeth and each planet by 9 teeth: all home.
+/SUN-R 60 def  /PLN-R 30 def  /RNG-R 120 def
+/GS 2 def
+/CARRIER 90 def                                             % sun + planet pitch radii
+
+% n rootR tipR gearpts -> [x y ...] : a toothed outline, a tooth centred
+% on every multiple of 360/n. Give tipR < rootR for an internal gear.
+/gearpts {
+  6 dict begin
+    /tr exch def /rr exch def /n exch def /tau 360 n div def
+    /pt { j add tau mul 2 copy cos mul 3 1 roll sin mul } def     % r frac -> x y
+    [ 0 1 n 1 sub { /j exch def
+        rr -0.30 pt  tr -0.15 pt  tr 0.15 pt  rr 0.30 pt
+      } for ]
+  end
+} def
+/sunpts  24 SUN-R 2.75 sub SUN-R 2.25 add gearpts def
+/plnpts  12 PLN-R 2.75 sub PLN-R 2.25 add gearpts def
+/rngpts  48 RNG-R 2.75 add RNG-R 2.25 sub gearpts def
+% array gearpath - : the outline as the current path.
+/gearpath {
+  /ga exch def
+  newpath ga 0 get ga 1 get moveto
+  2 2 ga length 2 sub { dup ga exch get exch 1 add ga exch get lineto } for
+  closepath
+} def
+
+% r len n w tickring - : n radial ticks of length len and width w on the
+% circle of radius r, as one dashed stroke. A tick is centred on angle 0.
+/tickring {
+  4 dict begin
+    /w exch def /n exch def /len exch def /r exch def
+    len setlinewidth 0 setlinecap
+    [ w  6.2831853 r mul n div w sub ] w 2 div setdash
+    newpath r 0 moveto 0 0 r 0 360 arc stroke
+    [] 0 setdash
+  end
+} def
+/ring { newpath dup 0 moveto 0 0 3 2 roll 0 360 arc stroke } def      % r ring
+/disc { newpath 0 360 arc fill } def                                  % x y r disc
+
+% ----------------------------------------------------------------- stars
+/NSTAR 420 def
+/stx NSTAR array def /sty NSTAR array def /stz NSTAR array def
+0 1 NSTAR 1 sub { /i exch def
+  stx i [i 1] hash01 1080 mul 540 sub put
+  sty i [i 2] hash01 1080 mul 540 sub put
+  stz i [i 3] hash01 dup mul 2.6 mul 0.7 add put            % size: most are small
+} for
+
+% ---------------------------------------------------------------- orbits
+% radius, bodies, steps of 360/bodies the bodies turn in their plane per
+% loop, whole turns of precession of the plane per loop, ticks, colour.
+% The plane precesses against the bodies, so on the page a body advances
+% by (steps * 360/bodies + turns * 360): 240, -180, 360 and -144 degrees.
+% (A half turn of precession would bring the ellipse home but swap its
+% near and far sides, so the planes must make whole turns.)
+/orbits [
+  [ 312 3  5 -1 72 /teal   ]
+  [ 352 2 -3  1 72 /violet ]
+  [ 396 1  2 -1 72 /gold   ]
+  [ 440 5 -7  1 90 /teal   ]
+] def
+
+/NCH 240 def                                                % chords per family
+
+% ================================================================ scene
+/stars {
+  0 1 NSTAR 1 sub { /i exch def
+    /sx stx i get def /sy sty i get def
+    % shimmer: noise sampled on a circle, so it returns
+    sx 0.011 mul T cos 0.55 mul add  sy 0.011 mul T sin 0.55 mul add  i 1.37 mul gnoise3
+    1.8 mul 0.62 add 0.05 1 clamp setalpha
+    i 5 mod 0 eq { gold } { i 5 mod 1 eq { teal } { ivory } ifelse } ifelse setc
+    sx sy stz i get disc
+  } for
+  1 setalpha
+} def
+
+% Soft clouds of colour behind everything: each a stack of shrinking
+% discs, breathing by looped noise and drifting on its own small circle.
+/NNEB 36 def
+/nebula {
+  0 1 NNEB 1 sub { /i exch def
+    /na [i 11] hash01 360 mul def /nr [i 12] hash01 sqrt 700 mul def
+    /nx na cos nr mul  T [i 13] hash01 360 mul add cos 26 mul add def
+    /ny na sin nr mul  T [i 13] hash01 360 mul add sin 26 mul add def
+    /ns 60 [i 14] hash01 110 mul add def
+    T cos 0.5 mul i 2.3 mul add  T sin 0.5 mul  i 0.71 mul gnoise3 0.6 mul 0.5 add 0 1 clamp
+    0.022 mul setalpha
+    i 3 mod 0 eq { violet } { i 3 mod 1 eq { teal } { coral } ifelse } ifelse setc
+    6 -1 1 { 6 div ns mul nx ny 3 2 roll disc } for
+  } for
+  1 setalpha
+} def
+
+% r amp lobes phase braid - : one strand of a rope round the circle r.
+/braid {
+  /bph exch def /bn exch def /bamp exch def /br exch def
+  newpath
+  0 0.5 359.5 { /th exch def
+    /r br bamp th bn mul bph add sin mul add def
+    th cos r mul th sin r mul th 0 eq { moveto } { lineto } ifelse
+  } for closepath stroke
+} def
+
+% dir zoff colour chordfamily - : chords of the circle r=466 whose spans
+% are bent by noise that drifts round the circle and loops in time.
+/chordfamily {
+  /ccol exch def /zo exch def /dir exch def
+  ccol setc 0.8 setlinewidth 0.2 setalpha
+  0 1 NCH 1 sub { /i exch def
+    /a i 360 NCH div mul def
+    /na a T dir mul add def
+    /d 84
+       na cos 1.25 mul T cos 0.7 mul add
+       na sin 1.25 mul T sin 0.7 mul dir mul add
+       zo gnoise3 64 mul add def
+    newpath
+    a d 2 div sub dup cos 466 mul exch sin 466 mul moveto
+    a d 2 div add dup cos 466 mul exch sin 466 mul lineto stroke
+  } for
+  1 setalpha
+} def
+
+/bezel {
+  ivory setc 0.55 setalpha
+  1.2 setlinewidth 468 ring 0.8 setlinewidth 472 ring
+  1.4 setlinewidth 504 ring 0.7 setlinewidth 509 ring
+  0.75 setalpha
+  480 8 360 1.0 tickring
+  484 16 72 1.4 tickring
+  gold setc 1 setalpha
+  487 22 12 2.4 tickring
+  % a vernier ring creeping the other way: 60-fold, so 5 steps of 6 degrees
+  gsave T -12 div rotate
+    teal setc 0.8 setalpha 498 5 60 6 tickring
+  grestore
+  % a two-strand rope inside the bezel, the strands sliding past each other
+  0.7 setlinewidth 0.7 setalpha
+  gold setc   461 3.2 72 T 3 mul braid
+  teal setc   461 3.2 72 T -3 mul 180 add braid
+  1 setalpha
+  % faint outer circles that only the corners of the frame see
+  violet setc 0.42 setalpha 0.8 setlinewidth 548 ring 612 ring 0.5 setlinewidth 553 ring 690 ring
+  gsave T 36 div rotate 0.45 setalpha 580 10 180 1.2 tickring 596 22 36 1.6 tickring grestore
+  gsave T -18 div rotate teal setc 0.36 setalpha 650 12 144 1.4 tickring
+        gold setc 0.4 setalpha 668 26 18 2.0 tickring grestore
+  % twelve lozenges outside the scale
+  coral setc 0.9 setalpha
+  0 1 11 { 30 mul gsave rotate 520 0 translate
+    newpath -6 0 moveto 0 3.2 lineto 6 0 lineto 0 -3.2 lineto closepath fill grestore } for
+  1 setalpha
+} def
+
+% One orbit ring, drawn in its own tilted plane: rotate to the line of
+% nodes, squash the other axis by cos(tilt).
+/orbitplane {                                    % k -> (CTM set; defs for the orbit)
+  /k exch def
+  orbits k get aload pop
+  /ocol exch cvx exec def /otk exch def /oprec exch def /ostep exch def /onb exch def /orad exch def
+  /tilt 17 T k 90 mul add sin 9 mul add def
+  /node k 47 mul T oprec mul add def
+  /spin P 360 mul onb div ostep mul def           % rotation of the bodies in the plane
+  node rotate 1 tilt cos scale
+} def
+
+/orbitrings {
+  0 1 3 {
+    gsave orbitplane
+      ocol setc
+      0.5 setalpha 1.1 setlinewidth orad ring
+      0.28 setalpha 0.6 setlinewidth orad 7 sub ring
+      gsave spin rotate
+        0.6 setalpha orad 3.5 sub 7 otk 1.1 tickring
+        % comet trails, one per body
+        0 1 onb 1 sub { /b exch def
+          /a0 b 360 mul onb div def
+          /sg ostep 0 gt { -1 } { 1 } ifelse def
+          0 1 35 { /m exch def
+            /u 1 m 36 div sub def
+            u u mul 0.8 mul setalpha
+            ivory ocol 1 u u mul sub mixc
+            u u mul 3.6 mul 0.5 add setlinewidth
+            newpath 0 0 orad
+            a0 m sg mul 1.6 mul add  a0 m 1 add sg mul 1.6 mul add
+            sg 0 gt { arc } { arcn } ifelse stroke
+          } for
+        } for
+      grestore
+    grestore
+  } for
+  1 setalpha
+} def
+
+% The bodies themselves are drawn round, in page space, at the points
+% the tilted planes put them.
+/bodies {
+  0 1 3 {
+    gsave orbitplane
+      0 1 onb 1 sub { /b exch def
+        /th b 360 mul onb div spin add def
+        th cos orad mul th sin orad mul transform      % device coordinates
+        gsave
+          initmatrix-here itransform translate
+          /sz 6.5 th sin tilt sin mul 5 mul add def    % nearer when above the plane
+          ivory setc 0.35 setalpha 0.6 setlinewidth sz 7 add ring sz 13 add ring
+          1 setalpha
+          % moons
+          teal setc T 4 mul k 80 mul add dup cos sz 7 add mul exch sin sz 7 add mul 2.2 disc
+          coral setc T -3 mul k 50 mul add dup cos sz 13 add mul exch sin sz 13 add mul 2.8 disc
+          ivory setc 0 0 sz disc
+          ocol setc 0 0 sz 0.55 mul disc
+        grestore
+      } for
+    grestore
+  } for
+} def
+
+/gearset {
+  gsave GS dup scale
+    /wc P 90 mul def /ws P 270 mul def /wp P -270 mul def
+    % a clean stage for the mechanism
+    ground setc 0.88 setalpha 0 0 131 disc 1 setalpha
+    % the fixed ring gear: an annulus with internal teeth
+    rngpts gearpath 131 0 moveto 0 0 131 0 360 arc closepath
+    gsave metal setc eofill grestore
+    violet setc 0.7 setlinewidth stroke
+    violet setc 0.6 setalpha 127 3 96 0.5 tickring
+    % a rope round the outside of the ring gear
+    0.4 setlinewidth 0.8 setalpha
+    violet setc 135 1.5 48 T 2 mul braid
+    coral setc  135 1.5 48 T -2 mul 180 add braid
+    0.5 setalpha ivory setc 0.35 setlinewidth 138.5 ring
+    1 setalpha
+    % the carrier: an octagon through the planet axles, and its spokes
+    gsave wc rotate
+      coral setc 0.6 setlinewidth 0.7 setalpha
+      newpath CARRIER 0 moveto 1 1 7 { 45 mul dup cos CARRIER mul exch sin CARRIER mul lineto } for closepath stroke
+      newpath CARRIER 0 moveto 1 1 7 { 135 mul dup cos CARRIER mul exch sin CARRIER mul lineto } for closepath stroke
+      0.4 setalpha CARRIER ring
+      1 setalpha
+    grestore
+    % eight planet gears
+    0 1 7 { /i exch def
+      gsave
+        wc i 45 mul add dup rotate CARRIER 0 translate
+        % undo the carrier angle, then the planet's absolute spin; alternate
+        % planets start half a tooth apart so that all eight mesh
+        neg i 2 mod 0 eq { 15 } { 0 } ifelse add wp add rotate
+        plnpts gearpath gsave metal setc fill grestore
+        teal setc 0.7 setlinewidth stroke
+        teal setc 0.55 setalpha 0.5 setlinewidth 23 ring
+        20.5 2.5 36 0.5 tickring 1 setalpha
+        % four lightening holes and twelve rivets: the planet turns 270
+        % degrees a loop, so its decoration must have 4- or 12-fold symmetry
+        0 1 3 { 90 mul gsave rotate
+          ground setc 12.5 0 5.6 disc
+          teal setc 0.5 setlinewidth newpath 18.1 0 moveto 12.5 0 5.6 0 360 arc stroke grestore } for
+        0 1 3 { 90 mul 45 add gsave rotate teal setc 14.5 0 1.3 disc ivory setc 8.5 0 0.8 disc grestore } for
+        coral setc 0 0 3.4 disc gold setc 0 0 2.2 disc
+        ivory setc 0.5 setlinewidth 5.4 ring
+      grestore
+    } for
+    % the sun gear
+    gsave ws rotate
+      sunpts gearpath gsave metal setc fill grestore
+      gold setc 0.8 setlinewidth stroke
+      gold setc 0.7 setalpha 0.5 setlinewidth 52.5 ring
+      50 3 48 0.6 tickring 1 setalpha
+    grestore
+  grestore
+} def
+
+% The hub: a family of guilloche curves, one lobed circle per member,
+% each a little out of phase with the last. The phase step breathes, so
+% the family fans open and gathers again.
+/rosette {
+  /dl 13 T sin 6.5 mul add def
+  0 1 11 { /j exch def
+    /ph j 5.5 sub dl mul T add def
+    /amp 26 T 2 mul j 30 mul add cos 5 mul add def
+    newpath
+    0 2 358 { /th exch def
+      /r 61 amp th 8 mul ph add sin mul
+               0.72 0.28 th 3 mul T sub cos mul add mul add def
+      th cos r mul th sin r mul th 0 eq { moveto } { lineto } ifelse
+    } for closepath
+    gold coral j 11 div mixc 0.75 setalpha 0.9 setlinewidth stroke
+  } for
+  1 setalpha
+  % rays and the sun
+  ivory setc
+  0 1 35 { /i exch def
+    gsave i 10 mul T 6 div add rotate
+      0.9 setlinewidth 0.8 setalpha
+      newpath 11 0 moveto 19 i 60 mul T 3 mul sub cos 7 mul add 0 lineto stroke
+    grestore } for
+  1 setalpha gold setc 0 0 8 disc ivory setc 0 0 5 disc
+} def
+
+/scene {
+  /P progress def /T P 360 mul def
+  540 540 translate
+  /pagem matrix currentmatrix def
+  /initmatrix-here { pagem setmatrix } def
+  2.0 { nebula stars } blurred
+  1  1.7 teal   chordfamily
+  -1 9.3 violet chordfamily
+  bezel
+  orbitrings
+  gearset
+  9 0.9 { rosette bodies } glowing
+  0.4 vignette
+} def

@@ -1,0 +1,24 @@
+%!PS
+% The player feeds the pointer to the program as signals. Move over the canvas;
+% press to make the ring swell. Offline, the same program reads them from a CSV.
+<< /Size [640 360] /Duration 8 /FPS 30 /Loop true /Background [0.04 0.05 0.08] >> animation
+
+/scene {
+  /mx /mousex signal def  /my /mousey signal def
+  0 1 23 { /i exch def
+    0 1 12 { /j exch def
+      /x i 28 mul 2 sub def  /y j 30 mul def
+      /d x mx sub dup mul y my sub dup mul add sqrt def      % distance to the pointer
+      /k 0 140 d smoothstep 1 exch sub def                   % 1 near it, 0 far away
+      gsave
+        x y translate
+        y my sub x mx sub 2 copy 0 eq exch 0 eq and { pop pop 0 } { atan } ifelse rotate
+        k 0.55 0.10 between  0.7  k 0.35 1 between sethsbcolor
+        k 1 4 between setlinewidth 1 setlinecap
+        -9 0 moveto 9 0 lineto stroke
+      grestore
+    } for
+  } for
+  1 0.8 0.3 setrgbcolor 2 setlinewidth
+  mx my 14 /mousedown signal 22 mul add  1 turns sin 3 mul add 0 360 arc stroke
+} def
