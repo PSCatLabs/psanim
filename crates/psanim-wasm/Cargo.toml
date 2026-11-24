@@ -1,0 +1,12 @@
+[package]
+name = "psanim-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "psanim for the browser: load a PostScript animation and render any moment into a canvas"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+psanim = { path = "../psanim" }

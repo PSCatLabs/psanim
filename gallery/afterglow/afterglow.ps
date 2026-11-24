@@ -1,0 +1,291 @@
+%!PS
+% AFTERGLOW: the opening titles of an imaginary film.
+%
+% A sun goes down behind a flat horizon while four credit cards pass on
+% the left of the frame; when the last light has gone the main title
+% draws itself on from its outlines, fills, takes one sweep of light and
+% holds, its final O burning in the one accent colour of the piece.
+%
+% Techniques
+%   - `sequence` gives each card its own clock; one `card` procedure is
+%     reused four times because it is written against `now` and `span`.
+%   - `eachglyph` + `staggered`: the letters of every name rise in turn.
+%   - `charpath` + `trimeach`: the title's outlines draw on, then a
+%     `faded` group brings the fill up under them.
+%   - `pathpoint`: a line of italic set around the limb of the sun.
+%   - depth: a huge `blurred` ghost of the title drifts behind the cards.
+%   - a clipped light sweep, `glowing` on the sun and then on the O only,
+%     a slow `camera` push-in, `vignette` and a little `filmgrain`.
+% Everything is a pure function of `now`.
+<< /Size [1280 720] /Duration 19.5 /FPS 30 /Background [0.035 0.040 0.065]
+   /Title (Afterglow)
+   /Description (Opening titles for an imaginary film: credits over a setting sun, and a title that draws itself on.)
+>> animation
+
+% ---- palette: a night ground, a paper white, two greys, one accent ----
+/night [0.035 0.040 0.065] def
+/earth [0.022 0.024 0.040] def
+/ink   [0.95 0.91 0.84] def
+/dim   [0.56 0.55 0.60] def
+/ghost [0.115 0.125 0.185] def
+/ember [1.00 0.47 0.20] def
+/dusk  [0.34 0.13 0.09] def      % the sky at the horizon, at its warmest
+/setc { aload pop setrgbcolor } def
+
+% ---- layout ----
+/HY 216 def                       % the horizon
+/SX 930 def /SR 62 def            % the sun: x and radius
+/LX 150 def                       % left edge of the credit cards
+/T-TITLE 14.3 def                 % when the main title begins
+/TSIZE 124 def /TTRK 20 def       % main title size and letterspacing
+/TY 318 def                       % main title baseline
+
+% the sun's height: it touches the horizon near t=9 and is gone by 13
+/suny { [ 0 452  13.2 136 /sine-inout ] keyframes } def
+% 0 -> 1 as the sun goes under: drives the warmth of the sky
+/sunk { 1  HY SR sub HY SR add suny smoothstep  sub } def
+
+% (str) track -> width of the string set with extra space between letters
+/trackw { exch dup stringwidth pop exch length 1 sub 3 -1 roll mul add } def
+
+% ---- the world behind the type ----
+/sky {
+  8 dict begin
+    /k 0.35 sunk 0.65 mul add  0 2.5 /quad-out tween mul def   % warmth
+    % sky: 132 bands, warm at the horizon, night above
+    0 1 131 { /i exch def
+      /u 1 i 131 div sub 3 exp k mul def
+      u night dusk between setc
+      -40 HY i 4 mul add 1360 4.5 rectfill
+    } for
+    earth setc -40 -40 1360 HY 40 add rectfill
+  end
+} def
+
+/sun {
+  8 dict begin
+    /y suny def
+    gsave
+      newpath -40 HY 1360 600 rectclip
+      26 0.9 { ember setc newpath SX y SR 0 360 arc fill } glowing
+    grestore
+    % its reflection: a few broken strokes on the ground, fading as it sets
+    gsave
+      ember setc 1 setlinecap
+      0 1 5 { /i exch def
+        /w 78 i 9 mul sub  i 70 add 0.4 5 wiggle add def
+        1 sunk sub 0.5 mul  1 i 7 div sub mul  0 2.5 ramp mul setalpha
+        2.2 setlinewidth
+        SX w sub HY 12 sub i 11 mul sub moveto w 2 mul 0 rlineto stroke
+      } for
+      1 setalpha
+    grestore
+  end
+} def
+
+/horizon {
+  % a hairline that draws outward from the middle at the very start
+  newpath -40 HY moveto 1320 HY lineto
+  0.2 2.4 /cubic-inout tween /u exch def
+  0.5 u 2 div sub  0.5 u 2 div add  trimpath
+  0.5 sunk between  dim ember between setc 0.55 setalpha
+  1.6 setlinewidth stroke 1 setalpha
+} def
+
+% Far layer: the film's own name, enormous and out of focus, sliding
+% slowly the other way to the cards. It leaves before the real title.
+/farlayer {
+  1.0 3.0 /quad-out tween  T-TITLE 2.2 sub T-TITLE 0.4 sub /quad-in tween 1 exch sub mul
+  dup 0 gt {
+    {
+      9 {
+        /AvantGarde-Demi findfont 330 scalefont setfont ghost setc
+        0 duration /linear tween 60 -520 between 372 moveto (AFTERGLOW) show
+      } blurred
+    } faded
+  } { pop } ifelse
+} def
+
+% The tagline, set around the sun and travelling with it.
+/TAG (the last light of the longest day) def
+/limbtext {
+  10 dict begin
+    /y suny def
+    /Palatino-Italic findfont 23 scalefont setfont
+    /n TAG length def
+    gsave
+      newpath -40 HY 4 add 1360 600 rectclip
+      % the path the type sits on: an arc over the top of the sun, left to right
+      newpath SX y SR 34 add 202 -22 arcn
+      /len pathlength def
+      /w TAG stringwidth pop def
+      /x0 len w sub 2 div def
+      TAG {
+        /i exch def /c exch def
+        /adv TAG 0 i getinterval stringwidth pop def
+        i 0.045 {
+          0 0.5 /quad-out tween dup 0 gt {
+            setalpha
+            x0 adv add len div pathpoint       % x y angle (path is kept)
+            gsave
+              3 1 roll translate rotate
+              ink setc 0 0 moveto c show
+            grestore
+          } { pop } ifelse
+        } staggered
+      } eachglyph
+    grestore
+    1 setalpha
+  end
+} def
+
+% ---- a credit card ----
+% (role) (NAME) (NAME2 or empty)  card
+% Lives inside a time scope: enters from 0, leaves before `span`.
+/card {
+  12 dict begin
+    /name2 exch def /name1 exch def /role exch def
+    /two name2 length 0 gt def
+    /y1 two { 404 } { 392 } ifelse def
+    % the whole card leaves as one: a fade and a short drift left
+    span 0.7 sub span /cubic-in tween /out exch def
+    gsave
+      out 0 -26 between 0 translate
+      1 out sub {
+        % the accent rule draws upward
+        newpath LX 26 sub two { 342 } { 386 } ifelse moveto LX 26 sub 474 lineto
+        0  0 0.7 /cubic-out tween  trimpath
+        ember setc 2.5 setlinewidth stroke
+        % the role, in italic, slides a little as it fades up
+        /Palatino-Italic findfont 27 scalefont setfont dim setc
+        0.15 0.8 /quad-out tween setalpha
+        LX  0.15 0.9 /cubic-out tween -14 0 between add  454 moveto role show
+        1 setalpha
+        % the names: capitals, letterspaced, each letter rising into place
+        /AvantGarde-Book findfont 44 scalefont setfont ink setc
+        name1 LX y1 0.30 nameline
+        two { name2 LX y1 58 sub 0.55 nameline } if
+      } faded
+    grestore
+  end
+} def
+
+% (STR) x y start  nameline : one line of rising, letterspaced capitals
+/nameline {
+  8 dict begin
+    /t0 exch def /y exch def /x exch def
+    x y moveto
+    {
+      /i exch def /c exch def
+      t0 { i 0.032 {
+        gsave
+          currentpoint translate
+          i 7 mul  0 0.55 /cubic-out tween 18 0 between neg  translate
+          0 0.4 /quad-out tween setalpha
+          0 0 moveto c show
+        grestore
+      } staggered } delayed
+    } eachglyph
+    1 setalpha
+  end
+} def
+
+/card1 { (presents) (MERIDIAN & VANE) () card } def
+/card2 { (a film by) (ILSE VARGA) () card } def
+/card3 { (with) (TOMAS REYE) (ODETTE LINDQVIST) card } def
+/card4 { (music by) (HALVARD OKONKWO) () card } def
+/rest { } def
+
+% ---- the main title ----
+/TITLE (AFTERGLOW) def
+
+% Run proc for each letter of the title with the origin at that letter.
+% proc sees /c (the letter) and /i (its index).
+/titleglyphs {
+  6 dict begin
+    /body exch def
+    /AvantGarde-Book findfont TSIZE scalefont setfont
+    640 TITLE TTRK trackw 2 div sub TY moveto
+    TITLE {
+      /i exch def /c exch def
+      gsave currentpoint translate i TTRK mul 0 translate body grestore
+    } eachglyph
+  end
+} def
+
+/maintitle {
+  12 dict begin
+    % 1. outlines draw on, letter after letter, every contour at once
+    1 2.2 2.9 /quad-in tween sub dup 0 gt {
+      {
+        ink setc 1.3 setlinewidth 1 setlinejoin
+        { i 0.11 {
+            newpath 0 0 moveto c true charpath
+            0  0 1.5 /cubic-inout tween  trimeach stroke
+          } staggered } titleglyphs
+      } faded
+    } { pop } ifelse
+    % 2. the fill comes up under them; the last letter is the accent
+    1.9 2.9 /quad-inout tween dup 0 gt {
+      {
+        { i 7 eq { ember } { ink } ifelse setc 0 0 moveto c show } titleglyphs
+      } faded
+    } { pop } ifelse
+    % 3. the O takes the light the sun left behind
+    2.6 4.2 /sine-inout tween dup 0 gt {
+      22 exch 0.95 mul { { i 7 eq { ember setc 0 0 moveto c show } if } titleglyphs } glowing
+    } { pop } ifelse
+    % 4. one sweep of light across the letters, clipped to their shapes
+    3.3 4.9 /sine-inout tween /s exch def
+    s 0 gt s 1 lt and {
+      gsave
+        newpath
+        /AvantGarde-Book findfont TSIZE scalefont setfont
+        /x 640 TITLE TTRK trackw 2 div sub def
+        0 1 8 { /k exch def
+          x TY moveto TITLE k 1 getinterval
+          k 7 ne { dup true charpath } if           % not the O: it keeps its colour
+          stringwidth pop TTRK add x add /x exch def
+        } for
+        clip newpath
+        s 120 1100 between TY translate -24 rotate
+        1 1 1 setrgbcolor
+        -12 1 12 { /k exch def
+          k 6 div dup mul neg 2.718 exch exp 0.16 mul setalpha
+          k 7 mul -80 7.2 320 rectfill
+        } for
+      grestore
+      1 setalpha
+    } if
+    % 5. a quiet line beneath
+    3.6 4.6 /quad-out tween dup 0 gt {
+      {
+        /AvantGarde-Book findfont 22 scalefont setfont dim setc
+        640 (A MERIDIAN & VANE PICTURE) 7 trackw 2 div sub 150 moveto
+        (A MERIDIAN & VANE PICTURE) { /i exch def /c exch def
+          gsave currentpoint translate i 7 mul 0 translate 0 0 moveto c show grestore } eachglyph
+      } faded
+    } { pop } ifelse
+  end
+} def
+
+/credits [ 0.9 /rest  3.3 /card1  0.15 /rest  3.3 /card2  0.15 /rest  3.6 /card3  0.15 /rest  2.8 /card4 ] def
+
+/scene {
+  gsave
+    % a slow push-in over the whole film
+    640 340  0 duration /sine-inout tween 1 1.07 between  0 camera
+    sky
+    farlayer
+    sun
+    horizon
+    4.6 11.5 /limbtext during
+    credits sequence
+    T-TITLE /maintitle after
+  grestore
+  % open from black, close to black
+  1  0 1.2 /quad-out tween  duration 0.9 sub duration /quad-in tween 1 exch sub  mul  sub
+  dup 0 gt { setalpha 0 setgray 0 0 1280 720 rectfill 1 setalpha } { pop } ifelse
+  0.4 vignette
+  0.05 filmgrain
+} def

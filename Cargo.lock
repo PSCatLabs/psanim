@@ -210,6 +210,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "psanim-wasm"
+version = "0.1.0"
+dependencies = [
+ "psanim",
+]
+
+[[package]]
 name = "pscat"
 version = "0.7.0-rc.5"
 dependencies = [
