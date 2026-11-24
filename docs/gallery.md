@@ -11,9 +11,13 @@ reproducible from the sources).
 | [Paper Boat](../gallery/paper-boat/paper-boat.ps) | A paper boat is folded, launched in the rain, lost down a drain, and found again on a calm river under stars. | 41.6 s, 1280x720, pure | `psanim render gallery/paper-boat/paper-boat.ps -o paper-boat.mp4` |
 | [Tidewater](../gallery/tidewater/tidewater.ps) | A watercolour estuary at sunrise that paints itself, wash by wash and stroke by stroke. | 24 s, 1280x720, persistent | `psanim render gallery/tidewater/tidewater.ps -o tidewater.mp4` |
 | [Murmuration](../gallery/murmuration/murmuration.ps) | Twelve hundred simulated starlings fold and pour over a fen at dusk. | 26 s, 1280x720, stateful | `psanim render gallery/murmuration/murmuration.ps -o murmuration.mp4` |
+| [Taiji](../gallery/taiji/taiji.ps) | A yin-yang whose eyes are yin-yangs, turning, all the way down: a seamless 24 second loop. | 24 s, 1080x1080, pure | `psanim render gallery/taiji/taiji.ps -o taiji.mp4` |
+| [Chalk Proof](../gallery/chalk-proof/chalk-proof.ps) | Pythagoras on a green board: a square cut two ways, and the algebra beside it, written in chalk a stroke at a time. | 37 s, 1280x720, persistent | `psanim render gallery/chalk-proof/chalk-proof.ps -o chalk-proof.mp4` |
+| [Halftone](../gallery/halftone/halftone.ps) | A sun rising and setting over the sea, printed in four misregistered ink screens whose dots are functions of time. | 16 s, 1280x720, pure | `psanim render gallery/halftone/halftone.ps -o halftone.mp4` |
+| [Neon](../gallery/neon/neon.ps) | A neon sign strikes letter by letter, buzzes, and is switched off: a 12 second loop in PSCat's tube font. | 12 s, 1280x720, pure | `psanim render gallery/neon/neon.ps -o neon.mp4` |
+| [Ripple](../gallery/ripple/ripple.ps) | Two wave sources interfering on a surface drawn as ridge lines, with its formula: a 10 second loop. | 10 s, 1280x720, pure | `psanim render gallery/ripple/ripple.ps -o ripple.mp4` |
+| [Letter](../gallery/letter/letter.ps) | A letter typed by PSCat's typewriter, one strike at a time, on paper that climbs with each carriage return. | 25 s, 1280x720, pure | `psanim render gallery/letter/letter.ps -o letter.mp4` |
 | [Epicycles](../gallery/epicycles/epicycles.ps) | A square wave assembled from rotating circles. | 22 s, 1280x720, pure | `psanim render gallery/epicycles/epicycles.ps -o epicycles.mp4` |
 | [One Frame, Any Time](../gallery/one-frame/one-frame.ps) | How psanim renders a movie: setup, checkpoint, and frames as functions of time. | 40.5 s, 1280x720, pure | `psanim render gallery/one-frame/one-frame.ps -o one-frame.mp4` |
-| [Chalk Proof](../gallery/chalk-proof/chalk-proof.ps) | Pythagoras on a green board: a square cut two ways, and the algebra beside it, written in chalk a stroke at a time. | 37 s, 1280x720, persistent | `psanim render gallery/chalk-proof/chalk-proof.ps -o chalk-proof.mp4` |
-| [Taiji](../gallery/taiji/taiji.ps) | A yin-yang whose eyes are yin-yangs, turning, all the way down: a seamless 24 second loop. | 24 s, 1080x1080, pure | `psanim render gallery/taiji/taiji.ps -o taiji.mp4` |
 
 Each piece's directory has a README describing its techniques.

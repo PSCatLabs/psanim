@@ -14,7 +14,7 @@ Working and tested on macOS (Apple silicon):
   MP4, WebM, GIF, PNG sequence exercised.
 - `crates/psanim-wasm` + `web/`: browser engine, `<psanim-player>`,
   playground. Exercised in Node and Chromium.
-- `gallery/`: nine pieces. `skills/psanim/`: the agent skill.
+- `gallery/`: thirteen pieces. `skills/psanim/`: the agent skill.
   `docs/` + `scripts/build_site.py`: Markdown docs and the HTML site.
 - PSCat branch `feature/psanim-library-api` in `../pscat-psanim-api`:
   three commits on top of `feature/0.7.1` @ `72a2c4e`. Full PSCat suite

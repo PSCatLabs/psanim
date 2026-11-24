@@ -1,0 +1,87 @@
+%!PS
+% Poster: 6
+% Halftone
+%
+% A day at sea, dawn to night, printed in four inks. The picture is never drawn: each ink is
+% a screen of dots whose sizes are a function of the place and the time,
+% and the four screens are laid over each other at different angles and
+% a little out of register, as on a cheap press.
+%
+% Techniques
+%   - PSCat's halftonekit: `halftone` fills the clip with a dot or line
+%     screen and asks a procedure for the tone at each cell.
+%   - Each ink is a `blended` layer in /multiply, so inks overprint as
+%     they do on paper (yellow and cyan make green) instead of covering.
+%   - Pure movie and a loop: the sun's height and the swell of the sea
+%     are functions of `progress`.
+
+<< /Size [1280 720] /Duration 16 /FPS 30 /Loop true
+   /Background [0.955 0.935 0.880]
+   /Title (Halftone)
+   /Description (A sun rising and setting over the sea, printed in four misregistered ink screens whose dots are functions of time.)
+>> animation
+
+(lib/halftonekit.ps) run
+
+/hor 250 def
+/c01 { 0 1 clamp } def
+/dist { sy sub dup mul exch sx sub dup mul add sqrt } def       % x y -> distance to the sun
+/hill { dup 0.006 mul 57.3 mul sin 26 mul exch 0.017 mul 57.3 mul 40 add sin 12 mul add 34 add hor add } def  % x -> y
+/swell { 0.16 mul 57.3 mul exch 0.012 mul 57.3 mul add ph add sin } def   % x y -> -1..1
+
+/yellowtone {   % glow round the sun, and its path on the water
+  2 copy dist /d exch def /py exch def /px exch def
+  py hor gt {
+    d sr lt { 0.75 } { 1 d 380 div sub c01 dup mul 0.95 mul } ifelse
+  } {
+    1 px sx sub abs 90 hor py sub 0.5 mul add div sub c01 0.9 mul low mul
+  } ifelse
+} def
+/magentatone {  % the warm band above the horizon, strongest when the sun is low
+  2 copy dist /d exch def /py exch def /px exch def
+  py hor gt {
+    d sr lt { 0.12 low 0.5 mul add } { 1 py hor sub 300 div sub c01 low mul 0.8 mul } ifelse
+  } { 0.22 low 0.25 mul add px py swell 0.10 mul add } ifelse
+} def
+/cyantone {     % the sky, deepening upward; the sea
+  2 copy dist /d exch def /py exch def /px exch def
+  py hor gt {
+    d sr lt { 0 } { py hor sub 470 div 0.15 add 1 low 0.55 mul sub mul night 0.45 mul add d 260 div c01 mul c01 } ifelse
+  } { 0.62 px py swell 0.22 mul add  1 px sx sub abs 70 hor py sub 0.5 mul add div sub c01 low mul 0.5 mul sub c01 } ifelse
+} def
+/blacktone {    % the hills, and the troughs of the sea
+  /py exch def /px exch def
+  py hor gt { py px hill lt { 0.93 } { 0 } ifelse }
+            { 0.30 px py swell 0.30 mul sub hor py sub 500 div add c01 } ifelse
+} def
+
+/nighttone {    % the dark of the sky after sunset. Dots, not lines: a dot can
+                % shrink to nothing, where the thinnest line is still a line.
+  /py exch def /px exch def
+  py hor gt { night 0.70 mul py hor sub 900 div night mul add } { 0 } ifelse
+} def
+
+/ink {  % [r g b] angle [dx dy] /screen toneproc ink -
+  6 dict begin /tone exch def /scr exch def /off exch def /ang exch def /colr exch def
+  1 /multiply {
+    newpath 0 0 moveto 1280 0 lineto 1280 720 lineto 0 720 lineto closepath clip
+    colr aload pop setrgbcolor
+    << /Screen scr /Frequency 6.5 /Angle ang /Offset off /Tone /tone load >> halftone
+  } blended
+  end
+} def
+
+/scene {
+  /ph progress 360 mul 3 mul def                       % the swell: three periods a loop
+  /el progress 360 mul sin def                         % -1..1: below the horizon half the time
+  /sx 640 progress 360 mul cos 380 mul sub def
+  /sy hor 20 sub el 330 mul add def
+  /sr 62 def
+  /low 1 el abs 1.6 mul sub c01 0.25 add c01 def        % 1 when the sun is at the horizon
+  /night el neg 2.2 mul c01 dup mul def                         % 1 when the sun is well down
+  [1.00 0.84 0.10]  0 [ 0.0  0.0] /dot  /yellowtone load ink
+  [0.90 0.16 0.46] 75 [ 2.5 -1.5] /dot  /magentatone load ink
+  [0.10 0.62 0.86] 15 [-2.0  1.5] /dot  /cyantone load ink
+  [0.13 0.11 0.20] 45 [ 1.0  2.5] /line /blacktone load ink
+  night 0 gt { [0.13 0.11 0.20] 45 [ 1.0  2.5] /dot /nighttone load ink } if
+} def

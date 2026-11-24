@@ -1,0 +1,64 @@
+%!PS
+% Poster: 3
+% Ripple
+%
+% Two sources of waves on a square of water, drawn as a stack of ridge
+% lines, with its equation above it.
+%
+% Techniques
+%   - PSCat's graph.ps: `setview` and `surfacerow` project z = f(x, y)
+%     a row at a time.
+%   - Hidden lines without sorting polygons: rows are drawn from the far
+%     edge to the near one, and each is filled down to the bottom of the
+%     frame in the ground colour before it is stroked, so a near ridge
+%     hides what is behind it.
+%   - The formula is TeX laid out by PSCat's mathkit as pen strokes and
+%     drawn on with `trimpath`.
+%   - Pure movie and a loop: the phase turns a whole number of times and
+%     the view sways through one period.
+
+<< /Size [1280 720] /Duration 10 /FPS 30 /Loop true
+   /Background [0.030 0.045 0.085]
+   /Title (Ripple)
+   /Description (Two wave sources interfering on a surface drawn as ridge lines, with its formula: a 10 second loop.)
+>> animation
+
+(lib/graph.ps) run
+(lib/handscript.ps) run (lib/strokeglyphs.ps) run (lib/mathkit.ps) run
+
+/rows 72 def /cols 110 def
+/ground [0.030 0.045 0.085] def
+
+% x y -> z : two damped circular waves
+/wave {
+  2 copy
+  0.9 sub dup mul exch 1.3 add dup mul add sqrt /r1 exch def
+  1.1 add dup mul exch 1.5 sub dup mul add sqrt /r2 exch def
+  r1 300 mul T 3 mul sub cos 1 r1 add div
+  r2 300 mul T 3 mul sub 60 add cos 1 r2 add div add 0.42 mul
+} def
+
+/scene {
+  /T progress 360 mul def
+  T sin 14 mul  34  118  640 250 setview
+  1 setlinejoin 1 setlinecap
+  14 1.0 {
+    0 1 rows { /j exch def
+      /yv 3.2 j rows div 6.4 mul sub def              % far to near
+      newpath -3.6 3.6 yv cols { wave } surfacerow
+      gsave
+        currentpoint pop -400 lineto
+        -3.6 yv 0 project3 pop -400 lineto closepath
+        ground aload pop setrgbcolor fill
+      grestore
+      j rows div /u exch def
+      u [0.16 0.36 0.62] [0.62 0.95 1.00] between aload pop setrgbcolor
+      0.8 u 0.9 mul add setlinewidth stroke
+    } for
+  } glowing
+  % the formula
+  0.86 0.90 0.96 setrgbcolor 2.0 setlinewidth
+  newpath (z = \\sum_{i=1}^{2} \\frac{\\cos(k r_i - \\omega t)}{1 + r_i}) 70 606 << /Size 46 /Seed 5 >> mkpath
+  stroke
+  0.5 vignette
+} def

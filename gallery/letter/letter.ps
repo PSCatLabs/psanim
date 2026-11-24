@@ -1,0 +1,60 @@
+%!PS
+% Poster: 24
+% Letter
+%
+% A letter typed on a manual typewriter. The typing point stays where it
+% is and the paper moves, up a line at each carriage return.
+%
+% Techniques
+%   - PSCat's typewriter (lib/typewriter.ps): every key of a machine has
+%     its own fixed faults (offset, tilt, weight), every strike its own
+%     pressure, and the ink is laid through a ribbon weave. The same
+%     /Machine and /Seed always type the same letter, so typing the
+%     first n characters on frame after frame adds a character and
+%     leaves the ones before it exactly where they were.
+%   - The text is broken into lines by hand, so no word changes line
+%     while it is being typed.
+%   - Pure movie: the number of characters typed and the height the
+%     paper has climbed are functions of `now`.
+
+<< /Size [1280 720] /Duration 25 /FPS 30
+   /Background [0.16 0.19 0.17]
+   /Title (Letter)
+   /Description (A letter typed by PSCat's typewriter, one strike at a time, on paper that climbs with each carriage return.)
+>> animation
+
+(lib/typewriter_outlines.ps) run (lib/typewriter.ps) run
+
+/txt (12 March\n\nDear reader,\n\nThis letter is being typed by a PostScript\nprogram, one frame at a time. Every key of\nthe machine has its own small faults, and\nthe ribbon is not new.\n\nNothing here was filmed.\n\nYours faithfully,\n\n\n          psanim) def
+/rate 15 def                 % strikes a second
+/tstart 0.8 def
+/pagew 480 def /pageh 560 def /zoom 2.3 def
+/lead 18 def                 % points a line, at /Spacing 1.5
+/tdone tstart txt length rate div add def
+
+% where the newlines are
+/breaks [ 0 1 txt length 1 sub { dup txt exch get 10 ne { pop } if } for ] def
+
+/scene {
+  /n now tstart sub rate mul floor cvi 0 txt length clamp cvi def
+  % lines climbed: each return takes a quarter of a second
+  /climb 0 breaks { rate div tstart add dup 0.25 add /smooth tween add } forall def
+  gsave
+    640 pagew zoom mul 2 div sub  0 translate zoom dup scale
+    % while typing, the line being typed sits at y = 330; afterwards the
+    % sheet is drawn back until the whole letter is in view
+    /ytyping 330 zoom div pageh 81 sub sub climb lead mul add def
+    /yread   360 zoom div pageh 81 sub breaks length lead mul 2 div sub sub def
+    0  tdone 0.5 add tdone 2.5 add /cubic-inout tween ytyping yread between  translate
+    % the paper, and its shadow on the desk
+    0.25 { 5 { 0 0 0 setrgbcolor 4 -6 pagew pageh rectfill } blurred } faded
+    0.955 0.940 0.900 setrgbcolor 0 0 pagew pageh rectfill
+    n 0 gt {
+      << /Text txt 0 n getinterval /Width pagew /Height pageh /Margin 72 /MarginLeft 78 /Spacing 1.5
+         /Machine 7 /Seed 3 /Preset /manual >> tw-type
+    } if
+  grestore
+  % the card guide: a shadow across the line being typed
+  0 0 0 setrgbcolor 1 tdone 0.3 add tdone 1.0 add /linear tween sub 0.10 mul setalpha 0 298 1280 16 rectfill 1 setalpha
+  0.6 vignette
+} def

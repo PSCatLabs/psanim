@@ -1,0 +1,96 @@
+%!PS
+% Poster: 7
+% Neon
+%
+% A sign of bent glass tube on a brick wall at night. The letters strike
+% one at a time, stuttering as they catch; one tube in the second line
+% never quite holds; at the end the sign is switched off, which is where
+% the loop begins again.
+%
+% Techniques
+%   - PSCat's /Neon font (lib/fonts/neon.ps): a Type 3 face whose glyphs
+%     are tube skeletons overdrawn five times, wide and dim to thin and
+%     bright. Its colour is read from a dictionary at draw time, so each
+%     letter is lit or dark by setting that colour before it is shown.
+%   - `eachglyph` shows the letters one by one; whether a letter is lit
+%     is a function of the time and a hash, so the flicker is the same
+%     on every render and any frame can be drawn alone.
+%   - `glowing` for the light on the wall; the wet pavement is the sign
+%     drawn again upside down, blurred and faded.
+
+<< /Size [1280 720] /Duration 12 /FPS 30 /Loop true
+   /Background [0.035 0.030 0.050]
+   /Title (Neon)
+   /Description (A neon sign strikes letter by letter, buzzes, and is switched off: a 12 second loop in PSCat's tube font.)
+>> animation
+
+(lib/fonts/neon.ps) run
+
+/pink [1.00 0.22 0.52] def
+/cyan [0.25 0.88 1.00] def
+/dead [0.150 0.125 0.150] def
+/line1 (POSTSCRIPT) def
+/line2 (OPEN ALL NIGHT) def
+/offat 10.9 def                     % the switch is thrown
+
+% key t -> bool : is the tube that started striking at t0 = key's time lit?
+% i t0 faulty lit? -> bool
+/lit? {
+  4 dict begin /faulty exch def /t0 exch def /i exch def
+  now t0 lt { false } {
+    now t0 0.55 add lt {
+      [ i now 22 mul floor ] hash01 now t0 sub 0.55 div 0.25 add lt   % catching
+    } {
+      now offat gt {
+        now offat 0.18 add lt { [ i now 30 mul floor 7 ] hash01 0.5 gt } { false } ifelse
+      } {
+        faulty { [ now 14 mul floor 3 ] hash01 0.82 lt  now 3 fmod 1.1 gt  or } { true } ifelse
+      } ifelse
+    } ifelse
+  } ifelse
+  end
+} def
+
+% string size y colour tstart gap faultyindex which signline -
+% which: true draws only lit letters, false only dark ones
+/signline {
+  10 dict begin
+  /which exch def /bad exch def /gap exch def /ts exch def /colr exch def
+  /yy exch def /sz exch def /str exch def
+  /Neon findfont sz scalefont setfont
+  640 str stringwidth pop 2 div sub yy moveto
+  str {
+    /gi exch def /gc exch def
+    gi ts gi gap mul add gi bad eq lit?
+    dup which eq {
+      NeonDict /work get /Tube 3 -1 roll { colr } { dead } ifelse put
+      gc show
+    } { pop } ifelse
+  } eachglyph
+  end
+} def
+
+/sign {  % which sign -
+  /sw exch def
+  line1 150 400 pink 0.5 0.22 -1 sw signline
+  line2  78 262 cyan 3.4 0.13  9 sw signline
+} def
+
+/scene {
+  % bricks, barely there
+  0.060 0.050 0.075 setrgbcolor 1.2 setlinewidth
+  0 1 17 { /r exch def
+    newpath 0 r 36 mul 150 add moveto 1280 0 rlineto stroke
+    0 1 17 { /c exch def
+      newpath c 80 mul r 2 mod 40 mul add r 36 mul 150 add moveto 0 36 rlineto stroke
+    } for
+  } for
+  % the pavement and what it reflects
+  0.020 0.018 0.030 setrgbcolor 0 0 1280 150 rectfill
+  0.30 { 7 { gsave 0 300 translate 1 -0.62 scale true sign grestore } blurred } faded
+  0.020 0.018 0.030 setrgbcolor 0.55 setalpha 0 0 1280 60 rectfill 1 setalpha
+  % the sign
+  false sign
+  34 1.5 { true sign } glowing
+  0.5 vignette
+} def
