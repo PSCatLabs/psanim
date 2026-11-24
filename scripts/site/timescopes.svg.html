@@ -1,0 +1,38 @@
+<figure class="diagram">
+<svg viewBox="0 0 1000 300" role="img" aria-label="Time scopes re-base the clock for a procedure" font-family="ui-sans-serif, system-ui, sans-serif">
+  <!-- movie time axis -->
+  <text x="14" y="24" font-size="12" fill="#9aa2b4" letter-spacing="1.2">MOVIE TIME</text>
+  <path d="M150 20H960" stroke="#3a4152" stroke-width="1.5"/>
+  <g font-size="11.5" fill="#9aa2b4" text-anchor="middle">
+    <path d="M150 15V25M285 15V25M420 15V25M555 15V25M690 15V25M825 15V25M960 15V25" stroke="#3a4152" stroke-width="1.5"/>
+    <text x="150" y="42">0</text><text x="285" y="42">1</text><text x="420" y="42">2</text><text x="555" y="42">3</text><text x="690" y="42">4</text><text x="825" y="42">5</text><text x="960" y="42">6 s</text>
+  </g>
+  <g font-size="12.5">
+    <text x="14" y="82" fill="#ece9e1" font-family="ui-monospace, Menlo, monospace">1 3 { m } during</text>
+    <rect x="285" y="64" width="270" height="26" rx="5" fill="#ffc94d" fill-opacity="0.9"/>
+    <text x="291" y="82" fill="#1a1405" font-size="11.5">now: 0</text><text x="549" y="82" fill="#1a1405" font-size="11.5" text-anchor="end">2</text>
+
+    <text x="14" y="124" fill="#ece9e1" font-family="ui-monospace, Menlo, monospace">2.5 { m } after</text>
+    <rect x="487" y="106" width="473" height="26" rx="5" fill="#4dd1c7" fill-opacity="0.9"/>
+    <text x="493" y="124" fill="#06201e" font-size="11.5">now: 0</text><text x="954" y="124" fill="#06201e" font-size="11.5" text-anchor="end">3.5</text>
+
+    <text x="14" y="166" fill="#ece9e1" font-family="ui-monospace, Menlo, monospace">1.5 { m } looped</text>
+    <g fill="#a38ffa" fill-opacity="0.9">
+      <rect x="150" y="148" width="200" height="26" rx="5"/><rect x="353" y="148" width="200" height="26" rx="5"/><rect x="556" y="148" width="200" height="26" rx="5"/><rect x="759" y="148" width="201" height="26" rx="5"/>
+    </g>
+    <g fill="#150f33" font-size="11.5"><text x="156" y="166">0 … 1.5</text><text x="359" y="166">0 … 1.5</text><text x="562" y="166">0 … 1.5</text><text x="765" y="166">0 … 1.5</text></g>
+
+    <text x="14" y="208" fill="#ece9e1" font-family="ui-monospace, Menlo, monospace">2 { m } timescaled</text>
+    <rect x="150" y="190" width="405" height="26" rx="5" fill="#fa7361" fill-opacity="0.9"/>
+    <text x="156" y="208" fill="#2b0d08" font-size="11.5">now: 0</text><text x="549" y="208" fill="#2b0d08" font-size="11.5" text-anchor="end">6 (twice as fast)</text>
+
+    <text x="14" y="250" fill="#ece9e1" font-family="ui-monospace, Menlo, monospace">i .5 { m } staggered</text>
+    <g fill="#ece9e1" fill-opacity="0.85">
+      <rect x="150" y="232" width="200" height="7" rx="3"/><rect x="217" y="241" width="200" height="7" rx="3"/><rect x="285" y="250" width="200" height="7" rx="3"/><rect x="352" y="259" width="200" height="7" rx="3"/>
+    </g>
+    <text x="566" y="254" fill="#9aa2b4" font-size="11.5">i = 0, 1, 2, 3: each copy starts half a second after the last</text>
+  </g>
+  <text x="500" y="292" text-anchor="middle" font-size="12.5" fill="#9aa2b4">The same procedure <tspan font-family="ui-monospace, Menlo, monospace" fill="#ece9e1">m</tspan>, written once against <tspan font-family="ui-monospace, Menlo, monospace" fill="#ece9e1">now</tspan>. Each bar is where it is live and what its clock reads there.</text>
+</svg>
+<figcaption>Time scopes are to <code>now</code> what <code>translate</code> and <code>scale</code> are to coordinates. They nest.</figcaption>
+</figure>

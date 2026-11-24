@@ -25,7 +25,8 @@ fn eval_at(setup: &str, expr: &str, k: u64) -> f64 {
     );
     // 8 bits of red is too coarse; print the value instead.
     let _ = src;
-    let src = format!("{HEAD}{setup}\n/scene {{ /psanim.probe {expr} store }} def /psanim.probe 0 def");
+    let src =
+        format!("{HEAD}{setup}\n/scene {{ /psanim.probe {expr} store }} def /psanim.probe 0 def");
     // `store` into a setup-defined name would be rolled back with the frame,
     // so read it out through the canvas instead: encode in three channels.
     let _ = src;
@@ -84,7 +85,10 @@ fn options_override_the_declaration() {
     };
     let mut m = Movie::load(&format!("{HEAD}/scene {{ }} def"), &opts).unwrap();
     let meta = m.meta().clone();
-    assert_eq!((meta.pixel_width, meta.pixel_height, meta.scale), (32, 24, 0.5));
+    assert_eq!(
+        (meta.pixel_width, meta.pixel_height, meta.scale),
+        (32, 24, 0.5)
+    );
     assert_eq!((meta.frames, meta.seed), (5, 77));
     let f = m.render_frame(0).unwrap();
     assert_eq!((f.width, f.height), (32, 24));
@@ -93,8 +97,23 @@ fn options_override_the_declaration() {
 
 #[test]
 fn a_program_without_a_declaration_gets_the_defaults() {
-    let m = Movie::load("/scene { } def", &Options { scale: Scale::Factor(0.1), ..Options::default() }).unwrap();
-    assert_eq!((m.meta().width, m.meta().height, m.meta().fps, m.meta().duration), (1280, 720, 30.0, 5.0));
+    let m = Movie::load(
+        "/scene { } def",
+        &Options {
+            scale: Scale::Factor(0.1),
+            ..Options::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        (
+            m.meta().width,
+            m.meta().height,
+            m.meta().fps,
+            m.meta().duration
+        ),
+        (1280, 720, 30.0, 5.0)
+    );
 }
 
 #[test]
@@ -127,10 +146,16 @@ fn frames_are_time_addressable() {
            32 24 translate now 180 mul rotate 1 1 1 setrgbcolor -20 -3 40 6 rectfill
            rand 1000 mod 100 div 0 moveto 2 2 rlineto stroke } def",
     );
-    let in_order: Vec<Vec<u8>> = (0..20).map(|k| m.render_frame(k).unwrap().premultiplied.to_vec()).collect();
+    let in_order: Vec<Vec<u8>> = (0..20)
+        .map(|k| m.render_frame(k).unwrap().premultiplied.to_vec())
+        .collect();
     assert_ne!(in_order[0], in_order[1]);
     for k in [19, 0, 7, 7, 3, 12] {
-        assert_eq!(m.render_frame(k).unwrap().premultiplied, &in_order[k as usize][..], "frame {k}");
+        assert_eq!(
+            m.render_frame(k).unwrap().premultiplied,
+            &in_order[k as usize][..],
+            "frame {k}"
+        );
     }
     // A second movie from the same source agrees: nothing depends on the
     // process or on what was rendered before.
@@ -140,7 +165,10 @@ fn frames_are_time_addressable() {
            32 24 translate now 180 mul rotate 1 1 1 setrgbcolor -20 -3 40 6 rectfill
            rand 1000 mod 100 div 0 moveto 2 2 rlineto stroke } def",
     );
-    assert_eq!(again.render_frame(13).unwrap().premultiplied, &in_order[13][..]);
+    assert_eq!(
+        again.render_frame(13).unwrap().premultiplied,
+        &in_order[13][..]
+    );
 }
 
 #[test]
@@ -150,7 +178,10 @@ fn scene_gets_the_time_on_the_stack_and_from_now() {
     assert_eq!(eval_at("", "globaltime", 15), 1.5);
     assert_eq!(eval_at("", "frame", 7), 7.0);
     assert_eq!(eval_at("", "progress", 5), 0.25);
-    assert_eq!(eval_at("", "duration fps add dt add width add height add", 0), 2.0 + 10.0 + 0.1 + 64.0 + 48.0);
+    assert_eq!(
+        eval_at("", "duration fps add dt add width add height add", 0),
+        2.0 + 10.0 + 0.1 + 64.0 + 48.0
+    );
     assert_eq!(eval_at("", "span", 0), 2.0);
 }
 
@@ -161,7 +192,13 @@ fn a_scene_must_leave_the_stack_empty() {
     let mut m = load("/scene { 7 1 setgray 0 0 64 48 rectfill } def");
     let e = m.render_frame(3).unwrap_err();
     assert_eq!(e.kind, "stackleft");
-    assert_eq!(e.phase, Phase::Frame { index: 3, time: 0.3 });
+    assert_eq!(
+        e.phase,
+        Phase::Frame {
+            index: 3,
+            time: 0.3
+        }
+    );
     assert!(e.message.contains("`scene` left 1 operand"), "{e}");
     assert!(e.hint.unwrap().contains("`now`"));
     // One operand short is now an error too, where the old contract
@@ -178,7 +215,10 @@ fn a_scene_must_leave_the_stack_empty() {
     )
     .unwrap();
     let e = m.render_frame(2).unwrap_err();
-    assert_eq!((e.kind.as_str(), e.stack.as_slice()), ("stackleft", &["42".to_string()][..]));
+    assert_eq!(
+        (e.kind.as_str(), e.stack.as_slice()),
+        ("stackleft", &["42".to_string()][..])
+    );
     assert!(matches!(e.phase, Phase::Step { tick: 0, .. }));
 }
 
@@ -195,10 +235,23 @@ fn what_a_program_prints_is_collected() {
 
 #[test]
 fn globally_reads_movie_time_inside_a_scope() {
-    assert_eq!(eval_at("", "-1 0.5 2 { pop { now } globally } during", 9), 0.9);
-    assert_eq!(eval_at("", "-1 0.5 2 { pop { 0 2 /linear tween } globally } during", 10), 0.5);
+    assert_eq!(
+        eval_at("", "-1 0.5 2 { pop { now } globally } during", 9),
+        0.9
+    );
+    assert_eq!(
+        eval_at(
+            "",
+            "-1 0.5 2 { pop { 0 2 /linear tween } globally } during",
+            10
+        ),
+        0.5
+    );
     // ...and the scope it was called from is back afterwards.
-    assert_eq!(eval_at("", "-1 0.5 2 { pop { } globally now } during", 9), 0.4);
+    assert_eq!(
+        eval_at("", "-1 0.5 2 { pop { } globally now } during", 9),
+        0.4
+    );
 }
 
 #[test]
@@ -206,18 +259,34 @@ fn spaced_and_path_text() {
     let font = "/Helvetica findfont 10 scalefont setfont";
     // spacedwidth = natural width + track * (n - 1)
     assert_eq!(
-        eval_at("", &format!("{font} (ABCD) 3 spacedwidth (ABCD) stringwidth pop sub"), 0),
+        eval_at(
+            "",
+            &format!("{font} (ABCD) 3 spacedwidth (ABCD) stringwidth pop sub"),
+            0
+        ),
         9.0
     );
-    assert_eq!(eval_at("", &format!("{font} (A) 3 spacedwidth (A) stringwidth pop sub"), 0), 0.0);
+    assert_eq!(
+        eval_at(
+            "",
+            &format!("{font} (A) 3 spacedwidth (A) stringwidth pop sub"),
+            0
+        ),
+        0.0
+    );
     // eachspaced: track 0 is eachglyph; a positive track spreads the origins.
-    let mut plain = load(&format!("/scene {{ {font} 1 setgray 4 20 moveto (WAVE) {{ pop show }} eachglyph }} def"));
-    let mut zero = load(&format!("/scene {{ {font} 1 setgray 4 20 moveto (WAVE) 0 {{ pop show }} eachspaced }} def"));
+    let mut plain = load(&format!(
+        "/scene {{ {font} 1 setgray 4 20 moveto (WAVE) {{ pop show }} eachglyph }} def"
+    ));
+    let mut zero = load(&format!(
+        "/scene {{ {font} 1 setgray 4 20 moveto (WAVE) 0 {{ pop show }} eachspaced }} def"
+    ));
     let a = plain.render_frame(0).unwrap().premultiplied.to_vec();
     assert_eq!(zero.render_frame(0).unwrap().premultiplied, &a[..]);
     let spread = "(WAVE) 4 { exch pop 3 eq { currentpoint pop } if } eachspaced";
     let natural = "(WAVE) 0 { exch pop 3 eq { currentpoint pop } if } eachspaced";
-    let d = eval_at("", &format!("{font} 4 20 moveto {spread}"), 0) - eval_at("", &format!("{font} 4 20 moveto {natural}"), 0);
+    let d = eval_at("", &format!("{font} 4 20 moveto {spread}"), 0)
+        - eval_at("", &format!("{font} 4 20 moveto {natural}"), 0);
     assert!((d - 12.0).abs() < 0.01, "{d}");
     // eachonpath: along a horizontal line it is plain text, shifted by u0.
     let mut on = load(&format!(
@@ -225,15 +294,24 @@ fn spaced_and_path_text() {
     ));
     let b = on.render_frame(0).unwrap().premultiplied.to_vec();
     let lit = |buf: &[u8]| buf.chunks(4).filter(|p| p[0] > 128).count() as f64;
-    assert!((lit(&a) - lit(&b)).abs() / lit(&a) < 0.05, "{} vs {}", lit(&a), lit(&b));
+    assert!(
+        (lit(&a) - lit(&b)).abs() / lit(&a) < 0.05,
+        "{} vs {}",
+        lit(&a),
+        lit(&b)
+    );
     // On a vertical line the text runs upward: tall, not wide.
     let mut up = load(&format!(
         "/scene {{ {font} 1 setgray newpath 30 4 moveto 30 44 lineto (WAVE) 0 {{ pop show }} eachonpath
                   pathlength 40 ne {{ 1 }} if }} def"
     ));
     let f = up.render_frame(0).unwrap().premultiplied.to_vec();
-    let cols = (0..64).filter(|x| (0..48).any(|y| f[(y * 64 + x) * 4] > 128)).count();
-    let rows = (0..48).filter(|y| (0..64).any(|x| f[(y * 64 + x) * 4] > 128)).count();
+    let cols = (0..64)
+        .filter(|x| (0..48).any(|y| f[(y * 64 + x) * 4] > 128))
+        .count();
+    let rows = (0..48)
+        .filter(|y| (0..64).any(|x| f[(y * 64 + x) * 4] > 128))
+        .count();
     assert!(rows > 2 * cols, "{rows} rows, {cols} cols");
 }
 
@@ -252,14 +330,30 @@ fn sequence_gap_and_wiggle_array_key() {
 fn polypath_turns_and_loopnoise() {
     assert_eq!(eval_at("", "[0 0 10 0 10 10] polypath pathlength", 0), 20.0);
     // In the current user space, like any path.
-    assert_eq!(eval_at("", "3 3 scale [0 0 10 0] polypath pathlength", 0), 10.0);
-    assert_eq!(eval_at("", "gsave 2 2 scale [0 0 10 0] polypath grestore 5 5 moveto pathlength", 0), 0.0);
+    assert_eq!(
+        eval_at("", "3 3 scale [0 0 10 0] polypath pathlength", 0),
+        10.0
+    );
+    assert_eq!(
+        eval_at(
+            "",
+            "gsave 2 2 scale [0 0 10 0] polypath grestore 5 5 moveto pathlength",
+            0
+        ),
+        0.0
+    );
     assert_eq!(eval_at("", "2 turns", 5), 180.0);
     assert_eq!(eval_at("", "0 1 { 3 turns } during", 5), 540.0);
     // loopnoise closes: its value just before the end is close to its value at the start.
     let at = |k| eval_at("", "4 0.8 loopnoise 1000 mul", k);
     assert!((-1000.0..=1000.0).contains(&at(7)));
-    assert!((at(19) - at(0)).abs() < 2.0 * (at(1) - at(0)).abs() + 1.0, "{} {} {}", at(19), at(0), at(1));
+    assert!(
+        (at(19) - at(0)).abs() < 2.0 * (at(1) - at(0)).abs() + 1.0,
+        "{} {} {}",
+        at(19),
+        at(0),
+        at(1)
+    );
     assert_ne!(at(3), at(11));
 }
 
@@ -318,7 +412,7 @@ fn sequence_plays_clips_in_turn() {
     assert_eq!(eval_at(setup, seq, 17), 30.4);
     // Past the end nothing plays.
     let m = Movie::load(
-        &format!("<< /Size [8 8] /Duration 4 /FPS 10 >> animation /scene {{ [ 1 {{ 1 1 1 setrgbcolor 0 0 8 8 rectfill }} ] sequence }} def"),
+        "<< /Size [8 8] /Duration 4 /FPS 10 >> animation /scene { [ 1 { 1 1 1 setrgbcolor 0 0 8 8 rectfill } ] sequence } def",
         &Options::default(),
     );
     let mut m = m.unwrap();
@@ -335,7 +429,10 @@ fn tween_ease_between_and_friends() {
     assert_eq!(eval_at("", "0.5 1.5 ramp", 10), 0.5);
     assert_eq!(eval_at("", "0.5 /cubic-out ease", 0), 0.875);
     assert_eq!(eval_at("", "0.25 100 200 between", 0), 125.0);
-    assert_eq!(eval_at("", "0.5 [0 10] [4 20] between aload pop add", 0), 17.0);
+    assert_eq!(
+        eval_at("", "0.5 [0 10] [4 20] between aload pop add", 0),
+        17.0
+    );
     assert_eq!(eval_at("", "1.5 0 100 between", 0), 150.0); // unclamped
     assert_eq!(eval_at("", "7 0 5 clamp", 0), 5.0);
     assert_eq!(eval_at("", "2.75 1 fmod", 0), 0.75);
@@ -355,7 +452,10 @@ fn keyframes_interpolate_and_hold() {
     assert_eq!(eval_at("", k, 10), 20.0);
     assert_eq!(eval_at("", k, 12), 20.0 - 20.0 * 0.16); // quad-in at u=0.4
     assert_eq!(eval_at("", k, 19), 0.0); // after the last
-    assert_eq!(eval_at("", "0.75 [ 0.5 [0 0] 1.0 [8 4] ] keyat aload pop add", 0), 6.0);
+    assert_eq!(
+        eval_at("", "0.75 [ 0.5 [0 0] 1.0 [8 4] ] keyat aload pop add", 0),
+        6.0
+    );
 }
 
 #[test]
@@ -374,27 +474,64 @@ fn hash01_and_wiggle_are_stable_across_frames_and_seeds_differ() {
 #[test]
 fn rand_is_reseeded_every_frame() {
     // The same scatter on every frame: no flicker.
-    assert_eq!(eval_at("", "rand 1000 mod", 0), eval_at("", "rand 1000 mod", 17));
-    let mut a = Movie::load(&format!("{HEAD}/scene {{ rand 255 mod 255 div dup dup setrgbcolor 0 0 64 48 rectfill }} def"), &Options::default()).unwrap();
-    let mut b = Movie::load(
-        &format!("{HEAD}/scene {{ rand 255 mod 255 div dup dup setrgbcolor 0 0 64 48 rectfill }} def"),
-        &Options { seed: Some(2), ..Options::default() },
+    assert_eq!(
+        eval_at("", "rand 1000 mod", 0),
+        eval_at("", "rand 1000 mod", 17)
+    );
+    let mut a = Movie::load(
+        &format!(
+            "{HEAD}/scene {{ rand 255 mod 255 div dup dup setrgbcolor 0 0 64 48 rectfill }} def"
+        ),
+        &Options::default(),
     )
     .unwrap();
-    assert_ne!(px(&a.render_frame(0).unwrap(), 0, 0), px(&b.render_frame(0).unwrap(), 0, 0));
+    let mut b = Movie::load(
+        &format!(
+            "{HEAD}/scene {{ rand 255 mod 255 div dup dup setrgbcolor 0 0 64 48 rectfill }} def"
+        ),
+        &Options {
+            seed: Some(2),
+            ..Options::default()
+        },
+    )
+    .unwrap();
+    assert_ne!(
+        px(&a.render_frame(0).unwrap(), 0, 0),
+        px(&b.render_frame(0).unwrap(), 0, 0)
+    );
 }
 
 #[test]
 fn path_operators() {
     let sq = "newpath 0 0 moveto 10 0 lineto 10 10 lineto 0 10 lineto closepath";
     assert_eq!(eval_at("", &format!("{sq} pathlength"), 0), 40.0);
-    assert_eq!(eval_at("", &format!("{sq} 0.375 pathpoint pop exch pop"), 0), 5.0);
-    assert_eq!(eval_at("", &format!("{sq} 0.375 pathpoint 3 1 roll pop pop"), 0), 90.0);
-    // trimpath changes the path's length in proportion, under a transform too.
-    assert_eq!(eval_at("", &format!("3 3 scale {sq} 0.25 0.75 trimpath pathlength"), 0), 20.0);
-    assert_eq!(eval_at("", &format!("{sq} 0 1 trimpath pathlength"), 0), 40.0);
     assert_eq!(
-        eval_at("", "newpath 0 0 moveto 10 0 lineto 0 5 moveto 10 5 lineto 0 0.5 trimeach pathlength", 0),
+        eval_at("", &format!("{sq} 0.375 pathpoint pop exch pop"), 0),
+        5.0
+    );
+    assert_eq!(
+        eval_at("", &format!("{sq} 0.375 pathpoint 3 1 roll pop pop"), 0),
+        90.0
+    );
+    // trimpath changes the path's length in proportion, under a transform too.
+    assert_eq!(
+        eval_at(
+            "",
+            &format!("3 3 scale {sq} 0.25 0.75 trimpath pathlength"),
+            0
+        ),
+        20.0
+    );
+    assert_eq!(
+        eval_at("", &format!("{sq} 0 1 trimpath pathlength"), 0),
+        40.0
+    );
+    assert_eq!(
+        eval_at(
+            "",
+            "newpath 0 0 moveto 10 0 lineto 0 5 moveto 10 5 lineto 0 0.5 trimeach pathlength",
+            0
+        ),
         10.0
     );
     // resample + morph: halfway between a small and a large square.
@@ -409,7 +546,9 @@ fn path_operators() {
 
 #[test]
 fn trimpath_draws_on() {
-    let mut m = load("/scene { 0 24 moveto 64 24 lineto 0 progress 2 mul trimpath 1 setgray 8 setlinewidth stroke } def");
+    let mut m = load(
+        "/scene { 0 24 moveto 64 24 lineto 0 progress 2 mul trimpath 1 setgray 8 setlinewidth stroke } def",
+    );
     let f = m.render_frame(5).unwrap(); // progress 0.25 -> half the line
     assert_eq!(px(&f, 16, 24)[0], 255);
     assert_eq!(px(&f, 48, 24)[0], 0);
@@ -421,9 +560,8 @@ fn trimpath_draws_on() {
 fn layers_fade_as_a_group_and_blend() {
     // Two overlapping white squares at half opacity: as a group the overlap
     // is no brighter than the rest.
-    let mut m = load(
-        "/scene { 0.5 { 1 setgray 0 0 40 48 rectfill 20 0 44 48 rectfill } faded } def",
-    );
+    let mut m =
+        load("/scene { 0.5 { 1 setgray 0 0 40 48 rectfill 20 0 44 48 rectfill } faded } def");
     let f = m.render_frame(0).unwrap();
     assert_eq!(px(&f, 10, 10)[0], 128);
     assert_eq!(px(&f, 30, 10)[0], 128, "the overlap");
@@ -492,9 +630,7 @@ fn an_unclosed_layer_is_reported_and_does_not_poison_the_next_frame() {
 
 #[test]
 fn backdrop_camera_vignette_grain() {
-    let mut m = load(
-        "/scene { 0.2 0.4 0.6 backdrop } def",
-    );
+    let mut m = load("/scene { 0.2 0.4 0.6 backdrop } def");
     let f = m.render_frame(0).unwrap();
     assert_eq!(px(&f, 0, 0), [51, 102, 153, 255]);
     assert_eq!(px(&f, 63, 47), [51, 102, 153, 255]);
@@ -511,7 +647,11 @@ fn backdrop_camera_vignette_grain() {
     let a = m.render_frame(0).unwrap().premultiplied.to_vec();
     let b = m.render_frame(1).unwrap().premultiplied.to_vec();
     assert_ne!(a, b, "grain moves");
-    assert_eq!(m.render_frame(0).unwrap().premultiplied, &a[..], "and is repeatable");
+    assert_eq!(
+        m.render_frame(0).unwrap().premultiplied,
+        &a[..],
+        "and is repeatable"
+    );
     assert!(a.chunks(4).any(|p| p[0] != 128));
 }
 
@@ -529,15 +669,23 @@ fn text_helpers() {
       } eachglyph acc ok 100 mul add";
     assert_eq!(eval_at(setup, expr, 0), 0.0 + 1.0 + 2.0 + 3.0 + 4.0 + 100.0);
     // `{ pop show }` reproduces show.
-    let mut a = load("/scene { /Helvetica findfont 12 scalefont setfont 1 setgray 4 20 moveto (Wave) show } def");
-    let mut b = load("/scene { /Helvetica findfont 12 scalefont setfont 1 setgray 4 20 moveto (Wave) { pop show } eachglyph } def");
+    let mut a = load(
+        "/scene { /Helvetica findfont 12 scalefont setfont 1 setgray 4 20 moveto (Wave) show } def",
+    );
+    let mut b = load(
+        "/scene { /Helvetica findfont 12 scalefont setfont 1 setgray 4 20 moveto (Wave) { pop show } eachglyph } def",
+    );
     let fa = a.render_frame(0).unwrap().premultiplied.to_vec();
-    assert!(fa.iter().any(|v| *v == 255));
+    assert!(fa.contains(&255));
     assert_eq!(b.render_frame(0).unwrap().premultiplied, &fa[..]);
     // showcenter centres on the current point.
-    let mut m = load("/scene { /Helvetica findfont 12 scalefont setfont 1 setgray 32 20 moveto (WWWW) showcenter } def");
+    let mut m = load(
+        "/scene { /Helvetica findfont 12 scalefont setfont 1 setgray 32 20 moveto (WWWW) showcenter } def",
+    );
     let f = m.render_frame(0).unwrap().premultiplied.to_vec();
-    let cols: Vec<usize> = (0..64).filter(|x| (0..48).any(|y| f[(y * 64 + x) * 4] > 100)).collect();
+    let cols: Vec<usize> = (0..64)
+        .filter(|x| (0..48).any(|y| f[(y * 64 + x) * 4] > 100))
+        .collect();
     let mid = (cols[0] + cols[cols.len() - 1]) as f64 / 2.0;
     assert!((mid - 32.0).abs() < 1.5, "{mid}");
 }
@@ -573,14 +721,27 @@ fn every_transition_starts_on_a_and_ends_on_b() {
     for name in psanim::TRANSITIONS {
         let mut m = reel_movie(name);
         let first = m.render_frame(5).unwrap(); // u = 0
-        let n = first.premultiplied.chunks(4).filter(|p| p[0] > 200 && p[2] < 50).count();
-        assert!(n as f64 > 0.95 * 800.0, "{name} at u=0 shows {n} red pixels");
+        let n = first
+            .premultiplied
+            .chunks(4)
+            .filter(|p| p[0] > 200 && p[2] < 50)
+            .count();
+        assert!(
+            n as f64 > 0.95 * 800.0,
+            "{name} at u=0 shows {n} red pixels"
+        );
         let last = m.render_frame(15).unwrap(); // just past the transition
-        assert!(last.premultiplied.chunks(4).all(|p| p == [0, 0, 255, 255]), "{name} after");
+        assert!(
+            last.premultiplied.chunks(4).all(|p| p == [0, 0, 255, 255]),
+            "{name} after"
+        );
         // Late in the transition B dominates.
         let late = m.render_frame(14).unwrap();
         let blue = late.premultiplied.chunks(4).filter(|p| p[2] > p[0]).count();
-        assert!(blue as f64 > 0.6 * 800.0, "{name} at u=0.9 shows {blue} blue pixels");
+        assert!(
+            blue as f64 > 0.6 * 800.0,
+            "{name} at u=0.9 shows {blue} blue pixels"
+        );
     }
 }
 
@@ -595,7 +756,11 @@ fn clips_that_start_with_backdrop_can_be_wiped_and_pushed() {
     .unwrap();
     let f = m.render_frame(10).unwrap();
     assert_eq!(px(&f, 2, 10), [0, 0, 255, 255]);
-    assert_eq!(px(&f, 37, 10), [255, 0, 0, 255], "the outgoing clip's backdrop is still there");
+    assert_eq!(
+        px(&f, 37, 10),
+        [255, 0, 0, 255],
+        "the outgoing clip's backdrop is still there"
+    );
     let mut m = Movie::load(
         "<< /Size [40 20] /Duration 3 /FPS 10 >> animation
          /a { 1 0 0 backdrop } def /b { 0 0 1 backdrop } def
@@ -629,7 +794,12 @@ fn a_program_can_add_a_transition_and_bad_names_fail_early() {
     // first frame, not only when that entry's turn comes.
     let mut m = Movie::load(&src("nosuchthing"), &Options::default()).unwrap();
     let e = m.render_frame(0).unwrap_err();
-    assert!(e.hint.unwrap().contains("/nosuchthing is neither a transition"), "hint names it");
+    assert!(
+        e.hint
+            .unwrap()
+            .contains("/nosuchthing is neither a transition"),
+        "hint names it"
+    );
 }
 
 #[test]
@@ -676,9 +846,15 @@ fn reel_clips_keep_their_own_clocks_through_a_transition() {
     )
     .unwrap();
     // t = 0.7: in the transition, before the cut: A at local 0.7.
-    assert_eq!(px(&m.render_frame(7).unwrap(), 1, 1)[0], (0.7f64 / 1.5 * 255.0).round() as u8);
+    assert_eq!(
+        px(&m.render_frame(7).unwrap(), 1, 1)[0],
+        (0.7f64 / 1.5 * 255.0).round() as u8
+    );
     // t = 1.2: after the cut: B at local 0.7 (it started at 0.5).
-    assert_eq!(px(&m.render_frame(12).unwrap(), 6, 1)[2], (0.7f64 / 1.5 * 255.0).round() as u8);
+    assert_eq!(
+        px(&m.render_frame(12).unwrap(), 6, 1)[2],
+        (0.7f64 / 1.5 * 255.0).round() as u8
+    );
 }
 
 #[test]
@@ -694,7 +870,10 @@ fn params_signals_and_events_reach_the_program() {
     opts.signals = psanim::Signals::from_csv("t,level,beat!\n0,0,\n1,1,x\n2,1,x\n").unwrap();
     let mut m = Movie::load(&src, &opts).unwrap();
     assert_eq!(m.meta().params.get("gain").map(String::as_str), Some("2"));
-    assert_eq!(m.meta().params.get("label").map(String::as_str), Some("(none)"));
+    assert_eq!(
+        m.meta().params.get("label").map(String::as_str),
+        Some("(none)")
+    );
     assert_eq!(px(&m.render_frame(5).unwrap(), 0, 0), [64, 0, 0, 255]); // level .5 * gain .5, no beat yet
     assert_eq!(px(&m.render_frame(15).unwrap(), 0, 0), [128, 128, 64, 255]); // one beat
     // A live host overrides the signal.
@@ -723,31 +902,48 @@ fn stateful_movies_replay_to_the_same_frames() {
     let mut m = Movie::load(BOUNCE, &Options::default()).unwrap();
     assert_eq!(m.meta().mode, Mode::Stateful);
     assert_eq!(m.meta().tick_rate, 50.0);
-    let forward: Vec<Vec<u8>> = (0..40).map(|k| m.render_frame(k).unwrap().premultiplied.to_vec()).collect();
+    let forward: Vec<Vec<u8>> = (0..40)
+        .map(|k| m.render_frame(k).unwrap().premultiplied.to_vec())
+        .collect();
     assert_ne!(forward[0], forward[5]);
     // The ball moves about 4 units a frame at first.
     let col = |buf: &[u8]| (0..64).find(|x| buf[(24 * 64 + x) * 4] > 0).unwrap();
     assert!((col(&forward[5]) as i64 - col(&forward[0]) as i64 - 20).abs() <= 2);
     // Backward, random access, repeated: identical.
     for k in [39, 0, 20, 19, 21, 3, 3, 38] {
-        assert_eq!(m.render_frame(k).unwrap().premultiplied, &forward[k as usize][..], "frame {k}");
+        assert_eq!(
+            m.render_frame(k).unwrap().premultiplied,
+            &forward[k as usize][..],
+            "frame {k}"
+        );
     }
     // A fresh movie jumping straight to a late frame agrees.
     let mut cold = Movie::load(BOUNCE, &Options::default()).unwrap();
-    assert_eq!(cold.render_frame(33).unwrap().premultiplied, &forward[33][..]);
+    assert_eq!(
+        cold.render_frame(33).unwrap().premultiplied,
+        &forward[33][..]
+    );
 }
 
 #[test]
 fn stateful_result_does_not_depend_on_the_output_frame_rate() {
     let mut a = Movie::load(BOUNCE, &Options::default()).unwrap();
-    let mut b = Movie::load(BOUNCE, &Options { fps: Some(25.0), ..Options::default() }).unwrap();
+    let mut b = Movie::load(
+        BOUNCE,
+        &Options {
+            fps: Some(25.0),
+            ..Options::default()
+        },
+    )
+    .unwrap();
     assert_eq!(b.meta().tick_rate, 50.0);
     // t = 2.0 is frame 20 at 10 fps and frame 50 at 25 fps.
     let fa = a.render_frame(20).unwrap().premultiplied.to_vec();
     assert_eq!(b.render_frame(50).unwrap().premultiplied, &fa[..]);
 }
 
-const TRAIL: &str = "<< /Size [64 48] /Duration 6 /FPS 10 /Persist true /Background [0 0 0] >> animation
+const TRAIL: &str =
+    "<< /Size [64 48] /Duration 6 /FPS 10 /Persist true /Background [0 0 0] >> animation
     /scene { 1 setgray frame 1 add 0 1 48 rectfill } def";
 
 #[test]
@@ -780,7 +976,11 @@ fn a_persistent_movie_can_show_an_overlay_that_is_not_kept() {
     assert_eq!(px(&f, 11, 21), [255, 0, 0, 255], "the overlay is shown");
     assert_eq!(px(&f, 5, 40)[0], 255, "over the painting");
     let f = m.render_frame(20).unwrap();
-    assert_eq!(px(&f, 11, 21), [0, 0, 0, 255], "and an earlier frame's overlay is gone");
+    assert_eq!(
+        px(&f, 11, 21),
+        [0, 0, 0, 255],
+        "and an earlier frame's overlay is gone"
+    );
     assert_eq!(px(&f, 21, 21), [255, 0, 0, 255]);
     // Seeking back still gives the same frame.
     let again = m.render_frame(10).unwrap().premultiplied.to_vec();
@@ -804,7 +1004,13 @@ fn motion_blur_averages_the_shutter_interval() {
     let mut sharp = Movie::load(src, &Options::default()).unwrap();
     let mut blur = Movie::load(
         src,
-        &Options { motion_blur: Some(Some(MotionBlur { samples: 8, shutter: 1.0 })), ..Options::default() },
+        &Options {
+            motion_blur: Some(Some(MotionBlur {
+                samples: 8,
+                shutter: 1.0,
+            })),
+            ..Options::default()
+        },
     )
     .unwrap();
     let lit = |f: &psanim::Frame| (0..64).filter(|x| px(f, *x, 4)[0] > 0).count();
@@ -814,13 +1020,36 @@ fn motion_blur_averages_the_shutter_interval() {
     assert!((14..=18).contains(&lit(&f)), "{}", lit(&f));
     assert!(px(&f, 24, 4)[0] < 80);
     // Declared in the program, and switched off by the host.
-    let declared = "<< /Size [64 8] /Duration 1 /FPS 4 /MotionBlur 4 /Shutter 0.5 >> animation /scene { } def";
+    let declared =
+        "<< /Size [64 8] /Duration 1 /FPS 4 /MotionBlur 4 /Shutter 0.5 >> animation /scene { } def";
     let m = Movie::load(declared, &Options::default()).unwrap();
-    assert_eq!(m.meta().motion_blur, Some(MotionBlur { samples: 4, shutter: 0.5 }));
-    let m = Movie::load(declared, &Options { motion_blur: Some(None), ..Options::default() }).unwrap();
+    assert_eq!(
+        m.meta().motion_blur,
+        Some(MotionBlur {
+            samples: 4,
+            shutter: 0.5
+        })
+    );
+    let m = Movie::load(
+        declared,
+        &Options {
+            motion_blur: Some(None),
+            ..Options::default()
+        },
+    )
+    .unwrap();
     assert_eq!(m.meta().motion_blur, None);
     // Not available to a simulation.
-    let e = match Movie::load(BOUNCE, &Options { motion_blur: Some(Some(MotionBlur { samples: 4, shutter: 0.5 })), ..Options::default() }) {
+    let e = match Movie::load(
+        BOUNCE,
+        &Options {
+            motion_blur: Some(Some(MotionBlur {
+                samples: 4,
+                shutter: 0.5,
+            })),
+            ..Options::default()
+        },
+    ) {
         Err(e) => e,
         Ok(_) => panic!(),
     };
@@ -831,7 +1060,10 @@ fn motion_blur_averages_the_shutter_interval() {
 fn setup_errors_carry_the_line() {
     let e = load_err("<< /Size [64 48] >> animation\n/scene { } def\n\n1 (two) add\n");
     assert_eq!(e.phase, Phase::Setup);
-    assert_eq!((e.kind.as_str(), e.command.as_deref(), e.line), ("typecheck", Some("add"), Some(4)));
+    assert_eq!(
+        (e.kind.as_str(), e.command.as_deref(), e.line),
+        ("typecheck", Some("add"), Some(4))
+    );
     assert_eq!(e.stack, ["1", "(two)"]);
     assert!(e.to_string().contains("[line 4]"));
     let e = load_err("<< /Size [64 48] >> animation\n/scene { (unterminated } def");
@@ -843,8 +1075,17 @@ fn frame_errors_say_which_frame_and_suggest_a_fix() {
     let mut m = load("/scene { now 0.5 ge { 0 0 1 durring } if } def");
     assert!(m.render_frame(2).is_ok());
     let e = m.render_frame(7).unwrap_err();
-    assert_eq!(e.phase, Phase::Frame { index: 7, time: 0.7 });
-    assert_eq!((e.kind.as_str(), e.command.as_deref()), ("undefined", Some("durring")));
+    assert_eq!(
+        e.phase,
+        Phase::Frame {
+            index: 7,
+            time: 0.7
+        }
+    );
+    assert_eq!(
+        (e.kind.as_str(), e.command.as_deref()),
+        ("undefined", Some("durring"))
+    );
     assert!(e.hint.as_deref().unwrap().contains("`during`"), "{e}");
     assert_eq!(e.line, None);
     assert_eq!(e.to_json()["frame"], 7);
@@ -874,11 +1115,20 @@ fn frame_errors_show_where_in_the_program() {
     // petal, the repeat body, flower's caller (the during body), scene.
     assert_eq!(names.first(), Some(&Some("petal")), "{e}");
     assert_eq!(names.last(), Some(&Some("scene")), "{e}");
-    assert_eq!(e.backtrace[0].excerpt, "0 0 moveto 10 (x) >>> lineto <<< stroke");
+    assert_eq!(
+        e.backtrace[0].excerpt,
+        "0 0 moveto 10 (x) >>> lineto <<< stroke"
+    );
     // The prelude's own plumbing is not in the way.
-    assert!(e.backtrace.iter().all(|t| !t.excerpt.contains(".timepop")), "{e}");
+    assert!(
+        e.backtrace.iter().all(|t| !t.excerpt.contains(".timepop")),
+        "{e}"
+    );
     let text = e.to_string();
-    assert!(text.contains("in petal: 0 0 moveto 10 (x) >>> lineto <<< stroke"), "{text}");
+    assert!(
+        text.contains("in petal: 0 0 moveto 10 (x) >>> lineto <<< stroke"),
+        "{text}"
+    );
     assert_eq!(e.to_json()["backtrace"][0]["procedure"], "petal");
     // A scene failing at its very last operator is still located.
     let mut m = load("/scene { 1 setgray 5 5 moveto (no font) show } def");
@@ -901,7 +1151,11 @@ fn declaration_errors_are_explained() {
     let e = load_err("42 animation /scene { } def");
     assert!(e.hint.unwrap().contains("dictionary"));
     // A custom scene name.
-    let mut m = Movie::load("<< /Size [8 8] /Scene /draw >> animation /draw { 1 setgray 0 0 8 8 rectfill } def", &Options::default()).unwrap();
+    let mut m = Movie::load(
+        "<< /Size [8 8] /Scene /draw >> animation /draw { 1 setgray 0 0 8 8 rectfill } def",
+        &Options::default(),
+    )
+    .unwrap();
     assert_eq!(px(&m.render_frame(0).unwrap(), 0, 0)[0], 255);
 }
 
@@ -914,14 +1168,21 @@ fn budgets_bound_setup_and_frames() {
         Err(e) => e,
         Ok(_) => panic!(),
     };
-    assert_eq!((e.phase, e.kind.as_str(), e.limit), (Phase::Setup, "limitexceeded", Some("steps")));
+    assert_eq!(
+        (e.phase, e.kind.as_str(), e.limit),
+        (Phase::Setup, "limitexceeded", Some("steps"))
+    );
     let mut m = Movie::load(
         &format!("{HEAD}/scene {{ frame 3 eq {{ {{ }} loop }} if 100 {{ 1 pop }} repeat }} def"),
         &opts,
     )
     .unwrap();
     m.render_frame(0).unwrap();
-    assert!((200..2000).contains(&m.last_frame_steps()), "{}", m.last_frame_steps());
+    assert!(
+        (200..2000).contains(&m.last_frame_steps()),
+        "{}",
+        m.last_frame_steps()
+    );
     let e = m.render_frame(3).unwrap_err();
     assert_eq!((e.kind.as_str(), e.limit), ("limitexceeded", Some("steps")));
     assert!(e.hint.unwrap().contains("budget"));
@@ -933,17 +1194,32 @@ fn programs_cannot_write_files_or_read_outside_their_roots() {
     let dir = std::env::temp_dir().join(format!("psanim-test-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let target = dir.join("out.txt");
-    let e = load_err(&format!("{HEAD}({}) (w) file closefile /scene {{ }} def", target.display()));
+    let e = load_err(&format!(
+        "{HEAD}({}) (w) file closefile /scene {{ }} def",
+        target.display()
+    ));
     assert_eq!(e.kind, "invalidfileaccess");
     assert!(!target.exists());
     std::fs::write(&target, "secret").unwrap();
-    let read = format!("{HEAD}({}) (r) file closefile /scene {{ }} def", target.display());
+    let read = format!(
+        "{HEAD}({}) (r) file closefile /scene {{ }} def",
+        target.display()
+    );
     // Open by default, as for any program you run yourself...
     assert!(Movie::load(&read, &Options::default()).is_ok());
     // ...and confined when the host says so; the built-in libraries still load.
-    let confined = Options { read_roots: Some(vec![]), ..Options::default() };
+    let confined = Options {
+        read_roots: Some(vec![]),
+        ..Options::default()
+    };
     assert!(Movie::load(&read, &confined).is_err());
-    assert!(Movie::load(&format!("{HEAD}(lib/artkit.ps) run /scene {{ }} def"), &confined).is_ok());
+    assert!(
+        Movie::load(
+            &format!("{HEAD}(lib/artkit.ps) run /scene {{ }} def"),
+            &confined
+        )
+        .is_ok()
+    );
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
@@ -954,7 +1230,10 @@ fn interrupt_stops_a_render() {
     let stop = Arc::new(AtomicBool::new(false));
     let mut m = Movie::load(
         &format!("{HEAD}/scene {{ {{ }} loop }} def"),
-        &Options { interrupt: Some(stop.clone()), ..Options::default() },
+        &Options {
+            interrupt: Some(stop.clone()),
+            ..Options::default()
+        },
     )
     .unwrap();
     let s = stop.clone();
@@ -993,6 +1272,9 @@ fn pscat_libraries_work_inside_a_movie() {
          /scene { 32 24 translate now 90 mul rotate 1 0.8 0.2 setrgbcolor 0 0 18 8 5 star fill } def",
     );
     let a = m.render_frame(0).unwrap().premultiplied.to_vec();
-    assert!(a.chunks(4).any(|p| p[0] > 200 && p[2] < 100), "a star was drawn");
+    assert!(
+        a.chunks(4).any(|p| p[0] > 200 && p[2] < 100),
+        "a star was drawn"
+    );
     assert_ne!(m.render_frame(3).unwrap().premultiplied, &a[..]);
 }

@@ -34,6 +34,13 @@ in the scene (it is cheap: fonts are cached).
 starts with an empty path. Also: `grestore` and `stroke`/`fill` discard
 the path. To use a path twice, `gsave fill grestore stroke`.
 
+## A shape I did not draw gets filled
+
+`clip` does not clear the path. After `x y r 0 360 arc clip`, the circle
+is still the current path and the next `fill` paints it too. Write
+`clip newpath`. Likewise `gsave ... grestore` restores the path that was
+current at the `gsave`.
+
 ## `stackunderflow` in a combinator
 
 Operands in the wrong order. The procedure is always last:

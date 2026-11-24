@@ -188,7 +188,10 @@ impl std::error::Error for Error {}
 
 /// The closest of `candidates` to `name`, if one is within a small edit
 /// distance: for "did you mean".
-pub(crate) fn closest<'a>(name: &str, candidates: impl Iterator<Item = &'a str>) -> Option<&'a str> {
+pub(crate) fn closest<'a>(
+    name: &str,
+    candidates: impl Iterator<Item = &'a str>,
+) -> Option<&'a str> {
     let limit = (name.len() / 3).clamp(1, 3);
     candidates
         .filter(|c| *c != name)
@@ -228,12 +231,21 @@ mod tests {
 
     #[test]
     fn display_and_json_carry_the_same_facts() {
-        let mut e = Error::new(Phase::Frame { index: 12, time: 0.4 }, "typecheck", "typecheck in `add`");
+        let mut e = Error::new(
+            Phase::Frame {
+                index: 12,
+                time: 0.4,
+            },
+            "typecheck",
+            "typecheck in `add`",
+        );
         e.command = Some("add".into());
         e.stack = vec!["(a)".into(), "3".into()];
         let e = e.hint("add needs two numbers");
         let text = e.to_string();
-        assert!(text.contains("frame 12") && text.contains("hint: add needs") && text.contains("(a) 3"));
+        assert!(
+            text.contains("frame 12") && text.contains("hint: add needs") && text.contains("(a) 3")
+        );
         let j = e.to_json();
         assert_eq!(j["phase"], "frame");
         assert_eq!(j["frame"], 12);

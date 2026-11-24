@@ -94,7 +94,8 @@ where
     let (tx, rx) = mpsc::sync_channel::<(usize, Result<Rendered, Error>)>(threads);
     let result = std::thread::scope(|scope| {
         for _ in 0..threads {
-            let (tx, next, delivered, stop) = (tx.clone(), next.clone(), delivered.clone(), stop.clone());
+            let (tx, next, delivered, stop) =
+                (tx.clone(), next.clone(), delivered.clone(), stop.clone());
             scope.spawn(move || {
                 let mut movie = match Movie::load(source, options) {
                     Ok(m) => m,
@@ -108,7 +109,9 @@ where
                         return;
                     }
                     let pos = next.fetch_add(1, Ordering::Relaxed);
-                    let Some(&index) = indices.get(pos) else { return };
+                    let Some(&index) = indices.get(pos) else {
+                        return;
+                    };
                     while pos > delivered.load(Ordering::Relaxed) + ahead {
                         if stop.load(Ordering::Relaxed) {
                             return;
@@ -125,7 +128,10 @@ where
                         steps: 0,
                     });
                     let steps = movie.last_frame_steps();
-                    if tx.send((pos, out.map(|r| Rendered { steps, ..r }))).is_err() {
+                    if tx
+                        .send((pos, out.map(|r| Rendered { steps, ..r })))
+                        .is_err()
+                    {
                         return;
                     }
                 }
@@ -191,7 +197,10 @@ mod tests {
         assert_eq!(serial, parallel);
         // An arbitrary selection, in the order asked for.
         let picked = collect(3, &[20, 2, 11, 2]);
-        assert_eq!(picked.iter().map(|f| f.0).collect::<Vec<_>>(), [20, 2, 11, 2]);
+        assert_eq!(
+            picked.iter().map(|f| f.0).collect::<Vec<_>>(),
+            [20, 2, 11, 2]
+        );
         assert_eq!(picked[1].1, serial[2].1);
     }
 
@@ -206,7 +215,13 @@ mod tests {
                 Ok(())
             })
             .unwrap_err();
-            assert_eq!(e.phase, Phase::Frame { index: 7, time: 0.7 });
+            assert_eq!(
+                e.phase,
+                Phase::Frame {
+                    index: 7,
+                    time: 0.7
+                }
+            );
             assert!(got.iter().all(|k| *k < 7), "{got:?}");
         }
     }
@@ -217,10 +232,17 @@ mod tests {
         let mut n = 0;
         let e = render_frames(SRC, &Options::default(), &all, 4, |_| {
             n += 1;
-            if n == 3 { Err("disk full".into()) } else { Ok(()) }
+            if n == 3 {
+                Err("disk full".into())
+            } else {
+                Ok(())
+            }
         })
         .unwrap_err();
-        assert_eq!((e.kind.as_str(), e.message.as_str()), ("output", "disk full"));
+        assert_eq!(
+            (e.kind.as_str(), e.message.as_str()),
+            ("output", "disk full")
+        );
         assert_eq!(n, 3);
     }
 
@@ -231,10 +253,16 @@ mod tests {
         let movie = Movie::load(src, &Options::default()).unwrap();
         assert_eq!(effective_threads(movie.meta(), 8, 10), 1);
         let mut shades = Vec::new();
-        render_frames(src, &Options::default(), &(0..10).collect::<Vec<_>>(), 8, |f| {
-            shades.push(f.premultiplied[0]);
-            Ok(())
-        })
+        render_frames(
+            src,
+            &Options::default(),
+            &(0..10).collect::<Vec<_>>(),
+            8,
+            |f| {
+                shades.push(f.premultiplied[0]);
+                Ok(())
+            },
+        )
         .unwrap();
         assert!(shades.windows(2).all(|w| w[0] < w[1]), "{shades:?}");
     }

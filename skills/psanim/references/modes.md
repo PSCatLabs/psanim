@@ -65,9 +65,77 @@ feedback. Draw only what is new this frame.
 
 - `scene` runs once per frame of the *declared* FPS, in order. Rendering
   at another `--fps` resamples those frames.
-- To paint a list of strokes over time, index by `frame`: stroke
-  `frame` is this frame's.
-- Seeking restores a canvas checkpoint and repaints from there.
+- `/Background` is painted once, before the first frame. For a textured
+  ground (paper), paint it yourself under `frame 0 eq { ... } if`.
+- `rand` is reseeded the same way every frame, so call `srand` yourself
+  when a mark's texture must not depend on which frame draws it.
+- Inside the scene, `now dt sub` is the previous frame's time: an
+  incremental painter needs both ends of the frame's interval.
+- **Seeking is not free.** A frame is reached by painting every frame
+  before it since the last checkpoint, and checkpoints live only as long
+  as the process: `psanim frame --at 20` paints from the start, and so
+  does every `sheet`. Iterate on late details with `--from`/`--to` on a
+  shortened copy, or with the earlier strokes switched off.
+
+### A stroke that travels across frames
+
+One whole stroke per frame is easy (stroke number `frame`). A wash that
+takes two seconds to cross the page is the real problem, because a
+textured or translucent stroke cannot simply be drawn "a bit longer"
+each frame: its texture would change and its alpha would stack. The
+recipe that works:
+
+1. Describe each stroke by a procedure that paints *all* of it, plus a
+   start time, a duration and a seed.
+2. Each frame, for every stroke in progress, clip to the sliver its
+   brush front crossed during this frame (from the front's position at
+   `now dt sub` to its position at `now`), `srand` the stroke's own seed,
+   and run the whole procedure.
+
+The slivers of successive frames tile the stroke exactly, so nothing is
+painted twice and the texture is the same whichever frame reveals it.
+
+```postscript
+%!PS
+<< /Size [640 360] /Duration 4 /FPS 30 /Persist true /Background [0.95 0.93 0.87] >> animation
+% [ start dur seed proc ]: each proc paints one whole stroke
+/plan [
+  [ 0.2 1.6 11 { 0.20 0.35 0.60 setrgbcolor 0.5 setalpha
+                 40 { rand 560 mod 40 add rand 60 mod 230 add rand 40 mod 10 add 0 360 arc fill } repeat } ]
+  [ 1.4 1.8 23 { 0.75 0.40 0.25 setrgbcolor 0.5 setalpha
+                 40 { rand 560 mod 40 add rand 60 mod 110 add rand 40 mod 10 add 0 360 arc fill } repeat } ]
+] def
+/scene {
+  plan {
+    aload pop /body exch def /seed exch def /dur exch def /t0 exch def
+    /u1 now t0 sub dur div 0 1 clamp def            % how far the brush has got now
+    /u0 now dt sub t0 sub dur div 0 1 clamp def     % ...and where it was a frame ago
+    u1 u0 gt {
+      gsave
+        u0 640 mul 0  u1 u0 sub 640 mul 360 rectclip     % the sliver crossed this frame
+        seed srand body
+      grestore
+    } if
+  } forall
+} def
+/overlay {      % the brush itself: shown, never kept
+  plan { aload pop pop pop /dur exch def /t0 exch def
+    now t0 ge now t0 dur add le and {
+      0.1 setgray now t0 sub dur div 640 mul 60 3 240 rectfill } if
+  } forall
+} def
+```
+
+A stroke pays its full cost on every frame it spans (the whole procedure
+runs under the clip), so long travelling washes are the expensive part of
+a painting.
+
+### An overlay that is not kept
+
+If a persistent movie defines `overlay`, it is drawn over each frame as
+shown and then discarded: a brush or cursor, a caption, a wet sheen that
+fades, a vignette. It runs like a pure scene (it reads `now`, may use
+time scopes and layers) and cannot change the painting.
 
 ## Parameters
 

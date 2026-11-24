@@ -438,7 +438,7 @@ The total length of a reel array: the clips' durations added up, minus the trans
 
 `-  transitions  dict`
 
-The dictionary of transitions. To define your own, put a procedure there: `transitions /shutter { ... } put`, then use `[dur /shutter]` in a reel. It is called with `procA procB u`: draw the frame that is u (0 to 1, linear) of the way from A to B. A and B are ready-made procedures that draw each clip with its own clock still running; call them inside gsave/grestore with whatever clip, transform or layer the transition needs.
+The dictionary of transitions. To define your own, put a procedure there: `transitions /t-shutter { ... } put`, then use `[dur /t-shutter]` in a reel. Name it with a `t-` prefix, or define it before the reel is measured with reelduration: otherwise the entry is taken for a clip. It is called with `procA procB u`: draw the frame that is u (0 to 1, linear) of the way from A to B. A and B are ready-made procedures that draw each clip with its own clock still running; call them inside gsave/grestore with whatever clip, transform or layer the transition needs.
 
 ## Parameters, signals and events
 

@@ -143,7 +143,7 @@ in its own rotated frame.
 % a line of italic riding an arc
 /Palatino-Italic findfont 20 scalefont setfont 1 0.75 0.4 setrgbcolor
 newpath 320 -120 280 120 60 arcn
-(the last light of the longest day) 0.5 3 /sine-inout tween 0.05 0.25 between { pop show } eachonpath
+(the last light of the longest day) 0.5 3 /sine-inout tween 0.02 0.12 between { pop show } eachonpath
 newpath
 ```
 
@@ -340,6 +340,60 @@ draw only type or a subject, and they transition over it. In a
 `sequence`, `null` in place of a procedure is a pause. Fade a clip's own text
 out before its transition (see "Enter, hold, leave") so two captions
 never overlap in a dissolve.
+
+### Writing a transition
+
+A transition is a procedure in the `transitions` dictionary. It gets
+`procA procB u`: draw the frame that is `u` (0 to 1, linear) of the way
+from clip A to clip B. A and B are ready-made procedures that draw each
+clip; both clips' clocks keep running through the transition. Clip,
+transform or fade them as you like:
+
+```postscript
+%!PS
+% B appears through horizontal slats that open. The `t-` prefix tells
+% `reelduration` this entry is a transition even if it is defined later.
+transitions /t-shutter {
+  /cubic-inout ease /u exch def /b exch def /a exch def
+  a
+  gsave
+    newpath 0 1 8 { 40 mul 0 exch moveto 640 0 rlineto 0 u 40 mul rlineto -640 0 rlineto closepath } for
+    clip newpath
+    b
+  grestore
+} put
+/film [ [2.5 /day] [1.2 /t-shutter] [2.5 /night] ] def
+<< /Size [640 360] /Duration film reelduration /FPS 30 >> animation
+/day   { 0.85 0.75 0.45 backdrop 1 1 0.9 setrgbcolor 500 now 12 mul 250 add 40 0 360 arc fill } def
+/night { 0.06 0.08 0.20 backdrop 0.9 0.9 1 setrgbcolor 140 now 10 mul 250 add 26 0 360 arc fill } def
+/scene { film reel } def
+```
+
+During a transition both clips are on screen. Get a character out of
+frame before a wipe or push, or put it at the same place in both clips
+for a dissolve; otherwise the audience sees two of it.
+
+### Parallax
+
+Depth from one number: draw each layer under its own camera, offset by a
+fraction of the travel. Far layers move less, are dimmer, and can be
+`blurred`.
+
+```postscript
+/travel 0 4 /sine-inout tween 900 mul def            % how far the camera has gone
+[ [0.15 0.28 0.36 0.48 60] [0.45 0.18 0.24 0.34 110] [1.0 0.09 0.11 0.16 170] ] {
+  aload pop /top exch def /b exch def /g exch def /r exch def /depth exch def
+  gsave
+    travel depth mul neg 0 translate                 % far layers (small depth) slide less
+    r g b setrgbcolor
+    0 1 30 { /i exch def
+      i 120 mul 0 moveto
+      i 120 mul 60 add  top [i depth] hash01 60 mul add  lineto
+      i 120 mul 120 add 0 lineto closepath fill
+    } for
+  grestore
+} forall
+```
 
 ## Keyframes
 

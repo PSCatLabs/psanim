@@ -12,11 +12,16 @@ use std::path::{Path, PathBuf};
 use psanim::{Movie, Options, Scale};
 
 fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap()
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn files_under(dir: &Path, ext: &str, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
     for e in entries.flatten() {
         let p = e.path();
         if p.is_dir() {
@@ -35,7 +40,9 @@ fn fences(text: &str) -> Vec<(usize, String)> {
     for (n, line) in text.lines().enumerate() {
         let t = line.trim_start();
         match &mut current {
-            None if t.starts_with("```postscript") && !t.contains("partial") => current = Some((n + 2, String::new())),
+            None if t.starts_with("```postscript") && !t.contains("partial") => {
+                current = Some((n + 2, String::new()))
+            }
             None => {}
             Some(_) if t.starts_with("```") => out.extend(current.take()),
             Some((_, body)) => {
@@ -93,7 +100,9 @@ fn every_postscript_fence_in_the_docs_runs() {
             let source = if body.trim_start().starts_with("%!PS") {
                 body
             } else {
-                format!("<< /Size [640 360] /Duration 4 /FPS 30 /Background [0.05 0.06 0.09] >> animation\n/scene {{\n{body}\n}} def\n")
+                format!(
+                    "<< /Size [640 360] /Duration 4 /FPS 30 /Background [0.05 0.06 0.09] >> animation\n/scene {{\n{body}\n}} def\n"
+                )
             };
             let what = format!("{}:{line}", path.strip_prefix(&root).unwrap().display());
             if let Err(e) = exercise(&what, &source, None) {
@@ -101,8 +110,16 @@ fn every_postscript_fence_in_the_docs_runs() {
             }
         }
     }
-    assert!(count >= 10, "only {count} fences found: is the skill where this test looks?");
-    assert!(failures.is_empty(), "{} of {count} documentation examples fail:\n\n{}", failures.len(), failures.join("\n\n"));
+    assert!(
+        count >= 10,
+        "only {count} fences found: is the skill where this test looks?"
+    );
+    assert!(
+        failures.is_empty(),
+        "{} of {count} documentation examples fail:\n\n{}",
+        failures.len(),
+        failures.join("\n\n")
+    );
 }
 
 #[test]
@@ -121,5 +138,11 @@ fn every_example_and_gallery_piece_loads_and_renders() {
             failures.push(e);
         }
     }
-    assert!(failures.is_empty(), "{} of {} programs fail:\n\n{}", failures.len(), ps.len(), failures.join("\n\n"));
+    assert!(
+        failures.is_empty(),
+        "{} of {} programs fail:\n\n{}",
+        failures.len(),
+        ps.len(),
+        failures.join("\n\n")
+    );
 }

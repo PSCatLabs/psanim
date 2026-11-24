@@ -228,7 +228,10 @@ mod tests {
     #[test]
     fn monotone_curves_are_monotone() {
         for name in NAMES {
-            if ["back", "elastic", "spring", "bounce"].iter().any(|p| name.starts_with(p)) {
+            if ["back", "elastic", "spring", "bounce"]
+                .iter()
+                .any(|p| name.starts_with(p))
+            {
                 continue;
             }
             let f = by_name(name).unwrap();

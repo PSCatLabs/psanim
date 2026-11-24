@@ -18,7 +18,11 @@ impl Poly {
     /// The edges, including the closing one.
     fn edges(&self) -> impl Iterator<Item = ((f64, f64), (f64, f64))> + '_ {
         let n = self.points.len();
-        let count = if self.closed && n > 1 { n } else { n.saturating_sub(1) };
+        let count = if self.closed && n > 1 {
+            n
+        } else {
+            n.saturating_sub(1)
+        };
         (0..count).map(move |i| (self.points[i], self.points[(i + 1) % n]))
     }
 
@@ -38,7 +42,11 @@ fn lerp(a: (f64, f64), b: (f64, f64), u: f64) -> (f64, f64) {
 /// Flatten a path into polylines. `tolerance` is the chord length, in user
 /// units, a curve is cut into (each curve gets between 4 and 200 chords).
 pub fn flatten(path: &[PathSegment], tolerance: f64) -> Vec<Poly> {
-    let tol = if tolerance.is_finite() && tolerance > 0.0 { tolerance } else { 1.0 };
+    let tol = if tolerance.is_finite() && tolerance > 0.0 {
+        tolerance
+    } else {
+        1.0
+    };
     let mut out: Vec<Poly> = Vec::new();
     let mut cur: Option<Poly> = None;
     let mut start = (0.0, 0.0);
@@ -47,7 +55,10 @@ pub fn flatten(path: &[PathSegment], tolerance: f64) -> Vec<Poly> {
             PathSegment::MoveTo(x, y) => {
                 out.extend(cur.take().filter(|p| p.points.len() > 1));
                 start = (x, y);
-                cur = Some(Poly { points: vec![(x, y)], closed: false });
+                cur = Some(Poly {
+                    points: vec![(x, y)],
+                    closed: false,
+                });
             }
             PathSegment::LineTo(x, y) => {
                 if let Some(p) = cur.as_mut() {
@@ -57,12 +68,14 @@ pub fn flatten(path: &[PathSegment], tolerance: f64) -> Vec<Poly> {
             PathSegment::CurveTo(x1, y1, x2, y2, x3, y3) => {
                 if let Some(p) = cur.as_mut() {
                     let p0 = *p.points.last().unwrap_or(&start);
-                    let ctrl = dist(p0, (x1, y1)) + dist((x1, y1), (x2, y2)) + dist((x2, y2), (x3, y3));
+                    let ctrl =
+                        dist(p0, (x1, y1)) + dist((x1, y1), (x2, y2)) + dist((x2, y2), (x3, y3));
                     let n = ((ctrl / tol).ceil() as usize).clamp(4, 200);
                     for i in 1..=n {
                         let t = i as f64 / n as f64;
                         let mt = 1.0 - t;
-                        let (a, b, c, d) = (mt * mt * mt, 3.0 * mt * mt * t, 3.0 * mt * t * t, t * t * t);
+                        let (a, b, c, d) =
+                            (mt * mt * mt, 3.0 * mt * mt * t, 3.0 * mt * t * t, t * t * t);
                         p.points.push((
                             a * p0.0 + b * x1 + c * x2 + d * x3,
                             a * p0.1 + b * y1 + c * y2 + d * y3,
@@ -82,7 +95,10 @@ pub fn flatten(path: &[PathSegment], tolerance: f64) -> Vec<Poly> {
                     }
                     // PostScript leaves the current point at the subpath's
                     // start after closepath; a lineto continues from there.
-                    cur = Some(Poly { points: vec![start], closed: false });
+                    cur = Some(Poly {
+                        points: vec![start],
+                        closed: false,
+                    });
                 }
             }
         }
@@ -119,7 +135,12 @@ pub fn point_at(polys: &[Poly], s: f64) -> Option<(f64, f64, f64)> {
     }
     // Rounding left a sliver past the last edge: its end point.
     last.map(|(a, b)| (b.0, b.1, (b.1 - a.1).atan2(b.0 - a.0).to_degrees()))
-        .or_else(|| polys.first().and_then(|p| p.points.first()).map(|p| (p.0, p.1, 0.0)))
+        .or_else(|| {
+            polys
+                .first()
+                .and_then(|p| p.points.first())
+                .map(|p| (p.0, p.1, 0.0))
+        })
 }
 
 /// The part of one polyline between arc lengths `s0` and `s1`.
@@ -171,7 +192,12 @@ pub fn trim(polys: &[Poly], u0: f64, u1: f64) -> Vec<PathSegment> {
     let mut pos = 0.0;
     for poly in polys {
         let len = poly.length();
-        trim_poly(poly, s0 - pos, (s1 - pos).min(len + if u1 >= 1.0 { 1.0 } else { 0.0 }), &mut out);
+        trim_poly(
+            poly,
+            s0 - pos,
+            (s1 - pos).min(len + if u1 >= 1.0 { 1.0 } else { 0.0 }),
+            &mut out,
+        );
         pos += len;
     }
     out
@@ -183,7 +209,11 @@ pub fn trim_each(polys: &[Poly], u0: f64, u1: f64) -> Vec<PathSegment> {
     let mut out = Vec::new();
     for poly in polys {
         let len = poly.length();
-        let end = if u1 >= 1.0 { len + 1.0 } else { u1.clamp(0.0, 1.0) * len };
+        let end = if u1 >= 1.0 {
+            len + 1.0
+        } else {
+            u1.clamp(0.0, 1.0) * len
+        };
         trim_poly(poly, u0.clamp(0.0, 1.0) * len, end, &mut out);
     }
     out
@@ -218,7 +248,13 @@ mod tests {
     use PathSegment::*;
 
     fn square() -> Vec<PathSegment> {
-        vec![MoveTo(0.0, 0.0), LineTo(10.0, 0.0), LineTo(10.0, 10.0), LineTo(0.0, 10.0), Close]
+        vec![
+            MoveTo(0.0, 0.0),
+            LineTo(10.0, 0.0),
+            LineTo(10.0, 10.0),
+            LineTo(0.0, 10.0),
+            Close,
+        ]
     }
 
     #[test]
@@ -263,7 +299,10 @@ mod tests {
     fn trim_takes_the_middle() {
         let polys = flatten(&square(), 1.0);
         let t = trim(&polys, 0.125, 0.375);
-        assert_eq!(t, vec![MoveTo(5.0, 0.0), LineTo(10.0, 0.0), LineTo(10.0, 5.0)]);
+        assert_eq!(
+            t,
+            vec![MoveTo(5.0, 0.0), LineTo(10.0, 0.0), LineTo(10.0, 5.0)]
+        );
         assert!(trim(&polys, 0.5, 0.5).is_empty());
         assert!(trim(&polys, 0.7, 0.2).is_empty());
     }
@@ -278,15 +317,36 @@ mod tests {
 
     #[test]
     fn trim_runs_through_subpaths_in_order() {
-        let two = vec![MoveTo(0.0, 0.0), LineTo(10.0, 0.0), MoveTo(0.0, 5.0), LineTo(10.0, 5.0)];
+        let two = vec![
+            MoveTo(0.0, 0.0),
+            LineTo(10.0, 0.0),
+            MoveTo(0.0, 5.0),
+            LineTo(10.0, 5.0),
+        ];
         let polys = flatten(&two, 1.0);
         assert_eq!(polys.len(), 2);
         // 75% of the ink: all of the first line, half of the second.
         let t = trim(&polys, 0.0, 0.75);
-        assert_eq!(t, vec![MoveTo(0.0, 0.0), LineTo(10.0, 0.0), MoveTo(0.0, 5.0), LineTo(5.0, 5.0)]);
+        assert_eq!(
+            t,
+            vec![
+                MoveTo(0.0, 0.0),
+                LineTo(10.0, 0.0),
+                MoveTo(0.0, 5.0),
+                LineTo(5.0, 5.0)
+            ]
+        );
         // trim_each grows both together.
         let t = trim_each(&polys, 0.0, 0.5);
-        assert_eq!(t, vec![MoveTo(0.0, 0.0), LineTo(5.0, 0.0), MoveTo(0.0, 5.0), LineTo(5.0, 5.0)]);
+        assert_eq!(
+            t,
+            vec![
+                MoveTo(0.0, 0.0),
+                LineTo(5.0, 0.0),
+                MoveTo(0.0, 5.0),
+                LineTo(5.0, 5.0)
+            ]
+        );
     }
 
     #[test]
@@ -304,13 +364,22 @@ mod tests {
         let line = flatten(&[MoveTo(0.0, 0.0), LineTo(10.0, 0.0)], 1.0);
         assert_eq!(resample(&line, 3), vec![0.0, 0.0, 5.0, 0.0, 10.0, 0.0]);
         let sq = flatten(&square(), 1.0);
-        assert_eq!(resample(&sq, 4), vec![0.0, 0.0, 10.0, 0.0, 10.0, 10.0, 0.0, 10.0]);
+        assert_eq!(
+            resample(&sq, 4),
+            vec![0.0, 0.0, 10.0, 0.0, 10.0, 10.0, 0.0, 10.0]
+        );
         assert!(resample(&[], 4).is_empty());
     }
 
     #[test]
     fn lineto_after_close_starts_from_the_subpath_start() {
-        let path = vec![MoveTo(0.0, 0.0), LineTo(4.0, 0.0), LineTo(4.0, 3.0), Close, LineTo(0.0, -5.0)];
+        let path = vec![
+            MoveTo(0.0, 0.0),
+            LineTo(4.0, 0.0),
+            LineTo(4.0, 3.0),
+            Close,
+            LineTo(0.0, -5.0),
+        ];
         let polys = flatten(&path, 1.0);
         assert_eq!(polys.len(), 2);
         assert_eq!(polys[1].points, vec![(0.0, 0.0), (0.0, -5.0)]);

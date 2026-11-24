@@ -1,7 +1,8 @@
 %!PS
+% Poster: 14.0
 % Murmuration: a flock of starlings over a fen at dusk.
 %
-% Five hundred birds are simulated with the three classic flocking rules
+% Twelve hundred birds are simulated with the three classic flocking rules
 % (separation, alignment, cohesion), a wandering attractor that leads the
 % flock about the sky, a field of coherent turbulence that makes it ripple,
 % and a falcon that twice stoops through it so that the flock pours, splits
@@ -17,6 +18,8 @@
 %     (count, position, velocity) gives alignment and cohesion in O(n), and a
 %     fine grid of linked lists gives each bird only the handful of birds
 %     close enough to collide with;
+%   - depth as three sheets that slide over one another, and a separation
+%     radius that follows a noise field, for density that folds and breathes;
 %   - native gradient noise (`gnoise3`) as a wind field;
 %   - artkit shadings (`axialsh`, `radialsh`) for the sky, blurred and
 %     screen-blended layers for cloud and afterglow;
@@ -25,7 +28,7 @@
 << /Size [1280 720] /Duration 26 /FPS 30 /StepRate 60
    /Background [0.05 0.05 0.09]
    /Title (Murmuration)
-   /Description (Five hundred simulated starlings fold and pour over a fen at dusk.)
+   /Description (Twelve hundred simulated starlings fold and pour over a fen at dusk.)
 >> animation
 
 (lib/artkit.ps) run
@@ -51,7 +54,7 @@
 /V-MIN   140 def      % a bird never flies slower than this ...
 /V-MAX   340 def      % ... or faster than this
 /SEP-R    12 def      % separation: birds closer than this push apart (the
-                      %   radius itself varies from 0.5x to 1.6x: see step)
+                      %   radius itself varies from 0.5x to 1.3x: see step)
 /K-SEP    70 def      %   strength (per unit of overlap)
 /K-ALI   2.4 def      % alignment: turn toward the local mean velocity (1/s)
 /K-COH   2.2 def      % cohesion: accelerate toward the local centre (1/s^2)
@@ -87,7 +90,7 @@
 /fx 4000 def /fy 900 def /fu 0 def /fv 0 def /f-home 0 def
 % the attractor seen by each sheet
 /lead-x [ SHEETS { 0 } repeat ] def /lead-y [ SHEETS { 0 } repeat ] def
-/DEBUG /debug 0 param cvi def
+/DEBUG /debug 0 param cvi def        % --param debug=1 marks the attractor in red
 
 % --- the two grids ---
 % Coarse grid: per-cell sums. A bird reads the 3x3 block of cells around it,
@@ -100,7 +103,7 @@
 % bird in the cell or -1, f-next = the bird after this one). Cells are just
 % wider than the separation radius, so the 3x3 block around a bird holds
 % every bird that can be within SEP-R of it.
-/FS 23 def /FC 96 def /FR 37 def /FN FC FR mul def
+/FS 16 def /FC 138 def /FR 54 def /FN FC FR mul def
 /f-head FN SHEETS mul array def 0 1 FN SHEETS mul 1 sub { f-head exch -1 put } for
 /f-next N array def /f-cell N array def
 
@@ -192,7 +195,7 @@
     % and time, so bands where the birds pack tight travel through the
     % flock. These are the dark waves of a real murmuration.
     /sep2 x 0.0065 mul y 0.0065 mul tsec 0.55 mul 40 add gnoise3
-          0.78 mul 1.05 add dup 0.5 lt { pop 0.5 } if SEP-R mul dup mul def
+          0.78 mul 1.0 add 0.5 1.3 clamp SEP-R mul dup mul def
     /k0 f-cell i get def
     -1 1 1 { FC mul k0 add /kr exch def
       kr 1 sub 1 kr 1 add {

@@ -198,7 +198,10 @@ mod tests {
             buckets[(v * 10.0) as usize] += 1;
         }
         assert!((sum / f64::from(n) - 0.5).abs() < 0.01);
-        assert!(buckets.iter().all(|b| (1800..2200).contains(b)), "{buckets:?}");
+        assert!(
+            buckets.iter().all(|b| (1800..2200).contains(b)),
+            "{buckets:?}"
+        );
         // Pinned: renders depend on these exact values staying put.
         assert_eq!(hash01(1, &[0.0]), hash01(1, &[-0.0]));
         assert_ne!(hash01(1, &[1.0]), hash01(2, &[1.0]));

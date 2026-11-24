@@ -45,7 +45,11 @@ fn pop_proc(i: &mut Interp, ctx: &Shared, who: &str) -> Result<Value, PsError> {
         // A name is accepted where a procedure is: `/intro` runs `intro`.
         Value::Name(n) => match i.lookup(&n) {
             Some(Value::Other(o)) if o.is_procedure() => Ok(Value::Other(o)),
-            _ => fail(ctx, PsError::Typecheck, format!("{who}: /{n} is not a procedure")),
+            _ => fail(
+                ctx,
+                PsError::Typecheck,
+                format!("{who}: /{n} is not a procedure"),
+            ),
         },
         _ => fail(
             ctx,
@@ -69,7 +73,11 @@ fn pop_key(i: &mut Interp, ctx: &Shared, usage: &str) -> Result<f64, PsError> {
     };
     match key {
         Some(k) => Ok(k),
-        None => fail(ctx, PsError::Typecheck, format!("{usage}, where key is a number or an array of numbers")),
+        None => fail(
+            ctx,
+            PsError::Typecheck,
+            format!("{usage}, where key is a number or an array of numbers"),
+        ),
     }
 }
 
@@ -107,7 +115,11 @@ fn ease_named(ctx: &Shared, name: &str, x: f64) -> Result<f64, PsError> {
             PsError::Rangecheck,
             format!(
                 "unknown easing /{name}. Known: {}",
-                ease::NAMES.iter().map(|n| format!("/{n}")).collect::<Vec<_>>().join(" ")
+                ease::NAMES
+                    .iter()
+                    .map(|n| format!("/{n}"))
+                    .collect::<Vec<_>>()
+                    .join(" ")
             ),
         ),
     }
@@ -142,7 +154,11 @@ fn parse_keys<'a>(ctx: &Shared, items: &'a [Value]) -> Result<Vec<Key<'a>>, PsEr
             _ => None,
         };
         if keys.last().is_some_and(|p: &Key| p.t > t) {
-            return fail(ctx, PsError::Rangecheck, "keyframes: times must not decrease");
+            return fail(
+                ctx,
+                PsError::Rangecheck,
+                "keyframes: times must not decrease",
+            );
         }
         keys.push(Key { t, v, ease });
     }
@@ -198,7 +214,12 @@ fn with_canvas_pixels(
     };
     let mut canvas = i.swap_canvas(spare).map_err(|_| PsError::Rangecheck)?;
     let mut scratch = std::mem::take(&mut ctx.borrow_mut().scratch);
-    f(canvas.premultiplied_rgba8_mut(), w as usize, h as usize, &mut scratch);
+    f(
+        canvas.premultiplied_rgba8_mut(),
+        w as usize,
+        h as usize,
+        &mut scratch,
+    );
     let spare = i.swap_canvas(canvas).map_err(|_| PsError::Rangecheck)?;
     let mut c = ctx.borrow_mut();
     c.scratch = scratch;
@@ -208,7 +229,11 @@ fn with_canvas_pixels(
 
 fn begin_layer(i: &mut Interp, ctx: &Shared) -> OpResult {
     if ctx.borrow().layers.len() >= MAX_LAYERS {
-        return fail(ctx, PsError::Limitcheck, format!("more than {MAX_LAYERS} nested layers"));
+        return fail(
+            ctx,
+            PsError::Limitcheck,
+            format!("more than {MAX_LAYERS} nested layers"),
+        );
     }
     let (w, h) = i.canvas_size();
     let spare = ctx.borrow_mut().spare.take();
@@ -231,7 +256,12 @@ fn begin_pending(i: &mut Interp, ctx: &Shared, end: LayerEnd) -> OpResult {
     Ok(())
 }
 
-const PLAIN: LayerEnd = LayerEnd { opacity: 1.0, blend: Blend::Normal, blur: 0.0, glow: (0.0, 0.0) };
+const PLAIN: LayerEnd = LayerEnd {
+    opacity: 1.0,
+    blend: Blend::Normal,
+    blur: 0.0,
+    glow: (0.0, 0.0),
+};
 
 fn blend_named(ctx: &Shared, name: &str) -> Result<Blend, PsError> {
     match Blend::from_name(name) {
@@ -246,7 +276,11 @@ fn blend_named(ctx: &Shared, name: &str) -> Result<Blend, PsError> {
 
 fn end_layer(i: &mut Interp, ctx: &Shared, opacity: f64, blend: Blend) -> OpResult {
     let Some(mut below) = ctx.borrow_mut().layers.pop() else {
-        return fail(ctx, PsError::Rangecheck, "endlayer without a matching beginlayer");
+        return fail(
+            ctx,
+            PsError::Rangecheck,
+            "endlayer without a matching beginlayer",
+        );
     };
     raster::composite(
         below.premultiplied_rgba8_mut(),
@@ -273,7 +307,9 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         }
         let mut c = ctx.borrow_mut();
         if c.running != Running::Probe && c.running != Running::Setup {
-            c.hint = Some("animation declares the movie; call it once, at the top of the program".into());
+            c.hint = Some(
+                "animation declares the movie; call it once, at the top of the program".into(),
+            );
             return Err(PsError::Rangecheck);
         }
         c.decl = Some(decl);
@@ -290,7 +326,11 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     });
     reg(interp, ctx, "progress", |i, ctx| {
         let s = ctx.borrow().scope();
-        let u = if s.dur > 0.0 && s.dur.is_finite() { (s.t / s.dur).clamp(0.0, 1.0) } else { 0.0 };
+        let u = if s.dur > 0.0 && s.dur.is_finite() {
+            (s.t / s.dur).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
         i.push_real(u);
         Ok(())
     });
@@ -339,7 +379,13 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let (b, a) = (i.pop_f64()?, i.pop_f64()?);
         let s = ctx.borrow().scope();
         if s.t >= a && s.t < b {
-            push_scope(ctx, TimeScope { t: s.t - a, dur: b - a })?;
+            push_scope(
+                ctx,
+                TimeScope {
+                    t: s.t - a,
+                    dur: b - a,
+                },
+            )?;
             i.push_value(&body);
             i.push_bool(true);
         } else {
@@ -352,7 +398,13 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let a = i.pop_f64()?;
         let s = ctx.borrow().scope();
         if s.t >= a {
-            push_scope(ctx, TimeScope { t: s.t - a, dur: (s.dur - a).max(0.0) })?;
+            push_scope(
+                ctx,
+                TimeScope {
+                    t: s.t - a,
+                    dur: (s.dur - a).max(0.0),
+                },
+            )?;
             i.push_value(&body);
             i.push_bool(true);
         } else {
@@ -377,7 +429,13 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let body = pop_proc(i, ctx, "delayed")?;
         let d = i.pop_f64()?;
         let s = ctx.borrow().scope();
-        push_scope(ctx, TimeScope { t: s.t - d, dur: s.dur - d })?;
+        push_scope(
+            ctx,
+            TimeScope {
+                t: s.t - d,
+                dur: s.dur - d,
+            },
+        )?;
         i.push_value(&body);
         Ok(())
     });
@@ -385,26 +443,46 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let body = pop_proc(i, ctx, "timescaled")?;
         let k = i.pop_f64()?;
         let s = ctx.borrow().scope();
-        push_scope(ctx, TimeScope { t: s.t * k, dur: s.dur * k.abs() })?;
+        push_scope(
+            ctx,
+            TimeScope {
+                t: s.t * k,
+                dur: s.dur * k.abs(),
+            },
+        )?;
         i.push_value(&body);
         Ok(())
     });
     reg(interp, ctx, ".looped", |i, ctx| {
         let body = pop_proc(i, ctx, "looped")?;
         let p = i.pop_f64()?;
-        if !(p > 0.0) {
-            return fail(ctx, PsError::Rangecheck, "looped: the period must be positive");
+        if p.is_nan() || p <= 0.0 {
+            return fail(
+                ctx,
+                PsError::Rangecheck,
+                "looped: the period must be positive",
+            );
         }
         let s = ctx.borrow().scope();
-        push_scope(ctx, TimeScope { t: s.t.rem_euclid(p), dur: p })?;
+        push_scope(
+            ctx,
+            TimeScope {
+                t: s.t.rem_euclid(p),
+                dur: p,
+            },
+        )?;
         i.push_value(&body);
         Ok(())
     });
     reg(interp, ctx, ".pingpong", |i, ctx| {
         let body = pop_proc(i, ctx, "pingpong")?;
         let p = i.pop_f64()?;
-        if !(p > 0.0) {
-            return fail(ctx, PsError::Rangecheck, "pingpong: the period must be positive");
+        if p.is_nan() || p <= 0.0 {
+            return fail(
+                ctx,
+                PsError::Rangecheck,
+                "pingpong: the period must be positive",
+            );
         }
         let s = ctx.borrow().scope();
         let phase = s.t.rem_euclid(2.0 * p);
@@ -441,7 +519,13 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     reg(interp, ctx, ".reversed", |i, ctx| {
         let body = pop_proc(i, ctx, "reversed")?;
         let s = ctx.borrow().scope();
-        push_scope(ctx, TimeScope { t: s.dur - s.t, dur: s.dur })?;
+        push_scope(
+            ctx,
+            TimeScope {
+                t: s.dur - s.t,
+                dur: s.dur,
+            },
+        )?;
         i.push_value(&body);
         Ok(())
     });
@@ -455,16 +539,28 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     // [ dur proc dur proc ... ] .sequence -> proc true | false
     reg(interp, ctx, ".sequence", |i, ctx| {
         let Value::Array(items) = i.pop_value()? else {
-            return fail(ctx, PsError::Typecheck, "sequence takes an array: [ dur {..} dur {..} ]");
+            return fail(
+                ctx,
+                PsError::Typecheck,
+                "sequence takes an array: [ dur {..} dur {..} ]",
+            );
         };
         if items.len() % 2 != 0 {
-            return fail(ctx, PsError::Rangecheck, "sequence: the array must be dur/procedure pairs");
+            return fail(
+                ctx,
+                PsError::Rangecheck,
+                "sequence: the array must be dur/procedure pairs",
+            );
         }
         let s = ctx.borrow().scope();
         let mut start = 0.0;
         for pair in items.chunks(2) {
             let Some(dur) = pair[0].as_f64() else {
-                return fail(ctx, PsError::Typecheck, "sequence: each pair starts with a duration in seconds");
+                return fail(
+                    ctx,
+                    PsError::Typecheck,
+                    "sequence: each pair starts with a duration in seconds",
+                );
             };
             if s.t >= start && s.t < start + dur {
                 if matches!(pair[1], Value::Null) {
@@ -472,7 +568,13 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 }
                 i.push_value(&pair[1]);
                 let body = pop_proc(i, ctx, "sequence")?;
-                push_scope(ctx, TimeScope { t: s.t - start, dur })?;
+                push_scope(
+                    ctx,
+                    TimeScope {
+                        t: s.t - start,
+                        dur,
+                    },
+                )?;
                 i.push_value(&body);
                 i.push_bool(true);
                 return Ok(());
@@ -488,7 +590,11 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     //    | kind u tB dB procB tA dA procA 2    a transition from A to B
     reg(interp, ctx, ".reel", |i, ctx| {
         let Value::Array(items) = i.pop_value()? else {
-            return fail(ctx, PsError::Typecheck, "reel takes an array of [dur proc] and [dur /transition]");
+            return fail(
+                ctx,
+                PsError::Typecheck,
+                "reel takes an array of [dur proc] and [dur /transition]",
+            );
         };
         let t = ctx.borrow().scope().t;
         let plan = match plan_reel(i, &items, true) {
@@ -517,11 +623,19 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             if t >= clip.start && t < clip.start + clip.dur {
                 // Not in this clip's lead-in, and the next clip's lead-in
                 // (which overlaps this one's end) is tested on its turn.
-                let next_lead = plan.get(k + 1).is_some_and(|n| n.lead.is_some() && t >= n.start);
+                let next_lead = plan
+                    .get(k + 1)
+                    .is_some_and(|n| n.lead.is_some() && t >= n.start);
                 if !next_lead {
                     i.push_value(clip.body);
                     let body = pop_proc(i, ctx, "reel")?;
-                    push_scope(ctx, TimeScope { t: t - clip.start, dur: clip.dur })?;
+                    push_scope(
+                        ctx,
+                        TimeScope {
+                            t: t - clip.start,
+                            dur: clip.dur,
+                        },
+                    )?;
                     i.push_value(&body);
                     i.push_int(1);
                     return Ok(());
@@ -556,7 +670,13 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let name = i.pop_name()?;
         let (b, a) = (i.pop_f64()?, i.pop_f64()?);
         let t = ctx.borrow().scope().t;
-        let u = if b > a { (t - a) / (b - a) } else if t >= b { 1.0 } else { 0.0 };
+        let u = if b > a {
+            (t - a) / (b - a)
+        } else if t >= b {
+            1.0
+        } else {
+            0.0
+        };
         let v = ease_named(ctx, &name, u)?;
         i.push_real(v);
         Ok(())
@@ -564,7 +684,13 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     reg(interp, ctx, "ramp", |i, ctx| {
         let (b, a) = (i.pop_f64()?, i.pop_f64()?);
         let t = ctx.borrow().scope().t;
-        let u = if b > a { ((t - a) / (b - a)).clamp(0.0, 1.0) } else if t >= b { 1.0 } else { 0.0 };
+        let u = if b > a {
+            ((t - a) / (b - a)).clamp(0.0, 1.0)
+        } else if t >= b {
+            1.0
+        } else {
+            0.0
+        };
         i.push_real(u);
         Ok(())
     });
@@ -599,19 +725,35 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     });
     reg(interp, ctx, "smoothstep", |i, _| {
         let (x, e1, e0) = (i.pop_f64()?, i.pop_f64()?, i.pop_f64()?);
-        let u = if e1 != e0 { ((x - e0) / (e1 - e0)).clamp(0.0, 1.0) } else if x >= e1 { 1.0 } else { 0.0 };
+        let u = if e1 != e0 {
+            ((x - e0) / (e1 - e0)).clamp(0.0, 1.0)
+        } else if x >= e1 {
+            1.0
+        } else {
+            0.0
+        };
         i.push_real(u * u * (3.0 - 2.0 * u));
         Ok(())
     });
     reg(interp, ctx, "remap", |i, _| {
-        let (d, c, b, a, x) = (i.pop_f64()?, i.pop_f64()?, i.pop_f64()?, i.pop_f64()?, i.pop_f64()?);
+        let (d, c, b, a, x) = (
+            i.pop_f64()?,
+            i.pop_f64()?,
+            i.pop_f64()?,
+            i.pop_f64()?,
+            i.pop_f64()?,
+        );
         let u = if b != a { (x - a) / (b - a) } else { 0.0 };
         i.push_real(c + (d - c) * u);
         Ok(())
     });
     reg(interp, ctx, "keyframes", |i, ctx| {
         let Value::Array(items) = i.pop_value()? else {
-            return fail(ctx, PsError::Typecheck, "keyframes takes an array: [ t v /easing t v ... ]");
+            return fail(
+                ctx,
+                PsError::Typecheck,
+                "keyframes takes an array: [ t v /easing t v ... ]",
+            );
         };
         let t = ctx.borrow().scope().t;
         let v = eval_keys(ctx, &items, t)?;
@@ -637,7 +779,11 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     reg(interp, ctx, "turns", |i, ctx| {
         let k = i.pop_f64()?;
         let s = ctx.borrow().scope();
-        let u = if s.dur > 0.0 && s.dur.is_finite() { s.t / s.dur } else { 0.0 };
+        let u = if s.dur > 0.0 && s.dur.is_finite() {
+            s.t / s.dur
+        } else {
+            0.0
+        };
         i.push_real(k * 360.0 * u);
         Ok(())
     });
@@ -646,8 +792,17 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let key = pop_key(i, ctx, "loopnoise: key radius")?;
         let c = ctx.borrow();
         let s = c.scope();
-        let a = if s.dur > 0.0 && s.dur.is_finite() { s.t / s.dur } else { 0.0 } * std::f64::consts::TAU;
-        i.push_real(crate::ctx::noise2(c.seed, key, radius * a.cos(), radius * a.sin()));
+        let a = if s.dur > 0.0 && s.dur.is_finite() {
+            s.t / s.dur
+        } else {
+            0.0
+        } * std::f64::consts::TAU;
+        i.push_real(crate::ctx::noise2(
+            c.seed,
+            key,
+            radius * a.cos(),
+            radius * a.sin(),
+        ));
         Ok(())
     });
     reg(interp, ctx, "hash01", |i, ctx| {
@@ -656,7 +811,11 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             v => v.as_f64().map(|x| vec![x]),
         };
         let Some(keys) = keys else {
-            return fail(ctx, PsError::Typecheck, "hash01 takes a number or an array of numbers as its key");
+            return fail(
+                ctx,
+                PsError::Typecheck,
+                "hash01 takes a number or an array of numbers as its key",
+            );
         };
         i.push_real(hash01(ctx.borrow().seed, &keys));
         Ok(())
@@ -673,7 +832,11 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let polys = flat_path(i, ctx)?;
         let total = pathmath::total_length(&polys);
         let Some((x, y, a)) = pathmath::point_at(&polys, u.clamp(0.0, 1.0) * total) else {
-            return fail(ctx, PsError::NoCurrentPoint, "pathpoint: there is no current path to walk along");
+            return fail(
+                ctx,
+                PsError::NoCurrentPoint,
+                "pathpoint: there is no current path to walk along",
+            );
         };
         i.push_real(x);
         i.push_real(y);
@@ -699,11 +862,19 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     reg(interp, ctx, "resamplepath", |i, ctx| {
         let n = i.pop_int()?;
         if !(2..=20_000).contains(&n) {
-            return fail(ctx, PsError::Rangecheck, "resamplepath: the point count must be between 2 and 20000");
+            return fail(
+                ctx,
+                PsError::Rangecheck,
+                "resamplepath: the point count must be between 2 and 20000",
+            );
         }
         let polys = flat_path(i, ctx)?;
         if polys.is_empty() {
-            return fail(ctx, PsError::NoCurrentPoint, "resamplepath: there is no current path");
+            return fail(
+                ctx,
+                PsError::NoCurrentPoint,
+                "resamplepath: there is no current path",
+            );
         }
         i.push_numbers(&pathmath::resample(&polys, n as usize));
         Ok(())
@@ -721,7 +892,11 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let mut path = Vec::with_capacity(a.len() / 2 + 1);
         for (k, (p, q)) in a.chunks(2).zip(b.chunks(2)).enumerate() {
             let (x, y) = (p[0] + (q[0] - p[0]) * u, p[1] + (q[1] - p[1]) * u);
-            path.push(if k == 0 { PathSegment::MoveTo(x, y) } else { PathSegment::LineTo(x, y) });
+            path.push(if k == 0 {
+                PathSegment::MoveTo(x, y)
+            } else {
+                PathSegment::LineTo(x, y)
+            });
         }
         path.push(PathSegment::Close);
         i.set_current_path(&path)
@@ -730,12 +905,22 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     reg(interp, ctx, "polypath", |i, ctx| {
         let pts = i.pop_numbers()?;
         if pts.len() < 4 || pts.len() % 2 != 0 {
-            return fail(ctx, PsError::Rangecheck, "polypath takes [x0 y0 x1 y1 ...] with at least two points");
+            return fail(
+                ctx,
+                PsError::Rangecheck,
+                "polypath takes [x0 y0 x1 y1 ...] with at least two points",
+            );
         }
         let path: Vec<PathSegment> = pts
             .chunks(2)
             .enumerate()
-            .map(|(k, p)| if k == 0 { PathSegment::MoveTo(p[0], p[1]) } else { PathSegment::LineTo(p[0], p[1]) })
+            .map(|(k, p)| {
+                if k == 0 {
+                    PathSegment::MoveTo(p[0], p[1])
+                } else {
+                    PathSegment::LineTo(p[0], p[1])
+                }
+            })
             .collect();
         i.set_current_path(&path)
     });
@@ -752,7 +937,15 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let name = i.pop_name()?;
         let opacity = i.pop_f64()?;
         let blend = blend_named(ctx, &name)?;
-        begin_pending(i, ctx, LayerEnd { opacity, blend, ..PLAIN })
+        begin_pending(
+            i,
+            ctx,
+            LayerEnd {
+                opacity,
+                blend,
+                ..PLAIN
+            },
+        )
     });
     reg(interp, ctx, ".blurbegin", |i, ctx| {
         let blur = i.pop_f64()?;
@@ -760,19 +953,39 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     });
     reg(interp, ctx, ".glowbegin", |i, ctx| {
         let (strength, radius) = (i.pop_f64()?, i.pop_f64()?);
-        begin_pending(i, ctx, LayerEnd { glow: (radius, strength), ..PLAIN })
+        begin_pending(
+            i,
+            ctx,
+            LayerEnd {
+                glow: (radius, strength),
+                ..PLAIN
+            },
+        )
     });
     reg(interp, ctx, ".layerend", |i, ctx| {
         let Some(end) = ctx.borrow_mut().pending.pop() else {
-            return fail(ctx, PsError::Rangecheck, "a layer combinator ended without having begun");
+            return fail(
+                ctx,
+                PsError::Rangecheck,
+                "a layer combinator ended without having begun",
+            );
         };
         let px = ctx.borrow().px_scale;
         if end.blur > 0.0 {
-            with_canvas_pixels(i, ctx, |p, w, h, scratch| raster::blur(p, w, h, end.blur * px, scratch))?;
+            with_canvas_pixels(i, ctx, |p, w, h, scratch| {
+                raster::blur(p, w, h, end.blur * px, scratch)
+            })?;
         }
         if end.glow.1 > 0.0 {
             with_canvas_pixels(i, ctx, |p, w, h, scratch| {
-                raster::glow(p, w, h, end.glow.0 * px, end.glow.1.clamp(0.0, 2.0), scratch)
+                raster::glow(
+                    p,
+                    w,
+                    h,
+                    end.glow.0 * px,
+                    end.glow.1.clamp(0.0, 2.0),
+                    scratch,
+                )
             })?;
         }
         end_layer(i, ctx, end.opacity, end.blend)
@@ -790,7 +1003,9 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     reg(interp, ctx, "blurlayer", |i, ctx| {
         let radius = i.pop_f64()?;
         let sigma = radius * ctx.borrow().px_scale;
-        with_canvas_pixels(i, ctx, |px, w, h, scratch| raster::blur(px, w, h, sigma, scratch))
+        with_canvas_pixels(i, ctx, |px, w, h, scratch| {
+            raster::blur(px, w, h, sigma, scratch)
+        })
     });
     reg(interp, ctx, "glowlayer", |i, ctx| {
         let (strength, radius) = (i.pop_f64()?, i.pop_f64()?);
@@ -826,7 +1041,8 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         };
         with_canvas_pixels(i, ctx, |px, _, _, _| {
             // One cheap xorshift stream per frame: grain that moves.
-            let mut s = crate::ctx::mix64(seed as u64 ^ (frame as u64).wrapping_mul(0x9E37_79B9)) | 1;
+            let mut s =
+                crate::ctx::mix64(seed as u64 ^ (frame as u64).wrapping_mul(0x9E37_79B9)) | 1;
             let amp = amount * 64.0;
             for p in px.chunks_exact_mut(4) {
                 s ^= s << 13;
@@ -849,7 +1065,9 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let shown = match &default {
             Value::String(s) => format!("({})", String::from_utf8_lossy(s)),
             Value::Name(n) => format!("/{n}"),
-            v => v.as_f64().map_or_else(|| "?".to_string(), |x| x.to_string()),
+            v => v
+                .as_f64()
+                .map_or_else(|| "?".to_string(), |x| x.to_string()),
         };
         c.params_seen.entry(name.clone()).or_insert(shown);
         let v = c.params.get(&name).cloned().unwrap_or(default);
@@ -910,14 +1128,21 @@ pub(crate) struct ReelClip<'a> {
 /// `strict` also requires every clip named to be a procedure now. Playing a
 /// reel is strict; measuring one (`reelduration`, usually in the
 /// declaration, before the clips are defined) is not.
-fn plan_reel<'a>(i: &Interp, items: &'a [Value], strict: bool) -> Result<Vec<ReelClip<'a>>, String> {
+fn plan_reel<'a>(
+    i: &Interp,
+    items: &'a [Value],
+    strict: bool,
+) -> Result<Vec<ReelClip<'a>>, String> {
     let known: Vec<String> = match i.lookup("transitions") {
         Some(Value::Dict(entries)) => entries.into_iter().map(|(k, _)| k).collect(),
         _ => TRANSITIONS.iter().map(|t| t.to_string()).collect(),
     };
     reel_plan(
         items,
-        &|n| known.iter().any(|k| k == n),
+        // A name starting with `t-` is taken for a transition even before
+        // it is defined, so a reel can be measured in the declaration with
+        // its own transitions defined further down the file.
+        &|n| known.iter().any(|k| k == n) || n.starts_with("t-"),
         &|n| !strict || matches!(i.lookup(n), Some(Value::Other(o)) if o.is_procedure()),
     )
 }
@@ -933,7 +1158,10 @@ pub(crate) fn reel_plan<'a>(
     let mut pending: Option<(String, f64)> = None;
     let mut cursor = 0.0;
     for item in items {
-        let Some([d, what]) = item.as_array().and_then(|a| <&[Value; 2]>::try_from(a).ok()) else {
+        let Some([d, what]) = item
+            .as_array()
+            .and_then(|a| <&[Value; 2]>::try_from(a).ok())
+        else {
             return Err("reel: each entry is [dur {clip}] or [dur /transition]".into());
         };
         let Some(dur) = d.as_f64().filter(|d| *d > 0.0) else {
@@ -967,7 +1195,12 @@ pub(crate) fn reel_plan<'a>(
                     return Err("reel: a transition is longer than a clip beside it".into());
                 }
                 let start = cursor - overlap;
-                plan.push(ReelClip { start, dur, body: what, lead });
+                plan.push(ReelClip {
+                    start,
+                    dur,
+                    body: what,
+                    lead,
+                });
                 cursor = start + dur;
             }
         }
@@ -981,6 +1214,15 @@ pub(crate) fn reel_plan<'a>(
 /// The transitions the prelude defines. A program adds its own by putting
 /// a procedure in the `transitions` dictionary under any name.
 pub const TRANSITIONS: &[&str] = &[
-    "cut", "dissolve", "dip", "wipe-left", "wipe-right", "wipe-up", "wipe-down", "iris", "push-left",
-    "push-right", "zoom",
+    "cut",
+    "dissolve",
+    "dip",
+    "wipe-left",
+    "wipe-right",
+    "wipe-up",
+    "wipe-down",
+    "iris",
+    "push-left",
+    "push-right",
+    "zoom",
 ];

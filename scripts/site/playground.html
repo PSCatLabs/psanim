@@ -1,0 +1,39 @@
+<section class="play">
+  <h1>Playground</h1>
+  <p class="lede">The real engine, compiled to WebAssembly, running in this page. Edit the program; it re-runs as you type. Drag the scrubber: the frame under it is computed on the spot.</p>
+  <div class="bar">
+    <label for="ex" class="status">Example</label>
+    <select id="ex"></select>
+    <button id="run" class="primary">Run</button>
+    <span id="status" class="status" role="status"></span>
+  </div>
+  <div class="grid">
+    <textarea id="src" spellcheck="false" aria-label="Program"></textarea>
+    <div>
+      <psanim-player id="player" autoplay loop></psanim-player>
+      <p class="hint">Errors appear over the canvas, with the frame, the command, a trace through your procedures and a hint. <code>now ==</code> prints nowhere here yet; use the command line for that. The page cannot read files or encode video: for those, <a href="guide/cli.html">install the CLI</a>.</p>
+    </div>
+  </div>
+</section>
+<script type="module">
+  import "./player.js";
+  const examples = {{EXAMPLES}};
+  const src = document.getElementById("src"), player = document.getElementById("player");
+  const pick = document.getElementById("ex"), status = document.getElementById("status");
+  for (const name of Object.keys(examples)) pick.add(new Option(name, name));
+  const run = () => { player.source = src.value; };
+  const load = (name) => { src.value = examples[name]; player.time = 0; run(); };
+  pick.addEventListener("change", () => load(pick.value));
+  document.getElementById("run").addEventListener("click", run);
+  let timer = 0;
+  src.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(run, 350); });
+  src.addEventListener("keydown", (e) => {
+    if (e.key === "Tab") { e.preventDefault(); src.setRangeText("  ", src.selectionStart, src.selectionEnd, "end"); }
+  });
+  player.addEventListener("psanim-load", (e) => {
+    const m = e.detail;
+    status.textContent = `${m.width}×${m.height} units · ${m.duration}s at ${m.fps} fps · ${m.mode} · rendering at ${m.pixel_width}×${m.pixel_height}`;
+  });
+  player.addEventListener("psanim-error", (e) => { status.textContent = `${e.detail.phase ?? "error"}: ${e.detail.kind ?? ""}`; });
+  load(location.hash ? decodeURIComponent(location.hash.slice(1)) in examples ? decodeURIComponent(location.hash.slice(1)) : "Hello" : "Hello");
+</script>

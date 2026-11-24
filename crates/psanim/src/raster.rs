@@ -102,7 +102,11 @@ pub fn composite(dst: &mut [u8], src: &[u8], opacity: f64, blend: Blend) {
 fn box_pass(src: &[u8], dst: &mut [u8], w: usize, h: usize, r: usize, horizontal: bool) {
     let (lines, len) = if horizontal { (h, w) } else { (w, h) };
     let at = |line: usize, i: usize| -> usize {
-        if horizontal { (line * w + i) * 4 } else { (i * w + line) * 4 }
+        if horizontal {
+            (line * w + i) * 4
+        } else {
+            (i * w + line) * 4
+        }
     };
     let win = (2 * r + 1) as u32;
     let half = win / 2;
@@ -141,7 +145,10 @@ fn ink_box(buf: &[u8], w: usize, h: usize) -> Option<(usize, usize, usize, usize
         let row = &buf[y * w * 4..(y + 1) * w * 4];
         if let Some(first) = row.chunks_exact(4).position(|p| p != [0, 0, 0, 0]) {
             x0 = x0.min(first);
-            let last = row.chunks_exact(4).rposition(|p| p != [0, 0, 0, 0]).unwrap_or(first);
+            let last = row
+                .chunks_exact(4)
+                .rposition(|p| p != [0, 0, 0, 0])
+                .unwrap_or(first);
             x1 = x1.max(last + 1);
         }
     }
@@ -331,15 +338,22 @@ pub fn stats(rgba: &[u8], w: usize, h: usize) -> Stats {
     let mut hist = vec![0u32; 4096];
     let mut sum = [0u64; 3];
     for p in rgba.chunks_exact(4) {
-        hist[(usize::from(p[0] >> 4) << 8) | (usize::from(p[1] >> 4) << 4) | usize::from(p[2] >> 4)] += 1;
+        hist[(usize::from(p[0] >> 4) << 8)
+            | (usize::from(p[1] >> 4) << 4)
+            | usize::from(p[2] >> 4)] += 1;
         for c in 0..3 {
             sum[c] += u64::from(p[c]);
         }
     }
-    let mode = hist.iter().enumerate().max_by_key(|(_, c)| **c).map_or(0, |(i, _)| i);
+    let mode = hist
+        .iter()
+        .enumerate()
+        .max_by_key(|(_, c)| **c)
+        .map_or(0, |(i, _)| i);
     let (mut covered, mut bbox) = (0usize, None::<[u32; 4]>);
     for (i, p) in rgba.chunks_exact(4).enumerate() {
-        let bin = (usize::from(p[0] >> 4) << 8) | (usize::from(p[1] >> 4) << 4) | usize::from(p[2] >> 4);
+        let bin =
+            (usize::from(p[0] >> 4) << 8) | (usize::from(p[1] >> 4) << 4) | usize::from(p[2] >> 4);
         if bin != mode {
             covered += 1;
             let (x, y) = ((i % w) as u32, (i / w) as u32);
@@ -365,7 +379,11 @@ pub fn difference(a: &[u8], b: &[u8]) -> f64 {
     if a.len() != b.len() || a.is_empty() {
         return 1.0;
     }
-    let total: u64 = a.iter().zip(b).map(|(x, y)| u64::from(x.abs_diff(*y))).sum();
+    let total: u64 = a
+        .iter()
+        .zip(b)
+        .map(|(x, y)| u64::from(x.abs_diff(*y)))
+        .sum();
     total as f64 / (a.len() as f64 * 255.0)
 }
 
@@ -421,7 +439,10 @@ mod tests {
                     for &op in &[0.3, 1.0] {
                         let mut d = vec![da, da / 2, 0, da];
                         composite(&mut d, &[sa, 0, sa / 3, sa], op, blend);
-                        assert!(d[0] <= d[3] && d[1] <= d[3] && d[2] <= d[3], "{blend:?} {d:?}");
+                        assert!(
+                            d[0] <= d[3] && d[1] <= d[3] && d[2] <= d[3],
+                            "{blend:?} {d:?}"
+                        );
                     }
                 }
             }
@@ -441,7 +462,10 @@ mod tests {
         img[centre..centre + 4].copy_from_slice(&[255, 255, 255, 255]);
         blur(&mut img, w, h, 2.0, &mut scratch);
         assert!(img[centre] < 60, "the spike spread: {}", img[centre]);
-        assert!(img[centre] > img[centre + 4 * 3], "and still peaks at the centre");
+        assert!(
+            img[centre] > img[centre + 4 * 3],
+            "and still peaks at the centre"
+        );
         // Symmetric left/right and up/down.
         assert_eq!(img[centre - 8], img[centre + 8]);
         assert_eq!(img[centre - 2 * w * 4], img[centre + 2 * w * 4]);
@@ -516,7 +540,10 @@ mod tests {
         for p in src.chunks_exact_mut(4) {
             p[3] = 255;
         }
-        assert_eq!(downscale(&src, 4, 2, 2, 1), [0, 0, 0, 255, 255, 255, 255, 255]);
+        assert_eq!(
+            downscale(&src, 4, 2, 2, 1),
+            [0, 0, 0, 255, 255, 255, 255, 255]
+        );
         // Non-integer ratio covers every source pixel at least once.
         let d = downscale(&src, 4, 2, 3, 1);
         assert_eq!(d.len(), 12);

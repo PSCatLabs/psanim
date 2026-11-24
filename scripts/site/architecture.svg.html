@@ -1,0 +1,78 @@
+<figure class="diagram">
+<svg viewBox="0 0 1000 470" role="img" aria-label="psanim's crates and how they sit on PSCat" font-family="ui-sans-serif, system-ui, sans-serif">
+  <defs>
+    <marker id="ar-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#9aa2b4"/></marker>
+  </defs>
+  <!-- inputs -->
+  <g font-size="13" fill="#ece9e1">
+    <rect x="14" y="60" width="150" height="54" rx="8" fill="#171b25" stroke="#3a4152"/>
+    <text x="89" y="83" text-anchor="middle" font-weight="600">movie.ps</text>
+    <text x="89" y="101" text-anchor="middle" fill="#9aa2b4" font-size="11.5">declaration + scene</text>
+    <rect x="14" y="134" width="150" height="70" rx="8" fill="#171b25" stroke="#3a4152"/>
+    <text x="89" y="157" text-anchor="middle" font-weight="600">options</text>
+    <text x="89" y="175" text-anchor="middle" fill="#9aa2b4" font-size="11.5">scale, fps, seed, budget</text>
+    <text x="89" y="191" text-anchor="middle" fill="#9aa2b4" font-size="11.5">params, signals</text>
+  </g>
+  <path d="M164 87H212M164 169H212" stroke="#9aa2b4" stroke-width="1.5" marker-end="url(#ar-a)" fill="none"/>
+
+  <!-- psanim -->
+  <rect x="216" y="18" width="770" height="258" rx="12" fill="none" stroke="#ffc94d" stroke-opacity="0.55" stroke-dasharray="5 5"/>
+  <text x="232" y="40" font-size="12" fill="#ffc94d" letter-spacing="1.2">PSANIM</text>
+
+  <rect x="232" y="52" width="480" height="208" rx="10" fill="#171b25" stroke="#3a4152"/>
+  <text x="250" y="76" font-size="14" font-weight="650" fill="#ece9e1">psanim <tspan fill="#9aa2b4" font-weight="400">· the engine (portable: no processes, clock or files)</tspan></text>
+  <g font-size="12.5" fill="#ece9e1">
+    <rect x="250" y="90" width="444" height="50" rx="7" fill="#12151d" stroke="#ffc94d" stroke-opacity="0.7"/>
+    <text x="264" y="111" font-weight="650" fill="#ffc94d">Movie</text>
+    <text x="318" y="111">load: probe declaration ▸ build interpreter ▸ setup ▸ save</text>
+    <text x="318" y="129">frame(t): restore ▸ set clock ▸ call scene ▸ read canvas</text>
+    <rect x="250" y="150" width="216" height="46" rx="7" fill="#12151d" stroke="#3a4152"/>
+    <text x="264" y="169" font-weight="600">native operators</text>
+    <text x="264" y="186" fill="#9aa2b4" font-size="11.5">clock, scopes, tweens, paths, layers</text>
+    <rect x="478" y="150" width="216" height="46" rx="7" fill="#12151d" stroke="#3a4152"/>
+    <text x="492" y="169" font-weight="600">prelude.ps</text>
+    <text x="492" y="186" fill="#9aa2b4" font-size="11.5">combinators, reels, text helpers</text>
+    <rect x="250" y="206" width="216" height="40" rx="7" fill="#12151d" stroke="#3a4152"/>
+    <text x="264" y="230" fill="#9aa2b4">raster · pathmath · ease · signals</text>
+    <rect x="478" y="206" width="216" height="40" rx="7" fill="#12151d" stroke="#3a4152"/>
+    <text x="492" y="230" fill="#9aa2b4">render (threads) · sheet · api table</text>
+  </g>
+
+  <g font-size="12.5" fill="#ece9e1">
+    <rect x="730" y="52" width="240" height="96" rx="10" fill="#171b25" stroke="#3a4152"/>
+    <text x="746" y="76" font-size="14" font-weight="650">psanim-cli</text>
+    <text x="746" y="96" fill="#9aa2b4">info · check · frame · sheet</text>
+    <text x="746" y="113" fill="#9aa2b4">render · bench · api</text>
+    <text x="746" y="134" fill="#fa7361">▸ ffmpeg ▸ mp4 · webm · gif</text>
+    <rect x="730" y="164" width="240" height="96" rx="10" fill="#171b25" stroke="#3a4152"/>
+    <text x="746" y="188" font-size="14" font-weight="650">psanim-wasm</text>
+    <text x="746" y="208" fill="#9aa2b4">C ABI, no imports</text>
+    <text x="746" y="225" fill="#9aa2b4">psanim.js · &lt;psanim-player&gt;</text>
+    <text x="746" y="246" fill="#4dd1c7">▸ canvas in the page</text>
+  </g>
+  <path d="M712 100H726M712 212H726" stroke="#9aa2b4" stroke-width="1.5" marker-start="url(#ar-a)" fill="none"/>
+
+  <!-- boundary -->
+  <path d="M472 262V306" stroke="#9aa2b4" stroke-width="1.5" marker-end="url(#ar-a)" marker-start="url(#ar-a)" fill="none"/>
+  <text x="484" y="290" font-size="12" fill="#9aa2b4">Rust API, in process (never the pscat binary)</text>
+
+  <!-- pscat -->
+  <rect x="216" y="310" width="770" height="146" rx="12" fill="#12151d" stroke="#4dd1c7" stroke-opacity="0.6"/>
+  <text x="232" y="333" font-size="12" fill="#4dd1c7" letter-spacing="1.2">PSCAT</text>
+  <g font-size="12.5" fill="#ece9e1">
+    <rect x="232" y="344" width="232" height="44" rx="7" fill="#171b25" stroke="#3a4152"/>
+    <text x="246" y="363" font-weight="600">Interp</text>
+    <text x="246" y="380" fill="#9aa2b4" font-size="11.5">PostScript machine · VM save/restore</text>
+    <rect x="476" y="344" width="232" height="44" rx="7" fill="#171b25" stroke="#3a4152"/>
+    <text x="490" y="363" font-weight="600">graphics</text>
+    <text x="490" y="380" fill="#9aa2b4" font-size="11.5">paths, paint, type · CPU raster</text>
+    <rect x="720" y="344" width="250" height="44" rx="7" fill="#171b25" stroke="#3a4152"/>
+    <text x="734" y="363" font-weight="600">lib/*.ps, fonts (compiled in)</text>
+    <text x="734" y="380" fill="#9aa2b4" font-size="11.5">artkit · paintkit · charts · faces</text>
+    <rect x="232" y="398" width="738" height="44" rx="7" fill="#171b25" stroke="#4dd1c7"/>
+    <text x="246" y="417" font-weight="650" fill="#4dd1c7">pscat::host <tspan fill="#9aa2b4" font-weight="400">· new on the feature branch, for any embedding application</tspan></text>
+    <text x="246" y="434" fill="#ece9e1" font-size="11.5">register_operator · Value · current_path · swap_canvas · error_details + backtrace · set_interrupt</text>
+  </g>
+</svg>
+<figcaption>Three crates on one dependency. Everything psanim asks of PSCat goes through its documented library API.</figcaption>
+</figure>

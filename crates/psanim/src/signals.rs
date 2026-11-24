@@ -106,7 +106,9 @@ impl Signals {
     /// assert_eq!(s.last_event("beat", 0.75), (Some(0.25), 1));
     /// ```
     pub fn from_csv(text: &str) -> Result<Signals, String> {
-        let mut lines = text.lines().filter(|l| !l.trim().is_empty() && !l.starts_with('#'));
+        let mut lines = text
+            .lines()
+            .filter(|l| !l.trim().is_empty() && !l.starts_with('#'));
         let header: Vec<&str> = lines
             .next()
             .ok_or("signal file is empty")?
@@ -129,10 +131,14 @@ impl Signals {
                 if let Some(event) = name.strip_suffix('!') {
                     out.events.entry(event.to_string()).or_default().push(t);
                 } else {
-                    let v: f64 = cell
-                        .parse()
-                        .map_err(|_| format!("row {}: '{cell}' in column '{name}' is not a number", n + 2))?;
-                    out.tracks.entry(name.to_string()).or_default().samples.push((t, v));
+                    let v: f64 = cell.parse().map_err(|_| {
+                        format!("row {}: '{cell}' in column '{name}' is not a number", n + 2)
+                    })?;
+                    out.tracks
+                        .entry(name.to_string())
+                        .or_default()
+                        .samples
+                        .push((t, v));
                 }
             }
         }
@@ -158,14 +164,20 @@ mod tests {
 
     #[test]
     fn track_interpolates_and_clamps() {
-        let tr = Track { samples: vec![(1.0, 10.0), (2.0, 20.0), (4.0, 0.0)], ..Default::default() };
+        let tr = Track {
+            samples: vec![(1.0, 10.0), (2.0, 20.0), (4.0, 0.0)],
+            ..Default::default()
+        };
         assert_eq!(tr.at(0.0), 10.0);
         assert_eq!(tr.at(1.0), 10.0);
         assert_eq!(tr.at(1.5), 15.0);
         assert_eq!(tr.at(2.0), 20.0);
         assert_eq!(tr.at(3.0), 10.0);
         assert_eq!(tr.at(9.0), 0.0);
-        let step = Track { interpolation: Interpolation::Step, ..tr };
+        let step = Track {
+            interpolation: Interpolation::Step,
+            ..tr
+        };
         assert_eq!(step.at(1.99), 10.0);
         assert_eq!(step.at(2.0), 20.0);
         assert_eq!(Track::default().at(1.0), 0.0);

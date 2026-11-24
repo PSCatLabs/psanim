@@ -59,7 +59,8 @@ pub enum Param {
 impl Param {
     /// Read a command-line value: a number if it parses as one, else text.
     pub fn parse(text: &str) -> Param {
-        text.parse::<f64>().map_or_else(|_| Param::Text(text.to_string()), Param::Number)
+        text.parse::<f64>()
+            .map_or_else(|_| Param::Text(text.to_string()), Param::Number)
     }
 }
 
@@ -261,7 +262,9 @@ impl Frame<'_> {
 
     /// The frame encoded as PNG.
     pub fn to_png(&self) -> Vec<u8> {
-        self.to_page().to_png().expect("encoding to memory cannot fail")
+        self.to_page()
+            .to_png()
+            .expect("encoding to memory cannot fail")
     }
 }
 
@@ -304,8 +307,9 @@ pub struct Movie {
 /// The vocabulary's native operators that a program is likely to shadow
 /// by accident: short, ordinary words.
 const NATIVE_WORDS: &[&str] = &[
-    "now", "progress", "span", "frame", "fps", "dt", "duration", "width", "height", "turns", "ease", "tween",
-    "ramp", "between", "clamp", "remap", "signal", "param", "grain", "vignette", "wiggle", "fmod",
+    "now", "progress", "span", "frame", "fps", "dt", "duration", "width", "height", "turns",
+    "ease", "tween", "ramp", "between", "clamp", "remap", "signal", "param", "grain", "vignette",
+    "wiggle", "fmod",
 ];
 
 /// The most printed text a movie keeps between calls of `take_output`.
@@ -319,7 +323,10 @@ fn short_repr(v: &Value) -> String {
         Value::Real(r) => format!("{r}"),
         Value::Name(n) => format!("/{n}"),
         Value::String(s) => format!("({})", String::from_utf8_lossy(s)),
-        Value::Array(a) => format!("[{}]", a.iter().map(short_repr).collect::<Vec<_>>().join(" ")),
+        Value::Array(a) => format!(
+            "[{}]",
+            a.iter().map(short_repr).collect::<Vec<_>>().join(" ")
+        ),
         Value::Dict(d) => format!("<<{} entries>>", d.len()),
         Value::Other(o) if o.is_procedure() => "{...}".to_string(),
         Value::Other(o) => format!("-{}-", o.type_name().trim_end_matches("type")),
@@ -395,17 +402,29 @@ impl Movie {
             decl.motion_blur = mb;
         }
         if !(decl.fps.is_finite() && decl.fps > 0.0 && decl.fps <= 1000.0) {
-            return Err(Error::new(Phase::Load, "options", format!("frame rate {} is not usable", decl.fps))
-                .hint("FPS must be above 0 and at most 1000"));
+            return Err(Error::new(
+                Phase::Load,
+                "options",
+                format!("frame rate {} is not usable", decl.fps),
+            )
+            .hint("FPS must be above 0 and at most 1000"));
         }
         if !(decl.duration.is_finite() && decl.duration > 0.0) {
-            return Err(Error::new(Phase::Load, "options", format!("duration {} is not usable", decl.duration))
-                .hint("Duration is in seconds and must be positive"));
+            return Err(Error::new(
+                Phase::Load,
+                "options",
+                format!("duration {} is not usable", decl.duration),
+            )
+            .hint("Duration is in seconds and must be positive"));
         }
         if let Some(mb) = decl.motion_blur
             && !((2..=64).contains(&mb.samples) && mb.shutter > 0.0 && mb.shutter <= 1.0)
         {
-            return Err(Error::new(Phase::Load, "options", "motion blur needs 2 to 64 samples and a shutter in (0, 1]"));
+            return Err(Error::new(
+                Phase::Load,
+                "options",
+                "motion blur needs 2 to 64 samples and a shutter in (0, 1]",
+            ));
         }
         let scale = match options.scale {
             Scale::Factor(f) => f,
@@ -419,7 +438,10 @@ impl Movie {
                 Error::new(
                     Phase::Load,
                     "options",
-                    format!("a {}x{} canvas at scale {scale} is not a usable size", decl.width, decl.height),
+                    format!(
+                        "a {}x{} canvas at scale {scale} is not a usable size",
+                        decl.width, decl.height
+                    ),
                 )
                 .hint("the output must be between 1 and 8000 pixels on each side")
             })?;
@@ -445,13 +467,16 @@ impl Movie {
             .map_err(|e| Error::new(Phase::Load, "options", e.to_string()))?;
         // The page starts transparent; each frame paints its own ground.
         interp.set_transparent_background();
-        run(&mut interp, &ctx, Phase::Setup, &format!("{} srand {} noiseseed", decl.seed, decl.seed))?;
+        run(
+            &mut interp,
+            &ctx,
+            Phase::Setup,
+            &format!("{} srand {} noiseseed", decl.seed, decl.seed),
+        )?;
         run(&mut interp, &ctx, Phase::Setup, PRELUDE)?;
         run(&mut interp, &ctx, Phase::Setup, source)?;
 
-        let is_proc = |interp: &Interp, name: &str| {
-            matches!(interp.lookup(name), Some(Value::Other(o)) if o.is_procedure())
-        };
+        let is_proc = |interp: &Interp, name: &str| matches!(interp.lookup(name), Some(Value::Other(o)) if o.is_procedure());
         if !is_proc(&interp, &decl.scene) {
             return Err(Error::new(
                 Phase::Setup,
@@ -489,10 +514,15 @@ impl Movie {
             )
             .hint("motion blur renders several moments per frame, which a simulation or a persistent canvas cannot rewind for"));
         }
-        let tick_rate = if mode == Mode::Persistent { decl.declared_fps } else { decl.step_rate };
+        let tick_rate = if mode == Mode::Persistent {
+            decl.declared_fps
+        } else {
+            decl.step_rate
+        };
         // A persistent movie may define `overlay`: drawn over each frame
         // shown, never kept.
-        let overlay = (mode == Mode::Persistent && is_proc(&interp, "overlay")).then(|| "overlay".to_string());
+        let overlay = (mode == Mode::Persistent && is_proc(&interp, "overlay"))
+            .then(|| "overlay".to_string());
         // Native words the program has redefined: its own code gets its
         // definition, which is rarely what was meant.
         let shadowed: Vec<String> = crate::api::API
@@ -506,7 +536,12 @@ impl Movie {
         interp
             .set_limits(options.budget.frame)
             .map_err(|e| Error::new(Phase::Load, "options", e.to_string()))?;
-        run(&mut interp, &ctx, Phase::Setup, "cleardictstack grestoreall save")?;
+        run(
+            &mut interp,
+            &ctx,
+            Phase::Setup,
+            "cleardictstack grestoreall save",
+        )?;
         let save = interp
             .pop_value()
             .map_err(|_| Error::new(Phase::Setup, "internal", "no checkpoint was taken"))?;
@@ -543,7 +578,11 @@ impl Movie {
             },
             scene: decl.scene,
             step,
-            checkpoints: vec![Checkpoint { tick: 0, save, canvas: None }],
+            checkpoints: vec![Checkpoint {
+                tick: 0,
+                save,
+                canvas: None,
+            }],
             cursor: 0,
             checkpoint_every,
             accum: Accumulator::default(),
@@ -616,7 +655,8 @@ impl Movie {
                     let len = self.interp.canvas_premultiplied_rgba8().len();
                     self.accum.clear(len);
                     for s in 0..mb.samples {
-                        let offset = (f64::from(s) + 0.5) / f64::from(mb.samples) * mb.shutter / self.meta.fps;
+                        let offset = (f64::from(s) + 0.5) / f64::from(mb.samples) * mb.shutter
+                            / self.meta.fps;
                         self.draw_pure(index, time + offset, phase)?;
                         self.accum.add(self.interp.canvas_premultiplied_rgba8());
                     }
@@ -648,8 +688,14 @@ impl Movie {
                 if let Some(overlay) = self.overlay.clone() {
                     // Draw the overlay on a copy; the painting is set aside.
                     let (w, h) = self.interp.canvas_size();
-                    let copy = Page::from_premultiplied_rgba8(w, h, self.interp.canvas_premultiplied_rgba8().to_vec())
-                        .ok_or_else(|| Error::new(phase, "internal", "the canvas could not be copied"))?;
+                    let copy = Page::from_premultiplied_rgba8(
+                        w,
+                        h,
+                        self.interp.canvas_premultiplied_rgba8().to_vec(),
+                    )
+                    .ok_or_else(|| {
+                        Error::new(phase, "internal", "the canvas could not be copied")
+                    })?;
                     self.kept = self.interp.swap_canvas(copy).ok();
                     self.exec(phase, "cleardictstack save")?;
                     let guard = self.pop_save(phase)?;
@@ -658,7 +704,9 @@ impl Movie {
                         "clear cleardictstack grestoreall initgraphics {} srand {overlay}",
                         self.meta.seed
                     );
-                    let drawn = self.exec(phase, &program).and_then(|()| self.check_stack(phase, &overlay));
+                    let drawn = self
+                        .exec(phase, &program)
+                        .and_then(|()| self.check_stack(phase, &overlay));
                     self.interp.clear_operands();
                     self.interp.push_value(&guard);
                     self.exec(phase, "cleardictstack restore")?;
@@ -673,7 +721,11 @@ impl Movie {
             time,
             width,
             height,
-            premultiplied: if from_accum { &self.blurred } else { self.interp.canvas_premultiplied_rgba8() },
+            premultiplied: if from_accum {
+                &self.blurred
+            } else {
+                self.interp.canvas_premultiplied_rgba8()
+            },
         })
     }
 
@@ -757,8 +809,14 @@ impl Movie {
         if let Some(base) = base {
             let _ = self.interp.swap_canvas(base);
         }
-        Err(Error::new(phase, "unclosedlayer", format!("{open} layer(s) opened with beginlayer were never closed"))
-            .hint("every beginlayer needs an `alpha endlayer`; `alpha { ... } faded` pairs them for you"))
+        Err(Error::new(
+            phase,
+            "unclosedlayer",
+            format!("{open} layer(s) opened with beginlayer were never closed"),
+        )
+        .hint(
+            "every beginlayer needs an `alpha endlayer`; `alpha { ... } faded` pairs them for you",
+        ))
     }
 
     /// The PostScript that draws one frame: a clean graphics state, the
@@ -815,15 +873,28 @@ impl Movie {
     /// Bring the simulation to exactly `target` ticks applied.
     fn seek(&mut self, target: u64) -> Result<(), Error> {
         if target < self.cursor {
-            let k = self.checkpoints.iter().rposition(|c| c.tick <= target).unwrap_or(0);
-            let phase = Phase::Step { tick: self.checkpoints[k].tick, time: 0.0 };
+            let k = self
+                .checkpoints
+                .iter()
+                .rposition(|c| c.tick <= target)
+                .unwrap_or(0);
+            let phase = Phase::Step {
+                tick: self.checkpoints[k].tick,
+                time: 0.0,
+            };
             self.rollback(k, phase)?;
             if self.meta.mode == Mode::Persistent {
                 match self.checkpoints[k].canvas.clone() {
                     Some(pixels) => {
                         let (w, h) = self.interp.canvas_size();
-                        let page = Page::from_premultiplied_rgba8(w, h, pixels)
-                            .ok_or_else(|| Error::new(phase, "internal", "a canvas checkpoint has the wrong size"))?;
+                        let page =
+                            Page::from_premultiplied_rgba8(w, h, pixels).ok_or_else(|| {
+                                Error::new(
+                                    phase,
+                                    "internal",
+                                    "a canvas checkpoint has the wrong size",
+                                )
+                            })?;
                         let _ = self.interp.swap_canvas(page);
                     }
                     None => self.reset_canvas()?,
@@ -846,10 +917,14 @@ impl Movie {
         let phase = Phase::Step { tick, time };
         // Each tick gets its own seed: `rand` inside `step` is repeatable
         // on replay, and differs from tick to tick.
-        let seed = (mix64(self.meta.seed as u64 ^ tick.wrapping_mul(0x9E37_79B9_7F4A_7C15)) >> 33) as i64;
+        let seed =
+            (mix64(self.meta.seed as u64 ^ tick.wrapping_mul(0x9E37_79B9_7F4A_7C15)) >> 33) as i64;
         if let Some(step) = self.step.clone() {
             self.begin(Running::Step, tick as i64, time, dt);
-            self.exec(phase, &format!("clear cleardictstack grestoreall initgraphics {seed} srand {step}"))?;
+            self.exec(
+                phase,
+                &format!("clear cleardictstack grestoreall initgraphics {seed} srand {step}"),
+            )?;
             self.check_stack(phase, &step)?;
         }
         if self.meta.mode == Mode::Persistent {
@@ -867,13 +942,17 @@ impl Movie {
             self.check_layers(phase)?;
         }
         self.cursor += 1;
-        if self.cursor % self.checkpoint_every == 0 {
+        if self.cursor.is_multiple_of(self.checkpoint_every) {
             self.interp.clear_operands();
             self.exec(phase, "cleardictstack grestoreall save")?;
             let save = self.pop_save(phase)?;
             let canvas = (self.meta.mode == Mode::Persistent)
                 .then(|| self.interp.canvas_premultiplied_rgba8().to_vec());
-            self.checkpoints.push(Checkpoint { tick: self.cursor, save, canvas });
+            self.checkpoints.push(Checkpoint {
+                tick: self.cursor,
+                save,
+                canvas,
+            });
         }
         Ok(())
     }
@@ -908,7 +987,12 @@ fn host_params(params: &BTreeMap<String, Param>) -> BTreeMap<String, Value> {
 
 /// Run `program`, turning a PostScript error into an [`Error`] that says
 /// where in the movie it happened.
-fn run(interp: &mut Interp, ctx: &Rc<RefCell<Ctx>>, phase: Phase, program: &str) -> Result<(), Error> {
+fn run(
+    interp: &mut Interp,
+    ctx: &Rc<RefCell<Ctx>>,
+    phase: Phase,
+    program: &str,
+) -> Result<(), Error> {
     let Err(err) = interp.run_str(program) else {
         return Ok(());
     };
@@ -942,9 +1026,15 @@ fn describe(interp: &mut Interp, ctx: &Rc<RefCell<Ctx>>, phase: Phase, err: &PsE
             !f.excerpt.split_whitespace().any(|w| {
                 let w = w.trim_start_matches(['{', '>', '-']);
                 w.starts_with('.') && w[1..].starts_with(|c: char| c.is_ascii_alphabetic())
-            }) && f.procedure.as_deref().is_none_or(|n| crate::api::lookup(n).is_none())
+            }) && f
+                .procedure
+                .as_deref()
+                .is_none_or(|n| crate::api::lookup(n).is_none())
         })
-        .map(|f| crate::error::TraceLine { procedure: f.procedure.clone(), excerpt: f.excerpt.clone() })
+        .map(|f| crate::error::TraceLine {
+            procedure: f.procedure.clone(),
+            excerpt: f.excerpt.clone(),
+        })
         .collect();
     // What the failing operator was looking at.
     let mut stack = Vec::new();
@@ -957,7 +1047,11 @@ fn describe(interp: &mut Interp, ctx: &Rc<RefCell<Ctx>>, phase: Phase, err: &PsE
     stack.reverse();
     e.stack = stack;
     interp.clear_operands();
-    e.hint = ctx.borrow_mut().hint.take().or_else(|| explain(d.name, d.command.as_deref()));
+    e.hint = ctx
+        .borrow_mut()
+        .hint
+        .take()
+        .or_else(|| explain(d.name, d.command.as_deref()));
     e
 }
 
@@ -1007,14 +1101,30 @@ struct Declaration {
 }
 
 const DECLARATION_KEYS: &[&str] = &[
-    "Size", "Duration", "FPS", "Seed", "Background", "Title", "Description", "Loop", "Scene", "Step",
-    "StepRate", "Persist", "MotionBlur", "Shutter",
+    "Size",
+    "Duration",
+    "FPS",
+    "Seed",
+    "Background",
+    "Title",
+    "Description",
+    "Loop",
+    "Scene",
+    "Step",
+    "StepRate",
+    "Persist",
+    "MotionBlur",
+    "Shutter",
 ];
 
 impl Declaration {
     fn read(decl: Option<&Value>) -> Result<Declaration, Error> {
         let bad = |key: &str, want: &str| {
-            Error::new(Phase::Load, "declaration", format!("/{key} in the animation dictionary must be {want}"))
+            Error::new(
+                Phase::Load,
+                "declaration",
+                format!("/{key} in the animation dictionary must be {want}"),
+            )
         };
         let mut d = Declaration {
             title: None,
@@ -1045,14 +1155,19 @@ impl Declaration {
                 "Size" => {
                     let size = v.as_numbers().filter(|s| s.len() == 2);
                     let ok = size.as_ref().is_some_and(|s| {
-                        s.iter().all(|x| x.fract() == 0.0 && (1.0..=8000.0).contains(x))
+                        s.iter()
+                            .all(|x| x.fract() == 0.0 && (1.0..=8000.0).contains(x))
                     });
                     let Some(s) = size.filter(|_| ok) else {
                         return Err(bad("Size", "[width height], whole numbers from 1 to 8000"));
                     };
                     (d.width, d.height) = (s[0] as u32, s[1] as u32);
                 }
-                "Duration" => d.duration = v.as_f64().ok_or_else(|| bad("Duration", "a number of seconds"))?,
+                "Duration" => {
+                    d.duration = v
+                        .as_f64()
+                        .ok_or_else(|| bad("Duration", "a number of seconds"))?
+                }
                 "FPS" => d.fps = v.as_f64().ok_or_else(|| bad("FPS", "a number"))?,
                 "Seed" => d.seed = v.as_i64().ok_or_else(|| bad("Seed", "an integer"))?,
                 "Background" => {
@@ -1061,21 +1176,45 @@ impl Declaration {
                         Value::Name(n) if n == "transparent" => None,
                         _ => {
                             let c = v.as_numbers().filter(|c| c.len() == 3).ok_or_else(|| {
-                                bad("Background", "[r g b] with components 0..1, or /transparent")
+                                bad(
+                                    "Background",
+                                    "[r g b] with components 0..1, or /transparent",
+                                )
                             })?;
-                            Some([c[0].clamp(0.0, 1.0), c[1].clamp(0.0, 1.0), c[2].clamp(0.0, 1.0)])
+                            Some([
+                                c[0].clamp(0.0, 1.0),
+                                c[1].clamp(0.0, 1.0),
+                                c[2].clamp(0.0, 1.0),
+                            ])
                         }
                     }
                 }
-                "Title" => d.title = Some(v.as_text().ok_or_else(|| bad("Title", "a string"))?.to_string()),
+                "Title" => {
+                    d.title = Some(
+                        v.as_text()
+                            .ok_or_else(|| bad("Title", "a string"))?
+                            .to_string(),
+                    )
+                }
                 "Description" => {
-                    d.description = Some(v.as_text().ok_or_else(|| bad("Description", "a string"))?.to_string());
+                    d.description = Some(
+                        v.as_text()
+                            .ok_or_else(|| bad("Description", "a string"))?
+                            .to_string(),
+                    );
                 }
                 "Loop" => d.looping = v.as_bool().ok_or_else(|| bad("Loop", "true or false"))?,
-                "Persist" => d.persist = v.as_bool().ok_or_else(|| bad("Persist", "true or false"))?,
+                "Persist" => {
+                    d.persist = v.as_bool().ok_or_else(|| bad("Persist", "true or false"))?
+                }
                 "Scene" => match v {
                     Value::Name(n) => d.scene = n.clone(),
-                    _ => return Err(bad("Scene", "the name of the drawing procedure, like /scene")),
+                    _ => {
+                        return Err(bad(
+                            "Scene",
+                            "the name of the drawing procedure, like /scene",
+                        ));
+                    }
                 },
                 "Step" => match v {
                     Value::Name(n) => {
@@ -1083,15 +1222,31 @@ impl Declaration {
                         d.step_declared = true;
                     }
                     Value::Null => d.step = None,
-                    _ => return Err(bad("Step", "the name of the simulation procedure, like /step")),
+                    _ => {
+                        return Err(bad(
+                            "Step",
+                            "the name of the simulation procedure, like /step",
+                        ));
+                    }
                 },
-                "StepRate" => d.step_rate = v.as_f64().ok_or_else(|| bad("StepRate", "ticks per second"))?,
+                "StepRate" => {
+                    d.step_rate = v
+                        .as_f64()
+                        .ok_or_else(|| bad("StepRate", "ticks per second"))?
+                }
                 "MotionBlur" => {
                     samples = Some(v.as_i64().filter(|n| (0..=64).contains(n)).ok_or_else(|| {
-                        bad("MotionBlur", "the number of samples per frame, 2 to 64 (0 for none)")
+                        bad(
+                            "MotionBlur",
+                            "the number of samples per frame, 2 to 64 (0 for none)",
+                        )
                     })? as u32);
                 }
-                "Shutter" => shutter = v.as_f64().ok_or_else(|| bad("Shutter", "a fraction of the frame, 0..1"))?,
+                "Shutter" => {
+                    shutter = v
+                        .as_f64()
+                        .ok_or_else(|| bad("Shutter", "a fraction of the frame, 0..1"))?
+                }
                 other => {
                     let mut e = Error::new(
                         Phase::Load,
@@ -1102,7 +1257,11 @@ impl Declaration {
                         Some(near) => format!("did you mean /{near}?"),
                         None => format!(
                             "the keys are {}",
-                            DECLARATION_KEYS.iter().map(|k| format!("/{k}")).collect::<Vec<_>>().join(" ")
+                            DECLARATION_KEYS
+                                .iter()
+                                .map(|k| format!("/{k}"))
+                                .collect::<Vec<_>>()
+                                .join(" ")
                         ),
                     });
                     return Err(e);
@@ -1117,7 +1276,10 @@ impl Declaration {
             return Err(bad("StepRate", "above 0 and at most 10000"));
         }
         if let Some(n) = samples.filter(|n| *n >= 2) {
-            d.motion_blur = Some(MotionBlur { samples: n, shutter });
+            d.motion_blur = Some(MotionBlur {
+                samples: n,
+                shutter,
+            });
         }
         Ok(d)
     }

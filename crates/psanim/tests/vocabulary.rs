@@ -11,7 +11,9 @@ use psanim::{Movie, Options};
 fn defined_by(before: &str, lib: &str) -> BTreeSet<String> {
     let mut interp = pscat::Interp::new();
     interp.capture_stdout();
-    interp.run_str(before).unwrap_or_else(|e| panic!("{before}: {e}"));
+    interp
+        .run_str(before)
+        .unwrap_or_else(|e| panic!("{before}: {e}"));
     let base = names(&mut interp);
     interp.run_str(lib).unwrap_or_else(|e| panic!("{lib}: {e}"));
     names(&mut interp).difference(&base).cloned().collect()
@@ -22,7 +24,10 @@ fn names(interp: &mut pscat::Interp) -> BTreeSet<String> {
         .run_str("[ systemdict { pop } forall userdict { pop } forall ]")
         .unwrap();
     match interp.pop_value().unwrap() {
-        pscat::host::Value::Array(a) => a.iter().filter_map(|v| v.as_text().map(str::to_string)).collect(),
+        pscat::host::Value::Array(a) => a
+            .iter()
+            .filter_map(|v| v.as_text().map(str::to_string))
+            .collect(),
         _ => panic!(),
     }
 }
@@ -30,7 +35,15 @@ fn names(interp: &mut pscat::Interp) -> BTreeSet<String> {
 #[test]
 fn every_documented_name_is_defined_in_a_movie() {
     // A scene that looks every name up; an undefined one fails the load.
-    let lookups: String = API.iter().map(|e| format!("/{} where {{ pop }} {{ /{} missing }} ifelse\n", e.name, e.name)).collect();
+    let lookups: String = API
+        .iter()
+        .map(|e| {
+            format!(
+                "/{} where {{ pop }} {{ /{} missing }} ifelse\n",
+                e.name, e.name
+            )
+        })
+        .collect();
     let src = format!("<< /Size [8 8] >> animation\n{lookups}/scene {{ }} def");
     Movie::load(&src, &Options::default()).unwrap_or_else(|e| panic!("{e}"));
 }
@@ -40,13 +53,31 @@ fn every_entry_is_complete_and_categories_are_known() {
     let cats: BTreeSet<&str> = CATEGORIES.iter().map(|c| c.0).collect();
     let mut seen = BTreeSet::new();
     for e in API {
-        assert!(cats.contains(e.category), "{}: unknown category {}", e.name, e.category);
-        assert!(e.stack.contains(&format!("  {}  ", e.name)) || e.stack.starts_with(&format!("-  {}  ", e.name)), "{}: stack effect `{}` should show the name", e.name, e.stack);
-        assert!(e.summary.len() > 10 && e.summary.ends_with('.'), "{}: summary", e.name);
+        assert!(
+            cats.contains(e.category),
+            "{}: unknown category {}",
+            e.name,
+            e.category
+        );
+        assert!(
+            e.stack.contains(&format!("  {}  ", e.name))
+                || e.stack.starts_with(&format!("-  {}  ", e.name)),
+            "{}: stack effect `{}` should show the name",
+            e.name,
+            e.stack
+        );
+        assert!(
+            e.summary.len() > 10 && e.summary.ends_with('.'),
+            "{}: summary",
+            e.name
+        );
         assert!(seen.insert(e.name), "{} is listed twice", e.name);
     }
     for (key, _) in CATEGORIES {
-        assert!(API.iter().any(|e| e.category == *key), "category {key} is empty");
+        assert!(
+            API.iter().any(|e| e.category == *key),
+            "category {key} is empty"
+        );
     }
     assert!(psanim::api::to_markdown().contains("### `tween`"));
     assert_eq!(psanim::api::to_json().as_array().unwrap().len(), API.len());
@@ -70,7 +101,10 @@ fn every_public_name_the_prelude_defines_is_documented() {
             if psanim::TRANSITIONS.contains(&name) {
                 continue;
             }
-            assert!(documented.contains(name), "prelude defines `{name}` but the reference does not list it");
+            assert!(
+                documented.contains(name),
+                "prelude defines `{name}` but the reference does not list it"
+            );
         }
     }
 }
@@ -83,7 +117,10 @@ fn transitions_table_matches_the_prelude() {
          /n 0 def transitions {{ pop pop /n n 1 add def }} forall
          n {} ne {{ /transitions-count-mismatch missing }} if
          /scene {{ }} def",
-        psanim::TRANSITIONS.iter().map(|t| format!("transitions /{t} known not {{ /{t} missing }} if\n")).collect::<String>(),
+        psanim::TRANSITIONS
+            .iter()
+            .map(|t| format!("transitions /{t} known not {{ /{t} missing }} if\n"))
+            .collect::<String>(),
         psanim::TRANSITIONS.len()
     );
     Movie::load(&src, &Options::default()).unwrap_or_else(|e| panic!("{e}"));
@@ -98,26 +135,58 @@ fn no_pscat_library_redefines_a_psanim_word() {
     let vocabulary: BTreeSet<&str> = API.iter().map(|e| e.name).collect();
     // Each library with what it needs loaded first.
     let libs = [
-        ("artkit", ""), ("paintkit", "artkit"), ("drykit", "artkit"), ("drychalk", "artkit"),
-        ("drycharcoal", "artkit"), ("drycrayon", "artkit"), ("graph", ""), ("dataviz", ""),
-        ("pagekit", "artkit"), ("functional", ""), ("aspect", "functional"), ("fillkit", "artkit"),
-        ("hatchkit", "artkit"), ("stipplekit", "artkit"), ("halftonekit", "artkit"),
-        ("surfacekit", "artkit"), ("mathkit", "artkit"), ("lettering", "artkit"), ("headline", "artkit"),
-        ("handscript", "artkit"), ("strokeglyphs", "handscript"), ("typewriter_outlines", ""),
-        ("typewriter", "typewriter_outlines"), ("warp", "functional aspect"), ("printkit", "artkit"),
-        ("etching", ""), ("qr", ""), ("kernel", ""), ("apparel", "artkit"), ("jersey", "artkit"),
-        ("hangul", "artkit"), ("noiseref", ""),
+        ("artkit", ""),
+        ("paintkit", "artkit"),
+        ("drykit", "artkit"),
+        ("drychalk", "artkit"),
+        ("drycharcoal", "artkit"),
+        ("drycrayon", "artkit"),
+        ("graph", ""),
+        ("dataviz", ""),
+        ("pagekit", "artkit"),
+        ("functional", ""),
+        ("aspect", "functional"),
+        ("fillkit", "artkit"),
+        ("hatchkit", "artkit"),
+        ("stipplekit", "artkit"),
+        ("halftonekit", "artkit"),
+        ("surfacekit", "artkit"),
+        ("mathkit", "artkit"),
+        ("lettering", "artkit"),
+        ("headline", "artkit"),
+        ("handscript", "artkit"),
+        ("strokeglyphs", "handscript"),
+        ("typewriter_outlines", ""),
+        ("typewriter", "typewriter_outlines"),
+        ("warp", "functional aspect"),
+        ("printkit", "artkit"),
+        ("etching", ""),
+        ("qr", ""),
+        ("kernel", ""),
+        ("apparel", "artkit"),
+        ("jersey", "artkit"),
+        ("hangul", "artkit"),
+        ("noiseref", ""),
     ];
     let mut clashes = Vec::new();
     for (lib, needs) in libs {
-        let before: String = needs.split_whitespace().map(|n| format!("(lib/{n}.ps) run ")).collect();
+        let before: String = needs
+            .split_whitespace()
+            .map(|n| format!("(lib/{n}.ps) run "))
+            .collect();
         let added = defined_by(&before, &format!("(lib/{lib}.ps) run"));
-        assert!(!added.is_empty(), "lib/{lib}.ps defined nothing: was it found?");
+        assert!(
+            !added.is_empty(),
+            "lib/{lib}.ps defined nothing: was it found?"
+        );
         for name in added {
             if vocabulary.contains(name.as_str()) {
                 clashes.push(format!("{lib}: {name}"));
             }
         }
     }
-    assert!(clashes.is_empty(), "name clashes with PSCat libraries: {clashes:?}");
+    assert!(
+        clashes.is_empty(),
+        "name clashes with PSCat libraries: {clashes:?}"
+    );
 }

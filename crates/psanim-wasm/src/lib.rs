@@ -82,10 +82,17 @@ pub unsafe extern "C" fn pa_free(ptr: *mut u8, len: usize) {
 pub unsafe extern "C" fn pa_load(src: *const u8, len: usize, scale: f64, max_steps: f64) -> i32 {
     // SAFETY: the caller's contract.
     let source = unsafe { text(src, len) };
-    let limits = if max_steps >= 1.0 { Limits::none().with_max_steps(max_steps as u64) } else { Limits::none() };
+    let limits = if max_steps >= 1.0 {
+        Limits::none().with_max_steps(max_steps as u64)
+    } else {
+        Limits::none()
+    };
     let options = Options {
         scale: Scale::Factor(if scale > 0.0 { scale } else { 1.0 }),
-        budget: Budget { setup: limits, frame: limits },
+        budget: Budget {
+            setup: limits,
+            frame: limits,
+        },
         // No disk in a browser: only the built-in libraries.
         read_roots: Some(Vec::new()),
         ..Options::default()
@@ -211,7 +218,11 @@ pub extern "C" fn pa_error_text_len() -> usize {
 /// Interpreter steps the last frame took (when a step cap is set).
 #[unsafe(no_mangle)]
 pub extern "C" fn pa_last_steps() -> f64 {
-    with(|s| s.movie.as_ref().map_or(0.0, |m| m.last_frame_steps() as f64))
+    with(|s| {
+        s.movie
+            .as_ref()
+            .map_or(0.0, |m| m.last_frame_steps() as f64)
+    })
 }
 
 #[cfg(test)]
@@ -247,8 +258,14 @@ mod tests {
         // SAFETY: the pixel buffer is width*height*4 bytes.
         let px = unsafe { std::slice::from_raw_parts(pa_pixels_ptr(), 64 * 32 * 4) };
         // At t=1 the bar starts at x=16 units = 32 px.
-        assert_eq!(&px[(16 * 64 + 34) * 4..(16 * 64 + 34) * 4 + 4], &[255, 0, 0, 255]);
-        assert_eq!(&px[(16 * 64 + 10) * 4..(16 * 64 + 10) * 4 + 4], &[0, 0, 0, 255]);
+        assert_eq!(
+            &px[(16 * 64 + 34) * 4..(16 * 64 + 34) * 4 + 4],
+            &[255, 0, 0, 255]
+        );
+        assert_eq!(
+            &px[(16 * 64 + 10) * 4..(16 * 64 + 10) * 4 + 4],
+            &[0, 0, 0, 255]
+        );
         assert!(pa_last_steps() > 0.0);
 
         let bad = "<< /Size [32 16] >> animation /scene { nosuchword } def";
@@ -256,7 +273,10 @@ mod tests {
         assert_eq!(unsafe { pa_load(bad.as_ptr(), bad.len(), 0.0, 0.0) }, 0);
         assert_eq!(pa_render(0.0), 1);
         let err = string(pa_error_ptr(), pa_error_len());
-        assert!(err.contains("\"kind\":\"undefined\"") && err.contains("nosuchword"), "{err}");
+        assert!(
+            err.contains("\"kind\":\"undefined\"") && err.contains("nosuchword"),
+            "{err}"
+        );
         assert!(string(pa_error_text_ptr(), pa_error_text_len()).contains("frame 0"));
         // A native thread must not leave an interpreter for thread-local
         // teardown to drop (the interpreter's own thread-locals may go

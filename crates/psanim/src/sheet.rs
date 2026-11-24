@@ -62,12 +62,22 @@ pub fn compose(
     let mut cells: Vec<(Page, Option<Page>)> = Vec::new();
     for s in stills {
         let tw = thumb_width.clamp(16, s.width.max(16));
-        let th = ((u64::from(s.height) * u64::from(tw)) as f64 / f64::from(s.width)).round().max(1.0) as u32;
-        let small = raster::downscale(&s.premultiplied, s.width as usize, s.height as usize, tw as usize, th as usize);
+        let th = ((u64::from(s.height) * u64::from(tw)) as f64 / f64::from(s.width))
+            .round()
+            .max(1.0) as u32;
+        let small = raster::downscale(
+            &s.premultiplied,
+            s.width as usize,
+            s.height as usize,
+            tw as usize,
+            th as usize,
+        );
         let mut flat = Vec::new();
         raster::flatten_onto(&small, matte, &mut flat);
-        let page = Page::from_premultiplied_rgba8(tw, th, flat).ok_or("thumbnail size is not usable")?;
-        let caption = text_strip(&format!("#{}  {:.2}s", s.index, s.time), 13, false).map_err(err)?;
+        let page =
+            Page::from_premultiplied_rgba8(tw, th, flat).ok_or("thumbnail size is not usable")?;
+        let caption =
+            text_strip(&format!("#{}  {:.2}s", s.index, s.time), 13, false).map_err(err)?;
         cells.push((page, caption));
     }
     let header = match title {
@@ -81,7 +91,9 @@ pub fn compose(
         .map(|(r, row)| {
             RowSize::new(
                 if r == 0 { size(&header) } else { (0, 0) },
-                row.iter().map(|(img, cap)| CellSize::new((img.width(), img.height()), size(cap))).collect(),
+                row.iter()
+                    .map(|(img, cap)| CellSize::new((img.width(), img.height()), size(cap)))
+                    .collect(),
             )
         })
         .collect();
@@ -145,12 +157,21 @@ mod tests {
         let stills: Vec<Still> = (0..6).map(|k| still(k * 3, 40 * k as u8 + 20)).collect();
         let page = compose(&stills, 3, 40, Some("Test movie"), [0, 0, 0]).unwrap();
         // Two rows of three 40x20 thumbnails, plus captions, gaps and a title.
-        assert!(page.width() >= 120 && page.height() >= 40 + 2 * 13, "{}x{}", page.width(), page.height());
+        assert!(
+            page.width() >= 120 && page.height() >= 40 + 2 * 13,
+            "{}x{}",
+            page.width(),
+            page.height()
+        );
         let px = page.rgba8();
         // Every thumbnail's grey appears somewhere on the sheet.
         for k in 0..6u8 {
             let shade = 40 * k + 20;
-            assert!(px.chunks(4).any(|p| p[0] == shade && p[1] == shade && p[2] == shade), "shade {shade}");
+            assert!(
+                px.chunks(4)
+                    .any(|p| p[0] == shade && p[1] == shade && p[2] == shade),
+                "shade {shade}"
+            );
         }
         assert!(compose(&[], 3, 40, None, [0, 0, 0]).is_err());
         // One column, no title.

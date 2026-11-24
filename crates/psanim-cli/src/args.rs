@@ -32,7 +32,15 @@ pub struct Common {
 }
 
 /// Flags that take no value.
-const SWITCHES: &[&str] = &["json", "quiet", "untrusted", "markdown", "no-blur", "keep-frames", "all"];
+const SWITCHES: &[&str] = &[
+    "json",
+    "quiet",
+    "untrusted",
+    "markdown",
+    "no-blur",
+    "keep-frames",
+    "all",
+];
 
 impl Common {
     /// Parse `args` (after the command name). `known` lists the
@@ -41,9 +49,14 @@ impl Common {
         let mut c = Common::default();
         let mut it = args.iter().peekable();
         while let Some(arg) = it.next() {
-            let Some(flag) = arg.strip_prefix("--").or_else(|| arg.strip_prefix('-').filter(|f| f.len() == 1)) else {
+            let Some(flag) = arg
+                .strip_prefix("--")
+                .or_else(|| arg.strip_prefix('-').filter(|f| f.len() == 1))
+            else {
                 if c.file.is_some() {
-                    return Err(format!("unexpected argument '{arg}' (one program file per command)"));
+                    return Err(format!(
+                        "unexpected argument '{arg}' (one program file per command)"
+                    ));
                 }
                 c.file = Some(PathBuf::from(arg));
                 continue;
@@ -58,14 +71,16 @@ impl Common {
                 "q" => "quiet",
                 f => f,
             };
-            let value = |it: &mut std::iter::Peekable<std::slice::Iter<String>>| -> Result<String, String> {
-                match inline.clone().or_else(|| it.next().cloned()) {
-                    Some(v) => Ok(v),
-                    None => Err(format!("--{flag} needs a value")),
-                }
-            };
+            let value =
+                |it: &mut std::iter::Peekable<std::slice::Iter<String>>| -> Result<String, String> {
+                    match inline.clone().or_else(|| it.next().cloned()) {
+                        Some(v) => Ok(v),
+                        None => Err(format!("--{flag} needs a value")),
+                    }
+                };
             fn num<T: std::str::FromStr>(flag: &str, v: &str) -> Result<T, String> {
-                v.parse().map_err(|_| format!("--{flag}: '{v}' is not a valid number"))
+                v.parse()
+                    .map_err(|_| format!("--{flag}: '{v}' is not a valid number"))
             }
             match flag {
                 "json" => c.json = true,
@@ -88,11 +103,17 @@ impl Common {
                 "signals" => c.signal_files.push(PathBuf::from(value(&mut it)?)),
                 "param" => {
                     let v = value(&mut it)?;
-                    let (k, v) = v.split_once('=').ok_or_else(|| format!("--param wants name=value, got '{v}'"))?;
+                    let (k, v) = v
+                        .split_once('=')
+                        .ok_or_else(|| format!("--param wants name=value, got '{v}'"))?;
                     c.params.insert(k.to_string(), Param::parse(v));
                 }
                 f if known.contains(&f) => {
-                    let v = if SWITCHES.contains(&f) { "true".to_string() } else { value(&mut it)? };
+                    let v = if SWITCHES.contains(&f) {
+                        "true".to_string()
+                    } else {
+                        value(&mut it)?
+                    };
                     c.extra.insert(f.to_string(), v);
                 }
                 f => {
@@ -106,7 +127,10 @@ impl Common {
     pub fn extra_num<T: std::str::FromStr>(&self, key: &str) -> Result<Option<T>, String> {
         match self.extra.get(key) {
             None => Ok(None),
-            Some(v) => v.parse().map(Some).map_err(|_| format!("--{key}: '{v}' is not a valid number")),
+            Some(v) => v
+                .parse()
+                .map(Some)
+                .map_err(|_| format!("--{key}: '{v}' is not a valid number")),
         }
     }
 
@@ -117,10 +141,12 @@ impl Common {
     /// The program file and its text.
     pub fn source(&self) -> Result<(PathBuf, String), String> {
         let path = self.file.clone().ok_or("no program file given")?;
-        let bytes = std::fs::read(&path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+        let bytes =
+            std::fs::read(&path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
         // PostScript is bytes; a movie program is text. Latin-1 bytes in
         // strings survive as the characters they are.
-        let text = String::from_utf8(bytes).unwrap_or_else(|e| e.into_bytes().iter().map(|b| *b as char).collect());
+        let text = String::from_utf8(bytes)
+            .unwrap_or_else(|e| e.into_bytes().iter().map(|b| *b as char).collect());
         Ok((path, text))
     }
 
@@ -129,10 +155,15 @@ impl Common {
     pub fn options(&self, default_scale: Scale) -> Result<Options, String> {
         let mut signals = Signals::default();
         for f in &self.signal_files {
-            let text = std::fs::read_to_string(f).map_err(|e| format!("cannot read {}: {e}", f.display()))?;
+            let text = std::fs::read_to_string(f)
+                .map_err(|e| format!("cannot read {}: {e}", f.display()))?;
             signals.extend(Signals::from_csv(&text).map_err(|e| format!("{}: {e}", f.display()))?);
         }
-        let mut budget = if self.untrusted { Budget::untrusted() } else { Budget::trusted() };
+        let mut budget = if self.untrusted {
+            Budget::untrusted()
+        } else {
+            Budget::trusted()
+        };
         let cap = |mut l: Limits| {
             if let Some(s) = self.max_steps {
                 l = l.with_max_steps(s);
@@ -159,7 +190,11 @@ impl Common {
             Some(Vec::new())
         } else {
             self.file.as_ref().and_then(|f| f.parent()).map(|d| {
-                vec![if d.as_os_str().is_empty() { PathBuf::from(".") } else { d.to_path_buf() }]
+                vec![if d.as_os_str().is_empty() {
+                    PathBuf::from(".")
+                } else {
+                    d.to_path_buf()
+                }]
             })
         };
         let motion_blur = if self.has("no-blur") {
@@ -167,7 +202,10 @@ impl Common {
         } else {
             match (self.motion_blur, self.shutter) {
                 (Some(0), _) => Some(None),
-                (Some(samples), shutter) => Some(Some(MotionBlur { samples, shutter: shutter.unwrap_or(0.5) })),
+                (Some(samples), shutter) => Some(Some(MotionBlur {
+                    samples,
+                    shutter: shutter.unwrap_or(0.5),
+                })),
                 (None, _) => None,
             }
         };
@@ -189,6 +227,10 @@ impl Common {
 /// Parse a list like `0,1.5,3` or a single number.
 pub fn number_list(text: &str, what: &str) -> Result<Vec<f64>, String> {
     text.split(',')
-        .map(|p| p.trim().parse::<f64>().map_err(|_| format!("{what}: '{p}' is not a number")))
+        .map(|p| {
+            p.trim()
+                .parse::<f64>()
+                .map_err(|_| format!("{what}: '{p}' is not a number"))
+        })
         .collect()
 }

@@ -1,0 +1,105 @@
+<section class="hero">
+  <div>
+    <h1>Animation, written as a <em>program</em>.</h1>
+    <p>psanim renders films from PostScript. A movie is one file: a procedure that draws the frame for a given moment, on a full graphics language with brushes, type and geometry already in it.</p>
+    <p>No timeline to keep in sync with the code, no scene graph. A frame is a function of its time, so any frame renders on its own, in any order, on every core.</p>
+    <div class="cta">
+      <a class="btn primary" href="gallery.html">Watch the gallery</a>
+      <a class="btn" href="playground.html">Try it in the page</a>
+      <a class="btn" href="guide/writing.html">Read the guide</a>
+    </div>
+  </div>
+  <video autoplay loop muted playsinline poster="gallery/orrery/poster.png" src="gallery/orrery/orrery.mp4" aria-label="Orrery, a looping gallery piece"></video>
+</section>
+
+<section class="band">
+  <h2>The whole contract</h2>
+  <p class="lede">Declare the movie. Define <code>scene</code>. Read the clock with <code>now</code>. Everything else is PostScript.</p>
+  <div class="two">
+    <pre class="code lang-postscript"><code>{{FIRST}}</code></pre>
+    <ol class="steps">
+      <li><code>psanim check first.ps</code><span>Loads it, renders sixteen small frames, and tells you about errors, blank frames, pops and loops that do not close.</span></li>
+      <li><code>psanim sheet first.ps -o sheet.png</code><span>Twelve frames on one labelled image: composition over time at a glance.</span></li>
+      <li><code>psanim frame first.ps --at 2.5 -o still.png</code><span>Any moment, at full size, in milliseconds. Nothing before it is rendered.</span></li>
+      <li><code>psanim render first.ps -o first.mp4</code><span>The film, on all cores. Also WebM, GIF, or a PNG sequence.</span></li>
+    </ol>
+  </div>
+</section>
+
+<section class="band">
+  <h2>Five ideas</h2>
+  <p class="lede">The vocabulary is {{WORDS}} words. These are the ones that change how you think.</p>
+  <div class="ideas">
+    <div class="idea"><h3>The clock</h3><p><code>now</code> is the time in seconds. <code>progress</code> is the same thing from 0 to 1.</p>
+      <pre>now 90 mul rotate</pre></div>
+    <div class="idea"><h3>Time scopes</h3><p>Re-base the clock for a procedure, the way <code>translate</code> re-bases space.</p>
+      <pre>2 5 { title } during
+i 0.08 { dot } staggered</pre></div>
+    <div class="idea"><h3>tween, then between</h3><p>When, how, what: eased progress piped into a range.</p>
+      <pre>1 2.5 /cubic-out tween
+100 400 between</pre></div>
+    <div class="idea"><h3>Paths that draw</h3><p>Keep a fraction of any path, including the outline of type.</p>
+      <pre>(ink) true charpath
+0 u trimpath stroke</pre></div>
+    <div class="idea"><h3>Layers and reels</h3><p>Groups that fade, glow and blur; clips joined by transitions.</p>
+      <pre>0.5 { ... } faded
+[ [4 /a] [1 /dissolve] [5 /b] ] reel</pre></div>
+  </div>
+</section>
+
+<section class="band">
+  <h2>Made with it</h2>
+  <p class="lede">Each of these is a single PostScript file in the repository. Five were written by coding agents working from the project's skill alone.</p>
+  <div class="strip">{{STRIP}}</div>
+</section>
+
+<section class="band">
+  <h2>Why any frame can be rendered alone</h2>
+  <p class="lede">The program's setup runs once. Then the interpreter's memory is checkpointed with PostScript's own <code>save</code>, and every frame begins by rolling back to it. Whatever a frame does to memory is gone before the next. Measured cost of the rollback: nothing you can see.</p>
+  {{LIFECYCLE}}
+</section>
+
+<section class="band">
+  <h2>Time is graphics state</h2>
+  <p class="lede">A procedure written against <code>now</code> is a reusable piece of motion. Its caller decides when it happens, how fast, and how many times.</p>
+  {{TIMESCOPES}}
+</section>
+
+<section class="band">
+  <h2>On PSCat, as a library</h2>
+  <p class="lede">psanim runs the PSCat PostScript interpreter in process. Building it grew PSCat a host API (operators from Rust closures, values across the stack, paths as data, canvas exchange, error backtraces) that any other application can use.</p>
+  {{ARCHITECTURE}}
+  <div class="cta">
+    <a class="btn" href="guide/architecture.html">Architecture and rationale</a>
+    <a class="btn" href="guide/pscat.html">The PSCat integration</a>
+    <a class="btn" href="guide/benchmarks.html">Benchmarks</a>
+  </div>
+</section>
+
+<section class="band">
+  <h2>Built for agents as much as for people</h2>
+  <p class="lede">An agent cannot watch a film. So the tools say what a viewer would notice, and errors say where in the program and what to try.</p>
+  <div class="two">
+<pre class="code"><code>$ psanim check movie.ps
+error in frame 45 (t=1.500s): typecheck in `lineto`
+  in petal: 0 0 moveto 10 (x) >>> lineto <<< stroke
+  in flower: >>> petal <<< 90 rotate
+  operand stack (top last): 0.5 10 (x)
+  hint: `lineto` got an operand of the wrong type.
+        The operand stack above shows what it was handed.</code></pre>
+<pre class="code"><code>$ psanim check loop.ps
+  frame    time    ms   luma  cover  motion
+      0   0.00s   1.9  0.071  0.212  0.0061
+    ...
+  loop join: step 0.0142 against 0.0061 beside it
+  warning: the loop does not close cleanly: the step from
+    the last frame to the first is 2.3x the steps beside it.
+    Check that every angle is a whole number of turns.</code></pre>
+  </div>
+  <div class="cta">
+    <a class="btn" href="guide/patterns.html">Patterns</a>
+    <a class="btn" href="guide/craft.html">Craft</a>
+    <a class="btn" href="guide/pitfalls.html">Pitfalls</a>
+    <a class="btn" href="reference.html">Vocabulary</a>
+  </div>
+</section>

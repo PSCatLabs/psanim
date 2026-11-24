@@ -89,7 +89,11 @@ enum Fail {
 
 impl From<Error> for Fail {
     fn from(e: Error) -> Fail {
-        if e.kind == "output" { Fail::Output(e.message) } else { Fail::Program(Box::new(e)) }
+        if e.kind == "output" {
+            Fail::Output(e.message)
+        } else {
+            Fail::Program(Box::new(e))
+        }
     }
 }
 
@@ -121,15 +125,23 @@ fn main() -> ExitCode {
         "render" => cmd_render(rest),
         "bench" => cmd_bench(rest),
         "api" => cmd_api(rest),
-        other => Err(usage(format!("unknown command '{other}' (see `psanim help`)"))),
+        other => Err(usage(format!(
+            "unknown command '{other}' (see `psanim help`)"
+        ))),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(fail) => {
             let (code, body) = match &fail {
-                Fail::Usage(m) => (2, json!({"ok": false, "error": {"phase": "usage", "kind": "usage", "message": m}})),
+                Fail::Usage(m) => (
+                    2,
+                    json!({"ok": false, "error": {"phase": "usage", "kind": "usage", "message": m}}),
+                ),
                 Fail::Program(e) => (1, json!({"ok": false, "error": e.to_json()})),
-                Fail::Output(m) => (3, json!({"ok": false, "error": {"phase": "output", "kind": "output", "message": m}})),
+                Fail::Output(m) => (
+                    3,
+                    json!({"ok": false, "error": {"phase": "output", "kind": "output", "message": m}}),
+                ),
             };
             if json_errors {
                 println!("{body}");
@@ -150,26 +162,34 @@ fn parse(rest: &[String], known: &[&str]) -> Result<Common, Fail> {
 }
 
 fn name_of(path: &Path) -> String {
-    path.file_stem().map_or_else(|| "movie".to_string(), |s| s.to_string_lossy().into_owned())
+    path.file_stem()
+        .map_or_else(|| "movie".to_string(), |s| s.to_string_lossy().into_owned())
 }
 
 /// The colour transparent frames are shown over in video and thumbnails.
 fn matte(meta: &Meta) -> [u8; 3] {
-    meta.background.map_or([0, 0, 0], |c| c.map(|v| (v * 255.0).round() as u8))
+    meta.background
+        .map_or([0, 0, 0], |c| c.map(|v| (v * 255.0).round() as u8))
 }
 
 fn write_file(path: &Path, bytes: &[u8]) -> Result<(), Fail> {
     if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
-        std::fs::create_dir_all(parent).map_err(|e| Fail::Output(format!("cannot create {}: {e}", parent.display())))?;
+        std::fs::create_dir_all(parent)
+            .map_err(|e| Fail::Output(format!("cannot create {}: {e}", parent.display())))?;
     }
-    std::fs::write(path, bytes).map_err(|e| Fail::Output(format!("cannot write {}: {e}", path.display())))
+    std::fs::write(path, bytes)
+        .map_err(|e| Fail::Output(format!("cannot write {}: {e}", path.display())))
 }
 
 /// The frames `--at`, `--frame`, `--count`, `--from`/`--to` select.
 fn select_frames(c: &Common, meta: &Meta, default_count: usize) -> Result<Vec<u64>, Fail> {
     let last = meta.frames.saturating_sub(1);
     if let Some(list) = c.extra.get("frame") {
-        return Ok(number_list(list, "--frame").map_err(usage)?.iter().map(|k| (*k as u64).min(last)).collect());
+        return Ok(number_list(list, "--frame")
+            .map_err(usage)?
+            .iter()
+            .map(|k| (*k as u64).min(last))
+            .collect());
     }
     if let Some(n) = c.extra_num::<u64>("seam").map_err(usage)? {
         // The last n frames, then the first n: the join of a loop.
@@ -177,11 +197,21 @@ fn select_frames(c: &Common, meta: &Meta, default_count: usize) -> Result<Vec<u6
         return Ok((meta.frames - n..meta.frames).chain(0..n).collect());
     }
     if let Some(list) = c.extra.get("at") {
-        return Ok(number_list(list, "--at").map_err(usage)?.iter().map(|t| meta.frame_at(*t)).collect());
+        return Ok(number_list(list, "--at")
+            .map_err(usage)?
+            .iter()
+            .map(|t| meta.frame_at(*t))
+            .collect());
     }
     let (first, end) = range(c, meta)?;
-    let count: usize = c.extra_num("count").map_err(usage)?.unwrap_or(default_count);
-    Ok(sheet::spread(end - first, count).into_iter().map(|k| k + first).collect())
+    let count: usize = c
+        .extra_num("count")
+        .map_err(usage)?
+        .unwrap_or(default_count);
+    Ok(sheet::spread(end - first, count)
+        .into_iter()
+        .map(|k| k + first)
+        .collect())
 }
 
 /// `--from`/`--to` as a half-open frame range.
@@ -191,7 +221,10 @@ fn range(c: &Common, meta: &Meta) -> Result<(u64, u64), Fail> {
     let first = ((from * meta.fps - 1e-9).ceil().max(0.0) as u64).min(meta.frames);
     let end = ((to * meta.fps - 1e-9).ceil().max(0.0) as u64).clamp(first, meta.frames);
     if first >= end {
-        return Err(usage(format!("--from {from} --to {to} selects no frames of a {}s movie", meta.duration)));
+        return Err(usage(format!(
+            "--from {from} --to {to} selects no frames of a {}s movie",
+            meta.duration
+        )));
     }
     Ok((first, end))
 }
@@ -202,7 +235,10 @@ fn cmd_info(rest: &[String]) -> Result<(), Fail> {
     let movie = Movie::load(&source, &c.options(Scale::Factor(1.0)).map_err(usage)?)?;
     let m = movie.meta();
     if c.json {
-        println!("{}", json!({"ok": true, "file": path, "movie": m.to_json()}));
+        println!(
+            "{}",
+            json!({"ok": true, "file": path, "movie": m.to_json()})
+        );
         return Ok(());
     }
     println!("{}", m.title.as_deref().unwrap_or(&name_of(&path)));
@@ -210,17 +246,36 @@ fn cmd_info(rest: &[String]) -> Result<(), Fail> {
         println!("  {d}");
     }
     println!("  canvas      {} x {} units", m.width, m.height);
-    println!("  output      {} x {} px (scale {})", m.pixel_width, m.pixel_height, m.scale);
-    println!("  duration    {} s at {} fps = {} frames", m.duration, m.fps, m.frames);
-    println!("  mode        {}{}", m.mode.name(), match m.mode {
-        psanim::Mode::Pure => " (any frame, any order, in parallel)".to_string(),
-        _ => format!(" ({} ticks/s, frames in order)", m.tick_rate),
-    });
+    println!(
+        "  output      {} x {} px (scale {})",
+        m.pixel_width, m.pixel_height, m.scale
+    );
+    println!(
+        "  duration    {} s at {} fps = {} frames",
+        m.duration, m.fps, m.frames
+    );
+    println!(
+        "  mode        {}{}",
+        m.mode.name(),
+        match m.mode {
+            psanim::Mode::Pure => " (any frame, any order, in parallel)".to_string(),
+            _ => format!(" ({} ticks/s, frames in order)", m.tick_rate),
+        }
+    );
     println!("  seed        {}", m.seed);
-    println!("  background  {}", m.background.map_or("transparent".to_string(), |c| format!("{} {} {}", c[0], c[1], c[2])));
+    println!(
+        "  background  {}",
+        m.background.map_or("transparent".to_string(), |c| format!(
+            "{} {} {}",
+            c[0], c[1], c[2]
+        ))
+    );
     println!("  loop        {}", m.looping);
     if let Some(mb) = m.motion_blur {
-        println!("  motion blur {} samples, shutter {}", mb.samples, mb.shutter);
+        println!(
+            "  motion blur {} samples, shutter {}",
+            mb.samples, mb.shutter
+        );
     }
     for (k, v) in &m.params {
         println!("  param       {k} (default {v})");
@@ -235,7 +290,10 @@ fn cmd_frame(rest: &[String]) -> Result<(), Fail> {
     let meta = movie.meta().clone();
     let frames = select_frames(&c, &meta, 1)?;
     let index = *frames.first().ok_or_else(|| usage("no frame selected"))?;
-    let out = c.output.clone().unwrap_or_else(|| format!("{}_{index:05}.png", name_of(&path)).into());
+    let out = c
+        .output
+        .clone()
+        .unwrap_or_else(|| format!("{}_{index:05}.png", name_of(&path)).into());
     let started = Instant::now();
     let frame = movie.render_frame(index)?;
     let elapsed = started.elapsed().as_secs_f64();
@@ -260,7 +318,11 @@ fn cmd_frame(rest: &[String]) -> Result<(), Fail> {
                    "render_seconds": elapsed, "stats": stats_json(&stats), "printed": printed})
         );
     } else if !c.quiet {
-        eprintln!("wrote {} (frame {index}, t={time:.3}s, {w}x{h}, {:.1} ms)", out.display(), elapsed * 1e3);
+        eprintln!(
+            "wrote {} (frame {index}, t={time:.3}s, {w}x{h}, {:.1} ms)",
+            out.display(),
+            elapsed * 1e3
+        );
     }
     Ok(())
 }
@@ -272,7 +334,12 @@ fn stats_json(s: &raster::Stats) -> serde_json::Value {
 }
 
 fn cmd_sheet(rest: &[String]) -> Result<(), Fail> {
-    let c = parse(rest, &["at", "frame", "count", "from", "to", "cols", "thumb", "seam"])?;
+    let c = parse(
+        rest,
+        &[
+            "at", "frame", "count", "from", "to", "cols", "thumb", "seam",
+        ],
+    )?;
     let (path, source) = c.source().map_err(usage)?;
     let thumb: u32 = c.extra_num("thumb").map_err(usage)?.unwrap_or(320);
     // Render at thumbnail size directly unless a size was asked for: a
@@ -283,15 +350,25 @@ fn cmd_sheet(rest: &[String]) -> Result<(), Fail> {
     drop(probe);
     let frames = select_frames(&c, &meta, 12)?;
     let cols: usize = c.extra_num("cols").map_err(usage)?.unwrap_or(4);
-    let out = c.output.clone().unwrap_or_else(|| format!("{}_sheet.png", name_of(&path)).into());
+    let out = c
+        .output
+        .clone()
+        .unwrap_or_else(|| format!("{}_sheet.png", name_of(&path)).into());
     let started = Instant::now();
     let mut stills = Vec::new();
     render_frames(&source, &opts, &frames, c.threads, |f: Rendered| {
-        stills.push(Still { index: f.index, time: f.time, width: f.width, height: f.height, premultiplied: f.premultiplied });
+        stills.push(Still {
+            index: f.index,
+            time: f.time,
+            width: f.width,
+            height: f.height,
+            premultiplied: f.premultiplied,
+        });
         Ok(())
     })?;
     let title = sheet::default_title(&meta, &name_of(&path));
-    let page = sheet::compose(&stills, cols, thumb, Some(&title), matte(&meta)).map_err(Fail::Output)?;
+    let page =
+        sheet::compose(&stills, cols, thumb, Some(&title), matte(&meta)).map_err(Fail::Output)?;
     let png = page.to_png().map_err(|e| Fail::Output(e.to_string()))?;
     write_file(&out, &png)?;
     let elapsed = started.elapsed().as_secs_f64();
@@ -302,7 +379,14 @@ fn cmd_sheet(rest: &[String]) -> Result<(), Fail> {
                    "seconds": elapsed})
         );
     } else if !c.quiet {
-        eprintln!("wrote {} ({} frames, {}x{}, {:.2} s)", out.display(), frames.len(), page.width(), page.height(), elapsed);
+        eprintln!(
+            "wrote {} ({} frames, {}x{}, {:.2} s)",
+            out.display(),
+            frames.len(),
+            page.width(),
+            page.height(),
+            elapsed
+        );
     }
     Ok(())
 }
@@ -311,7 +395,10 @@ fn cmd_render(rest: &[String]) -> Result<(), Fail> {
     let c = parse(rest, &["from", "to", "crf"])?;
     let (path, source) = c.source().map_err(usage)?;
     let opts = c.options(Scale::Factor(1.0)).map_err(usage)?;
-    let out = c.output.clone().unwrap_or_else(|| format!("{}.mp4", name_of(&path)).into());
+    let out = c
+        .output
+        .clone()
+        .unwrap_or_else(|| format!("{}.mp4", name_of(&path)).into());
     let format = Format::from_path(&out).map_err(usage)?;
     let probe = Movie::load(&source, &opts)?;
     let meta = probe.meta().clone();
@@ -320,8 +407,16 @@ fn cmd_render(rest: &[String]) -> Result<(), Fail> {
     let frames: Vec<u64> = (first..end).collect();
     let threads = effective_threads(&meta, c.threads, frames.len());
     let crf: Option<u32> = c.extra_num("crf").map_err(usage)?;
-    let mut encoder = Encoder::start(format, &out, meta.pixel_width, meta.pixel_height, meta.fps, crf, meta.looping)
-        .map_err(Fail::Output)?;
+    let mut encoder = Encoder::start(
+        format,
+        &out,
+        meta.pixel_width,
+        meta.pixel_height,
+        meta.fps,
+        crf,
+        meta.looping,
+    )
+    .map_err(Fail::Output)?;
     let matte = matte(&meta);
     let started = Instant::now();
     let total = frames.len();
@@ -360,7 +455,11 @@ fn cmd_render(rest: &[String]) -> Result<(), Fail> {
     let render_secs = started.elapsed().as_secs_f64();
     encoder.finish().map_err(Fail::Output)?;
     let total_secs = started.elapsed().as_secs_f64();
-    let bytes = if format == Format::PngSequence { 0 } else { std::fs::metadata(&out).map_or(0, |m| m.len()) };
+    let bytes = if format == Format::PngSequence {
+        0
+    } else {
+        std::fs::metadata(&out).map_or(0, |m| m.len())
+    };
     if c.json {
         println!(
             "{}",
@@ -383,7 +482,11 @@ fn cmd_render(rest: &[String]) -> Result<(), Fail> {
             total_secs,
             if threads == 1 { "" } else { "s" },
             total as f64 / render_secs.max(1e-9),
-            if bytes > 0 { format!(", {:.1} MB", bytes as f64 / 1e6) } else { String::new() }
+            if bytes > 0 {
+                format!(", {:.1} MB", bytes as f64 / 1e6)
+            } else {
+                String::new()
+            }
         );
     }
     Ok(())
@@ -409,8 +512,15 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
     let load_ms = load_started.elapsed().as_secs_f64() * 1e3;
     let meta = movie.meta().clone();
     let (first, end) = range(&c, &meta)?;
-    let count = if c.has("all") { (end - first) as usize } else { c.extra_num("count").map_err(usage)?.unwrap_or(16) };
-    let picks: Vec<u64> = sheet::spread(end - first, count).into_iter().map(|k| k + first).collect();
+    let count = if c.has("all") {
+        (end - first) as usize
+    } else {
+        c.extra_num("count").map_err(usage)?.unwrap_or(16)
+    };
+    let picks: Vec<u64> = sheet::spread(end - first, count)
+        .into_iter()
+        .map(|k| k + first)
+        .collect();
     let matte = matte(&meta);
     let (w, h) = (meta.pixel_width as usize, meta.pixel_height as usize);
     let mut samples: Vec<Sample> = Vec::new();
@@ -439,7 +549,13 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
                 last.motion = raster::difference(p, &flat);
             }
             prev = Some(flat.clone());
-            samples.push(Sample { index, time, millis, stats, motion: 0.0 });
+            samples.push(Sample {
+                index,
+                time,
+                millis,
+                stats,
+                motion: 0.0,
+            });
             continue;
         }
         // The frame after it, to measure motion.
@@ -450,7 +566,13 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
         } else {
             0.0
         };
-        samples.push(Sample { index, time, millis, stats, motion });
+        samples.push(Sample {
+            index,
+            time,
+            millis,
+            stats,
+            motion,
+        });
     }
     // Judgements an agent would otherwise have to look at pixels to make.
     let mut warnings: Vec<String> = Vec::new();
@@ -464,9 +586,15 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
     if lead == samples.len() {
         warnings.push("every sampled frame is blank: the scene draws nothing visible (check colours against the background, and coordinates against the canvas size)".into());
     } else {
-        let middle: Vec<u64> = samples[lead..samples.len() - trail].iter().filter(|s| is_blank(s)).map(|s| s.index).collect();
+        let middle: Vec<u64> = samples[lead..samples.len() - trail]
+            .iter()
+            .filter(|s| is_blank(s))
+            .map(|s| s.index)
+            .collect();
         if !middle.is_empty() {
-            warnings.push(format!("blank frames in the middle of the movie at {middle:?}: nothing is visible there"));
+            warnings.push(format!(
+                "blank frames in the middle of the movie at {middle:?}: nothing is visible there"
+            ));
         }
         let long = |n: usize| n > 1 && samples.len() >= 8 && n * 4 > samples.len();
         if long(lead) {
@@ -492,7 +620,11 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
     if samples.len() > 1 && moving == 0 {
         warnings.push("nothing moves: every sampled frame equals the one after it (does the scene read `now`?)".into());
     }
-    let mut motions: Vec<f64> = samples.iter().map(|s| s.motion).filter(|m| *m > 0.0).collect();
+    let mut motions: Vec<f64> = samples
+        .iter()
+        .map(|s| s.motion)
+        .filter(|m| *m > 0.0)
+        .collect();
     motions.sort_by(f64::total_cmp);
     let median = motions.get(motions.len() / 2).copied().unwrap_or(0.0);
     for s in &samples {
@@ -548,10 +680,22 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
     println!(
         "{}: {}x{} units, {}s at {} fps = {} frames, {}",
         meta.title.as_deref().unwrap_or(&name_of(&path)),
-        meta.width, meta.height, meta.duration, meta.fps, meta.frames, meta.mode.name()
+        meta.width,
+        meta.height,
+        meta.duration,
+        meta.fps,
+        meta.frames,
+        meta.mode.name()
     );
-    println!("  loaded in {load_ms:.1} ms; {} frames sampled at {}x{}", samples.len(), meta.pixel_width, meta.pixel_height);
-    println!("  frame    time    ms   luma  cover  motion   (motion: difference from the next frame)");
+    println!(
+        "  loaded in {load_ms:.1} ms; {} frames sampled at {}x{}",
+        samples.len(),
+        meta.pixel_width,
+        meta.pixel_height
+    );
+    println!(
+        "  frame    time    ms   luma  cover  motion   (motion: difference from the next frame)"
+    );
     for s in &samples {
         println!(
             "  {:5} {:6.2}s {:5.1}  {:5.3}  {:5.3}  {:6.4}",
@@ -559,7 +703,10 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
         );
     }
     if let Some(s) = slowest {
-        println!("  mean {mean_ms:.1} ms/frame; slowest frame {} at {:.1} ms (at preview size)", s.index, s.millis);
+        println!(
+            "  mean {mean_ms:.1} ms/frame; slowest frame {} at {:.1} ms (at preview size)",
+            s.index, s.millis
+        );
     }
     if let Some((join, typical)) = seam {
         println!("  loop join: step {join:.4} against {typical:.4} beside it");
@@ -627,11 +774,29 @@ fn cmd_bench(rest: &[String]) -> Result<(), Fail> {
     if c.json {
         println!("{result}");
     } else {
-        println!("{} at {}x{} ({}), {} frames timed", name_of(&path), meta.pixel_width, meta.pixel_height, meta.mode.name(), picks.len());
+        println!(
+            "{} at {}x{} ({}), {} frames timed",
+            name_of(&path),
+            meta.pixel_width,
+            meta.pixel_height,
+            meta.mode.name(),
+            picks.len()
+        );
         println!("  load           {load_ms:8.1} ms");
-        println!("  frame median   {:8.2} ms   mean {:.2}   p95 {:.2}   max {:.2}", pct(0.5), serial_total / times.len() as f64, pct(0.95), pct(1.0));
+        println!(
+            "  frame median   {:8.2} ms   mean {:.2}   p95 {:.2}   max {:.2}",
+            pct(0.5),
+            serial_total / times.len() as f64,
+            pct(0.95),
+            pct(1.0)
+        );
         if threads > 1 {
-        println!("  {threads} thread{}      {:8.1} frames/s  ({:.1}x, load included)", if threads == 1 { " " } else { "s" }, result["parallel_fps"].as_f64().unwrap_or(0.0), result["speedup"].as_f64().unwrap_or(0.0));
+            println!(
+                "  {threads} thread{}      {:8.1} frames/s  ({:.1}x, load included)",
+                if threads == 1 { " " } else { "s" },
+                result["parallel_fps"].as_f64().unwrap_or(0.0),
+                result["speedup"].as_f64().unwrap_or(0.0)
+            );
         }
     }
     Ok(())
@@ -651,8 +816,19 @@ fn cmd_api(rest: &[String]) -> Result<(), Fail> {
         let word = word.to_string_lossy();
         let word = word.trim_start_matches('/');
         let Some(e) = psanim::api::lookup(word) else {
-            let near: Vec<&str> = psanim::api::API.iter().map(|e| e.name).filter(|n| n.contains(word)).collect();
-            return Err(usage(format!("no word '{word}' in the vocabulary{}", if near.is_empty() { String::new() } else { format!(" (related: {})", near.join(" ")) })));
+            let near: Vec<&str> = psanim::api::API
+                .iter()
+                .map(|e| e.name)
+                .filter(|n| n.contains(word))
+                .collect();
+            return Err(usage(format!(
+                "no word '{word}' in the vocabulary{}",
+                if near.is_empty() {
+                    String::new()
+                } else {
+                    format!(" (related: {})", near.join(" "))
+                }
+            )));
         };
         println!("{}\n\n  {}\n", e.stack, e.summary);
         return Ok(());
@@ -666,6 +842,8 @@ fn cmd_api(rest: &[String]) -> Result<(), Fail> {
     }
     println!("Easings: {}", psanim::ease::NAMES.join(" "));
     println!("Transitions: {}", psanim::TRANSITIONS.join(" "));
-    println!("\n`psanim api NAME` explains one word; `psanim api --markdown` prints the full reference.");
+    println!(
+        "\n`psanim api NAME` explains one word; `psanim api --markdown` prints the full reference."
+    );
     Ok(())
 }

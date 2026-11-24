@@ -1,0 +1,48 @@
+<figure class="diagram">
+<svg viewBox="0 0 1000 330" role="img" aria-label="Lifecycle: setup once, checkpoint, then each frame rolls back, sets the clock and draws" font-family="ui-sans-serif, system-ui, sans-serif">
+  <defs>
+    <marker id="ar-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#9aa2b4"/></marker>
+    <marker id="ar-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#ffc94d"/></marker>
+  </defs>
+  <text x="14" y="26" font-size="12" fill="#9aa2b4" letter-spacing="1.2">ONCE, AT LOAD</text>
+  <g font-size="13" fill="#ece9e1">
+    <rect x="14" y="40" width="150" height="62" rx="8" fill="#171b25" stroke="#3a4152"/>
+    <text x="89" y="66" text-anchor="middle" font-weight="600">probe</text>
+    <text x="89" y="85" text-anchor="middle" fill="#9aa2b4" font-size="11.5">run to `animation`</text>
+    <rect x="200" y="40" width="170" height="62" rx="8" fill="#171b25" stroke="#3a4152"/>
+    <text x="285" y="66" text-anchor="middle" font-weight="600">build interpreter</text>
+    <text x="285" y="85" text-anchor="middle" fill="#9aa2b4" font-size="11.5">canvas size × scale</text>
+    <rect x="406" y="40" width="190" height="62" rx="8" fill="#171b25" stroke="#3a4152"/>
+    <text x="501" y="66" text-anchor="middle" font-weight="600">setup</text>
+    <text x="501" y="85" text-anchor="middle" fill="#9aa2b4" font-size="11.5">prelude, then the program</text>
+    <rect x="632" y="40" width="150" height="62" rx="8" fill="#171b25" stroke="#ffc94d"/>
+    <text x="707" y="66" text-anchor="middle" font-weight="650" fill="#ffc94d">save</text>
+    <text x="707" y="85" text-anchor="middle" fill="#9aa2b4" font-size="11.5">checkpoint the VM</text>
+  </g>
+  <path d="M164 71H196M370 71H402M596 71H628" stroke="#9aa2b4" stroke-width="1.5" marker-end="url(#ar-b)" fill="none"/>
+
+  <text x="14" y="158" font-size="12" fill="#9aa2b4" letter-spacing="1.2">FOR EACH FRAME, AT TIME t (ANY t, ANY ORDER)</text>
+  <rect x="14" y="170" width="972" height="118" rx="12" fill="none" stroke="#3a4152" stroke-dasharray="5 5"/>
+  <g font-size="13" fill="#ece9e1">
+    <rect x="34" y="194" width="170" height="70" rx="8" fill="#171b25" stroke="#ffc94d"/>
+    <text x="119" y="222" text-anchor="middle" font-weight="650" fill="#ffc94d">restore · save</text>
+    <text x="119" y="242" text-anchor="middle" fill="#9aa2b4" font-size="11.5">memory as setup left it</text>
+    <rect x="234" y="194" width="170" height="70" rx="8" fill="#171b25" stroke="#3a4152"/>
+    <text x="319" y="222" text-anchor="middle" font-weight="600">clean slate</text>
+    <text x="319" y="242" text-anchor="middle" fill="#9aa2b4" font-size="11.5">graphics state, canvas, rand</text>
+    <rect x="434" y="194" width="150" height="70" rx="8" fill="#171b25" stroke="#4dd1c7"/>
+    <text x="509" y="222" text-anchor="middle" font-weight="650" fill="#4dd1c7">now = t</text>
+    <text x="509" y="242" text-anchor="middle" fill="#9aa2b4" font-size="11.5">the host's clock</text>
+    <rect x="614" y="194" width="150" height="70" rx="8" fill="#171b25" stroke="#3a4152"/>
+    <text x="689" y="222" text-anchor="middle" font-weight="600">scene</text>
+    <text x="689" y="242" text-anchor="middle" fill="#9aa2b4" font-size="11.5">the program draws</text>
+    <rect x="794" y="194" width="170" height="70" rx="8" fill="#171b25" stroke="#3a4152"/>
+    <text x="879" y="222" text-anchor="middle" font-weight="600">pixels</text>
+    <text x="879" y="242" text-anchor="middle" fill="#9aa2b4" font-size="11.5">borrowed, not copied</text>
+  </g>
+  <path d="M204 229H230M404 229H430M584 229H610M764 229H790" stroke="#9aa2b4" stroke-width="1.5" marker-end="url(#ar-b)" fill="none"/>
+  <path d="M707 102V128H119V190" stroke="#ffc94d" stroke-width="1.5" fill="none" marker-end="url(#ar-c)" stroke-dasharray="4 4"/>
+  <text x="500" y="316" text-anchor="middle" font-size="12.5" fill="#9aa2b4">Whatever the scene does to memory is rolled back before the next frame: frame = f(t). Stateful movies nest further checkpoints between simulation ticks.</text>
+</svg>
+<figcaption>The life of a movie. The checkpoint is PostScript's own <code>save</code>; psanim holds the save object and hands it back to <code>restore</code>.</figcaption>
+</figure>

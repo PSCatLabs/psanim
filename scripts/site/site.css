@@ -88,7 +88,7 @@ figure.diagram figcaption { color: var(--faint); font-size: 13.5px; margin-top: 
 .band > .lede { margin: 0 0 26px; }
 .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: start; }
 .two pre.code { margin: 0; }
-.ideas { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+.ideas { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
 .idea { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 18px 12px; }
 .idea h3 { margin: 0 0 6px; font-size: 16.5px; }
 .idea p { margin: 0 0 10px; color: var(--dim); font-size: 14.5px; }
