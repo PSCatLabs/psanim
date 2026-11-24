@@ -1,0 +1,23 @@
+%!PS
+% The motion catalogue for the reference page: every built-in motion on
+% the same card, looping. Entrances arrive, hold and leave by the same
+% motion; emphases fire once a cycle.
+<< /Size [1280 800] /Duration 3 /FPS 30 /Loop true /Background [0.055 0.065 0.10] >> animation
+/pkmotion use /pktype use
+/slots canvasbox 2 vmin inset 6 5 1 vmin cells def
+/card {            % box ->
+  /cb exch def
+  /accent ink cb 70 46 /c placed 6 roundpath fill
+  /bg ink /title 20 face (Aa) cb 70 46 /c placed /c showin
+} def
+/scene {
+  0 1 motionnames length 1 sub { /i exch def
+    /b slots i get def /nm motionnames i get def
+    /surface ink b 8 roundpath fill
+    /muted ink /body 13 face nm 24 string cvs b 0 8 shifted /s showin
+    /cardbox b 0 10 shifted def
+    i 21 lt
+      { 0.3 2.7 nm nm { cardbox card } onstage }
+      { 1.0 nm { cardbox card } emphasized } ifelse
+  } for
+} def

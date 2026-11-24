@@ -250,6 +250,30 @@ Smooth random motion in -1..1 (key is a number or an array of numbers) that retu
 
 A repeatable random number in 0..1 determined by key (a number or an array of numbers) and the movie seed. Stateless: the same key gives the same value on every frame, which keeps per-particle properties from flickering.
 
+### `smoothkeys`
+
+`[ t v t v ... ]  smoothkeys  v`
+
+The value at now of a smooth track through the keys (numbers, or arrays of one length: points, boxes, colours): it passes through every key without stopping or turning a corner, and starts and ends at rest. For camera paths and anything that should flow; use `keyframes` where each move should ease in and out on its own.
+
+### `valueat`
+
+`array x  valueat  v`
+
+The array read at a fractional index: element x where x is whole, the linear blend of its neighbours between (clamped to the ends). For a readout that follows a table: `table people valueat 1 fmtnum show` while `people` is a tween.
+
+### `ranks`
+
+`[ v ... ]  ranks  [ r ... ]`
+
+The rank of each value, 0 for the largest. Interpolating two rank arrays with `between` slides rows past each other: a bar-chart race.
+
+### `niceticks`
+
+`lo hi n  niceticks  [ v ... ]`
+
+About n round numbers covering lo..hi (steps of 1, 2, 2.5 or 5 times a power of ten): tick positions for an axis.
+
 ## Paths: measuring, following, drawing on, morphing
 
 ### `pathlength`
@@ -293,6 +317,24 @@ Replace the current path by the open polyline through [x0 y0 x1 y1 ...], in the 
 `arrayA arrayB u  morphpath  -`
 
 Replace the current path by the closed polygon u of the way from A to B, two arrays from resamplepath with the same n. The points are placed in the current user space, so the transformation in force applies to them as to any path.
+
+### `onpath`
+
+`u proc  onpath  -`
+
+Run proc with the origin at the point u (0..1) of the way along the current path and the x axis along the direction of travel: draw the thing that rides the path as if at 0 0 facing right. The path is kept.
+
+### `straightenpath`
+
+`u anchor  straightenpath  -`
+
+Unbend the current path by u (0 as it is, 1 a straight line), keeping its length: every turn is scaled by 1 - u. The point anchor (0..1 of the way along) stays where it is, with its direction. An arc that unrolls into a strip, a circle's circumference laid flat, a rope pulled taut: `morphpath` would shrink them on the way.
+
+### `taperpath`
+
+`[ w ... ]  taperpath  -`
+
+Replace the current path by the outline of a stroke along it whose width follows the list, spread evenly along its length: [12 0] is a comet, [0 9 0] a brush mark. Fill the result.
 
 ## Layers and effects
 
@@ -420,6 +462,60 @@ Like eachglyph, letterspaced: each character's origin is track units further alo
 
 Set the string along the current path, starting u0 (0..1) of the way along. proc runs per character with `(c) i` on the stack, in coordinates whose origin is the character's place on the path and whose x axis follows the path, with the current point at the character's origin. The path is left as it was. `{ pop show }` sets the text.
 
+### `strcat`
+
+`(a) (b)  strcat  (ab)`
+
+Join two strings.
+
+### `fmtnum`
+
+`num decimals  fmtnum  string`
+
+The number as text with that many decimal places and commas between thousands: 1234567.8 1 fmtnum is (1,234,567.8). For counters: `1 3 /cubic-out tween 0 48213 between 0 fmtnum show`.
+
+### `fmtfixed`
+
+`num decimals  fmtfixed  string`
+
+The number as text with that many decimal places and no thousands separators (years, versions).
+
+### `zeropad`
+
+`int width  zeropad  string`
+
+The integer as text, padded with zeros on the left to that width: 7 2 zeropad is (07).
+
+### `fmtclock`
+
+`seconds  fmtclock  string`
+
+Seconds as a clock: (01:05), or (1:01:05) from an hour up.
+
+### `splitwords`
+
+`(text)  splitwords  [ (word) ... ]`
+
+The words of a string, split at spaces and line breaks.
+
+### `splitlines`
+
+`(text)  splitlines  [ (line) ... ]`
+
+The lines of a string, split at \n.
+
+### `codetokens`
+
+`(source) /language  codetokens  lines`
+
+Source code as data, one array per line of alternating text and kind: [ (fn) /keyword ( ) /plain (main) /call ... ]. Kinds: /plain /keyword /string /number /comment /type /call /name /punct. Languages: /rust /python /javascript /typescript /c /go /postscript /shell /json /plain. Call it in setup; draw with pkcode.
+
+### `difflines`
+
+`(old) (new)  difflines  rows`
+
+A line diff as data: an array of [ /same|/del|/add (line) oldindex newindex ] rows, in the order they would be printed.
+
 ## Reels: clips and transitions
 
 ### `reel`
@@ -465,4 +561,122 @@ Seconds since the most recent event on track name; a million if there has been n
 `/name  eventcount  int`
 
 How many events on track name have happened so far.
+
+## Viewports and libraries
+
+### `within`
+
+`box proc  within  -`
+
+Run proc inside the box [x y w h]: the origin moves to the box's corner, drawing is clipped to it, and `width` and `height` report the box's size. The spatial twin of `during`: a scene written against width and height can be placed in any box (a panel, one half of a comparison, a picture in a picture).
+
+### `fitted`
+
+`box w h proc  fitted  -`
+
+Run proc, which draws for a canvas w by h, scaled to fit inside the box and centred there, clipped. Inside, `width` and `height` are w and h. For placing a finished scene in a panel whatever its aspect.
+
+### `use`
+
+`/library  use  -`
+
+Load one of psanim's libraries, once: /pkstage /pkmotion /pktype /pkdiagram /pkcode /pkchart /pkink. Call it in setup, after `animation`. A library loads the ones it needs. `psanim api --libs` lists them; `psanim api --lib pkmotion` lists one's words.
+
+## Storyboards, scripts and cascades
+
+### `storyboard`
+
+`[ /name seconds /name seconds ... ]  storyboard  -`
+
+Name the stretches of the film, in order. Call it before `animation` and use `storylength` for /Duration; then place things by beat name instead of by second, so retiming the film is editing one list.
+
+### `storylength`
+
+`-  storylength  seconds`
+
+The total length of the storyboard.
+
+### `beat`
+
+`/name  beat  t`
+
+The movie time at which the named beat starts. Add to it for a moment inside the beat: `/build beat 0.5 add`.
+
+### `beatspan`
+
+`/name  beatspan  a b`
+
+The start and end of the named beat, on the movie's clock: operands for `during` at the top level of a scene.
+
+### `inbeat`
+
+`/name proc  inbeat  -`
+
+Run proc during the named beat, with the clock starting from 0 at the beat's start and `span` its length, whatever time scopes are open.
+
+### `frombeat`
+
+`/name proc  frombeat  -`
+
+Run proc from the start of the named beat to the end of the film, with the clock starting from 0 there: for something a beat introduces that then stays.
+
+### `script`
+
+`proc  script  -`
+
+Run proc as a script: a cursor starts at 0 and each `then`, `thenfor` and `wait` inside moves it on, so things happen one after another without any times written down. Scripts nest; the cursor outside is untouched.
+
+### `then`
+
+`seconds proc  then  -`
+
+In a script: run proc from the cursor on (it stays for good, its clock starting from 0), and move the cursor seconds forward. The seconds are how long before the next step starts, not how long proc lasts.
+
+### `thenfor`
+
+`seconds proc  thenfor  -`
+
+In a script: run proc for seconds starting at the cursor (it is gone afterwards; inside, `span` is seconds), and move the cursor past it.
+
+### `wait`
+
+`seconds  wait  -`
+
+In a script: move the cursor forward, leaving a pause. Negative overlaps the next step with the last.
+
+### `cursor`
+
+`-  cursor  t`
+
+The script cursor: the time, in the current scope, at which the next `then` will start.
+
+### `tempo`
+
+`bpm  tempo  -`
+
+Set the tempo in beats a minute (in setup; 120 if never set), for films cut to a pulse.
+
+### `counts`
+
+`n  counts  seconds`
+
+n beats at the tempo, in seconds: write times and storyboard lengths in beats (`[ /intro 8 counts /drop 16 counts ] storyboard`, `2 counts /pop { } enters`).
+
+### `countnow`
+
+`-  countnow  n`
+
+The beat the film is on, as a number that grows by 1 every beat (movie clock): its whole part is the beat's index, `countnow 4 mod` the place in a bar of four.
+
+### `kick`
+
+`-  kick  u`
+
+1 on every beat, falling quickly to 0 before the next: multiply a size, a brightness or a blur by it and the picture keeps time.
+
+### `cascade`
+
+`array gap proc  cascade  -`
+
+Run proc once per element with `item i` on the stack, each element's clock gap seconds behind the one before: a row of things arriving one after another, written as if each were alone.
 

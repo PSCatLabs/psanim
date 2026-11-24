@@ -44,6 +44,29 @@ psanim frame  examples/hello.ps --at 2.4 -o still.png
 psanim render examples/hello.ps -o hello.mp4    # 120 frames in about 0.1 s
 ```
 
+That is the core vocabulary. Most films are written a level up, with the
+libraries: draw each thing at rest, in a box, in theme colours, then say
+when it arrives and by what motion.
+
+```postscript
+%!PS
+<< /Size [640 360] /Duration 6 /FPS 30 >> animation
+/pkdiagram use
+/slots canvasbox 10 vmin inset 0.35 splity exch pop 3 14 vmin cols def
+/scene {
+  ground
+  /display 30 face /fg ink 36 300 moveto (How a frame is made) /glyphs 0.03 /mask-up kinetic
+  {
+    0.9 wait
+    0.6 { /pop { (program) slots 0 get /surface node } entering } then
+    0.6 { /pop { (clock) slots 1 get /surface node } entering
+          slots 0 get slots 1 get << /Draw 0.1 0.6 /cubic-inout tween >> edge } then
+    0.6 { /pop { (picture) slots 2 get << /Fill /accent /Ink /bg >> node } entering
+          slots 1 get slots 2 get << /Draw 0.1 0.6 /cubic-inout tween /Pulse 1.2 2 pulsetrain >> edge } then
+  } script
+} def
+```
+
 ## What is here
 
 - **An engine** (`crates/psanim`): load a program, render any frame.
@@ -51,7 +74,7 @@ psanim render examples/hello.ps -o hello.mp4    # 120 frames in about 0.1 s
   canvases for paintings; motion blur; parameters, signals and events
   from outside; budgets and file confinement for programs you did not
   write.
-- **A vocabulary of about 75 words** added to PostScript: a clock (`now`),
+- **A core vocabulary of about 110 words** added to PostScript: a clock (`now`),
   time scopes that re-base it for a procedure (`during`, `delayed`,
   `looped`, `staggered`), eased values (`tween`, `between`,
   `keyframes`), arc-length path operations (`trimpath`, `pathpoint`,
@@ -63,7 +86,13 @@ psanim render examples/hello.ps -o hello.mp4    # 120 frames in about 0.1 s
   `--json`.
 - **A browser build** (`crates/psanim-wasm`, `web/`): the same engine in
   WebAssembly, a `<psanim-player>` element, a playground.
-- **A gallery** (`gallery/`): fifteen films, each one file. [Index, with stills](docs/gallery.md).
+- **Libraries for saying what you mean** (`/pkmotion use` ...): boxes and
+  themes, named motions that work on any drawing (`2 /pop { ... }
+  enters`), kinetic type, diagrams with flowing edges, code panels and
+  animated diffs, charts that move between datasets, brush marks. About
+  105 more words in seven libraries, written in PostScript.
+  [Design](docs/vocabulary-design.md), [evaluation](docs/vocabulary-evaluation.md).
+- **A gallery** (`gallery/`): twenty-one films, each one file. [Index, with stills](docs/gallery.md).
 - **An agent skill** (`skills/psanim/`) and a documentation site built
   from the same text.
 - **A host API for PSCat**, on a feature branch: what PSCat needed to
@@ -80,7 +109,7 @@ git clone -b feature/psanim-library-api https://github.com/PSCatLabs/pscat ../ps
 
 # 2. psanim
 cargo build --release                # target/release/psanim
-cargo test  --release                # about 100 tests; renders thousands of frames
+cargo test  --release                # about 140 tests; renders thousands of frames
 
 # 3. optional
 scripts/build_wasm.sh                # web/psanim.wasm (needs: rustup target add wasm32-unknown-unknown)
@@ -97,10 +126,12 @@ standard library of Python 3 (for the site).
 | | |
 |---|---|
 | [Writing an animation](docs/authoring.md) | the tutorial |
+| [Staging](skills/psanim/references/stage.md), [type](skills/psanim/references/type.md), [diagrams, code, charts](skills/psanim/references/explain.md), [ink](skills/psanim/references/ink.md), [storytelling](skills/psanim/references/storytelling.md) | the libraries, by what you want to make; every example is run by the tests and rendered on the site |
 | [Patterns](skills/psanim/references/patterns.md), [craft](skills/psanim/references/craft.md), [pitfalls](skills/psanim/references/pitfalls.md), [modes](skills/psanim/references/modes.md) | the chapters, shared with the agent skill; every example is run by the tests |
-| [Vocabulary](skills/psanim/references/vocabulary.md) | every word (generated) |
+| [Vocabulary](skills/psanim/references/vocabulary.md), [library vocabulary](skills/psanim/references/vocabulary-libraries.md) | every word (generated) |
 | [Command line](docs/cli.md) · [Rust API](docs/rust.md) · [Browser](docs/wasm.md) | reference |
 | [Architecture](docs/architecture.md) | the model, the decisions, what was rejected |
+| [The expressive vocabulary](docs/vocabulary-design.md) · [its evaluation](docs/vocabulary-evaluation.md) | the five ideas behind the libraries, and what fresh agents did with them |
 | [psanim and PSCat](docs/pscat-integration.md) | the branch, the API, building both |
 | [Security](docs/security.md) | what is and is not guaranteed for untrusted programs |
 | [Benchmarks](docs/benchmarks.md) · [Testing](docs/testing.md) | measurements and how to repeat them |
@@ -111,9 +142,10 @@ The same pages, with diagrams, films and a live player: `scripts/build_site.py`.
 ## For agents
 
 `skills/psanim/SKILL.md` is a skill: how to author, check, look at and
-render a movie, with tested recipes and a list of what goes wrong. Five of
+render a movie, with tested recipes and a list of what goes wrong. Ten of
 the gallery pieces were written by agents given that skill and nothing
-else; their friction reports shaped the engine (see the commit history).
+else; their friction reports shaped the engine and then the libraries
+([evaluation](docs/vocabulary-evaluation.md)).
 
 The loop is built so an agent need not watch anything: `psanim check`
 reports blank frames, stillness, pops and loop seams as data; errors name

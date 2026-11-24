@@ -158,11 +158,18 @@ DOCS = [
     ("guide/craft.html", "Craft", "skills/psanim/references/craft.md", "Guide"),
     ("guide/pitfalls.html", "Pitfalls", "skills/psanim/references/pitfalls.md", "Guide"),
     ("guide/modes.html", "State, inputs, blur", "skills/psanim/references/modes.md", "Guide"),
+    ("libraries/stage.html", "Staging: boxes, themes, motions", "skills/psanim/references/stage.md", "Libraries"),
+    ("libraries/type.html", "Type", "skills/psanim/references/type.md", "Libraries"),
+    ("libraries/explain.html", "Diagrams, code, charts", "skills/psanim/references/explain.md", "Libraries"),
+    ("libraries/ink.html", "Ink", "skills/psanim/references/ink.md", "Libraries"),
+    ("libraries/storytelling.html", "Storytelling", "skills/psanim/references/storytelling.md", "Libraries"),
     ("reference.html", "Vocabulary", None, "Reference"),
     ("guide/cli.html", "Command line", "docs/cli.md", "Reference"),
     ("guide/rust.html", "Rust API", "docs/rust.md", "Reference"),
     ("guide/browser.html", "Browser", "docs/wasm.md", "Reference"),
     ("guide/architecture.html", "Architecture", "docs/architecture.md", "Design"),
+    ("guide/vocabulary-design.html", "The expressive vocabulary", "docs/vocabulary-design.md", "Design"),
+    ("guide/vocabulary-evaluation.html", "Evaluating the vocabulary", "docs/vocabulary-evaluation.md", "Design"),
     ("guide/pscat.html", "psanim and PSCat", "docs/pscat-integration.md", "Design"),
     ("guide/security.html", "Security", "docs/security.md", "Design"),
     ("guide/benchmarks.html", "Benchmarks", "docs/benchmarks.md", "Design"),
@@ -171,7 +178,51 @@ DOCS = [
 ]
 BY_SOURCE = {src: out for out, _, src, _ in DOCS if src}
 BY_SOURCE["skills/psanim/references/vocabulary.md"] = "reference.html"
+BY_SOURCE["skills/psanim/references/vocabulary-libraries.md"] = "reference.html"
 BY_SOURCE["docs/gallery.md"] = "gallery.html"
+
+# The library chapters are a visual cookbook: every runnable example in
+# them is rendered and shown, looping, under its code.
+COOKBOOK = {"stage.md", "type.md", "explain.md", "ink.md", "storytelling.md"}
+LIBRARIES = "pkstage pkmotion pktype pkdiagram pkcode pkchart pkink".split()
+
+def with_films(text, stem):
+    """Insert a marker after each runnable fence and render its film."""
+    out, cur, films = [], None, []
+    for n, line in enumerate(text.split("\n")):
+        t = line.lstrip()
+        out.append(line)
+        if cur is None:
+            if t.startswith("```postscript") and "partial" not in t:
+                cur = (n + 2, [])
+        elif t.startswith("```"):
+            name = f"{stem}-{cur[0]}"
+            films.append((name, "\n".join(cur[1]) + "\n"))
+            out += ["", f"<!-- film: {name} -->", ""]
+            cur = None
+        else:
+            cur[1].append(line)
+    dest = SITE / "cookbook"
+    dest.mkdir(exist_ok=True)
+    for name, body in films:
+        if not body.lstrip().startswith("%!PS"):
+            use = " ".join(f"/{l} use" for l in LIBRARIES)
+            body = ("<< /Size [640 360] /Duration 4 /FPS 30 /Background [0.05 0.06 0.09] >> animation\n"
+                    f"{use}\n/scene {{\n{body}\n}} def\n")
+        ps, mp4 = dest / f"{name}.ps", dest / f"{name}.mp4"
+        if mp4.exists() and ps.exists() and ps.read_text() == body:
+            continue                      # unchanged since the last build
+        ps.write_text(body)
+        done = subprocess.run([str(PSANIM), "render", str(ps), "-o", str(mp4), "-q"], capture_output=True, text=True)
+        if done.returncode != 0:
+            print(f"  (cookbook: {name} failed: {done.stderr.strip()[:200]})")
+            ps.unlink()
+    return "\n".join(out)
+
+def film_tag(page, name):
+    src = rel(page, f"cookbook/{name}.mp4")
+    return (f'<figure class="film"><video src="{src}" autoplay loop muted playsinline '
+            f'preload="metadata" style="width:100%;max-width:640px;height:auto;display:block;border-radius:6px"></video></figure>')
 
 def rel(from_page, to_page):
     depth = from_page.count("/")
@@ -248,8 +299,11 @@ def build_docs():
             print(f"  (skipping {out}: no {source} yet)")
             continue
         text = path.read_text()
+        if path.name in COOKBOOK:
+            text = with_films(text, path.stem)
         # Diagrams: a line `<!-- diagram: name -->` in the Markdown is replaced.
         body, toc = markdown(text, linker(out, source))
+        body = re.sub(r"<p>&lt;!-- film: ([a-z0-9-]+) --&gt;</p>", lambda m: film_tag(out, m.group(1)), body)
         body = re.sub(r"<p>&lt;!-- diagram: ([a-z-]+) --&gt;</p>", lambda m: part(m.group(1) + ".svg.html"), body)
         if source == "docs/architecture.md":
             # The ASCII overview becomes the drawn one.
@@ -264,7 +318,10 @@ def build_docs():
 def build_reference():
     cats = json.loads(subprocess.run([str(PSANIM), "api", "--json"], capture_output=True, text=True, check=True).stdout)
     listing = subprocess.run([str(PSANIM), "api"], capture_output=True, text=True, check=True).stdout
-    titles = [l for l in listing.split("\n") if l and not l.startswith(" ") and not l.startswith(("Easings", "Transitions", "`"))]
+    def md(*args):
+        return subprocess.run([str(PSANIM), "api", *args, "--markdown"], capture_output=True, text=True, check=True).stdout
+    # Category titles, in the table's order: the core's, then each library's.
+    titles = re.findall(r"^## (.*)$", md() + "".join(md(lib) for lib in LIBRARIES), re.M)
     order = []
     for e in cats:
         if e["category"] not in order:
@@ -272,7 +329,7 @@ def build_reference():
     easings = re.search(r"^Easings: (.*)$", listing, re.M).group(1).split()
     transitions = re.search(r"^Transitions: (.*)$", listing, re.M).group(1).split()
     body = ['<h1>Vocabulary</h1>',
-            f'<p class="lede">Every word psanim adds to PostScript: {len(cats)} of them. Generated from the table in '
+            f'<p class="lede">Every word psanim adds to PostScript, the core and the libraries: {len(cats)} of them. Generated from the table in '
             '<code>crates/psanim/src/api.rs</code>, the same one <code>psanim api</code> prints and the test suite checks '
             'against the interpreter. Stack effects read left to right, topmost operand last.</p>',
             '<input class="filter" type="search" placeholder="Filter words…" aria-label="Filter words" '
@@ -282,6 +339,16 @@ def build_reference():
         anchor = slug(title)
         toc.append((2, anchor, title.split(":")[0]))
         body.append(f'<h2 id="{anchor}">{html.escape(title)}</h2>')
+        if cat in LIBRARIES:
+            body.append(f'<p>Load with <code>/{cat} use</code>.</p>')
+        if cat == "pkmotion":
+            film = SITE / "motions.mp4"
+            done = subprocess.run([str(PSANIM), "render", str(ROOT / "scripts/site/motions.ps"), "-o", str(film), "-q"])
+            if done.returncode == 0:
+                body.append('<figure class="diagram"><video src="motions.mp4" autoplay loop muted playsinline '
+                            'style="width:100%;height:auto;display:block;border-radius:6px"></video>'
+                            '<figcaption>Every built-in motion on the same card: entrances arrive and leave by the '
+                            'same motion, emphases fire once a cycle. Drawn by <code>scripts/site/motions.ps</code>.</figcaption></figure>')
         for e in [e for e in cats if e["category"] == cat]:
             stack = html.escape(e["stack"]).replace(f"  {e['name']}  ", f'  <b>{e["name"]}</b>  ')
             body.append(f'<div class="word" id="w-{e["name"]}"><pre class="stack">{stack}</pre>'

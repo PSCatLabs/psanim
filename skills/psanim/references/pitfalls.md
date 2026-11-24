@@ -163,3 +163,29 @@ very dark gradients can band. Check stills from the video itself:
 seconds is normal at the default quality (`--crf 22` halves it), and a
 GIF of it will be large whatever you do; prefer MP4 or WebM. Thin lines under 1.5 px shimmer in motion: thicken them or
 render larger.
+
+## A character does not appear
+
+The text fonts are ASCII. A string containing "π", "→", "≠" or any other
+non-ASCII character shows a blank for it, with no error. Use pktype's
+`/pi sym`, `/arrow sym`, `/neq sym`, or a run list (`showruns`).
+
+## Single blank frames between sections
+
+One section fades out by its end and the next fades in from its start,
+so the frame between them is empty; only `check --all` sees it. Let
+something persist across the cut (a rule, a progress bar, a heading
+that changes on the cut) or overlap the sections.
+
+## Hairlines between shapes that should touch
+
+N pieces tiling a shape (wedges of a disc, slices of a bar) show faint
+seams where their antialiased edges meet, worst in a sheet's small
+thumbnails. Stroke each piece in its own colour, or draw the whole
+shape underneath the pieces.
+
+## A stray line into an arc
+
+`show` leaves a current point at the end of the text. An `arc` after it
+draws a line from there to the arc's start. Begin a new shape with
+`newpath`.

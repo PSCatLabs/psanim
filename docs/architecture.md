@@ -228,3 +228,24 @@ Generated PostScript is treated as untrusted when the host says so. See
 | Workers each load the program | sharing an interpreter | `Interp` is `Rc`-based by design; loading is milliseconds |
 | ffmpeg as a subprocess of the CLI | a Rust encoder in the engine | keeps the engine portable and its dependency tree small |
 | C ABI for wasm | wasm-bindgen | no toolchain beyond `rustup target add`; matches PSCat's own browser build |
+
+## The libraries
+
+Above the core sits a second layer, the `pk` libraries: PostScript
+source compiled into the binary, loaded by a movie with `/pkmotion use`,
+with native halves for the parts that touch pixels or process data.
+They add three things to the model described here, and change none of
+it:
+
+- **A viewport stack** beside the time scope stack: `within` pushes a
+  width and height that `width`, `height` and everything built on them
+  report, so a scene is a function of its box as well as its time.
+- **Placed layers**: a motion draws its body on a layer, measures what
+  was painted, and composites the layer under an affine pose
+  (`raster::composite_placed`). At rest there is no layer.
+- **Data operators** (`codetokens`, `difflines`, `niceticks`, `ranks`,
+  `fmtnum`, `straightenpath`, `taperpath`) that return plain PostScript
+  data or a path for the libraries to draw.
+
+[The expressive vocabulary](vocabulary-design.md) explains the design;
+[its evaluation](vocabulary-evaluation.md) what agents did with it.
