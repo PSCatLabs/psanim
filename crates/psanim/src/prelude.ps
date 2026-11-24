@@ -1,0 +1,171 @@
+%!PS
+% psanim prelude: the PostScript half of the animation vocabulary.
+%
+% Loaded into every movie before the program runs. The native operators
+% (crates/psanim/src/ops.rs) hold the clock and do the arithmetic; the
+% procedures here are the parts that must run a body: a native operator
+% cannot call a procedure, so `.during` decides whether the body is live and
+% pushes its time scope, and `during` below runs it and pops the scope.
+%
+% Rules this file keeps, because user procedures run inside these:
+%   - No `begin`: a body's `def` must land where the user expects.
+%   - State lives on the operand stack, or in a closure built with `[ ... ] cvx`.
+%   - Every procedure is `bind`-ed, so a user redefining `exec` or `now`
+%     for themselves does not change what these do.
+
+% --- declaration ---------------------------------------------------------
+% dict animation -      declare the movie; first statement of a program.
+/animation { .animation { quit } if } bind def
+
+% --- time scopes -----------------------------------------------------------
+% Time is part of the state a drawing procedure runs in, like the CTM. Each
+% combinator runs `proc` with `now` and `progress` re-based, then puts the
+% clock back.
+/during     { .during     { exec .timepop } if } bind def  % a b proc     live for a <= now < b; inside, now runs 0..b-a
+/after      { .after      { exec .timepop } if } bind def  % a proc       live for now >= a; inside, now starts at 0
+/before     { .before     { exec .timepop } if } bind def  % b proc       live for now < b
+/delayed    { .delayed    exec .timepop } bind def         % d proc       now is d seconds earlier inside
+/timescaled { .timescaled exec .timepop } bind def         % k proc       now runs k times as fast inside
+/looped     { .looped     exec .timepop } bind def         % p proc       now wraps every p seconds
+/pingpong   { .pingpong   exec .timepop } bind def         % p proc       now runs 0..p..0..p
+/attime     { .attime     exec .timepop } bind def         % t proc       now is frozen at t
+/timewindow { .timewindow exec .timepop } bind def         % t dur proc   now is t, in a window dur long
+/reversed   { .reversed   exec .timepop } bind def         % proc         now runs backward through the window
+% i gap proc staggered: item i of a row starts gap seconds after item i-1.
+/staggered  { 3 1 roll mul exch delayed } bind def
+% [ dur proc dur proc ... ] sequence: play the procs one after another.
+/sequence   { .sequence   { exec .timepop } if } bind def
+
+% --- layers ------------------------------------------------------------------
+/faded   { beginlayer exec endlayer } bind def               % alpha proc           draw proc as a group at one opacity
+/blended { beginlayer exec endlayerblend } bind def           % alpha /mode proc     ... with a blend mode
+/blurred { beginlayer exec blurlayer 1 endlayer } bind def   % radius proc          draw proc out of focus
+/glowing { beginlayer exec glowlayer 1 endlayer } bind def   % radius strength proc draw proc with a halo
+% procA procB u crossfade: A, with B over it at opacity u.
+/crossfade { 3 -1 roll exec beginlayer exch exec endlayer } bind def
+
+% --- the canvas ----------------------------------------------------------------
+% r g b backdrop: fill the whole frame, whatever the CTM and clip are.
+/backdrop {
+  gsave initmatrix initclip setrgbcolor 0 0 width height rectfill grestore
+} bind def
+% cx cy zoom angle camera: look at (cx, cy), magnified, rotated. Draw the
+% world after it; wrap in gsave/grestore to come back to frame coordinates.
+/camera {
+  width 2 div height 2 div translate
+  rotate dup scale
+  neg exch neg exch translate
+} bind def
+
+% --- text ------------------------------------------------------------------------
+% (str) u typed -> (prefix)     the first u (0..1) of the string, by characters
+/typed {
+  0 1 clamp 1 index length mul round cvi 0 exch getinterval
+} bind def
+% (str) showcenter              show centred on the current point
+/showcenter {
+  dup stringwidth pop 2 div neg 0 rmoveto show
+} bind def
+% (str) proc eachglyph          run proc once per character, with `(c) i` on
+%                               the stack and the current point at that
+%                               character's origin on the baseline.
+/.glyphstep {            % i str proc x0 y0
+  4 index 4 index exch 0 exch getinterval stringwidth pop   % i str proc x0 y0 wprefix
+  3 -1 roll add exch moveto                                  % i str proc
+  3 1 roll                                                   % proc i str
+  1 index 1 getinterval exch                                 % proc (c) i
+  3 -1 roll exec
+} bind def
+/eachglyph {             % str proc
+  currentpoint                                 % str proc x0 y0
+  3 index length 1 sub 0 exch 1 exch           % str proc x0 y0 0 1 n-1   (for's three operands, reordered below)
+  7 3 roll                                     % 0 1 n-1 str proc x0 y0
+  [ 5 1 roll /.glyphstep cvx ] cvx             % 0 1 n-1 { str proc x0 y0 .glyphstep }
+  for
+} bind def
+
+% --- reels: clips joined by transitions ---------------------------------------------
+% A transition is a procedure `procA procB u name`: draw the frame that is
+% u (0..1) of the way from clip A to clip B. A and B are ready to run: each
+% sets its own clock. Add one by putting it in `transitions` under a name
+% that starts with `t-`.
+% A B x y w h .wipe: A, then B clipped to the rectangle.
+/.wipe {
+  6 -1 roll exec
+  gsave rectclip exec grestore
+} bind def
+/transitions 16 dict def
+transitions begin
+  /cut      { 0.5 lt { pop exec } { exch pop exec } ifelse } bind def
+  /dissolve { crossfade } bind def
+  % dip: A fades to black, then B rises from it.
+  /dip {
+    dup 0.5 lt
+      { exch pop 2 mul 1 exch sub exch faded }                 % A at 1-2u
+      { 3 -1 roll pop 2 mul 1 sub exch faded } ifelse          % B at 2u-1
+  } bind def
+  % wipes: B is revealed behind a moving edge.
+  /wipe-right { /smooth ease width mul  0 exch 0 exch height .wipe } bind def
+  /wipe-left  { /smooth ease width mul  dup width exch sub exch 0 exch height .wipe } bind def
+  /wipe-up    { /smooth ease height mul 0 exch 0 exch width exch .wipe } bind def
+  /wipe-down  { /smooth ease height mul dup height exch sub exch 0 3 1 roll width exch .wipe } bind def
+  % iris: B opens as a growing circle from the centre.
+  /iris {
+    /cubic-inout ease
+    3 -1 roll exec
+    gsave
+      width 2 div height 2 div
+      3 -1 roll width dup mul height dup mul add sqrt 2 div mul   % radius: reaches the corners at u = 1
+      0 360 arc clip newpath
+      exec
+    grestore
+  } bind def
+  % push: B slides in and shoves A out.
+  /push-left {
+    /cubic-inout ease width mul                                 % A B dx
+    gsave dup neg 0 translate 3 -1 roll exec grestore           % B dx
+    gsave width exch sub 0 translate exec grestore
+  } bind def
+  /push-right {
+    /cubic-inout ease width mul
+    gsave dup 0 translate 3 -1 roll exec grestore
+    gsave width sub 0 translate exec grestore
+  } bind def
+  % zoom: A swells and fades while B settles into place.
+  /zoom {
+    /cubic-inout ease                                           % A B u
+    dup 1 exch sub                                              % A B u 1-u
+    4 -1 roll                                                   % B u 1-u A
+    gsave
+      width 2 div height 2 div translate
+      2 index 0.6 mul 1 add dup scale
+      width -2 div height -2 div translate
+      faded                                                     % B u
+    grestore
+    gsave
+      width 2 div height 2 div translate
+      dup 0.25 mul 0.75 add dup scale
+      width -2 div height -2 div translate
+      exch faded
+    grestore
+  } bind def
+end
+
+/.clipproc { [ 4 1 roll /timewindow cvx ] cvx } bind def       % t dur proc -> { t dur proc timewindow }
+% [ [dur proc] [dur /transition] [dur proc] ... ] reel
+/reel {
+  .reel
+  dup 0 eq { pop } {
+    1 eq { exec .timepop } {
+      % kind u tB dB procB tA dA procA
+      .clipproc                       % kind u tB dB procB A'
+      4 1 roll .clipproc              % kind u A' B'
+      3 -1 roll                       % kind A' B' u
+      4 -1 roll                       % A' B' u kind
+      transitions exch get exec
+    } ifelse
+  } ifelse
+} bind def
+
+% Pictures are composed over a transparent page; a program draws its own
+% ground, or declares /Background.
