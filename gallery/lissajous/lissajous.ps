@@ -1,0 +1,78 @@
+%!PS
+% Poster: 5.2
+% Lissajous
+%
+% The Lissajous table. Along the top, six wheels turning at 1 to 6 times
+% the base rate; down the side, six more. Each cell takes its x from the
+% wheel above it and its y from the wheel beside it, and the point that
+% results draws the curve for that pair of frequencies: circles down the
+% diagonal, and everywhere else the figure its ratio makes. 2:1 and 4:2
+% are the same curve, traced twice as fast.
+%
+% Techniques
+%   - Pure movie and a seamless loop without any fade: every frequency
+%     is a whole number, so after one turn of the slowest wheel all 36
+%     points are back where they began. The picture is a comet, not a
+%     drawing that completes: each point drags a tail that is the last
+%     third of a turn, brightest at the head.
+%   - A tail is 110 short strokes whose colour and width fall off along
+%     it; the whole curve sits faintly underneath as a single path.
+%   - One `glowing` layer over everything that is light.
+
+<< /Size [1080 1080] /Duration 16 /FPS 30 /Loop true
+   /Background [0.022 0.026 0.050]
+   /Title (Lissajous)
+   /Description (The Lissajous table: twelve wheels and the 36 curves their pairs draw, as comets on a seamless 16 second loop.)
+>> animation
+
+/N 6 def
+/cell 140 def /mar 50 def /rad 52 def
+/tailn 110 def /taild 1.2 def                 % strokes in a tail, degrees of base phase each
+/cx { cell mul mar add cell 2 div add } def   % column index 0..6 -> x
+/cy { cell mul mar add cell 2 div add 1080 exch sub } def   % row index 0..6 -> y (row 0 at the top)
+
+% col row phase -> x y : the point of cell (col, row) at a base phase.
+% Column 0 and row 0 are the wheels themselves.
+/pt {
+  4 dict begin /ph exch def /row exch def /col exch def
+  col 0 eq { /fx row def } { /fx col def } ifelse
+  row 0 eq { /fy col def } { /fy row def } ifelse
+  col cx fx ph mul cos rad mul add
+  row cy fy ph mul sin rad mul add
+  end
+} def
+
+/hue { add 13 div 0.52 add dup 1 gt { 1 sub } if } def     % col row -> hue
+
+/curve {   % col row -    the whole figure, faint, and its comet
+  /row exch def /col exch def
+  /hh col row hue def
+  newpath col row 0 pt moveto
+  1.5 1.5 360 { col row 3 -1 roll pt lineto } for closepath
+  hh 0.55 0.22 sethsbcolor 1 setlinewidth stroke
+  tailn 1 sub -1 0 { /k exch def
+    /f 1 k tailn div sub def
+    newpath col row T k 1 add taild mul sub pt moveto
+            col row T k taild mul sub pt lineto
+    hh 0.75 f 0.55 mul sub  f f mul sethsbcolor
+    0.8 f 2.4 mul add setlinewidth stroke
+  } for
+  1 1 0.95 setrgbcolor newpath col row T pt 3.6 0 360 arc fill
+} def
+
+/scene {
+  /T progress 360 mul def
+  1 setlinecap 1 setlinejoin
+  % the guides: each wheel's point, carried down its column or along its row
+  0.5 setlinewidth
+  1 1 N { /i exch def
+    i i hue 0.5 0.30 sethsbcolor
+    newpath i 0 T pt exch dup 3 1 roll exch moveto N cy rad sub 6 sub lineto stroke
+    newpath 0 i T pt 2 copy moveto exch pop N cx rad add 6 add exch lineto stroke
+  } for
+  9 1.3 {
+    1 1 N { /i exch def i 0 curve 0 i curve } for
+    1 1 N { /r exch def 1 1 N { r curve } for } for
+  } glowing
+  0.45 vignette
+} def

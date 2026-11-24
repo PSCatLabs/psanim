@@ -315,7 +315,7 @@ def gallery_pieces():
                        "has_video": (out / f"{d.name}.mp4").exists()})
     # The order of the page: a curated sequence, then anything new.
     order = ["orrery", "afterglow", "paper-boat", "tidewater", "murmuration", "taiji", "chalk-proof",
-             "halftone", "neon", "ripple", "letter", "epicycles", "one-frame"]
+             "tesseract", "lissajous", "halftone", "neon", "ripple", "letter", "epicycles", "one-frame"]
     pieces.sort(key=lambda p: order.index(p["name"]) if p["name"] in order else len(order))
     return pieces
 

@@ -1,0 +1,125 @@
+%!PS
+% Poster: 11
+% Tesseract
+%
+% A hypercube, turned in each of the six planes four dimensions have.
+% In three dimensions a rotation has an axis; in four it has a plane, and
+% there are six: xy, xz, yz, xw, yw, zw. The first three are the spins we
+% know, and the figure (a cube inside a cube, as its shadow in our space
+% looks) turns rigidly. The other three involve w, the direction we
+% cannot see: the inner cube swells, passes through the outer one and
+% becomes it. Last, two planes that share no axis turn together, which
+% only four dimensions allow.
+%
+% Techniques
+%   - Sixteen vertices, the corners (+-1, +-1, +-1, +-1), rotated in 4D
+%     plane by plane, then projected twice in perspective: 4D to 3D from
+%     a point on the w axis, 3D to the page from a point on the z axis.
+%   - Colour is w: cyan where a point is far along w, magenta where it
+%     is near. Each edge is drawn in eight pieces so the colour and the
+%     width (the perspective scale) run along it.
+%   - Every turn is a half turn, which maps the hypercube onto itself,
+%     so the last frame leads into the first: a loop with no cut.
+%   - Six dials show the angle in each plane.
+
+<< /Size [1080 1080] /Duration 28 /FPS 30 /Loop true
+   /Background [0.020 0.022 0.045]
+   /Title (Tesseract)
+   /Description (A hypercube turned in each of the six planes of four dimensions, then in two at once: a seamless 28 second loop.)
+>> animation
+
+/planes [ [0 1 (xy)] [0 2 (xz)] [1 2 (yz)] [0 3 (xw)] [1 3 (yw)] [2 3 (zw)] ] def
+/near [1.00 0.30 0.62] def        % colour at w = +1 (towards the eye in w)
+/far  [0.25 0.85 1.00] def        % colour at w = -1
+
+% the sixteen corners, the 32 edges (pairs differing in one coordinate),
+% and the 24 square faces
+/corners [ 0 1 15 { /i exch def [ 0 1 3 { 1 exch bitshift i and 0 eq { -1 } { 1 } ifelse } for ] } for ] def
+/edges [ 0 1 15 { /i exch def 0 1 3 { 1 exch bitshift /bt exch def
+           i bt and 0 eq { [ i i bt or ] } if } for } for ] def
+/faces [ 0 1 3 { /fa exch def fa 1 add 1 3 { /fb exch def
+           /ba 1 fa bitshift def /bb 1 fb bitshift def
+           0 1 15 { /i exch def i ba and 0 eq i bb and 0 eq and
+             { [ i  i ba or  i ba or bb or  i bb or ] } if } for } for } for ] def
+
+% [x y z w] i j angle rot4 -> [x y z w]'   (a turn in the plane of axes i and j)
+/rot4 {
+  6 dict begin /ang exch def /j exch def /i exch def
+  4 array copy /p exch def
+  /u p i get def /v p j get def
+  p i u ang cos mul v ang sin mul sub put
+  p j u ang sin mul v ang cos mul add put
+  p end
+} def
+
+% [x y z w] -> sx sy scale wdepth   (two perspective projections)
+/project {
+  5 dict begin aload pop /pw exch def /pz exch def /py exch def /px exch def
+  /s4 4 4 pw sub div def
+  /px px s4 mul def /py py s4 mul def /pz pz s4 mul def
+  % a fixed view: turn about y, then tip towards the eye
+  /qx px 24 cos mul pz 24 sin mul add def
+  /qz pz 24 cos mul px 24 sin mul sub def
+  /qy py 16 cos mul qz 16 sin mul sub def
+  /qz qz 16 cos mul py 16 sin mul add def
+  /s3 6.5 6.5 qz sub div def
+  540 qx s3 mul 165 mul add   590 qy s3 mul 165 mul add   s3 s4 mul   pw
+  end
+} def
+
+/scene {
+  % the angle in each plane now: a half turn each, in turn, then xw and yz together
+  /angs [
+    0.5 3.5 /cubic-inout tween 180 mul
+    3.0 6.0 /cubic-inout tween 180 mul
+    5.5 8.5 /cubic-inout tween 180 mul  21 27.5 /sine-inout tween 180 mul add
+    8.5 13  /cubic-inout tween 180 mul  21 27.5 /sine-inout tween 180 mul add
+    12.5 17 /cubic-inout tween 180 mul
+    16.5 21 /cubic-inout tween 180 mul
+  ] def
+  % where each corner is on the page
+  /pts [ corners {
+      0 1 5 { /k exch def planes k get aload pop pop angs k get rot4 } for
+      [ exch project ]
+    } forall ] def
+
+  1 setlinecap 1 setlinejoin
+  % faces, as faint panes of glass
+  faces { /fc exch def
+    /wm 0 fc { pts exch get 3 get add } forall 4 div def
+    wm 1 add 2 div far near between aload pop setrgbcolor 0.035 setalpha
+    newpath fc 0 get pts exch get aload pop pop pop moveto
+    1 1 3 { fc exch get pts exch get aload pop pop pop lineto } for closepath fill
+  } forall
+  1 setalpha
+  12 1.25 {
+    edges { aload pop pts exch get /pb exch def pts exch get /pa exch def
+      0 1 7 { /k exch def
+        /u0 k 8 div def /u1 k 1 add 8 div def /um k 0.5 add 8 div def
+        um pa 3 get pb 3 get between 1 add 2 div far near between aload pop setrgbcolor
+        um pa 2 get pb 2 get between 2.6 mul setlinewidth
+        newpath u0 pa 0 get pb 0 get between u0 pa 1 get pb 1 get between moveto
+                u1 pa 0 get pb 0 get between u1 pa 1 get pb 1 get between lineto stroke
+      } for
+    } forall
+    pts { aload pop 1 add 2 div far near between aload pop setrgbcolor
+          3.4 mul 3 1 roll newpath 3 -1 roll 0 360 arc fill } forall
+  } glowing
+
+  % the dials
+  /Helvetica findfont 20 scalefont setfont
+  0 1 5 { /k exch def
+    /dx 190 k 140 mul add def /dy 92 def
+    /busy angs k get 180 fmod dup 0.5 gt exch 179.5 lt and def
+    /lv busy { 1 } { 0.62 } ifelse def
+    k 3 lt { 0.80 0.84 0.95 } { 1.00 0.62 0.80 } ifelse
+    lv mul 3 1 roll lv mul 3 1 roll lv mul 3 1 roll setrgbcolor
+    1.4 setlinewidth newpath dx dy 30 0 360 arc stroke
+    gsave dx dy translate angs k get rotate
+      busy { 2.6 } { 1.4 } ifelse setlinewidth newpath -30 0 moveto 30 0 lineto stroke
+      newpath 30 0 3.5 0 360 arc fill
+    grestore
+    dx dy 58 sub moveto planes k get 2 get showcenter
+  } for
+  0.4 vignette
+} def

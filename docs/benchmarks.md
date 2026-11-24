@@ -18,6 +18,8 @@ movie; the first 36 in order for a stateful or persistent one):
 | paper-boat | pure | 1280x720 | 999 | 1.4 | 29.2 | 59.6 | 32.0 | 10 | 146.9 |
 | orrery | pure | 1080x1080 | 360 | 1.5 | 76.3 | 77.9 | 13.1 | 10 | 57.5 |
 | taiji | pure | 1080x1080 | 720 | 0.8 | 55.5 | 57.3 | 18.0 | 10 | 78.4 |
+| tesseract | pure | 1080x1080 | 840 | 1.0 | 20.0 | 24.9 | 48.7 | 10 | 224.7 |
+| lissajous | pure | 1080x1080 | 480 | 1.0 | 68.0 | 70.2 | 14.7 | 10 | 70.1 |
 | neon | pure | 1280x720 | 360 | 1.1 | 45.0 | 45.8 | 23.9 | 10 | 119.1 |
 | ripple | pure | 1280x720 | 300 | 9.1 | 53.4 | 55.2 | 18.7 | 10 | 82.7 |
 | letter | pure | 1280x720 | 750 | 12.7 | 97.1 | 117.4 | 12.2 | 10 | 56.7 |
@@ -51,6 +53,8 @@ ffmpeg, time from first frame to finished file.
 | paper-boat | 999 | 13.4 s | 10 | 77 | 14.6 MB |
 | orrery | 360 | 9.4 s | 10 | 40 | 40.9 MB |
 | taiji | 720 | 10.9 s | 10 | 67 | 3.5 MB |
+| tesseract | 840 | 6.5 s | 10 | 131 | 8.8 MB |
+| lissajous | 480 | 9.0 s | 10 | 55 | 8.5 MB |
 | neon | 360 | 3.3 s | 10 | 111 | 0.3 MB |
 | ripple | 300 | 4.8 s | 10 | 65 | 9.3 MB |
 | letter | 750 | 13.3 s | 10 | 57 | 1.2 MB |
