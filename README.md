@@ -80,7 +80,7 @@ git -C /path/to/pscat worktree add ../pscat-psanim-api feature/psanim-library-ap
 
 # 2. psanim
 cargo build --release                # target/release/psanim
-cargo test  --release                # about 160 tests; renders thousands of frames
+cargo test  --release                # about 100 tests; renders thousands of frames
 
 # 3. optional
 scripts/build_wasm.sh                # web/psanim.wasm (needs: rustup target add wasm32-unknown-unknown)
