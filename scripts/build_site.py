@@ -348,7 +348,7 @@ def build_gallery():
 {facts}
 <div class="readme">{readme_html}</div>
 <pre class="code cmd"><code>psanim render gallery/{n}/{n}.ps -o {n}.mp4</code></pre>
-<p class="links"><a href="gallery/{n}/{n}.ps">source</a> · <a href="gallery/{n}/sheet.png">contact sheet</a> · <a href="gallery/{n}/poster.png">still</a> · <a href="gallery/{n}/{n}.mp4">mp4</a></p>
+<p class="links"><a href="gallery/{n}/{n}.ps">source</a> · <a href="gallery/{n}/sheet.png">contact sheet</a> · <a href="gallery/{n}/poster.png">still</a> · <a href="gallery/{n}/{n}.mp4">mp4</a>{' · <a href="gallery/' + n + '/' + n + '.gif">gif</a>' if (SITE / "gallery" / n / f"{n}.gif").exists() else ''}</p>
 </div>
 <details class="source"><summary>{n}.ps · {lines} lines of PostScript</summary><pre class="code lang-postscript"><code>{source}</code></pre></details>
 </article>""")
