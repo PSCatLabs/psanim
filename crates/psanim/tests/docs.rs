@@ -57,9 +57,25 @@ fn fences(text: &str) -> Vec<(usize, String)> {
 
 /// Load `source` and render a few frames; the error names `what`.
 fn exercise(what: &str, source: &str, dir: Option<&Path>) -> Result<(), String> {
+    // A piece that reads host data names its recording beside it, as
+    // `% Signals: day.csv`; the gallery scripts pass it, and so does this.
+    let mut signals = psanim::Signals::default();
+    for line in source.lines() {
+        if let Some(file) = line
+            .strip_prefix('%')
+            .map(str::trim_start)
+            .and_then(|l| l.strip_prefix("Signals:"))
+        {
+            let path = dir.unwrap_or(Path::new(".")).join(file.trim());
+            let text = std::fs::read_to_string(&path)
+                .map_err(|e| format!("{what}: cannot read {}: {e}", path.display()))?;
+            signals.extend(psanim::Signals::from_csv(&text).map_err(|e| format!("{what}: {e}"))?);
+        }
+    }
     let options = Options {
         scale: Scale::Width(160),
         read_roots: Some(dir.map(|d| vec![d.to_path_buf()]).unwrap_or_default()),
+        signals,
         ..Options::default()
     };
     let mut movie = Movie::load(source, &options).map_err(|e| format!("{what}: {e}"))?;

@@ -80,8 +80,42 @@ impl Signals {
         self.tracks.insert(name.to_string(), Track::constant(value));
     }
 
+    /// Append a sample to `name` at time `t`: what a live host calls with
+    /// each new reading, so the movie can read the signal's recent past
+    /// (`signalago`, `signalseries`) and draw between readings. A sample
+    /// earlier than the track's last replaces the track. The track keeps
+    /// its newest [`Signals::MAX_RECORDED`] samples.
+    pub fn record(&mut self, name: &str, t: f64, value: f64) {
+        let track = self.tracks.entry(name.to_string()).or_default();
+        if track.samples.last().is_some_and(|s| s.0 > t) {
+            track.samples.clear();
+        }
+        track.interpolation = Interpolation::Linear;
+        track.samples.push((t, value));
+        let n = track.samples.len();
+        if n > Self::MAX_RECORDED {
+            track.samples.drain(..n - Self::MAX_RECORDED);
+        }
+    }
+
+    /// How many samples [`Signals::record`] keeps per signal.
+    pub const MAX_RECORDED: usize = 100_000;
+
     pub fn value(&self, name: &str, t: f64) -> Option<f64> {
         self.tracks.get(name).map(|tr| tr.at(t))
+    }
+
+    /// `n` readings of `name` evenly spaced from `t0` to `t1` inclusive;
+    /// `None` when there is no such signal.
+    pub fn series(&self, name: &str, t0: f64, t1: f64, n: usize) -> Option<Vec<f64>> {
+        let tr = self.tracks.get(name)?;
+        Some(match n {
+            0 => Vec::new(),
+            1 => vec![tr.at(t1)],
+            _ => (0..n)
+                .map(|k| tr.at(t0 + (t1 - t0) * k as f64 / (n - 1) as f64))
+                .collect(),
+        })
     }
 
     /// Seconds since the most recent event at or before `t`, and how many
@@ -182,6 +216,28 @@ mod tests {
         assert_eq!(step.at(2.0), 20.0);
         assert_eq!(Track::default().at(1.0), 0.0);
         assert_eq!(Track::constant(3.5).at(-100.0), 3.5);
+    }
+
+    #[test]
+    fn recorded_samples_interpolate_and_series_spans_the_window() {
+        let mut s = Signals::default();
+        s.record("cpu", 1.0, 10.0);
+        s.record("cpu", 2.0, 30.0);
+        assert_eq!(s.value("cpu", 1.5), Some(20.0));
+        assert_eq!(s.value("cpu", 5.0), Some(30.0));
+        assert_eq!(
+            s.series("cpu", 1.0, 2.0, 5),
+            Some(vec![10.0, 15.0, 20.0, 25.0, 30.0])
+        );
+        assert_eq!(s.series("cpu", 0.0, 2.0, 1), Some(vec![30.0]));
+        assert_eq!(s.series("nope", 0.0, 1.0, 3), None);
+        // Going back in time starts the track again.
+        s.record("cpu", 0.5, 7.0);
+        assert_eq!(s.value("cpu", 3.0), Some(7.0));
+        // A constant set by `set` is the track's first sample, at time 0.
+        s.set("x", 4.0);
+        s.record("x", 1.0, 6.0);
+        assert_eq!(s.value("x", 0.5), Some(5.0));
     }
 
     #[test]

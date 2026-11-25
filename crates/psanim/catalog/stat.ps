@@ -1,0 +1,74 @@
+%!PS
+% Catalog entry: stat. A dashboard stat panel: one number, live or replayed.
+% In a movie:  /cpu /stat << /Params << /Signal /cpu /Title (CPU) /Unit (%) >> >> instance
+%              then  /cpu << /Box [x y w h] >> place
+% The number comes from a host signal (`--signals day.csv`, or a live host's
+% record_signal), or from an array of values played across its duration.
+/Width 360 param /cw0 exch def                 % its width in units: give it the shape of the box it is placed in
+/Height 200 param /ch0 exch def                % its height in units
+<< /Size [cw0 ch0] /Duration 12 /Loop true /Background /transparent
+   /Title (Stat panel)
+   /Description (A dashboard tile: a big number coloured by thresholds, its unit, its change and a sparkline of its recent past, from a host signal or an array.)
+>> animation
+/pkchart use
+
+/Title (Requests / s) param /ttl exch def      % the panel's title
+/Signal null param /sig exch def               % the host signal to show, e.g. /cpu; null plays /Values
+/Values null param /vals exch def              % without a signal: values played evenly across the duration (null: a demo)
+/Unit () param /unit exch def                  % written small after the number
+/Decimals 0 param /dec exch def                % decimal places
+/Short false param /short exch def             % true: 12.4k and 3.2M instead of 12,431 and 3,200,000
+/Thresholds null param /ths exch def           % [ /good 70 /warn 90 /bad ]: the number's colour by value; null: /fg
+/Spark 4 param /spark exch def                 % seconds of history in the sparkline (0: none)
+/Delta 2 param /delta exch def                 % show the change in % over this many seconds (0: none)
+/DownIsGood false param /downgood exch def     % true when a fall is good news (latency, errors)
+/Lag 0 param /lag exch def                     % read the signal this many seconds late, so live values glide between updates
+/Fill /surface param /cardfill exch def           % /surface, or /threshold to colour the card instead of the number
+/Theme null param /thm exch def                % a theme name, or null for the movie's own
+
+thm null ne { thm usetheme } if
+sig null eq vals null eq and {
+  /vals [ 0 1 120 { 120 div 360 mul /a exch def
+    a sin 900 mul a 3 mul sin 350 mul add a 7 mul cos 160 mul add 2400 add } for ] def
+} if
+
+% the clock the readings are on: the movie's for a signal, our own for /Values
+/tnow { sig null ne { signaltime } { globaltime } ifelse } def
+% t at -> v        the reading at time t (a signal, /Lag seconds late)
+/at {
+  sig null ne { tnow exch sub lag add sig exch signalago } {
+    duration div 1 fmod 1 add 1 fmod vals length 1 sub mul vals exch valueat
+  } ifelse
+} def
+/ago { tnow exch sub at } def          % dt ago -> v
+
+/scene {
+  /v 0 ago def
+  spark 0 gt {
+    % the sparkline's window, read on a grid fixed in time (one step past
+    % now, clipped) so its samples do not slide and shimmer
+    % (with a quarter more on the left, out of view, for the range to fade over)
+    /tc tnow def /dt spark 47 div def /fz dt 12 mul def
+    /tq tc dt div ceiling dt mul def /ta tq spark sub dt sub fz sub def
+    /sv [ 0 1 60 { dt mul ta add at } for ] def
+    /fx0 ta tc sub spark add spark div def /fx1 tq tc sub spark add spark div def
+    % its range: what is in view, and, weighed down the further out they
+    % are, the readings just gone, so the scale glides when a peak scrolls out
+    /hi v def /lo v def
+    0 1 60 { /k exch def /tk ta k dt mul add def
+      tk tc le {
+        sv k get v sub tk tc sub spark add fz add fz div 0 1 clamp mul v add
+        dup hi max /hi exch def lo min /lo exch def
+      } if
+    } for
+    /pad hi lo sub 0.12 mul v abs 0.01 mul max 1e-6 max def
+  } if
+  v canvasbox 3 inset <<
+    /Title ttl /Unit unit /Decimals dec /Short short /Fill cardfill /DownIsGood downgood
+    ths null ne { /Thresholds ths } if
+    spark 0 gt { /Spark sv /SparkFrom fx0 /SparkTo fx1 /SparkRange [ lo pad sub hi pad add ] } if
+    delta 0 gt {
+      /Delta delta ago dup abs 1e-9 max v 3 -1 roll sub exch div 100 mul
+    } if
+  >> stattile
+} def

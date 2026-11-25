@@ -142,7 +142,7 @@ The part of the world the frame shows under the current transformation (the boun
 
 `-  themes  dict`
 
-The built-in themes by name: /midnight /paper /blueprint /terminal /poster /dusk. Each maps roles to colours (/bg /surface /line /fg /muted /accent /accent2 /accent3 /good /bad), fonts (/title /body /mono /display /serif) and sizes (/corner /stroke).
+The built-in themes by name: /midnight /paper /blueprint /terminal /poster /dusk. Each maps roles to colours (/bg /surface /line /fg /muted /accent /accent2 /accent3 /good /warn /bad), fonts (/title /body /mono /display /serif) and sizes (/corner /stroke).
 
 ### `theme`
 
@@ -570,7 +570,7 @@ Data coordinates to canvas coordinates, in the current plot frame: for placing a
 
 `opts  plotaxes  -`
 
-Draw the axes, ticks, labels and grid of the current plot frame. opts: << /Draw u (drawn on, 0..1) /YTicks 5 /XTicks 5 /Grid true /Decimals 0 /XDecimals 0 /XNames [ (a) ... ] (names under evenly spaced slots, for bars) /XValues [ ... ] /YValues [ ... ] (ticks exactly there) /Suffix (%) /XLabel (text) /YLabel (text) /Size s >>. The plot frame's box is the data rectangle; labels and titles are drawn outside it, about three times /Size to the left and below, so inset the box from the page.
+Draw the axes, ticks, labels and grid of the current plot frame. opts: << /Draw u (drawn on, 0..1) /YTicks 5 /XTicks 5 /Grid true /Decimals 0 /XDecimals 0 /XNames [ (a) ... ] (names under evenly spaced slots, for bars) /XValues [ ... ] /YValues [ ... ] (ticks exactly there) /Fade true (while the range moves, ticks cross-fade between round steps instead of jumping) /Suffix (%) /XLabel (text) /YLabel (text) /Size s >>. The plot frame's box is the data rectangle; labels and titles are drawn outside it, about three times /Size to the left and below, so inset the box from the page.
 
 ### `bars`
 
@@ -637,6 +637,54 @@ Mark a data point: a dot, dashed drop lines to both axes, and a label on a leade
 `-  chartroles  [ /role ... ]`
 
 The roles marks cycle through when none are given.
+
+### `thresholdrole`
+
+`v [ role v1 role v2 role ... ]  thresholdrole  role`
+
+The role for a value by thresholds, the way dashboards colour status: the first role below v1, the next from v1 up, and so on. `v [ /good 70 /warn 90 /bad ] thresholdrole ink`.
+
+### `sparkline`
+
+`[ v ... ] box opts  sparkline  -`
+
+A small line chart filling the box, no axes: the shape of a recent past. opts: << /Range [lo hi] (the data's own, padded) /Role /accent2 /Fill 0.18 (opacity of the shading under it; 0 for none) /Width w /Dot true (a dot on the newest value) /Draw u (the part drawn, from the left) /From 0 /To 1 (where the first and last values sit, as fractions of the box's width, the rest clipped: for a window read on a fixed grid that slides by part of a step) >>.
+
+### `horizon`
+
+`[ v ... ] box opts  horizon  -`
+
+A horizon chart in the box: the series folded into bands of colour, darker the higher, so a row a few pixels high still shows its shape and a fleet of rows fits on a screen. Values above /Base rise from the bottom in /Role; below it, they hang from the top in /NegRole. opts: << /Extent e (the value that fills every band; the data's largest by default) /Bands 3 /Base 0 /Role /accent2 /NegRole /accent3 /Ground /surface (the colour the bands rise from) /Mirror false (negatives from the bottom too) /Draw u (the part drawn, from the left) >>. The catalog's /horizon draws many rows with a cursor.
+
+### `heatmap`
+
+`[ [ v ... ] ... ] box opts  heatmap  -`
+
+A matrix as cells in the box, first row at the top, coloured from a low role to a high one. opts: << /Range [lo hi] (the data's) /Roles [ /surface /accent ] (low high, or low mid high) /Gap g /Draw u (columns brought in from the left) >>.
+
+### `statuslight`
+
+`x y r role  statuslight  -`
+
+A status lamp: a dot of radius r in the role with a soft halo and a glint. With `thresholdrole`, a status light: `x y 8 v [ /good 70 /warn 90 /bad ] thresholdrole statuslight`.
+
+### `panel`
+
+`box opts  panel  box`
+
+A dashboard card: the theme's surface with rounded corners and a title; leaves the box inside it for the contents. opts: << /Title (text) /Status role (a lamp at the top right) /Fill /surface /Size s (title size; a fifteenth of the card's width, at most a seventh of its height) /Pad p >>.
+
+### `stattile`
+
+`v box opts  stattile  -`
+
+A stat panel: a card with a title, the value large in its threshold's colour, its unit, a change with an up or down arrow, and a sparkline of its recent past along the bottom. opts: << /Title (text) /Unit (%) /Decimals 0 /Short false (12.4k instead of 12,431) /Thresholds [ /good 70 /warn 90 /bad ] (default /fg) /Delta d (the change to show) /DeltaDecimals 1 /DeltaSuffix (%) /DownIsGood false /Spark [ v ... ] /SparkRange [lo hi] /SparkFrom 0 /SparkTo 1 (as sparkline's /From /To) /Fill /surface, or /threshold to colour the card instead of the number >>.
+
+### `dial`
+
+`v box opts  dial  -`
+
+A gauge: an arc from bottom left round to bottom right, filled to the value in its threshold's colour, the thresholds as a thin band round it, the number in the middle. opts: << /Range [0 100] /Thresholds [ /good 70 /warn 90 /bad ] (default all /accent) /Sweep 240 /Thick 0.17 (of the radius) /Unit (%) /Decimals 0 /Short false /Label (text, under the number) /Track /line >>.
 
 ## pkink: marks with a hand in them
 

@@ -23,6 +23,10 @@ assert.ok(first.some((b) => b > 200), "the frame has something bright in it");
 engine.open("<< /Size [16 8] >> animation /scene { /mousex signal 16 div 0 0 setrgbcolor 0 0 16 8 rectfill } def");
 engine.setSignal("mousex", 8);
 assert.equal(engine.render(0).data[0], 128, "signals reach the program");
+engine.open("<< /Size [16 8] >> animation /scene { /cpu 0.5 signalago 0 0 setrgbcolor 0 0 16 8 rectfill } def");
+engine.recordSignal("cpu", 0, 0);
+engine.recordSignal("cpu", 1, 1);
+assert.ok(Math.abs(engine.render(1).data[0] - 128) <= 1, "recorded signals keep their past");
 
 engine.open("<< /Size [8 8] >> animation /scene { 1 (a) add } def");
 assert.throws(() => engine.render(0), (e) => e.name === "PsAnimError" && e.info.kind === "typecheck" && e.info.backtrace[0].procedure === "scene");

@@ -412,6 +412,13 @@ def gallery_pieces():
     pieces.sort(key=lambda p: order.index(p["name"]) if p["name"] in order else len(order))
     return pieces
 
+def render_cmd(p):
+    """The command that renders a piece, with the recording it names in a
+    "% Signals: FILE.csv" line, if any."""
+    n = p["name"]
+    sigs = re.findall(r"^% *Signals: *(\S+)", p["src"].read_text(), re.M)
+    return f"psanim render gallery/{n}/{n}.ps" + "".join(f" --signals gallery/{n}/{f}" for f in sigs) + f" -o {n}.mp4"
+
 def build_gallery():
     pieces = gallery_pieces()
     cards, md_rows = [], []
@@ -441,14 +448,14 @@ def build_gallery():
 <p class="lede">{html.escape(desc)}</p>
 {facts}
 <div class="readme">{readme_html}</div>
-<pre class="code cmd"><code>psanim render gallery/{n}/{n}.ps -o {n}.mp4</code></pre>
+<pre class="code cmd"><code>{html.escape(render_cmd(p))}</code></pre>
 <p class="links">{source_link("gallery.html", f"gallery/{n}/{n}.ps", f"gallery/{n}/{n}.ps")} · <a href="gallery/{n}/sheet.png">contact sheet</a> · <a href="gallery/{n}/poster.png">still</a> · <a href="gallery/{n}/{n}.mp4">mp4</a>{' · <a href="gallery/' + n + '/' + n + '.gif">gif</a>' if (SITE / "gallery" / n / f"{n}.gif").exists() else ''}</p>
 </div>
 <details class="source"><summary>{n}.ps · {lines} lines of PostScript</summary><pre class="code lang-postscript"><code>{source}</code></pre></details>
 </article>""")
         if info:
             still = f"![{title}](img/gallery/{n}.jpg)" if (ROOT / "docs/img/gallery" / f"{n}.jpg").exists() else ""
-            md_rows.append(f"| {still} | [{title}](../gallery/{n}/{n}.ps) | {desc} | {info['duration']:g} s, {info['width']}x{info['height']}, {info['mode']} | `psanim render gallery/{n}/{n}.ps -o {n}.mp4` |")
+            md_rows.append(f"| {still} | [{title}](../gallery/{n}/{n}.ps) | {desc} | {info['duration']:g} s, {info['width']}x{info['height']}, {info['mode']} | `{render_cmd(p)}` |")
     head = ('<section class="page-head"><h1>Gallery</h1><p class="lede">' + str(len(pieces)) + ' films, each one PostScript file. '
             'Every frame you see is the program below it, run by the engine at that moment in time. '
             'Sources, stills and contact sheets are beside each film; the render command reproduces it.</p></section>')

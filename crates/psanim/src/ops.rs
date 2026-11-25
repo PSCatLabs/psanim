@@ -39,13 +39,22 @@ where
 
 /// An array of numbers as PostScript writes it, for `info`.
 fn v_numbers(v: &Value) -> String {
-    v.as_numbers().map_or_else(
-        || "[...]".to_string(),
-        |n| {
-            let parts: Vec<String> = n.iter().map(|x| x.to_string()).collect();
-            format!("[{}]", parts.join(" "))
-        },
-    )
+    // Numbers, names and strings print as written; anything deeper as "...".
+    fn one(v: &Value) -> Option<String> {
+        match v {
+            Value::Name(n) => Some(format!("/{n}")),
+            Value::String(s) => Some(format!("({})", String::from_utf8_lossy(s))),
+            v => v.as_f64().map(|x| x.to_string()),
+        }
+    }
+    match v {
+        Value::Array(a) if a.len() <= 12 => a
+            .iter()
+            .map(one)
+            .collect::<Option<Vec<_>>>()
+            .map_or_else(|| "[...]".to_string(), |p| format!("[{}]", p.join(" "))),
+        _ => "[...]".to_string(),
+    }
 }
 
 /// Pop a procedure, kept opaque so it can be pushed back for the prelude
@@ -1130,6 +1139,8 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             Value::String(s) => format!("({})", String::from_utf8_lossy(s)),
             Value::Name(n) => format!("/{n}"),
             Value::Array(_) => v_numbers(&default),
+            Value::Null => "null".to_string(),
+            Value::Bool(b) => b.to_string(),
             v => v
                 .as_f64()
                 .map_or_else(|| "?".to_string(), |x| x.to_string()),
@@ -1256,6 +1267,70 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let name = i.pop_name()?;
         let c = ctx.borrow();
         i.push_real(c.signals.value(&name, c.global_t).unwrap_or(0.0));
+        Ok(())
+    });
+    // /name dt signalago -> v     the signal dt seconds before now.
+    reg(interp, ctx, "signalago", |i, ctx| {
+        let dt = i.pop_f64()?;
+        let name = i.pop_name()?;
+        let c = ctx.borrow();
+        i.push_real(c.signals.value(&name, c.global_t - dt).unwrap_or(0.0));
+        Ok(())
+    });
+    // /name span n signalseries -> [v ...]   n readings over the last span
+    // seconds, oldest first, the last one now.
+    reg(interp, ctx, "signalseries", |i, ctx| {
+        let n = i.pop_int()?;
+        let span = i.pop_f64()?;
+        let name = i.pop_name()?;
+        if !(2..=100_000).contains(&n) {
+            return fail(
+                ctx,
+                PsError::Rangecheck,
+                "signalseries wants 2 to 100000 readings: /cpu 3600 240 signalseries",
+            );
+        }
+        let c = ctx.borrow();
+        let t = c.global_t;
+        let v = c
+            .signals
+            .series(&name, t - span, t, n as usize)
+            .unwrap_or_else(|| vec![0.0; n as usize]);
+        drop(c);
+        i.push_numbers(&v);
+        Ok(())
+    });
+    // /name t0 t1 n signalbetween -> [v ...]   n readings from signal time
+    // t0 to t1: a fixed grid, for a window that does not slide.
+    reg(interp, ctx, "signalbetween", |i, ctx| {
+        let n = i.pop_int()?;
+        let t1 = i.pop_f64()?;
+        let t0 = i.pop_f64()?;
+        let name = i.pop_name()?;
+        if !(2..=100_000).contains(&n) {
+            return fail(
+                ctx,
+                PsError::Rangecheck,
+                "signalbetween wants 2 to 100000 readings: /cpu 0 60 240 signalbetween",
+            );
+        }
+        let v = ctx
+            .borrow()
+            .signals
+            .series(&name, t0, t1, n as usize)
+            .unwrap_or_else(|| vec![0.0; n as usize]);
+        i.push_numbers(&v);
+        Ok(())
+    });
+    // The movie time signals are read at: the movie's own, inside a component too.
+    reg(interp, ctx, "signaltime", |i, ctx| {
+        i.push_real(ctx.borrow().global_t);
+        Ok(())
+    });
+    reg(interp, ctx, "hassignal", |i, ctx| {
+        let name = i.pop_name()?;
+        let known = ctx.borrow().signals.tracks.contains_key(&name);
+        i.push_bool(known);
         Ok(())
     });
     reg(interp, ctx, "sinceevent", |i, ctx| {

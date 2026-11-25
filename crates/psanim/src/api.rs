@@ -505,6 +505,36 @@ pub const API: &[ApiEntry] = &[
         "/name  eventcount  int",
         "How many events on track name have happened so far.",
     ),
+    e(
+        "input",
+        "signalago",
+        "/name dt  signalago  num",
+        "The host's signal name as it was dt seconds ago, interpolated between readings: the recent past of a recording, or of a live signal its host records (`Movie::record_signal`). `/cpu 0.5 signalago` reads half a second late, so a value updated once a second glides instead of stepping.",
+    ),
+    e(
+        "input",
+        "signalseries",
+        "/name span n  signalseries  [ v ... ]",
+        "n readings of signal name spread over the last span seconds, oldest first, the last one now: the history for a sparkline. The readings move with now; for a window that must not shimmer use `signalbetween` on a grid.",
+    ),
+    e(
+        "input",
+        "signalbetween",
+        "/name t0 t1 n  signalbetween  [ v ... ]",
+        "n readings of signal name evenly spaced from movie time t0 to t1, both included: a fixed stretch of a recording (a day replayed behind a cursor), or a window aligned to a grid so samples do not slide.",
+    ),
+    e(
+        "input",
+        "signaltime",
+        "-  signaltime  t",
+        "The movie time signals are read at: the movie's own clock, also inside a component (whose `globaltime` starts at its /At).",
+    ),
+    e(
+        "input",
+        "hassignal",
+        "/name  hassignal  bool",
+        "Whether the host gave a signal of that name: to draw a \"no data\" state instead of a row of zeros.",
+    ),
     // --- generated block: libraries ---
     e(
         "space",
@@ -681,6 +711,18 @@ pub const API: &[ApiEntry] = &[
         "About n round numbers covering lo..hi (steps of 1, 2, 2.5 or 5 times a power of ten): tick positions for an axis.",
     ),
     e(
+        "value",
+        "fadeticks",
+        "lo hi n  fadeticks  [ v alpha ... ]",
+        "Ticks for a range that is moving: about n round numbers over lo..hi from the two nice steps either side of the ideal one, each with an opacity. Ticks both steps share stay at 1; the rest cross-fade as the range grows or shrinks, so labels never jump. `plotaxes` uses it with /Fade true.",
+    ),
+    e(
+        "value",
+        "seriespoints",
+        "[ v ... ] box [lo hi]  seriespoints  [ x0 y0 x1 y1 ... ]",
+        "A series spread evenly across a box, lo at its bottom and hi at its top, clamped to the box: points for `polypath`. A reversed range [hi lo] turns it upside down. The fast way to draw a long series.",
+    ),
+    e(
         "path",
         "onpath",
         "u proc  onpath  -",
@@ -709,6 +751,12 @@ pub const API: &[ApiEntry] = &[
         "fmtnum",
         "num decimals  fmtnum  string",
         "The number as text with that many decimal places and commas between thousands: 1234567.8 1 fmtnum is (1,234,567.8). For counters: `1 3 /cubic-out tween 0 48213 between 0 fmtnum show`.",
+    ),
+    e(
+        "text",
+        "fmtshort",
+        "num decimals  fmtshort  string",
+        "The number in a dashboard's short form: 950, 12.4k, 3.2M, 1.1B, 4.0T, with that many decimal places (below a thousand too, so a tween keeps its width). A value that rounds up takes the next unit: 999.96 1 fmtshort is (1.0k).",
     ),
     e(
         "text",
@@ -882,7 +930,7 @@ pub const API: &[ApiEntry] = &[
         "pkstage",
         "themes",
         "-  themes  dict",
-        "The built-in themes by name: /midnight /paper /blueprint /terminal /poster /dusk. Each maps roles to colours (/bg /surface /line /fg /muted /accent /accent2 /accent3 /good /bad), fonts (/title /body /mono /display /serif) and sizes (/corner /stroke).",
+        "The built-in themes by name: /midnight /paper /blueprint /terminal /poster /dusk. Each maps roles to colours (/bg /surface /line /fg /muted /accent /accent2 /accent3 /good /warn /bad), fonts (/title /body /mono /display /serif) and sizes (/corner /stroke).",
     ),
     e(
         "pkstage",
@@ -1290,7 +1338,7 @@ pub const API: &[ApiEntry] = &[
         "pkchart",
         "plotaxes",
         "opts  plotaxes  -",
-        "Draw the axes, ticks, labels and grid of the current plot frame. opts: << /Draw u (drawn on, 0..1) /YTicks 5 /XTicks 5 /Grid true /Decimals 0 /XDecimals 0 /XNames [ (a) ... ] (names under evenly spaced slots, for bars) /XValues [ ... ] /YValues [ ... ] (ticks exactly there) /Suffix (%) /XLabel (text) /YLabel (text) /Size s >>. The plot frame's box is the data rectangle; labels and titles are drawn outside it, about three times /Size to the left and below, so inset the box from the page.",
+        "Draw the axes, ticks, labels and grid of the current plot frame. opts: << /Draw u (drawn on, 0..1) /YTicks 5 /XTicks 5 /Grid true /Decimals 0 /XDecimals 0 /XNames [ (a) ... ] (names under evenly spaced slots, for bars) /XValues [ ... ] /YValues [ ... ] (ticks exactly there) /Fade true (while the range moves, ticks cross-fade between round steps instead of jumping) /Suffix (%) /XLabel (text) /YLabel (text) /Size s >>. The plot frame's box is the data rectangle; labels and titles are drawn outside it, about three times /Size to the left and below, so inset the box from the page.",
     ),
     e(
         "pkchart",
@@ -1357,6 +1405,54 @@ pub const API: &[ApiEntry] = &[
         "chartroles",
         "-  chartroles  [ /role ... ]",
         "The roles marks cycle through when none are given.",
+    ),
+    e(
+        "pkchart",
+        "thresholdrole",
+        "v [ role v1 role v2 role ... ]  thresholdrole  role",
+        "The role for a value by thresholds, the way dashboards colour status: the first role below v1, the next from v1 up, and so on. `v [ /good 70 /warn 90 /bad ] thresholdrole ink`.",
+    ),
+    e(
+        "pkchart",
+        "sparkline",
+        "[ v ... ] box opts  sparkline  -",
+        "A small line chart filling the box, no axes: the shape of a recent past. opts: << /Range [lo hi] (the data's own, padded) /Role /accent2 /Fill 0.18 (opacity of the shading under it; 0 for none) /Width w /Dot true (a dot on the newest value) /Draw u (the part drawn, from the left) /From 0 /To 1 (where the first and last values sit, as fractions of the box's width, the rest clipped: for a window read on a fixed grid that slides by part of a step) >>.",
+    ),
+    e(
+        "pkchart",
+        "horizon",
+        "[ v ... ] box opts  horizon  -",
+        "A horizon chart in the box: the series folded into bands of colour, darker the higher, so a row a few pixels high still shows its shape and a fleet of rows fits on a screen. Values above /Base rise from the bottom in /Role; below it, they hang from the top in /NegRole. opts: << /Extent e (the value that fills every band; the data's largest by default) /Bands 3 /Base 0 /Role /accent2 /NegRole /accent3 /Ground /surface (the colour the bands rise from) /Mirror false (negatives from the bottom too) /Draw u (the part drawn, from the left) >>. The catalog's /horizon draws many rows with a cursor.",
+    ),
+    e(
+        "pkchart",
+        "heatmap",
+        "[ [ v ... ] ... ] box opts  heatmap  -",
+        "A matrix as cells in the box, first row at the top, coloured from a low role to a high one. opts: << /Range [lo hi] (the data's) /Roles [ /surface /accent ] (low high, or low mid high) /Gap g /Draw u (columns brought in from the left) >>.",
+    ),
+    e(
+        "pkchart",
+        "statuslight",
+        "x y r role  statuslight  -",
+        "A status lamp: a dot of radius r in the role with a soft halo and a glint. With `thresholdrole`, a status light: `x y 8 v [ /good 70 /warn 90 /bad ] thresholdrole statuslight`.",
+    ),
+    e(
+        "pkchart",
+        "panel",
+        "box opts  panel  box",
+        "A dashboard card: the theme's surface with rounded corners and a title; leaves the box inside it for the contents. opts: << /Title (text) /Status role (a lamp at the top right) /Fill /surface /Size s (title size; a fifteenth of the card's width, at most a seventh of its height) /Pad p >>.",
+    ),
+    e(
+        "pkchart",
+        "stattile",
+        "v box opts  stattile  -",
+        "A stat panel: a card with a title, the value large in its threshold's colour, its unit, a change with an up or down arrow, and a sparkline of its recent past along the bottom. opts: << /Title (text) /Unit (%) /Decimals 0 /Short false (12.4k instead of 12,431) /Thresholds [ /good 70 /warn 90 /bad ] (default /fg) /Delta d (the change to show) /DeltaDecimals 1 /DeltaSuffix (%) /DownIsGood false /Spark [ v ... ] /SparkRange [lo hi] /SparkFrom 0 /SparkTo 1 (as sparkline's /From /To) /Fill /surface, or /threshold to colour the card instead of the number >>.",
+    ),
+    e(
+        "pkchart",
+        "dial",
+        "v box opts  dial  -",
+        "A gauge: an arc from bottom left round to bottom right, filled to the value in its threshold's colour, the thresholds as a thin band round it, the number in the middle. opts: << /Range [0 100] /Thresholds [ /good 70 /warn 90 /bad ] (default all /accent) /Sweep 240 /Thick 0.17 (of the radius) /Unit (%) /Decimals 0 /Short false /Label (text, under the number) /Track /line >>.",
     ),
     e(
         "pkink",

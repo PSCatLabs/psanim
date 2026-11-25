@@ -35,7 +35,14 @@ const meta = engine.open(source, { scale: 0.5, maxSteps: 50_000_000 });
 const frame = engine.render(1.25);           // { width, height, data: Uint8ClampedArray }
 ctx.putImageData(new ImageData(frame.data, frame.width, frame.height), 0, 0);
 engine.setSignal("mousex", 320);             // read in the program with /mousex signal
+engine.recordSignal("cpu", 12.5, 73.0);      // a reading at movie time 12.5, keeping the earlier ones
 ```
+
+`setSignal` replaces a signal with a constant; `recordSignal` adds a
+reading and keeps the earlier ones, so a live dashboard can draw the
+signal's recent past (`signalseries`) and read it a little late to glide
+between readings (`signalago`). `scripts/wasm_smoke.mjs` exercises it in
+Node; it has not yet been run in a browser page.
 
 Errors throw `PsAnimError` with `.info`, the same structured error the
 CLI prints with `--json`.

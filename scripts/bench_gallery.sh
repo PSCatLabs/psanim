@@ -9,7 +9,9 @@ echo "| Piece | Mode | Size | Frames | Load ms | Median ms/frame | p95 | 1 threa
 echo "|---|---|---|---|---|---|---|---|---|---|"
 for d in gallery/*/; do
   name=$(basename "$d")
-  $P bench "gallery/$name/$name.ps" --json --count "${COUNT:-48}" > /tmp/psanim-bench.json
+  sig=()
+  for f in $(sed -n 's/^% *Signals: *\([^ ]*\).*/\1/p' "gallery/$name/$name.ps"); do sig+=(--signals "gallery/$name/$f"); done
+  $P bench "gallery/$name/$name.ps" ${sig[@]+"${sig[@]}"} --json --count "${COUNT:-48}" > /tmp/psanim-bench.json
   $P info "gallery/$name/$name.ps" --json > /tmp/psanim-info.json
   python3 - "$name" <<'PY'
 import json, sys

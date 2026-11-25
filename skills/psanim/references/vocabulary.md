@@ -274,6 +274,18 @@ The rank of each value, 0 for the largest. Interpolating two rank arrays with `b
 
 About n round numbers covering lo..hi (steps of 1, 2, 2.5 or 5 times a power of ten): tick positions for an axis.
 
+### `fadeticks`
+
+`lo hi n  fadeticks  [ v alpha ... ]`
+
+Ticks for a range that is moving: about n round numbers over lo..hi from the two nice steps either side of the ideal one, each with an opacity. Ticks both steps share stay at 1; the rest cross-fade as the range grows or shrinks, so labels never jump. `plotaxes` uses it with /Fade true.
+
+### `seriespoints`
+
+`[ v ... ] box [lo hi]  seriespoints  [ x0 y0 x1 y1 ... ]`
+
+A series spread evenly across a box, lo at its bottom and hi at its top, clamped to the box: points for `polypath`. A reversed range [hi lo] turns it upside down. The fast way to draw a long series.
+
 ## Paths: measuring, following, drawing on, morphing
 
 ### `pathlength`
@@ -474,6 +486,12 @@ Join two strings.
 
 The number as text with that many decimal places and commas between thousands: 1234567.8 1 fmtnum is (1,234,567.8). For counters: `1 3 /cubic-out tween 0 48213 between 0 fmtnum show`.
 
+### `fmtshort`
+
+`num decimals  fmtshort  string`
+
+The number in a dashboard's short form: 950, 12.4k, 3.2M, 1.1B, 4.0T, with that many decimal places (below a thousand too, so a tween keeps its width). A value that rounds up takes the next unit: 999.96 1 fmtshort is (1.0k).
+
 ### `fmtfixed`
 
 `num decimals  fmtfixed  string`
@@ -561,6 +579,36 @@ Seconds since the most recent event on track name; a million if there has been n
 `/name  eventcount  int`
 
 How many events on track name have happened so far.
+
+### `signalago`
+
+`/name dt  signalago  num`
+
+The host's signal name as it was dt seconds ago, interpolated between readings: the recent past of a recording, or of a live signal its host records (`Movie::record_signal`). `/cpu 0.5 signalago` reads half a second late, so a value updated once a second glides instead of stepping.
+
+### `signalseries`
+
+`/name span n  signalseries  [ v ... ]`
+
+n readings of signal name spread over the last span seconds, oldest first, the last one now: the history for a sparkline. The readings move with now; for a window that must not shimmer use `signalbetween` on a grid.
+
+### `signalbetween`
+
+`/name t0 t1 n  signalbetween  [ v ... ]`
+
+n readings of signal name evenly spaced from movie time t0 to t1, both included: a fixed stretch of a recording (a day replayed behind a cursor), or a window aligned to a grid so samples do not slide.
+
+### `signaltime`
+
+`-  signaltime  t`
+
+The movie time signals are read at: the movie's own clock, also inside a component (whose `globaltime` starts at its /At).
+
+### `hassignal`
+
+`/name  hassignal  bool`
+
+Whether the host gave a signal of that name: to draw a "no data" state instead of a row of zeros.
 
 ## Viewports and libraries
 

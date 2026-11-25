@@ -144,7 +144,7 @@ is too low: an entrance is three tweens, a diagram is arithmetic. The
 | `pktype` | text in boxes, wrapping, `kinetic` type, counters, captions | [type.md](references/type.md) |
 | `pkdiagram` | `node`, `edge` (with flowing pulses), `group`, `note`, `circled` | [explain.md](references/explain.md) |
 | `pkcode` | `codeblock` (typing, focus), `codediff` | [explain.md](references/explain.md) |
-| `pkchart` | `plotframe`, `plotaxes`, `bars`, `hbars`, `plotline`, `donut` | [explain.md](references/explain.md) |
+| `pkchart` | `plotframe`, `plotaxes`, `bars`, `hbars`, `plotline`, `donut`; dashboards: `stattile`, `dial`, `horizon`, `sparkline`, `heatmap`, `statuslight` | [explain.md](references/explain.md) |
 | `pkink` | tapered strokes, `revealalong`, `around`, gradients | [ink.md](references/ink.md) |
 
 The way of working they assume: **draw each thing at rest, in a box, in
@@ -235,6 +235,7 @@ number still passes `check`). So:
 | type that moves | `(TEXT) box /c placetext (TEXT) /glyphs 0.05 /mask-up kinetic` |
 | a diagram | `(label) box /surface node`, `boxA boxB << /Draw u /Label (x) /Pulse u >> edge` |
 | a chart | `box [x0 x1] [y0 y1] plotframe`, `<< >> plotaxes`, `[v ...] << /Grow u >> bars`, `pts plotline 0 u trimpath stroke`, `x y << /Label (x) >> plotmark` |
+| a dashboard | catalog panels `/stat` `/gauge` `/horizon` `/timeseries` `/status` `/counter` reading `/Signal /cpu` from `--signals day.csv`; by hand `v box << /Thresholds [/good 70 /warn 90 /bad] >> stattile`, `/cpu 3 60 signalseries` |
 | code | `/src (...) /rust codetokens def` in setup, `src box << /Reveal u /Focus [2] >> codeblock` |
 | a sign | `/arrow sym`, `/neq sym`, `/pi sym` (a non-ASCII character in a string is a silent blank) |
 

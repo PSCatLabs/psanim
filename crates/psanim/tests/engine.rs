@@ -884,6 +884,45 @@ fn params_signals_and_events_reach_the_program() {
     assert_eq!(px(&m.render_frame(5).unwrap(), 0, 0), [0, 0, 0, 255]);
 }
 
+#[test]
+fn a_signal_has_a_past_that_a_movie_can_read() {
+    // 10 FPS; level rises 0 -> 10 over the first second, then holds.
+    let src = format!(
+        "{HEAD}/scene {{ /level 0.5 signalago == /level 1 3 signalseries == /level 0 1 3 signalbetween ==
+                  signaltime == /level hassignal == /nope hassignal == /nope 1 signalago == }} def"
+    );
+    let opts = Options {
+        signals: psanim::Signals::from_csv("t,level\n0,0\n1,10\n").unwrap(),
+        ..Options::default()
+    };
+    let mut m = Movie::load(&src, &opts).unwrap();
+    m.take_output();
+    m.render_frame(10).unwrap(); // t = 1
+    let out = m.take_output();
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(lines[0], "5.0", "{out}");
+    assert_eq!(lines[1], "[0.0 5.0 10.0]", "{out}");
+    assert_eq!(lines[2], "[0.0 5.0 10.0]", "{out}");
+    assert_eq!(lines[3], "1.0", "{out}");
+    assert_eq!(&lines[4..], ["true", "false", "0.0"], "{out}");
+    // A live host records readings as they come; the movie reads between them.
+    let mut m = Movie::load(&src, &Options::default()).unwrap();
+    m.record_signal("level", 0.0, 0.0);
+    m.record_signal("level", 1.0, 10.0);
+    m.take_output();
+    m.render_at(1.0).unwrap();
+    assert!(m.take_output().starts_with("5.0\n[0.0 5.0 10.0]"));
+    // signaltime is the movie's clock inside a component too.
+    let src = format!(
+        "{HEAD}/c << /Size [10 10] /Duration 9 /Scene {{ globaltime == signaltime == }} >> component
+         /scene {{ /c << /At 0.5 >> place }} def"
+    );
+    let mut m = Movie::load(&src, &Options::default()).unwrap();
+    m.take_output();
+    m.render_at(2.0).unwrap();
+    assert_eq!(m.take_output(), "1.5\n2.0\n");
+}
+
 const BOUNCE: &str = "<< /Size [64 48] /Duration 4 /FPS 10 /StepRate 50 >> animation
     /x 5 def /vx 40 def /bounces 0 def
     /step { /h dt def
