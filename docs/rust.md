@@ -69,10 +69,14 @@ before each frame:
 ```rust
 movie.set_signal("mousex", pointer.x);
 movie.set_signal("level", audio.rms());
+if clicked { movie.push_event("click", clock.seconds()); }
 let frame = movie.render_at(clock.seconds())?;
 ```
 
-The program reads them with `/mousex signal`. The same program renders
+The program reads them with `/mousex signal` and `/click sinceevent`.
+A live event track keeps its last 256 events (older ones still count in
+`eventcount`); `clear_events` forgets a track, for a host whose clock
+starts over. The same program renders
 offline with those signals loaded from a file.
 
 ## Errors

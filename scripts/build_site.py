@@ -167,6 +167,7 @@ DOCS = [
     ("guide/cli.html", "Command line", "docs/cli.md", "Reference"),
     ("guide/rust.html", "Rust API", "docs/rust.md", "Reference"),
     ("guide/browser.html", "Browser", "docs/wasm.md", "Reference"),
+    ("guide/widgets.html", "Widgets", "docs/widgets.md", "Design"),
     ("guide/architecture.html", "Architecture", "docs/architecture.md", "Design"),
     ("guide/vocabulary-design.html", "The expressive vocabulary", "docs/vocabulary-design.md", "Design"),
     ("guide/vocabulary-evaluation.html", "Evaluating the vocabulary", "docs/vocabulary-evaluation.md", "Design"),
@@ -530,7 +531,7 @@ def build_eval():
 def copy_assets():
     shutil.copy(ROOT / "scripts/site/site.css", SITE / "site.css")
     shutil.copy(ROOT / "scripts/site/source-viewer.js", SITE / "source-viewer.js")
-    for f in ["psanim.js", "player.js"]:
+    for f in ["psanim.js", "player.js", "widget.js", "widgets.html"]:
         shutil.copy(ROOT / "web" / f, SITE / f)
     wasm = ROOT / "web/psanim.wasm"
     if wasm.exists():
