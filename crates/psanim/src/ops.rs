@@ -212,6 +212,23 @@ pub(crate) fn flat_path(i: &Interp, ctx: &Shared) -> Result<Vec<pathmath::Poly>,
 
 /// Take the canvas out of the interpreter, run `f` on its pixels, put it
 /// back.
+/// Clear every pixel outside `r` (x0, y0, x1, y1): what a blur or glow
+/// spread past a component's box.
+fn clear_outside(px: &mut [u8], w: usize, h: usize, r: [usize; 4]) {
+    if r == [0, 0, w, h] {
+        return;
+    }
+    for y in 0..h {
+        let row = &mut px[y * w * 4..(y + 1) * w * 4];
+        if y < r[1] || y >= r[3] {
+            row.fill(0);
+        } else {
+            row[..r[0].min(w) * 4].fill(0);
+            row[r[2].min(w) * 4..].fill(0);
+        }
+    }
+}
+
 pub(crate) fn with_canvas_pixels(
     i: &mut Interp,
     ctx: &Shared,
@@ -1000,9 +1017,12 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             );
         };
         let px = ctx.borrow().px_scale;
+        let (cw, ch) = i.canvas_size();
+        let rect = ctx.borrow().effect_rect(cw as usize, ch as usize);
         if end.blur > 0.0 {
             with_canvas_pixels(i, ctx, |p, w, h, scratch| {
-                raster::blur(p, w, h, end.blur * px, scratch)
+                raster::blur(p, w, h, end.blur * px, scratch);
+                clear_outside(p, w, h, rect);
             })?;
         }
         if end.glow.1 > 0.0 {
@@ -1014,7 +1034,8 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                     end.glow.0 * px,
                     end.glow.1.clamp(0.0, 2.0),
                     scratch,
-                )
+                );
+                clear_outside(p, w, h, rect);
             })?;
         }
         end_layer(i, ctx, end.opacity, end.blend)
@@ -1032,24 +1053,34 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     reg(interp, ctx, "blurlayer", |i, ctx| {
         let radius = i.pop_f64()?;
         let sigma = radius * ctx.borrow().px_scale * ctx.borrow().unit_scale();
+        let (cw, ch) = i.canvas_size();
+        let rect = ctx.borrow().effect_rect(cw as usize, ch as usize);
         with_canvas_pixels(i, ctx, |px, w, h, scratch| {
-            raster::blur(px, w, h, sigma, scratch)
+            raster::blur(px, w, h, sigma, scratch);
+            clear_outside(px, w, h, rect);
         })
     });
     reg(interp, ctx, "glowlayer", |i, ctx| {
         let (strength, radius) = (i.pop_f64()?, i.pop_f64()?);
         let sigma = radius * ctx.borrow().px_scale * ctx.borrow().unit_scale();
+        let (cw, ch) = i.canvas_size();
+        let rect = ctx.borrow().effect_rect(cw as usize, ch as usize);
         with_canvas_pixels(i, ctx, |px, w, h, scratch| {
-            raster::glow(px, w, h, sigma, strength.clamp(0.0, 2.0), scratch)
+            raster::glow(px, w, h, sigma, strength.clamp(0.0, 2.0), scratch);
+            clear_outside(px, w, h, rect);
         })
     });
     reg(interp, ctx, "vignette", |i, ctx| {
         let amount = i.pop_f64()?.clamp(0.0, 1.0);
-        with_canvas_pixels(i, ctx, |px, w, h, _| {
-            let (cx, cy) = (w as f64 / 2.0, h as f64 / 2.0);
-            let rmax2 = cx * cx + cy * cy;
-            for y in 0..h {
-                for x in 0..w {
+        let (cw, ch) = i.canvas_size();
+        let r = ctx.borrow().effect_rect(cw as usize, ch as usize);
+        with_canvas_pixels(i, ctx, |px, w, _, _| {
+            // Centred on the component's box when inside one.
+            let (hw, hh) = ((r[2] - r[0]) as f64 / 2.0, (r[3] - r[1]) as f64 / 2.0);
+            let (cx, cy) = (r[0] as f64 + hw, r[1] as f64 + hh);
+            let rmax2 = (hw * hw + hh * hh).max(1.0);
+            for y in r[1]..r[3] {
+                for x in r[0]..r[2] {
                     let (dx, dy) = (x as f64 + 0.5 - cx, y as f64 + 0.5 - cy);
                     let r2 = (dx * dx + dy * dy) / rmax2;
                     // Untouched in the middle, darkest in the corners.
@@ -1068,12 +1099,21 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             let c = ctx.borrow();
             (c.seed, c.frame)
         };
-        with_canvas_pixels(i, ctx, |px, _, _, _| {
+        let (cw, ch) = i.canvas_size();
+        let r = ctx.borrow().effect_rect(cw as usize, ch as usize);
+        with_canvas_pixels(i, ctx, |px, w, _, _| {
             // One cheap xorshift stream per frame: grain that moves.
             let mut s =
                 crate::ctx::mix64(seed as u64 ^ (frame as u64).wrapping_mul(0x9E37_79B9)) | 1;
             let amp = amount * 64.0;
-            for p in px.chunks_exact_mut(4) {
+            let inside = |k: usize| {
+                let (x, y) = (k % w, k / w);
+                x >= r[0] && x < r[2] && y >= r[1] && y < r[3]
+            };
+            for (k, p) in px.chunks_exact_mut(4).enumerate() {
+                if !inside(k) {
+                    continue;
+                }
                 s ^= s << 13;
                 s ^= s >> 7;
                 s ^= s << 17;
@@ -1119,12 +1159,21 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         Ok(())
     });
     // --- components (native halves; see prelude.ps) ----------------------
-    // t dur seed params unit .comppush -    open a component's clock: its
-    //                                  movie time t of dur, its seed, the
-    //                                  values its `param` lookups get (a
-    //                                  dictionary, or null for none), and
-    //                                  the device length of its unit.
+    // t dur seed params unit rect .comppush -    open a component's clock:
+    //                                  its movie time t of dur, its seed,
+    //                                  the values its `param` lookups get
+    //                                  (a dictionary, or null for none),
+    //                                  the device length of its unit, and
+    //                                  its box in device pixels [x0 y0 x1
+    //                                  y1] (or null).
     reg(interp, ctx, ".comppush", |i, ctx| {
+        let rect = match i.pop_value()? {
+            Value::Null => None,
+            v => v.as_numbers().filter(|n| n.len() == 4).map(|n| {
+                let px = |x: f64| x.max(0.0).round() as usize;
+                [px(n[0]), px(n[1]), px(n[2]), px(n[3])]
+            }),
+        };
         let unit = i.pop_f64()?;
         let params = match i.pop_value()? {
             Value::Dict(entries) => entries,
@@ -1159,6 +1208,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             seed,
             params,
             scale,
+            rect,
         });
         drop(c);
         push_scope(ctx, TimeScope::window(t, dur))

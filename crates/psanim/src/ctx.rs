@@ -120,6 +120,9 @@ pub(crate) struct Comp {
     /// How many of the movie's units one of its units is where it is
     /// drawn: blur and glow radii, given in its units, are scaled by this.
     pub scale: f64,
+    /// Its box on the canvas, in pixels (x0, y0, x1, y1), when it is placed:
+    /// blur, glow, grain and vignette inside it stay inside it.
+    pub rect: Option<[usize; 4]>,
 }
 
 pub(crate) const MAX_COMPS: usize = 16;
@@ -181,6 +184,29 @@ impl Ctx {
     /// or inside a component, its placed scale.
     pub fn unit_scale(&self) -> f64 {
         self.comps.last().map_or(1.0, |c| c.scale)
+    }
+
+    /// The pixels effects may touch: the innermost component's box, or
+    /// the whole canvas.
+    pub fn effect_rect(&self, w: usize, h: usize) -> [usize; 4] {
+        let mut r = [0, 0, w, h];
+        for c in &self.comps {
+            if let Some(b) = c.rect {
+                r = [
+                    r[0].max(b[0]),
+                    r[1].max(b[1]),
+                    r[2].min(b[2]),
+                    r[3].min(b[3]),
+                ];
+            }
+        }
+        if r[2] < r[0] {
+            r[2] = r[0];
+        }
+        if r[3] < r[1] {
+            r[3] = r[1];
+        }
+        r
     }
 
     /// Movie time and length as the running program sees them: inside a
