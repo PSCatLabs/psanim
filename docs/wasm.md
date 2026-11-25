@@ -35,7 +35,16 @@ const meta = engine.open(source, { scale: 0.5, maxSteps: 50_000_000 });
 const frame = engine.render(1.25);           // { width, height, data: Uint8ClampedArray }
 ctx.putImageData(new ImageData(frame.data, frame.width, frame.height), 0, 0);
 engine.setSignal("mousex", 320);             // read in the program with /mousex signal
+engine.event("click", 1.25);                 // an event at movie time 1.25: /click sinceevent
+
+// A catalog entry by name, with parameters at open (as --param gives them):
+engine.open(engine.catalog("clock-digital"), { params: { Signal: "clock", Theme: "amber" } });
+engine.catalogNames();                       // ["clock-analog", "clock-digital", ...]
 ```
+
+For a movie that keeps running in a page, with live inputs and no
+controls, use `<psanim-widget>` (`web/widget.js`); `docs/widgets.md` says
+what it does and `web/widgets.html` is a demo.
 
 Errors throw `PsAnimError` with `.info`, the same structured error the
 CLI prints with `--json`.
@@ -50,10 +59,9 @@ parameter naming a signal that carries seconds since midnight, and a page
 that embeds the engine sets it before each frame, fractions included
 (`const d = new Date(); engine.setSignal("clock", d.getHours() * 3600 +
 d.getMinutes() * 60 + d.getSeconds() + d.getMilliseconds() / 1000)`),
-and a wrapper movie places the clock with
-`/c /clock-digital << /Params << /Signal /clock >> >> instance` (`open`
-takes no `--param` values today). The shipped `<psanim-player>` does not set
-a clock signal yet. Offline the same
+and opens the clock with `{ params: { Signal: "clock" } }`.
+`<psanim-widget>` sets `clock` before every frame; `<psanim-player>` does
+not. Offline the same
 movie takes a start time instead, so a render is still a pure function of
 its own time.
 

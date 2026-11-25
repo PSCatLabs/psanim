@@ -217,9 +217,9 @@ difference:
   midnight, fractions included, before each frame (`engine.setSignal(
   "clock", secs)` in the browser player; `Movie::set_signal` in Rust).
   The start is ignored. A page that sends only whole seconds shows a clock
-  that never animates between them: send the fraction. The shipped
-  `<psanim-player>` does not set this signal yet; a page that embeds the
-  engine does it itself.
+  that never animates between them: send the fraction. The page's
+  `<psanim-widget>` element (`web/widget.js`, `docs/widgets.md`) sets
+  `clock` before every frame; `<psanim-player>` does not.
 
 `clockparts` splits a time into hours, minutes, seconds and the fraction of
 the second (`45296.25 clockparts` leaves `12 34 56 0.25`), `fmtday` writes

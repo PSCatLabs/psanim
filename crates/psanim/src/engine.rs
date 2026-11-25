@@ -733,6 +733,18 @@ impl Movie {
         self.ctx.borrow_mut().signals.set(name, value);
     }
 
+    /// Add an event at movie time `t` to the track `name`, for
+    /// `sinceevent` and `eventcount`: what a live host calls when the viewer
+    /// clicks or presses a key. See [`Signals::push_event`].
+    pub fn push_event(&mut self, name: &str, t: f64) {
+        self.ctx.borrow_mut().signals.push_event(name, t);
+    }
+
+    /// Forget the events of the track `name`.
+    pub fn clear_events(&mut self, name: &str) {
+        self.ctx.borrow_mut().signals.clear_events(name);
+    }
+
     /// Render frame `index` (time `index / fps`).
     pub fn render_frame(&mut self, index: u64) -> Result<Frame<'_>, Error> {
         let time = self.meta.time_of(index);

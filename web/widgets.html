@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>psanim widgets</title>
+<style>
+  :root { color-scheme: dark; --bg: #0b0d12; --panel: #12151c; --ink: #e8e6df; --dim: #9aa3b5; --accent: #ffc94d; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 ui-sans-serif, system-ui, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  p.lede { color: var(--dim); margin: 0 0 24px; max-width: 70ch; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  section { background: var(--panel); border-radius: 8px; padding: 14px; }
+  section h2 { font-size: 14px; margin: 0 0 10px; color: var(--dim); font-weight: 600; }
+  section.wide { grid-column: 1 / -1; }
+  psanim-widget { width: 100%; }
+  .spin { width: 96px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+  button { font: inherit; color: var(--ink); background: #232836; border: 1px solid #2f3546; border-radius: 5px;
+           padding: 5px 12px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  .stats { font: 12px/1.5 ui-monospace, Menlo, monospace; color: var(--dim); margin-top: 8px; white-space: pre; }
+  code { font: 13px ui-monospace, Menlo, monospace; color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>psanim widgets</h1>
+  <p class="lede">Each of these is a psanim movie running live in this page, rendered by the engine compiled to
+    WebAssembly. The page feeds it inputs (the time of day, the pointer, a signal set from JavaScript) and it
+    draws only when its frame changes or an input does. Scroll one off screen or hide the tab and it stops drawing.</p>
+
+  <div class="grid">
+    <section class="wide">
+      <h2>Digital clock: <code>entry="clock-digital"</code>, <code>Signal=clock</code></h2>
+      <psanim-widget id="digital" entry="clock-digital" time="run" fps="10"
+                     params='{"Signal": "clock", "Theme": "amber"}'></psanim-widget>
+      <div class="stats" data-for="digital"></div>
+    </section>
+
+    <section>
+      <h2>Analog clock, sweeping second hand</h2>
+      <psanim-widget id="analog" entry="clock-analog" time="run"
+                     params='{"Signal": "clock", "Second": "sweep", "Theme": "paper"}'></psanim-widget>
+      <div class="stats" data-for="analog"></div>
+    </section>
+
+    <section>
+      <h2>Pointer: hover and click it</h2>
+      <psanim-widget id="pointer"></psanim-widget>
+      <div class="stats" data-for="pointer"></div>
+    </section>
+
+    <section>
+      <h2>Spinners: <code>entry="spinner"</code></h2>
+      <div class="row">
+        <psanim-widget class="spin" id="spin1" entry="spinner"></psanim-widget>
+        <psanim-widget class="spin" id="spin2" entry="spinner" params='{"Style": "dots"}'></psanim-widget>
+        <psanim-widget class="spin" id="spin3" entry="spinner" params='{"Style": "bars"}'></psanim-widget>
+      </div>
+      <div class="stats" data-for="spin1"></div>
+    </section>
+
+    <section class="wide">
+      <h2>Build status: <code>entry="pipeline"</code>, driven by <code>widget.setSignal("build", stage)</code></h2>
+      <psanim-widget id="build" entry="pipeline" time="run" params='{"Signal": "build"}'></psanim-widget>
+      <div class="row">
+        <button id="pass">Run a passing build</button>
+        <button id="fail">Run a build that fails its tests</button>
+      </div>
+      <div class="stats" data-for="build"></div>
+    </section>
+  </div>
+</main>
+
+<script type="text/x-postscript" id="pointer-source">
+%!PS
+<< /Size [240 240] /Duration 4 /Loop true /FPS 30 /Background [0.06 0.07 0.1] >> animation
+/scene {
+  /mx /mousex signal def  /my /mousey signal def  /hv /hover signal def
+  /s /click sinceevent def
+  20 20 220 { /x exch def
+    20 20 220 { /y exch def
+      /d x mx sub dup mul y my sub dup mul add sqrt def
+      /near 1 d 90 div sub 0 max hv mul def
+      /wave x y add 480 div now 4 div add 360 mul sin 0.5 mul 0.5 add def
+      0.25 near 0.75 mul add  0.45 wave 0.3 mul add near 0.4 mul add  0.9 setrgbcolor
+      x y 1.6 near 6 mul add wave 0.6 mul add 0 360 arc fill
+    } for
+  } for
+  s 1 lt {
+    1 s sub setgray 2 setlinewidth
+    mx my s 160 mul 0 360 arc stroke
+  } if
+} def
+</script>
+
+<script type="module">
+  import "./widget.js";
+
+  document.getElementById("pointer").source = document.getElementById("pointer-source").textContent;
+
+  // A build run: the page owns the state and tells the widget where it is.
+  const build = document.getElementById("build");
+  let run = null;
+  function start(failAt) {
+    clearInterval(run);
+    build.setAttribute("params", JSON.stringify(failAt >= 0 ? { Signal: "build", Fail: failAt } : { Signal: "build" }));
+    const begun = performance.now();
+    const seconds = 6;
+    run = setInterval(() => {
+      const stage = Math.min(3, ((performance.now() - begun) / 1000 / seconds) * 3);
+      build.setSignal("build", stage);
+      if (stage >= 3 || (failAt >= 0 && stage >= failAt + 1)) clearInterval(run);
+    }, 100);
+  }
+  build.setSignal("build", 0);
+  document.getElementById("pass").onclick = () => start(-1);
+  document.getElementById("fail").onclick = () => start(1);
+
+  // What each widget costs: frames drawn, animation frames it slept through.
+  setInterval(() => {
+    for (const el of document.querySelectorAll(".stats")) {
+      const w = document.getElementById(el.dataset.for);
+      if (!w.meta) continue;
+      el.textContent = `${w.meta.pixel_width}x${w.meta.pixel_height}  ${w.frameMs.toFixed(1)} ms/frame  ` +
+        `drawn ${w.framesDrawn}  slept ${w.frameSkips}`;
+    }
+  }, 500);
+</script>
+</body>
+</html>
