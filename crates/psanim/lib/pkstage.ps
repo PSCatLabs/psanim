@@ -244,6 +244,7 @@
 /theme 32 dict def
 % /name usetheme -     or  << /accent [1 0 0] ... >> usetheme  to change some roles
 /usetheme {
+  dup type /stringtype eq { cvn } if   % a name given as text, as --param gives it
   dup type /nametype eq {
     dup themes exch known not { .notheme } if
     themes exch get

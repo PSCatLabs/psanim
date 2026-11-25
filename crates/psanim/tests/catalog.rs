@@ -809,3 +809,23 @@ fn alignpath_refuses_an_outline_too_long_to_compare() {
     let e = m.render_at(0.0).unwrap_err().to_string();
     assert!(e.contains("at most"), "{e}");
 }
+
+#[test]
+fn theme_given_as_text_selects_the_theme() {
+    for entry in [
+        "stat",
+        "gauge",
+        "status",
+        "counter",
+        "horizon",
+        "timeseries",
+    ] {
+        let mut opts = Options::default();
+        opts.params
+            .insert("Theme".into(), psanim::Param::Text("paper".into()));
+        let src = psanim::catalog::source(entry).unwrap();
+        let mut m =
+            Movie::load(src, &opts).unwrap_or_else(|e| panic!("/{entry} Theme=(paper): {e}"));
+        m.render_at(0.5).unwrap();
+    }
+}

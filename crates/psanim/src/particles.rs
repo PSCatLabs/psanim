@@ -24,6 +24,26 @@ use crate::ops::{Shared, eval_keys, fail, reg};
 /// hours of particle life at 60 cells a second).
 const MAX_GUST_CELLS: usize = 1 << 20;
 
+/// The most gust cells all particles and trails may integrate in one
+/// moment (about a second of native work).
+const MAX_GUST_WORK: f64 = 40_000_000.0;
+
+/// Charge `cells` of gust integration to this moment, failing when the
+/// total would pass [`MAX_GUST_WORK`].
+fn charge_gust(ctx: &Shared, cells: f64) -> Result<(), PsError> {
+    let mut c = ctx.borrow_mut();
+    c.gust_work += cells.max(0.0);
+    if c.gust_work > MAX_GUST_WORK {
+        c.hint = Some(format!(
+            "particles: following the wind gusts would take {:.0} million steps this frame (at most {:.0} million): fewer particles, a shorter /Life, or no /Gust",
+            c.gust_work / 1e6,
+            MAX_GUST_WORK / 1e6
+        ));
+        return Err(PsError::Limitcheck);
+    }
+    Ok(())
+}
+
 /// How many particles one `particles` call may draw.
 pub(crate) const MAX_PARTICLES: usize = 200_000;
 /// The cell of the grid a gusting wind is held constant over, in seconds.
@@ -512,6 +532,9 @@ fn particle(
         v0.0 += e.inherit * (b.0 - a.0) / (2.0 * h);
         v0.1 += e.inherit * (b.1 - a.1) / (2.0 * h);
     }
+    if e.gusty() {
+        charge_gust(ctx, age / GUST_CELL + 1.0)?;
+    }
     let (mut p, mut v) = flight(e, seed, p0, v0, born, t);
     if e.sway != (0.0, 0.0) {
         let (s1, s0) = (e.sway_at(seed, key, t), e.sway_at(seed, key, born));
@@ -803,10 +826,22 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let n = i.pop_int()?;
         let back = i.pop_f64()?;
         let p = current(ctx, "particletrail")?;
+        let n = n.clamp(1, 512);
+        {
+            let c = ctx.borrow();
+            let set = c.particles.last().expect("current() found a set");
+            let cost = if set.emitters[p.emitter].gusty() {
+                (n as f64 + 1.0) * ((set.t - p.born) / GUST_CELL + 1.0)
+            } else {
+                0.0
+            };
+            drop(c);
+            charge_gust(ctx, cost)?;
+        }
         let pts = {
             let c = ctx.borrow();
             let set = c.particles.last().expect("current() found a set");
-            trail(set, &p, back, n.clamp(1, 512) as usize)
+            trail(set, &p, back, n as usize)
         };
         let mut segs = Vec::with_capacity(pts.len());
         for (k, (x, y)) in pts.into_iter().enumerate() {

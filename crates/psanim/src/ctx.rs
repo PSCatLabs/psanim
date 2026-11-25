@@ -97,6 +97,10 @@ pub(crate) struct Ctx {
     /// movie-level facts (`globaltime`, `duration`, `movieseed`, `param`)
     /// are the component's own.
     pub comps: Vec<Comp>,
+    /// Gust cells integrated so far this moment, across every particle and
+    /// trail: native work the interpreter's budgets cannot see, so it is
+    /// capped here (see `particles::charge_gust`).
+    pub gust_work: f64,
     /// The particles of each open `particles` call, innermost last.
     pub particles: Vec<crate::particles::ParticleSet>,
     /// Planes opened by `onplane`, innermost last: where the plane is, and
@@ -171,6 +175,7 @@ impl Ctx {
             params_seen: BTreeMap::new(),
             comps: Vec::new(),
             particles: Vec::new(),
+            gust_work: 0.0,
             planes: Vec::new(),
             base_dir: None,
             measured_reels: Vec::new(),
@@ -244,6 +249,7 @@ impl Ctx {
         self.views.clear();
         self.comps.clear();
         self.particles.clear();
+        self.gust_work = 0.0;
         self.planes.clear();
         self.hint = None;
     }

@@ -272,3 +272,21 @@ fn a_gust_at_an_enormous_time_is_refused_not_looped() {
     .unwrap();
     assert!(m.render_at(0.5).is_err());
 }
+
+#[test]
+fn gusts_over_many_long_lived_particles_are_refused_not_followed() {
+    let mut m = psanim::Movie::load(
+        "<< /Size [64 48] /Duration 2 /FPS 10 >> animation
+         /scene { 16000 { << /Bursts [0] /Count 200000 /Life 17000 /Gust [1 0] >> { } particles } attime } def",
+        &psanim::Options::default(),
+    )
+    .unwrap();
+    let started = std::time::Instant::now();
+    let e = m.render_at(0.5).unwrap_err().to_string();
+    assert!(e.contains("gust"), "{e}");
+    assert!(
+        started.elapsed().as_secs() < 10,
+        "took {:?}",
+        started.elapsed()
+    );
+}
