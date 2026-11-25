@@ -184,9 +184,5 @@ otherwise it is transparent and draws over the movie.
 - A component's /Size and /Duration may depend on its parameters: read them
   with `param` before `animation` (the instance's /Seed is already in force
   there). `/terminal` and `/pipeline` size and time themselves that way.
-- The movie's own definitions are visible inside a component, below its own
-  names: a movie that defines `/scale` or `/between` for itself changes what
-  every component it places means by those words. Give the movie's helpers
-  names of their own.
 - A file component is read from the movie's own directory and must be
   inside the read roots (`--read-root`).
