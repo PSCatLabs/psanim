@@ -91,6 +91,24 @@ End credits rolling upward at a steady speed: headings, roles beside names, cent
 | /Settle | `0.12` | fraction of the box's height over which the roll slows to its stop (0 for none) |
 | /Theme | `/inherit` | a theme name (/paper /dusk ..), or /inherit for the movie's |
 
+## `/fire`: Fire
+
+A flame that loops: stylized, as flat tongues in two or three colours, or realistic, a hot body with glow, flicker, rising embers and faint smoke. Height, width, intensity and wind take it from a candle to a campfire to a torch.
+
+480x600, 4 s, loops. `/x /fire component`, then `/x << /Box [..] >> place`.
+
+| Param | Default | Meaning |
+|---|---|---|
+| /Embers | `1` | how many embers rise, 0 for none |
+| /Glow | `1` | the halo of light: 0 is a cheap painted one, above 0 a glowing layer (a few ms a frame, more for a larger box); stylized has none |
+| /Height | `0.55` | flame height, as a fraction of its box's height |
+| /Intensity | `1` | 0.3 a candle .. 1 a fire .. 1.6 a blaze: height, flicker, glow, embers |
+| /Palette | `/fire` | /fire /blue /green /violet |
+| /Smoke | `0.25` | realistic only: 0 none, 1 a heavy plume |
+| /Style | `/realistic` | /realistic or /stylized |
+| /Width | `0.42` | flame width, as a fraction of its box's width (up to 0.8; wide means several tongues) |
+| /Wind | `0` | -1 .. 1: leans the flame, carries the embers and smoke |
+
 ## `/spinner`: Spinner
 
 A loading indicator that loops: a ring with a sweeping arc, a circle of fading dots, or three bouncing bars.

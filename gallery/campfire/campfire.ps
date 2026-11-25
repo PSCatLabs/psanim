@@ -1,0 +1,233 @@
+%!PS
+% Poster: 3.1
+% Campfire
+%
+% A camp at night under a sky of twinkling stars: a tent, a ring of stones, and a
+% fire whose sparks climb into the stars. An 8 second seamless loop.
+%
+% Techniques
+%   - The fire is not drawn here. It is the catalog's /fire entry, set up
+%     once and placed in a box: `/camp /fire << ... >> instance`, then
+%     `/camp << /Box [...] >> place`. Its flames, glow, embers and smoke
+%     are its own; this film only says how tall, how wide and how fierce.
+%   - The entry loops in 4 seconds and this film in 8, a whole number of
+%     its loops, so the join cannot show. Stars twinkle a whole number of
+%     times a loop, and the one shooting star is a function of the clock.
+%   - The firelight on the ground, the tent and the stones is painted
+%     here as stacked translucent ellipses (no layer), and flickers with
+%     `loopnoise`, so it closes at the seam like everything else.
+
+<< /Size [1280 720] /Duration 8 /FPS 30 /Loop true /Seed 5
+   /Background [0.02 0.025 0.06]
+   /Title (Campfire)
+   /Description (A camp at night: a tent, a ring of stones and a fire whose sparks climb into a sky of twinkling stars, built on the catalog's fire entry: an 8 second loop.)
+>> animation
+
+% ---- the fire: one catalog entry, placed in a box ------------------------------
+/camp /fire << /Seed 11 /Params <<
+  /Height 0.74 /Width 0.5 /Intensity 1.25 /Embers 2.2 /Smoke 0.35
+>> >> instance
+/campbox [ 330 70 620 650 ] def          % its flame stands at the box's bottom centre
+/hearth [ 640 134 ] def                   % ... which is here, on the ground
+
+% ---- the sky -----------------------------------------------------------------
+/skytop [0.012 0.016 0.050] def
+/skylow [0.115 0.130 0.250] def
+/horizon 215 def
+/mix { % t a b -> a + t (b - a), for colours
+  3 dict begin /b exch def /a exch def /t exch def
+  0 1 2 { /k exch def a k get 1 t sub mul b k get t mul add } for
+  end
+} def
+/sky {
+  /bh 720 horizon sub 48 div def
+  0 1 47 { /i exch def
+    i 47 div 1.6 exp skytop skylow mix setrgbcolor
+    0 720 i 1 add bh mul sub 1280 bh 1.2 add rectfill
+  } for
+  skylow aload pop setrgbcolor 0 0 1280 horizon rectfill
+} def
+
+% ---- the stars: hashed places, a whole number of twinkles a loop -------------------------
+/moon [ 1075 590 ] def
+/stars {
+  0 1 179 { /i exch def
+    /sx [1 i] hash01 1280 mul def
+    /sy horizon 40 add [2 i] hash01 720 horizon sub 45 sub mul add def
+    /d sx moon 0 get sub dup mul sy moon 1 get sub dup mul add sqrt def
+    d 90 gt {
+      /fade sy horizon 40 add sub 200 div 1 min def
+      /k 1 [3 i] hash01 3 mul floor add def
+      /tw k 360 mul progress mul [4 i] hash01 360 mul add sin 0.5 mul 0.5 add def
+      [6 i] hash01 0.8 gt { 1 0.85 0.65 } { 0.8 0.9 1 } ifelse setrgbcolor
+      0.25 0.7 tw mul add fade mul setalpha
+      sx sy 0.5 [7 i] hash01 dup mul 1.5 mul add 0 360 arc fill
+    } if
+  } for
+  % a faint band of the galaxy, and dust along it
+  gsave
+    0.75 0.8 1 setrgbcolor 1 setlinecap
+    0 1 5 { /i exch def
+      0.014 setalpha 220 i 33 mul sub setlinewidth
+      60 250 moveto 980 730 lineto stroke
+    } for
+  grestore
+  0 1 239 { /i exch def
+    /t [11 i] hash01 def
+    /off [12 i] hash01 [13 i] hash01 add 1 sub 95 mul def
+    /px 60 920 t mul add off 0.45 mul sub def
+    /py 250 480 t mul add off 0.9 mul add def
+    py horizon 60 add gt {
+      0.8 0.85 1 setrgbcolor
+      0.18 [14 i] hash01 0.3 mul add 1 off abs 100 div sub 0 max mul setalpha
+      px py 0.5 [15 i] hash01 0.9 mul add 0 360 arc fill
+    } if
+  } for
+  1 setalpha
+} def
+
+/moonlight {
+  gsave
+    moon aload pop translate
+    0.85 0.9 1 setrgbcolor
+    0 1 29 { /i exch def 0.0045 setalpha 0 0 150 i 3.6 mul sub 0 360 arc fill } for
+    1 setalpha
+    newpath 0 0 34 0 360 arc gsave clip newpath
+      0.95 0.93 0.82 setrgbcolor 0 0 34 0 360 arc fill
+      0.88 0.86 0.76 setrgbcolor 12 -6 6 0 360 arc fill  -4 14 4 0 360 arc fill
+      0.12 skytop skylow mix setrgbcolor 15 8 31 0 360 arc fill      % the dark of the crescent
+    grestore
+  grestore
+} def
+
+% a streak that crosses the sky once a loop
+/streak {
+  5.0 5.7 /linear tween /u exch def
+  u 0 gt u 1 lt and {
+    gsave
+      1 setlinecap 2 setlinewidth 0.9 0.95 1 setrgbcolor
+      u 180 mul sin /fa exch def
+      900 u 330 mul sub  640 u 130 mul sub  /hx exch def /hy exch def
+      0 1 11 { /j exch def
+        1 j 12 div sub 1.5 exp fa mul 0.9 mul setalpha
+        hx j 12 div 80 mul add  hy j 12 div 16 mul add moveto
+        hx j 1 add 12 div 80 mul add  hy j 1 add 12 div 16 mul add lineto stroke
+      } for
+    grestore
+  } if
+} def
+
+% ---- the land ------------------------------------------------------------------
+/ridge { % y0 amp r g b: a skyline of summed sines, filled down to the ground
+  6 dict begin setrgbcolor /amp exch def /y0 exch def
+  -20 0 moveto
+  -20 10 1300 { /x exch def
+    x y0
+      x 0.42 mul 80 add sin 0.55 mul  x 0.95 mul 25 add sin 0.3 mul add  x 2.6 mul sin 0.15 mul add
+      amp mul add lineto
+  } for
+  1300 0 lineto closepath fill
+  end
+} def
+/pine { % x y h: a tree in three tiers
+  4 dict begin /h exch def /y exch def /x exch def
+  0 1 2 { /t exch def
+    /by y h 0.1 0.25 t mul add mul add def
+    /bw h 0.2 mul 1 0.2 t mul sub mul def
+    x bw sub by moveto  x bw add by lineto  x by h 0.45 mul add lineto closepath fill
+  } for
+  x h 0.025 mul sub y h 0.05 mul h 0.14 mul rectfill
+  end
+} def
+/trees {
+  0.014 0.02 0.042 setrgbcolor
+  0 1 11 { /i exch def
+    [20 i] hash01 440 mul  160 [21 i] hash01 50 mul add  120 [22 i] hash01 120 mul add pine
+  } for
+  0 1 13 { /i exch def
+    1280 [23 i] hash01 350 mul sub  160 [24 i] hash01 50 mul add  110 [25 i] hash01 140 mul add pine
+  } for
+} def
+
+% ---- firelight: stacked ellipses, brighter when the fire flares ---------------------
+/flare { % the fire's brightness this moment, about 1
+  1 7 2.2 loopnoise 0.13 mul add 8 5 loopnoise 0.05 mul add
+} def
+/glowpool { % x y rx amount
+  4 dict begin /amt exch def /rx exch def /y exch def /x exch def
+  gsave 1 0.52 0.16 setrgbcolor
+  x y translate 1 0.3 scale
+  0 1 31 { /q exch def amt 0.0090 mul setalpha 0 0 rx 1 q 32 div 0.94 mul sub mul 0 360 arc fill } for
+  grestore end
+} def
+
+/ground {
+  0.040 0.036 0.046 setrgbcolor 0 0 1280 152 rectfill
+} def
+
+/stone { % x y rx ry: a rounded stone, its top edge lit by the fire
+  4 dict begin /ry exch def /rx exch def /y exch def /x exch def
+  gsave x y translate rx ry scale
+    0.10 0.10 0.125 setrgbcolor 0 0 1 0 360 arc fill
+    1 0.55 0.2 setrgbcolor 0.07 setlinewidth 0.55 flare mul 0.9 min setalpha 0 0 0.93 28 152 arc stroke
+  grestore end
+} def
+/stonering { % the half of the ring behind the flames (0) or in front of them (1)
+  /front exch def
+  0 1 9 { /i exch def
+    /a i 36 mul 18 add def
+    a sin 0 lt front 1 eq eq {
+      hearth 0 get a cos 200 mul add  hearth 1 get a sin 42 mul add 8 sub
+      28 [40 i] hash01 12 mul add  15 [41 i] hash01 5 mul add stone
+    } if
+  } for
+} def
+
+/log { % x y angle length: a log lit on its upper side
+  gsave 4 dict begin /len exch def /ang exch def
+  translate ang rotate
+  0.17 0.095 0.055 setrgbcolor len 2 div neg -15 len 30 rectfill
+  1 0.5 0.15 setrgbcolor 0.3 flare mul setalpha len 2 div neg 2 len 11 rectfill
+  0.3 0.17 0.09 setrgbcolor 1 setalpha len 2 div 0 15 0 360 arc fill
+  end grestore
+} def
+
+/coals {
+  0 1 6 { /i exch def
+    1 0.35 0.05 setrgbcolor
+    0.3 flare mul [50 i] hash01 0.25 mul add setalpha
+    hearth 0 get i 3 sub 32 mul add  hearth 1 get [51 i] hash01 6 mul add 10 add
+    20 [52 i] hash01 10 mul add 0 360 arc fill
+  } for
+  1 setalpha
+} def
+
+% ---- a tent, its right side lit by the fire ---------------------------------------
+/tent {
+  gsave 250 150 translate
+    0.04 0.05 0.095 setrgbcolor -150 0 moveto 0 190 lineto 10 0 lineto closepath fill
+    0.075 0.09 0.15 setrgbcolor 10 0 moveto 0 190 lineto 150 0 lineto closepath fill
+    1 0.5 0.18 setrgbcolor 0.11 flare mul setalpha 10 0 moveto 0 190 lineto 150 0 lineto closepath fill
+    0.015 0.015 0.03 setrgbcolor 1 setalpha 50 0 moveto 78 96 lineto 104 0 lineto closepath fill
+    0.05 0.05 0.08 setrgbcolor 1.4 setlinewidth 0 190 moveto 3 206 lineto stroke
+  grestore
+} def
+
+/scene {
+  sky stars moonlight streak
+  horizon 25 0.06 0.075 0.14 ridge
+  170 16 0.03 0.04 0.075 ridge
+  trees
+  ground
+  tent
+  hearth 0 get hearth 1 get 70 add 600 flare glowpool
+  hearth 0 get hearth 1 get 18 add 240 flare 1.2 mul glowpool
+  0 stonering
+  hearth 0 get 10 add hearth 1 get 20 add 14 210 log
+  coals
+  /camp << /Box campbox >> place
+  hearth 0 get hearth 1 get 8 add 158 230 log
+  hearth 0 get 28 sub hearth 1 get 4 sub 22 200 log
+  1 stonering
+  0.4 vignette
+} def
