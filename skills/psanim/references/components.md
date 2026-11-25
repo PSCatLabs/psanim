@@ -97,6 +97,6 @@ otherwise it is transparent and draws over the movie.
   and draw a vignette by hand: the catalog's `/terminal` does both.
 - A component's /Size and /Duration may depend on its parameters: read them
   with `param` before `animation` (the instance's /Seed is already in force
-  there). Catalog entries such as `/terminal` size and time themselves that way.
+  there). `/terminal` and `/pipeline` size and time themselves that way.
 - A file component is read from the movie's own directory and must be
   inside the read roots (`--read-root`).

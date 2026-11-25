@@ -1,0 +1,171 @@
+%!PS
+% Catalog entry: progress. A progress bar, ring or row of blocks, determinate or not.
+% A timed run happens once: place it with /After /hold to keep the result on screen.
+% In a movie:  /load /progress component   then   /load << /Box [x y w h] >> place
+% Three ways to drive it:
+%   /Mode /time            it fills over /Seconds (the default)
+%   /Mode /value /Value .6 a fixed fraction (a still: make one instance for each value)
+%   /Signal (build)        follow the host's signal of that name, 0 to 1, frame by frame
+%   /Mode /indeterminate   it does not know how long: it sweeps, forever
+% With /FailAt .7 it stops there and goes red. At 1 it goes green.
+
+/Mode /time param /mode exch def                % /time (fills over /Seconds), /value (shows /Value) or /indeterminate (sweeps)
+/Value 0.6 param /value exch def                % 0 to 1, shown in /value mode
+/Signal () param /signame exch def              % the name of a movie signal (0 to 1) to show, in place of Value or time
+/Seconds 3 param /secs exch def                 % how long /time mode takes to fill
+/Ease /cubic-inout param /easing exch def       % the pace of that fill (/linear for a steady one; use a monotonic easing with FailAt)
+/FailAt -1 param /failat exch def               % the value at which it fails and goes red; -1 never
+/Style /bar param /style exch def               % /bar /ring /segments
+/Segments 20 param /nseg exch def               % how many blocks /segments has
+/Label true param /label exch def               % the percentage (FAILED when it fails)
+/Color [0.36 0.78 0.98] param /col exch def     % while it runs
+/Track [1 1 1] param /trk exch def              % the empty part, faint
+/OkColor [0.3 0.85 0.5] param /okc exch def     % when it reaches 1
+/FailColor [1 0.36 0.36] param /failc exch def  % when it fails
+
+/lead 0.3 def  /rest 1.1 def
+/dur mode /time eq { lead secs add rest add } { mode /indeterminate eq { 1.6 } { 1 } ifelse } ifelse def
+
+<< /Size style /ring eq { [160 160] } { [520 80] } ifelse /Duration dur /Loop mode /time ne /Background /transparent
+   /Title (Progress)
+   /Description (A progress bar, ring or row of blocks. Determinate, driven by time, a value or a signal, with a failure look that stops and turns it red and a finished look that turns it green; or indeterminate, sweeping.)
+>> animation
+
+% ---- what it shows, as a function of time --------------------------------------------
+/timed signame length 0 eq mode /time eq and def
+/vraw {
+  signame length 0 gt { signame cvn signal } {
+    timed { lead lead secs add easing tween } { value } ifelse
+  } ifelse
+  0 1 clamp
+} def
+% the moment the fill reaches FailAt: bisect the easing, in setup
+/tfail -10 def  /tdone -10 def
+timed {
+  /tdone lead secs add def
+  failat 0 ge {
+    /lo 0 def /hi 1 def
+    24 { /mid lo hi add 2 div def mid easing ease failat lt { /lo mid def } { /hi mid def } ifelse } repeat
+    /tfail lead hi secs mul add def
+  } if
+} if
+/failing failat 0 ge def
+
+% ---- the picture -----------------------------------------------------------------
+/A { /ga exch def } def
+/rrect { % x y w h : a pill (fully rounded ends)
+  6 dict begin /h exch def /w exch def /y exch def /x exch def /r h 2 div def
+  newpath
+  x r add y r add r 90 270 arc
+  x w add r sub y r add r 270 90 arc
+  closepath end
+} def
+/pct { 0 fmtfixed (%) strcat } def
+
+/scene {
+  /v vraw def
+  /failed failing v failat 0.0001 sub ge and def
+  /vs failed { failat } { v } ifelse def
+  /done failed not v 0.9999 ge and def
+  /lastfade 1 def
+  % the colour: the running colour, eased to red or green when it gets there
+  /c failed { now tfail sub 0.15 div 0 1 clamp col failc between }
+     { done { now tdone sub 0.25 div 0 1 clamp col okc between } { col } ifelse } ifelse def
+  % a failure shakes once
+  /shake failed now tfail gt and { now tfail sub /dt exch def 2.71828 dt -8 mul exp  dt 2520 mul sin  mul 6 mul } { 0 } ifelse def
+  gsave
+    shake 0 translate
+    style /ring eq { ringstyle } { style /segments eq { segstyle } { barstyle } ifelse } ifelse
+  grestore
+} def
+
+/labeltext {
+  failed { (FAILED) } { vs 100 mul pct } ifelse
+} def
+% sets the label font: the percentage a little larger than the word FAILED
+/labelfont {
+  /Helvetica-Bold findfont failed { 22 } { 30 } ifelse scalefont setfont
+} def
+
+% ---- the bar -----------------------------------------------------------------------
+/barstyle {
+  1 lastfade mul A
+  trk aload pop setrgbcolor 0.14 ga mul setalpha 16 27 400 26 rrect fill
+  mode /indeterminate eq {
+    gsave 16 27 400 26 rrect clip newpath
+      c aload pop setrgbcolor ga setalpha
+      now 1.6 div 1 fmod /sine-inout ease 1.35 mul 0.35 sub 400 mul 16 add 27 140 26 rrect fill
+    grestore
+  } {
+    vs 0.001 gt {
+      /fw 26 374 vs mul add def
+      c aload pop setrgbcolor
+      [ [14 0.04] [8 0.07] [4 0.1] ] { aload pop ga mul setalpha setlinewidth 16 27 fw 26 rrect stroke } forall
+      ga setalpha 16 27 fw 26 rrect fill
+      gsave 16 27 fw 26 rrect clip newpath
+        % a lighter top half, and stripes sliding along while it runs
+        1 setgray 0.16 ga mul setalpha 16 40 fw 13 rectfill
+        failed done or not {
+          0 setgray 0.13 ga mul setalpha
+          -2 1 18 { 26 mul now 1 fmod 26 mul add 16 add /sx0 exch def
+            sx0 27 moveto 13 0 rlineto 26 26 rlineto -13 0 rlineto closepath fill } for
+        } if
+        done { % one sheen across when it finishes
+          1 setgray 0.35 ga mul setalpha
+          now tdone sub 0.6 div 0 1 clamp /quad-out ease 480 mul 60 sub 16 add 27 moveto 30 0 rlineto 26 26 rlineto -30 0 rlineto closepath
+          now tdone ge now tdone 0.6 add lt and { fill } { newpath } ifelse
+        } if
+      grestore
+    } if
+    label {
+      labelfont
+      c aload pop setrgbcolor ga setalpha
+      504 labeltext stringwidth pop sub 31 moveto labeltext show
+    } if
+  } ifelse
+} def
+
+% ---- blocks ---------------------------------------------------------------------------
+/segstyle {
+  1 lastfade mul A
+  /sg 4 def  /sw 400 sg nseg 1 sub mul sub nseg div def
+  0 1 nseg 1 sub { /i exch def
+    /sxi i sw sg add mul 16 add def
+    trk aload pop setrgbcolor 0.14 ga mul setalpha sxi 27 sw 26 rectfill
+    mode /indeterminate eq {
+      /head now 1.6 div 1 fmod nseg 6 add mul 3 sub def
+      /lit 1 head i sub abs 3 div sub 0 max def
+    } {
+      /lit vs nseg mul i sub 0 1 clamp def
+    } ifelse
+    lit 0.01 gt {
+      c aload pop setrgbcolor
+      lit ga mul setalpha sxi 27 sw 26 rectfill
+      lit 0.06 mul ga mul setalpha sxi 2 sub 25 sw 4 add 30 rectfill
+    } if
+  } for
+  mode /indeterminate eq not label and {
+    labelfont
+    c aload pop setrgbcolor ga setalpha
+    504 labeltext stringwidth pop sub 31 moveto labeltext show
+  } if
+} def
+
+% ---- the ring ---------------------------------------------------------------------------
+/ringstyle {
+  1 lastfade mul A
+  trk aload pop setrgbcolor 0.14 ga mul setalpha 14 setlinewidth newpath 80 80 56 0 360 arc stroke
+  1 setlinecap c aload pop setrgbcolor ga setalpha
+  mode /indeterminate eq {
+    now 1.6 div 360 mul sin 0.5 mul 0.5 add 240 mul 30 add
+    now 1.6 div 360 mul neg 90 add
+    dup 3 -1 roll sub exch newpath 80 80 56 5 3 roll exch arc stroke
+  } {
+    vs 0.001 gt { newpath 80 80 56 90 90 360 vs mul sub arcn stroke } if
+    label {
+      /Helvetica-Bold findfont 34 scalefont setfont
+      failed { /Helvetica-Bold findfont 26 scalefont setfont } if
+      80 labeltext stringwidth pop 2 div sub 68 moveto labeltext show
+    } if
+  } ifelse
+} def
