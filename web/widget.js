@@ -148,6 +148,8 @@ export class PsAnimWidget extends HTMLElement {
     // detached element, and a pending resize must not reopen it.
     this.generation = (this.generation ?? 0) + 1;
     clearTimeout(this.resizeTimer);
+    cancelAnimationFrame(this.frameRequest);
+    this.loop = (this.loop ?? 0) + 1;
     this.running = false;
     this.io?.disconnect();
     this.ro?.disconnect();
@@ -311,15 +313,18 @@ export class PsAnimWidget extends HTMLElement {
   #wake() {
     if (this.running || !this.#awake()) return;
     this.running = true;
+    // One loop at a time: a callback from an earlier loop (one queued
+    // before a disconnect, say) finds its token stale and stops.
+    const loop = (this.loop = (this.loop ?? 0) + 1);
     const tick = () => {
-      if (!this.running) return;
+      if (!this.running || loop !== this.loop) return;
       if (!this.#awake()) {
         this.running = false;   // asleep until the observer or the tab wakes it
         return;
       }
-      if (this.#step()) requestAnimationFrame(tick);
+      if (this.#step()) this.frameRequest = requestAnimationFrame(tick);
     };
-    requestAnimationFrame(tick);
+    this.frameRequest = requestAnimationFrame(tick);
   }
 
   /** One animation frame: draw if there is something new. False on error. */
