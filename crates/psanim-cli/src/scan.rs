@@ -287,7 +287,13 @@ impl Scanner {
             }
         }
         Findings {
-            covered: (0..=self.last).filter(|p| covered(*p)).count(),
+            // Over the judged pairs only: a short range late in a very long
+            // movie must not walk every frame before it.
+            covered: self
+                .judged
+                .iter()
+                .filter(|p| **p <= self.last && covered(**p))
+                .count(),
             pops,
             repeated,
         }
