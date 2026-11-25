@@ -368,6 +368,48 @@ Select the role's font (or any font name) at the largest size at which the strin
 
 Break text into lines no wider than width in the current font; \n forces a break.
 
+### `emojinames`
+
+`-  emojinames  [ /name ... ]`
+
+The emoji psanim draws itself, no font needed: smile laugh wink sad cool heart thumbsup party fire check rocket eyes. Flat, round and friendly, in a style of their own; they paint in their own colours.
+
+### `emoji`
+
+`/name  emoji  -`
+
+Draw an emoji at the current point as if it were a letter of the current font: sized to it, sitting on its baseline, and the current point moves past it. `(Great ) show /party emoji`.
+
+### `emojiat`
+
+`/name x y size  emojiat  -`
+
+Draw an emoji centred on x y, size across: for a reaction, a badge, a big one on its own.
+
+### `emojiwidth`
+
+`-  emojiwidth  w`
+
+How far `emoji` advances in the current font: 1.2 times its size.
+
+### `emojitext`
+
+`(text)  emojitext  -`
+
+Show text at the current point, each `:name:` of a known emoji (`:heart:`, `:laugh:`, see `emojinames`) drawn as that emoji. Anything else with colons, like 9:41, is plain text.
+
+### `emojitextwidth`
+
+`(text)  emojitextwidth  w`
+
+The width `emojitext` will advance by.
+
+### `emojilines`
+
+`(text) width  emojilines  [ (line) ... ]`
+
+`wraplines` for text with `:name:` emoji: each counts as the emoji it will be drawn as. Show the lines with `emojitext`.
+
 ### `textlayout`
 
 `(text) box opts  textlayout  [ [ (line) x y ] ... ]`

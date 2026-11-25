@@ -16,6 +16,7 @@ Scene bodies below run on a 640x360 canvas, 4 seconds, libraries loaded.
 - [Marking a word](#marking-a-word)
 - [Numbers that count](#numbers-that-count)
 - [Typing](#typing)
+- [Emoji](#emoji)
 - [Captions](#captions)
 - [Mathematics](#mathematics)
 - [Hierarchy](#hierarchy)
@@ -155,6 +156,44 @@ ground
 ground /mono 24 face /good ink
 60 180 moveto (psanim render film.ps -o film.mp4) 0.4 2.6 ramp typewrite
 ```
+
+## Emoji
+
+Real Unicode emoji need font support PSCat does not have yet, so psanim
+draws twelve of its own: `emojinames` lists them (smile laugh wink sad cool
+heart thumbsup party fire check rocket eyes). They are flat, round and in
+one style, and paint in their own colours.
+
+`/name emoji` draws one as if it were a letter of the current font: sized
+to it, sitting on its baseline, and the current point moves past it.
+`(text) emojitext` shows a string in which `:name:` is the emoji (anything
+else with colons, like 9:41, stays text). `/name x y size emojiat` puts one
+anywhere, as big as you like, for a reaction or a stamp.
+
+```postscript
+ground /title 34 face /fg ink
+60 290 moveto (Shipped it :party: thanks :heart: all) emojitext
+/body 22 face /muted ink
+60 230 moveto (:smile: :laugh: :wink: :sad: :cool: :heart:) emojitext
+60 190 moveto (:thumbsup: :party: :fire: :check: :rocket: :eyes:) emojitext
+/rocket 500 110 120 emojiat  /fire 590 70 50 emojiat
+```
+
+Wrap text that has emoji with `emojilines`, which counts each as the
+emoji it will be drawn as (`wraplines` would count its seven letters), and
+show the lines with `emojitext`. `emojitextwidth` is the width a string
+will take.
+
+```postscript
+ground /body 22 face /fg ink
+(Dinner is at eight :party: bring a friend :smile: and an appetite :fire:)
+300 emojilines
+/y 250 def
+{ 60 y moveto emojitext /y y 34 sub def } forall
+```
+
+A conversation of text messages, with these in it, is the `chat` entry of
+the [catalog](catalog.md).
 
 ## Captions
 

@@ -32,6 +32,25 @@ From the catalog of ready-made elements: give an entry's name.
 ```
 
 
+An entry takes its data the same way. The `chat` entry is a phone showing
+a conversation: its `/Script` is a list of `[ sender (text) when ]`, where
+the sender is `/me` or `/them` and `when` is a pause in seconds or a
+dictionary (`/Typing`, `/At`, `/Time`, `/React`, see
+`psanim catalog chat`). The length of the movie follows the script, so
+`componentduration` times the film around it.
+
+```postscript
+%!PS
+<< /Size [640 400] /Duration 12 /Background [0.9 0.92 0.96] >> animation
+/pktype use
+/talk /chat << /Params << /Contact (Ada) /Theme /mint /Script [
+  [ /them (did the render finish? :eyes:) ]
+  [ /me (yes! :rocket:) << /React /heart >> ]
+  [ /them (show me) 0.6 ]
+] >> >> instance
+/scene { /talk << /Box [220 10 200 380] /After /hold >> place } def
+```
+
 From a file: any movie is a component. The file keeps its declaration,
 setup and `scene`; read it with a name relative to the movie's own file.
 

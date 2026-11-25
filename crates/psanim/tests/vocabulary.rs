@@ -207,7 +207,7 @@ fn each_library_alone_can_run_its_own_words() {
         ("pkmotion", "0 /pop { 1 setgray 1 1 3 3 rectfill } enters"),
         (
             "pktype",
-            "/body 2 face /fg ink (a) canvasbox /c showin [ (a) /pi [/sup (2)] ] showruns",
+            "/body 2 face /fg ink (a) canvasbox /c showin [ (a) /pi [/sup (2)] ] showruns 1 1 moveto /heart emoji (a:heart:) emojitext",
         ),
         (
             "pkdiagram",

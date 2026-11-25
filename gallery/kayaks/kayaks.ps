@@ -1,0 +1,109 @@
+%!PS
+% Poster: 34.4
+% Two Yellow Kayaks
+%
+% A made-up text conversation between two friends, planning a dawn paddle
+% on a lake, in a phone: the dots, the bubbles with their tails, the
+% timestamp, the reactions, the emoji drawn by psanim itself, Delivered
+% turning to Read, the list scrolling up as the messages arrive. The sky
+% behind it warms with the conversation, and the plan on the right fills
+% in as each part of it is agreed.
+%
+% Techniques
+%   - The phone is the `chat` catalog entry, placed as a component; the
+%     whole conversation is one script of [ sender (text) options ].
+%   - Every message arrives at an explicit /At time, so the plan card on
+%     the right can take each line from the message that settles it.
+%   - `:eyes:` `:party:` `:laugh:` ... in a message are emoji (`emoji`,
+%     `emojitext`); the card and the stamp reuse them with `emojiat`.
+<< /Size [1280 720] /Duration 41 /FPS 30
+   /Title (Two Yellow Kayaks)
+   /Description (A made-up text conversation in a phone: two friends plan a dawn paddle, with typing dots, reactions and emoji, while the sky behind them warms and the plan fills in.)
+>> animation
+/pkstage use /pkmotion use /pktype use /pkink use
+/dusk usetheme
+
+/script [
+  [ /them (are you free saturday? :eyes:) << /At 2.6 /Time (Thu 4:52 PM) >> ]
+  [ /me (depends. what are we doing?) << /At 5.6 >> ]
+  [ /them (sunrise kayaking at the lake. I found two kayaks for $20 :party:) << /At 9.6 >> ]
+  [ /me (that is suspiciously cheap) << /At 12.2 >> ]
+  [ /them (they're yellow. very yellow.) << /At 14.6 >> ]
+  [ /me (...ok I'm in :laugh:) << /At 17.2 /React /heart >> ]
+  [ /them (6:15 at the dock? bring coffee) << /At 20.6 >> ]
+  [ /me (6:15 AM??? :sad:) << /At 23.0 /React /laugh >> ]
+  [ /them (the sun is worth it. pastries after :thumbsup:) << /At 27.2 >> ]
+  [ /me (fine. but you're buying the pastries) << /At 30.4 >> ]
+  [ /them (deal :check:) << /At 32.6 /React /thumbsup >> ]
+  [ /me (see you at the dock :cool:) << /At 35.8 >> ]
+  [ /them (:heart:) << /At 38.0 /Typing 0.8 >> ]
+] def
+/talk /chat << /Params << /Script script /Theme /sunset /Contact (Noor) /Hold 3 >> >> instance
+
+% ---- the plan: what gets settled, and by which message ----------------------------------
+/plan [
+  [ 9.6  (WHAT)  (Sunrise kayaking) ]
+  [ 14.6 (WITH)  (Two yellow kayaks, $20) ]
+  [ 20.6 (WHERE) (The lake dock, 6:15) ]
+  [ 21.4 (BRING) (Coffee) ]
+  [ 32.6 (AFTER) (Pastries, Noor's treat) ]
+] def
+
+/phonebox [ 440 14 350 700 ] def
+/leftcol  [ 56 300 330 300 ] def
+/card     [ 868 150 348 400 ] def
+
+/sky {
+  0 38 /sine-inout tween /u exch def
+  canvasbox u [ 0.06 0.06 0.18 ] [ 0.42 0.30 0.58 ] between
+            u [ 0.12 0.10 0.28 ] [ 1.00 0.72 0.45 ] between 90 boxgradient
+  0 36 /sine-inout tween -90 130 between /sy exch def
+  gsave
+    26 1.0 { 1 0.84 0.48 setrgbcolor 190 sy 72 disc } glowing
+  grestore
+  gsave
+    [ 0 0 width 124 ] boxpath clip newpath
+    [ 0 0 width 124 ] u [ 0.04 0.05 0.14 ] [ 0.30 0.24 0.42 ] between
+                      u [ 0.07 0.08 0.22 ] [ 0.90 0.52 0.40 ] between 90 boxgradient
+    4 30 /sine-inout tween 0.45 mul setalpha 1 0.93 0.7 setrgbcolor
+    0 1 5 { /k exch def 190 130 k 14 mul sub 2 div sub 112 k 17 mul sub 130 k 14 mul sub 4 rectfill } for
+  grestore
+} bind def
+
+/plate {                       % box -   a dark plate behind some text
+  gsave /bg ink 0.5 setalpha 24 roundpath fill grestore
+} bind def
+
+/scene {
+  sky
+
+  % the title, left
+  0.4 {
+    /display 60 face /fg ink
+    (Saturday,) leftcol 0 0.5 1 0.5 subbox /w placetext (Saturday,) /words 0.15 /mask-up kinetic
+    (very early.) leftcol 0 0.25 1 0.5 subbox /w placetext (very early.) /words 0.15 /mask-up kinetic
+    /body 21 face 0.88 setalpha /fg ink
+    1.4 { (a conversation, in PostScript) leftcol 0 0 1 0.3 subbox /w showin } after
+  } after
+
+  % the phone
+  0.2 [ /rise 0.9 ] { /talk << /Box phonebox /After /hold >> place } enters
+
+  % the plan, right
+  1.0 [ /rise 0.8 ] {
+    card plate
+    /title 15 face /accent ink (THE PLAN) card 0.1 0.88 0.8 0.08 subbox /w showin
+  } enters
+  0 1 plan length 1 sub {
+    /i exch def plan i get aload pop /pv exch def /pl exch def /pt exch def
+    /rowbox card 0.1 0.73 i 0.125 mul sub 0.8 0.105 subbox def
+    pt 0.2 add [ /rise 0.5 ] {
+      /body 13 face /accent2 ink pl rowbox 0 0.6 1 0.4 subbox /w showin
+      /title 23 face /fg ink pv rowbox 0 0 1 0.6 subbox /w showin
+    } enters
+  } for
+  36.6 /pop {
+    /check card 0 get 58 add card 1 get 34 add 44 emojiat
+    /title 22 face /good ink (All settled) card 0 get 92 add card 1 get 25 add moveto show
+  } enters
+} def
