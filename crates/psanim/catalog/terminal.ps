@@ -1,0 +1,194 @@
+%!PS
+% Catalog entry: terminal. An old video terminal with someone typing at it.
+% In a movie:  /tty /terminal component   then   /tty << /Box [x y w h] >> place
+% With a session of your own:
+%   /tty /terminal << /Params << /Session [ [/type (make test)] [/lines (ok\nok) 0.2] ] /Phosphor /amber >> >> instance
+% The session is data (see `psanim api sessionplan`); everything on screen is a
+% pure function of the time, so any frame can be drawn alone. The typing follows
+% the instance's /Seed. To act on the session from the movie (start a progress
+% bar when it reaches a mark), make the plan in the movie, pass it as /Plan, and
+% ask it: `plan /tested planmark`. Place it with /After /hold to keep the last screen.
+
+/demo [
+  [/type (whoami)]
+  [/out (hacker)]
+  [/type (ls -la /var/log)]
+  [/lines (total 48\ndrwxr-xr-x  7 root  wheel   224 Nov 24 .\n-rw-r--r--  1 root  wheel  8192 Nov 24 auth.log\n-rw-r--r--  1 root  wheel 31337 Nov 24 kernel.log) 0.09]
+  [/type (tail -f auth.log)]
+  [/lines (02:14:07 sshd: accepted key for hacker\n02:14:09 sudo: session opened) 0.5]
+] def
+
+/Session demo param /session exch def           % the script: [/type (cmd)] [/out (text)] [/lines (text) gap] [/progress (frames) gap] [/wait s] [/clear] [/mark /name]
+/Phosphor /green param /phos exch def           % /green /amber /white, or [r g b]
+/Rows 18 param /rows exch def                   % lines on the screen
+/Cols 50 param /cols exch def                   % characters across
+/Font /Courier-Bold param /fontname exch def    % a monospace face: the one parameter a bitmap terminal font will replace
+/Prompt (hacker@vax:~$ ) param /prompt exch def % the prompt printed before each typed command
+/Speed 1 param /speed exch def                  % typing speed, 1 is brisk
+/Typos 0.03 param /typos exch def               % chance of a slip per letter, noticed, backspaced and fixed
+/Persistence 0.6 param /persist exch def        % 0 to 1: how long text lingers as it scrolls, is erased or the cursor blinks off
+/Glow 1 param /glow exch def                    % phosphor bloom, 0 for none
+/Scanlines 0.3 param /scan exch def             % 0 to 1: dark lines between the raster lines
+/Grain 0.1 param /grain exch def                % 0 to 1: film grain and flicker
+/Curve 0.035 param /curve exch def              % how much the glass bows
+/Bezel true param /bezel exch def               % the monitor's frame (false: only the screen)
+/Hold 1.5 param /hold exch def                  % seconds to rest on the last screen
+/PowerOn 0 param /poweron exch def              % seconds the tube takes to warm up at the start (a bright line opening to the screen); 0 for none
+/Plan null param /plan0 exch def                % a plan made in the movie with sessionplan, used instead of Session (so the movie can read its marks)
+
+/phosphors << /green [0.3 1 0.5] /amber [1 0.7 0.14] /white [0.85 0.93 1] >> def
+/pc phos type /nametype eq { phosphors phos get } { phos } ifelse def
+/tc [ 0 1 2 { pc exch get 0.72 mul 0.28 add } for ] def          % the hot core of a lit glyph
+
+% the typing follows the instance's seed: another instance, another typist
+/plan plan0 null eq { session movieseed << /Prompt prompt /Speed speed /Typos typos /Tail 0.4 >> sessionplan } { plan0 } ifelse def
+
+<< /Size [960 720] /Duration plan planlength hold add /Background /transparent
+   /Title (Terminal)
+   /Description (An old video terminal: phosphor text with glow, scanlines, a bowed screen, persistence and grain, and a session typed as a person types it, slips and backspaces included, with output scrolling up the screen.)
+>> animation
+
+% ---- layout, once --------------------------------------------------------------------
+/bz bezel { width 0.045 mul } { 0 } ifelse def
+/sx bz def  /sy bz def  /sw width bz 2 mul sub def  /sh height bz 2 mul sub def
+/pad sw 0.035 mul def
+/areaw sw pad 2 mul sub def  /areah sh pad 2 mul sub def
+fontname findfont 1 scalefont setfont (M) stringwidth pop /adv exch def
+/fs areaw cols adv mul div areah rows 1.2 mul div 2 copy gt { exch } if pop def
+/cw fs adv mul def  /ch fs 1.2 mul def
+/gx sx sw cw cols mul sub 2 div add def                    % the grid's left edge, centred
+/gtop sy sh add sh ch rows mul sub 2 div sub def           % and its top
+/cx sx sw 2 div add def  /cy sy sh 2 div add def
+
+/rrect { % x y w h r : a rounded rectangle path
+  6 dict begin /r exch def /h exch def /w exch def /y exch def /x exch def
+  x r add y moveto  x w add y x w add y h add r arcto 4 { pop } repeat
+  x w add y h add x y h add r arcto 4 { pop } repeat
+  x y h add x y r arcto 4 { pop } repeat
+  x y x w add y r arcto 4 { pop } repeat closepath end
+} def
+/glass { sx sy sw sh sw 0.06 mul rrect } def
+
+% ---- the text, drawn at one moment -----------------------------------------------------
+% (str) r rowdraw    one row, where the glass's bow puts it: rows near the top and
+%                    bottom are squeezed in a little, and each shivers by a hair
+/rowdraw {
+  8 dict begin
+  /rr exch def /rs exch def
+  /ru gtop rr 0.5 add ch mul sub cy sub sh 2 div div def           % +1 at the top .. -1 at the bottom
+  /ry cy sh 2 div ru ru dup dup mul mul curve 0.5 mul mul sub mul add def
+  gsave
+    cx ry fs 0.3 mul sub translate
+    1 curve ru ru mul mul sub 1 scale
+    gx cx sub [ rr now 24 mul floor ] hash01 0.5 sub 0.5 mul add 0 moveto
+    rs show
+  grestore
+  end
+} def
+% col row cursor    the block, in row's place
+/cursorat {
+  8 dict begin
+  /rr exch def /cc exch def
+  /ru gtop rr 0.5 add ch mul sub cy sub sh 2 div div def
+  /ry cy sh 2 div ru ru dup dup mul mul curve 0.5 mul mul sub mul add def
+  gsave
+    cx ry fs 0.3 mul sub translate
+    1 curve ru ru mul mul sub 1 scale
+    gx cx sub cc cw mul add  fs -0.22 mul  cw 0.92 mul  fs 0.98 mul  rectfill
+  grestore
+  end
+} def
+% t a cur screen -> rows    the grid as it was at time t, at opacity a; rows that
+%                           equal those of cur (an array, or null) are left out
+/screen {
+  /sc-cur exch def /sc-a exch def /sc-t exch def
+  plan sc-t rows cols screenat /sc-last exch def /sc-col exch def /sc-rows exch def
+  sc-a flicker mul setalpha
+  0 1 sc-rows length 1 sub { /sc-r exch def
+    sc-rows sc-r get /sc-s exch def
+    sc-s length 0 gt
+    sc-cur null eq { true } { sc-r sc-cur length lt { sc-cur sc-r get sc-s ne } { true } ifelse } ifelse and
+    { sc-s sc-r rowdraw } if
+  } for
+  sc-t sc-last sub dup 0.55 lt exch 1.1 fmod 0.55 lt or {           % solid while typing, then blinking
+    sc-col sc-rows length 1 sub cursorat
+  } if
+  sc-rows
+} def
+/lags [0.2 0.12 0.06 0.03] def
+/pal  [0.05 0.12 0.22 0.38] def
+/drawtext {
+  fontname findfont fs scalefont setfont
+  tc aload pop setrgbcolor
+  /curr plan now rows cols screenat pop pop def
+  persist 0 gt {
+    0 1 3 { /k exch def
+      now lags k get sub dup 0 ge { pal k get persist mul curr screen pop } { pop } ifelse
+    } for
+  } if
+  now 1 null screen pop
+} def
+
+% ---- the glass, the frame, the raster --------------------------------------------------
+/glassfill {
+  << /ShadingType 3 /ColorSpace /DeviceRGB /Coords [cx cy 0 cx cy sw 0.7 mul]
+     /Function << /FunctionType 2 /Domain [0 1]
+        /C0 [ 0 1 2 { pc exch get 0.12 mul } for ] /C1 [ 0 1 2 { pc exch get 0.01 mul } for ] /N 1.5 >>
+     /Extend [true true] >> shfill
+} def
+/scanlines {
+  newpath
+  sy 3 sy sh add {
+    sx exch moveto sw 0 rlineto 0 1.5 rlineto sw neg 0 rlineto closepath
+  } for
+  0 setgray scan 0.55 mul setalpha fill
+} def
+/rollbar {                                     % a soft band of light drifting down the tube
+  gsave
+  pc aload pop setrgbcolor
+  now 0.11 mul 1.3 fmod 1.15 sub neg sh mul sy add /by exch def
+  0 1 9 { /k exch def
+    scan 0.05 mul 1 k 4.5 sub abs 4.5 div sub mul setalpha
+    sx by sh 0.018 mul k mul add sw sh 0.018 mul rectfill
+  } for
+  grestore
+} def
+/vignette-glass {                              % corners darker, by three wide strokes of the outline
+  0 setgray
+  [0.05 0.1 0.18] { sw mul 2 mul setlinewidth 0.12 setalpha glass stroke } forall
+} def
+/framing {
+  0 0 width height width 0.06 mul rrect 0.19 0.18 0.16 setrgbcolor fill
+  0 0 width height width 0.06 mul rrect 1 setgray 0.07 setalpha 2 setlinewidth stroke
+  glass 0 setgray 0.7 setalpha bz 0.55 mul setlinewidth stroke
+  % the power light
+  gsave 8 1 { pc aload pop setrgbcolor width bz 1.6 mul sub bz 0.5 mul 3 0 360 arc fill } glowing grestore
+} def
+
+/scene {
+  /flicker 1 grain 0.25 mul 3 11 1 wiggle abs mul sub def       % the tube's brightness wavers a little
+  /warmup poweron 0 gt { now poweron div 0 1 clamp } { 1 } ifelse def
+  1 {
+    bezel { framing } if
+    gsave
+      glass 0.012 0.018 0.016 setrgbcolor fill                % the dark glass, whatever happens on it
+      glass clip newpath
+      warmup 1 lt {                                   % the tube warming up: a line of light that opens out
+        sx cy sh warmup 3 exp 0.995 mul 0.005 add mul 2 div sub moveto
+        sw 0 rlineto 0 sh warmup 3 exp 0.995 mul 0.005 add mul rlineto sw neg 0 rlineto closepath clip newpath
+      } if
+      glassfill
+      glow 0 gt {
+        1 { sw 0.012 mul glow 1.1 mul { drawtext } glowing } faded      % in a layer of its own: a halo would otherwise leak past the clip
+      } { drawtext } ifelse
+      scan 0 gt { scanlines rollbar } if
+      vignette-glass
+      warmup 1 lt { pc aload pop setrgbcolor 1 warmup sub 0.6 mul setalpha sx sy sh 2 div add 4 sub sw 8 rectfill } if
+      gsave sx sw 0.28 mul add sy sh 0.82 mul add translate 1 0.35 scale        % a faint reflection on the glass
+        1 setgray 0.012 setalpha
+        1 1 7 { sw 0.05 mul mul 0 0 3 -1 roll 0 360 arc fill } for
+      grestore
+    grestore
+    grain 0 gt { grain 0.4 mul filmgrain } if
+  } faded
+} def

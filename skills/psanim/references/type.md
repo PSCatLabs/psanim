@@ -156,6 +156,57 @@ ground /mono 24 face /good ink
 60 180 moveto (psanim render film.ps -o film.mp4) 0.4 2.6 ramp typewrite
 ```
 
+### Typing like a person
+
+`typewrite` reveals a string at an even rate. A person does not: keys come
+in bursts, words are separated by longer gaps, there is the odd thinking
+pause, and now and then a finger slips to a neighbouring key and the
+mistake is backspaced and fixed. `typingplan` makes that schedule from a
+seed, once, in setup; `typedat` then answers what is on the line at any
+time, so it stays a pure function of the clock. Another seed types the
+same text another way; `/Typos 0` types it cleanly; `/Slips [4]` makes
+the fifth character slip for certain.
+
+```postscript
+%!PS
+<< /Size [640 360] /Duration 6 /FPS 30 /Background [0.03 0.05 0.04] >> animation
+/pktype use
+/line (git push origin main) 11 << /Think 0.4 /Slips [5] >> typingplan def
+/scene {
+  /mono 28 face /good ink
+  40 200 moveto (> ) show
+  line now typedat show
+  line planlength 0.4 add now lt { 0.3 setgray } if
+} def
+```
+
+A whole terminal session is data too. `sessionplan` takes prompts, typed
+commands, output that arrives at once (`/out`) or line by line (`/lines`),
+a line redrawn in place (`/progress`), waits and marks, and `screenat`
+gives the character grid at any time (the screen scrolls when it fills).
+Because the screen is a function of time, the screen a moment ago is
+`t 0.1 sub screenat`: that is how the catalog's `/terminal` fades text
+out like a phosphor. For a screen to look at, place that entry; to act
+when the session reaches a point, give it the plan and ask `plan /name
+planmark` (see [catalog.md](catalog.md)).
+
+```postscript
+%!PS
+<< /Size [640 360] /Duration 7 /FPS 30 /Background [0 0 0] >> animation
+/pktype use
+/session [
+  [/type (make test)] [/lines (cc a.c\ncc b.c\nlink) 0.25]
+  [/mark /ran] [/out (all 12 tests passed)]
+] 3 << /Prompt (\$ ) >> sessionplan def
+/scene {
+  /mono 24 face /good ink
+  session now 9 50 screenat pop pop
+  /rows exch def
+  0 1 rows length 1 sub { /i exch def 40 320 i 28 mul sub moveto rows i get show } for
+  session /ran planmark now lt { /accent ink 40 30 moveto (the tests ran) show } if
+} def
+```
+
 ## Captions
 
 `[ [t0 t1 (text)] ... ] box opts captions` shows each caption in its

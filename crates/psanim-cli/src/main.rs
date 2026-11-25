@@ -924,7 +924,7 @@ fn cmd_catalog(rest: &[String]) -> Result<(), Fail> {
                 println!("{d}\n");
             }
             println!(
-                "{}x{}, {} s{}. `/x /{name} component`, then `/x << /Box [..] >> place`.\n",
+                "{}x{}, {:.1} s{}. `/x /{name} component`, then `/x << /Box [..] >> place`.\n",
                 m.width,
                 m.height,
                 m.duration,

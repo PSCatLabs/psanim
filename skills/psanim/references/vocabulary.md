@@ -432,6 +432,42 @@ Set the transformation so the world point (cx, cy) is at the centre of the frame
 
 The first u (0..1) of the string, by characters: a typewriter reveal.
 
+### `typingplan`
+
+`(text) seed opts  typingplan  plan`
+
+Plan how a person would type a string, from a seed: a key every ~0.1 s with jitter, bursts and slow words, longer gaps after a space, a thinking pause now and then, and an occasional slip to a neighbouring key that is noticed a character or two later, backspaced and retyped. opts: << /Speed 1 (keys-rate multiplier) /Typos 0.02 (chance of a slip per letter) /Slips [4] (letters that always slip) /Pauses 1 /Think 0 (seconds before the first key) >>. Make the plan in setup; `plan t typedat` then gives the text typed by time t, a pure function of t. Same text and seed always type the same way.
+
+### `sessionplan`
+
+`[ item ... ] seed opts  sessionplan  plan`
+
+Plan a terminal session, from a seed. Items: [/type (cmd)] or [/type (cmd) << /Speed 1.4 /Slips [3] /Think 1 >>] (prompt, human typing, Enter); [/out (text\nmore)] (lines appear at once); [/lines (text) gap] (one line every ~gap s, a little uneven); [/progress (frame1\nframe2 ...) gap] (a line redrawn in place); [/wait s]; [/clear]; [/prompt (> )]; [/mark /name] (note the time: `plan /name planmark`). opts: << /Prompt ($ ) /Speed /Typos /Think 0.6 /Latency 0.18 (Enter to output) /Gap 0.07 /Start 0 /FinalPrompt true /Tail 0 >>. Output follows its command after the latency. The plan is data: `plan t rows cols screenat` is the grid at any time.
+
+### `planlength`
+
+`plan  planlength  seconds`
+
+The time of the last thing a typing or session plan does (plus the session's /Tail): how long to give it.
+
+### `planmark`
+
+`plan /name  planmark  seconds`
+
+The time a session plan reached `[/mark /name]`, or -1 if it has no such mark: to start something else (a progress bar, a flash) when the session gets there.
+
+### `typedat`
+
+`plan t  typedat  (string)`
+
+The line under the cursor at time t: for a `typingplan`, what has been typed so far, backspaces and all. `(text) 7 << >> typingplan` in setup; `plan now typedat show` in the scene.
+
+### `screenat`
+
+`plan t rows cols  screenat  [ (row) ... ] col last`
+
+What a character grid shows at time t: its rows (at most `rows`, top to bottom; long lines wrap at `cols`; the screen scrolls when full), the cursor's column in the last row, and the time of the latest keystroke or line before t (-1 if none), for a cursor that stays solid while typing and blinks at rest. Pure in t, so the screen a moment ago (`t 0.1 sub screenat`) is phosphor persistence.
+
 ### `showcenter`
 
 `string  showcenter  -`

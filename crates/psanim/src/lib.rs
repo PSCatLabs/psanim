@@ -60,6 +60,7 @@ pub mod raster;
 pub mod render;
 pub mod sheet;
 pub mod signals;
+pub mod terminal;
 mod vocab;
 
 pub use catalog::CATALOG;
