@@ -323,6 +323,11 @@ the first. `/From` is ignored: the sky is already full at t = 0.
 } def
 ```
 
+For a finished celebration, place `/fireworks` or `/confetti` from the
+catalog ([catalog.md](catalog.md)): shells, stars, tumbling paper and a
+message that pulses on each burst, already tuned; `psanim catalog
+fireworks` prints the source to learn from.
+
 Under the hood a particle is born at a time fixed by its emitter (a
 burst, or a slot of the continuous rate) with properties from `hash01`
 of its key, and only the live ones are visited, so a long film costs no

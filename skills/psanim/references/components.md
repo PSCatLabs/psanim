@@ -63,6 +63,28 @@ Inline, as a dictionary with the declaration's keys plus /Setup and
 } def
 ```
 
+### Reacting to a catalog entry's events
+
+The celebrations (`/fireworks`, `/confetti`) take their burst times as a
+parameter, `/Bursts`. Pass your own array and the same array is an event
+track your movie owns: `sincelast` says how long ago the latest one was,
+on the clock of the scope it is called in, so read it inside the same
+delay the instance is placed at.
+
+```postscript
+%!PS
+<< /Size [640 360] /Duration 5 /Background [0.04 0.04 0.08] >> animation
+/booms [0.8 1.6 2.3] def
+/show /fireworks << /Params << /Bursts booms /Message (Shipped) /Detail () /Sky false >> >> instance
+/scene {
+  /show << /At 0.5 >> place
+  0.5 {                                   % on the instance's clock
+    booms sincelast -6 mul 2.718 exch exp  % 1 at each burst, falling away
+    1 0.8 0.3 setrgbcolor 0.6 mul setalpha 0 0 width 12 rectfill
+  } delayed
+} def
+```
+
 ## Placing
 
 `/name opts place`, in the scene. All options are optional:

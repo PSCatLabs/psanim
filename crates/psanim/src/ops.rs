@@ -1108,6 +1108,8 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             Value::String(s) => format!("({})", String::from_utf8_lossy(s)),
             Value::Name(n) => format!("/{n}"),
             Value::Array(_) => v_numbers(&default),
+            Value::Bool(b) => b.to_string(),
+            Value::Null => "null".to_string(),
             v => v
                 .as_f64()
                 .map_or_else(|| "?".to_string(), |x| x.to_string()),
