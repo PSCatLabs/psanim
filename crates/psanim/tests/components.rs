@@ -214,6 +214,29 @@ fn blur_glow_and_grain_inside_a_component_stay_in_its_box() {
 }
 
 #[test]
+fn a_glow_inside_a_within_inside_a_component_stays_in_the_within_box() {
+    // The component's box is x 80..120, rows 30..70; the within box inside
+    // it is x 90..110, rows 40..60.
+    let mut m = load(
+        "/g << /Size [40 40] /Scene { [10 10 20 20] { 6 1.5 { 1 setgray 0 0 20 20 rectfill } glowing } within } >> component
+         /scene { 0 0 0.3 setrgbcolor 0 0 200 100 rectfill /g << /Box [80 30 40 40] >> place } def",
+    );
+    let f = m.render_at(0.0).unwrap();
+    let w = f.width as usize;
+    for (k, p) in f.premultiplied.chunks_exact(4).enumerate() {
+        let (x, y) = (k % w, k / w);
+        if !((90..110).contains(&x) && (40..60).contains(&y)) {
+            assert_eq!(
+                &p[..3],
+                &[0, 0, 77],
+                "pixel {x},{y} touched outside the within box"
+            );
+        }
+    }
+    assert_eq!(f.premultiplied[(50 * w + 100) * 4], 255);
+}
+
+#[test]
 fn a_movie_redefining_a_word_does_not_change_it_inside_a_component() {
     // The movie defines scale, between and rgbof for itself; the component
     // still means PostScript's scale, the prelude's between and pkstage's rgbof.
@@ -340,4 +363,32 @@ fn holding_keeps_a_drawing_made_in_a_half_open_window() {
          /scene { /c << /After /hold >> place } def",
     );
     assert_eq!(printed(&mut m, 3.0), "(shown)");
+}
+
+#[test]
+fn a_rotated_components_blur_stays_inside_its_rotated_box() {
+    // A component turned 45 degrees and blurred: the corners of its
+    // axis-aligned bounds, outside the turned box, keep the movie's ground.
+    let mut m = load(
+        "/b << /Size [40 40] /Scene { 6 { 1 1 1 setrgbcolor 0 0 40 40 rectfill } blurred } >> component
+         /scene { 0 0 1 setrgbcolor 0 0 200 100 rectfill
+                  gsave 100 50 translate 45 rotate -20 -20 translate /b << /Box [0 0 40 40] >> place grestore } def",
+    );
+    let f = m.render_at(0.0).unwrap();
+    let px = |x: u32, y: u32| {
+        let o = ((y * f.width + x) * 4) as usize;
+        [
+            f.premultiplied[o],
+            f.premultiplied[o + 1],
+            f.premultiplied[o + 2],
+        ]
+    };
+    // The turned box spans about 28 units each way from (100, 50); its
+    // bounding corners (e.g. 76, 26 in canvas units, rows from the top) lie
+    // outside the box itself.
+    for (x, y) in [(75, 25), (125, 25), (75, 75), (125, 75)] {
+        assert_eq!(px(x, y), [0, 0, 255], "corner {x},{y} was touched");
+    }
+    // And the middle is white.
+    assert!(px(100, 50)[0] > 200);
 }

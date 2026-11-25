@@ -100,6 +100,22 @@ Full reasoning in `docs/architecture.md`.
     a pure shift that shortens the window but leaves the cycle, so a loop
     closes in a late copy too. `after` and `enters` restart the clock and
     keep the shortened window as the cycle.
+13. **Blur and glow stay inside the clip they began under** (#66).
+    `.clipmask` in the prelude paints through the interpreter's own clip,
+    in device space, on a scratch layer, over the newest clip's box
+    (`clippath`), and the engine keeps the coverage; `.layerend`,
+    `blurlayer` and `glowlayer` confine what they spread to it. That is
+    exact for any clip (rotated, curved, even-odd, nested, anti-aliased)
+    with no PSCat change. `faded` and `blended` take none: their body was
+    drawn under the clip already. It is the clip in force when the effect
+    begins; one the body sets and leaves does not confine it. Cost at
+    1280x720 on an Apple M4, median frame, one `blurred`: +0.3 ms
+    unclipped, +0.6 ms inside a `within`. A read-only PSCat accessor for
+    the current clip's coverage (`None` when nothing is clipped) would
+    save the fill and the scan. pkmotion's moving layers still ignore the
+    clip (a slide or /focus inside a `within` shows past its edge). The
+    same mask fixes them, but a 12-item cascade then measured +3.9 ms a
+    frame inside a `within` (+1.0 ms unclipped), so that is a follow-up.
 
 ## How the gallery was made, and what it taught
 

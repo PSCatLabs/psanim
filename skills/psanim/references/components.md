@@ -252,7 +252,8 @@ pattern:
 - Its setup runs when `component` or `instance` is called, so call them in
   setup, not in the scene (where they would run every frame).
 - `vignette` and `filmgrain` inside a component act only on its box, and
-  blur and glow stay inside it too.
+  blur and glow stay inside it too, as they stay inside any clip (a
+  `within` box, a `rectclip`) in force when they begin.
 - A component's /Size and /Duration may depend on its parameters: read them
   with `param` before `animation` (the instance's /Seed is already in force
   there). `/terminal` and `/pipeline` size and time themselves that way.

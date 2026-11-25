@@ -151,8 +151,19 @@
 % radius and so on are taken first and kept by the engine.
 /faded   { exch   .fadebegin  exec .layerend } bind def      % alpha proc           draw proc as a group at one opacity
 /blended { 3 1 roll .blendbegin exec .layerend } bind def    % alpha /mode proc     ... with a blend mode
-/blurred { exch   .blurbegin  exec .layerend } bind def      % radius proc          draw proc out of focus
-/glowing { 3 1 roll .glowbegin  exec .layerend } bind def    % radius strength proc draw proc with a halo
+/blurred { exch   .clipmask .blurbegin  exec .layerend } bind def    % radius proc          draw proc out of focus
+/glowing { 3 1 roll .clipmask .glowbegin  exec .layerend } bind def  % radius strength proc draw proc with a halo
+/blurlayer { .clipmask .blurlayer } bind def                         % radius               blur the layer so far
+/glowlayer { .clipmask .glowlayer } bind def                         % radius strength      add a halo to it
+% - .clipmask -   capture the clip in force, for the blur or glow about to
+% begin to stay inside: paint through it, in device space, on a layer of
+% its own (the engine keeps the coverage). A blur spreads past the clip
+% its body was drawn under; this is what holds it in.
+/.clipmask {
+  gsave matrix setmatrix clippath .maskbegin {
+    1 setgray 1 setalpha /Normal setblendmode rectfill .maskend
+  } if grestore
+} bind def
 % procA procB u crossfade: A, with B over it at opacity u.
 /crossfade {
   [ 4 1 roll 3 -1 roll /exec cvx 4 2 roll exch /faded cvx ] cvx exec

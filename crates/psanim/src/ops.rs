@@ -13,7 +13,9 @@ use std::rc::Rc;
 use pscat::host::{PathSegment, Value};
 use pscat::{Interp, Page, PsError};
 
-use crate::ctx::{Ctx, LayerEnd, MAX_LAYERS, MAX_SCOPES, Running, TimeScope, hash01, wiggle};
+use crate::ctx::{
+    ClipMask, Ctx, LayerEnd, MAX_LAYERS, MAX_SCOPES, Running, TimeScope, hash01, wiggle,
+};
 use crate::ease;
 use crate::pathmath;
 use crate::plane::{self, Plane};
@@ -388,7 +390,114 @@ const PLAIN: LayerEnd = LayerEnd {
     blend: Blend::Normal,
     blur: 0.0,
     glow: (0.0, 0.0),
+    clip: None,
 };
+
+/// The clip `.clipmask` captured for the effect about to begin, or none.
+fn take_clip(ctx: &Shared) -> Option<ClipMask> {
+    ctx.borrow_mut().clip_taken.take().flatten()
+}
+
+/// `.maskbegin`, with the clip as the current path in device space (see
+/// `.clipmask` in the prelude): the rectangle to paint through the clip,
+/// on a fresh layer, and true; or false when the clip is empty and there
+/// is nothing to paint.
+fn mask_begin(i: &mut Interp, ctx: &Shared) -> OpResult {
+    let (w, h) = i.canvas_size();
+    let path = i.current_path()?;
+    let mut b = [
+        f64::INFINITY,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        f64::NEG_INFINITY,
+    ];
+    let mut grow = |x: f64, y: f64| {
+        b = [b[0].min(x), b[1].min(y), b[2].max(x), b[3].max(y)];
+    };
+    for s in &path {
+        match *s {
+            PathSegment::MoveTo(x, y) | PathSegment::LineTo(x, y) => grow(x, y),
+            PathSegment::CurveTo(x1, y1, x2, y2, x3, y3) => {
+                grow(x1, y1);
+                grow(x2, y2);
+                grow(x3, y3);
+            }
+            PathSegment::Close => {}
+        }
+    }
+    // The newest clip's box, a pixel wider all round, on the canvas: the
+    // older clips it was intersected with lie inside it, and painting
+    // through the clip itself gives the exact coverage.
+    let x0 = (b[0].floor() - 1.0).max(0.0);
+    let y0 = (b[1].floor() - 1.0).max(0.0);
+    let x1 = (b[2].ceil() + 1.0).min(f64::from(w));
+    let y1 = (b[3].ceil() + 1.0).min(f64::from(h));
+    if !(x1 > x0 && y1 > y0) {
+        // Everything is clipped away: the effect may show nothing.
+        let mut c = ctx.borrow_mut();
+        let mut alpha = c.mask_pool.pop().unwrap_or_default();
+        alpha.clear();
+        alpha.resize((w * h) as usize, 0);
+        c.clip_taken = Some(Some(ClipMask {
+            alpha,
+            support: [0, 0, 0, 0],
+        }));
+        drop(c);
+        i.push_bool(false);
+        return Ok(());
+    }
+    begin_layer(i, ctx)?;
+    i.push_numbers(&[x0, y0, x1 - x0, y1 - y0]);
+    i.push_bool(true);
+    Ok(())
+}
+
+/// `.maskend`: close the layer `.maskbegin` opened and keep its coverage
+/// as the clip; none at all when it covers the whole canvas.
+fn mask_end(i: &mut Interp, ctx: &Shared) -> OpResult {
+    let Some(below) = ctx.borrow_mut().layers.pop() else {
+        return fail(ctx, PsError::Rangecheck, ".maskend without .maskbegin");
+    };
+    let page = i.swap_canvas(below).map_err(|_| PsError::Rangecheck)?;
+    let (w, h) = (page.width() as usize, page.height() as usize);
+    let px = page.premultiplied_rgba8();
+    let mut c = ctx.borrow_mut();
+    let clip = if px.chunks_exact(4).all(|p| p[3] == 255) {
+        None
+    } else {
+        let mut alpha = c.mask_pool.pop().unwrap_or_default();
+        alpha.clear();
+        alpha.extend(px.chunks_exact(4).map(|p| p[3]));
+        let mut s = [w, h, 0, 0];
+        for y in 0..h {
+            let row = &alpha[y * w..(y + 1) * w];
+            if let (Some(a), Some(b)) = (
+                row.iter().position(|v| *v != 0),
+                row.iter().rposition(|v| *v != 0),
+            ) {
+                s = [s[0].min(a), s[1].min(y), s[2].max(b + 1), s[3].max(y + 1)];
+            }
+        }
+        if s[2] <= s[0] {
+            s = [0, 0, 0, 0];
+        }
+        Some(ClipMask { alpha, support: s })
+    };
+    c.clip_taken = Some(clip);
+    c.spare = Some(page);
+    Ok(())
+}
+
+/// Confine an effect's spread to the clip it began under: zero what lies
+/// outside the clip (a layer, whose own drawing was clipped already), or
+/// with `orig`, put back what was there (the canvas, or a layer drawn on
+/// before the clip was set).
+fn apply_clip(px: &mut [u8], w: usize, h: usize, clip: &ClipMask, orig: Option<&[u8]>) {
+    match orig {
+        None => raster::mask_multiply(px, w, h, &clip.alpha, clip.support),
+        Some(o) => raster::mask_mix(px, o, &clip.alpha),
+    }
+}
 
 fn blend_named(ctx: &Shared, name: &str) -> Result<Blend, PsError> {
     match Blend::from_name(name) {
@@ -418,6 +527,35 @@ fn end_layer(i: &mut Interp, ctx: &Shared, opacity: f64, blend: Blend) -> OpResu
     let layer = i.swap_canvas(below).map_err(|_| PsError::Rangecheck)?;
     // The finished layer is the right size to be the next spare.
     ctx.borrow_mut().spare = Some(layer);
+    Ok(())
+}
+
+/// `blurlayer` (no strength) or `glowlayer`: spread what is on the canvas,
+/// within the component's box and the clip in force.
+fn spread_layer(i: &mut Interp, ctx: &Shared, radius: f64, strength: Option<f64>) -> OpResult {
+    let clip = take_clip(ctx);
+    let sigma = radius * ctx.borrow().px_scale * ctx.borrow().unit_scale();
+    let (cw, ch) = i.canvas_size();
+    let rect = ctx.borrow().effect_rect(cw as usize, ch as usize);
+    with_canvas_pixels(i, ctx, |px, w, h, scratch| {
+        // These work in place on a canvas that may hold other drawing (the
+        // movie's, around a component): what lies outside the component's
+        // box or the clip keeps its earlier pixels.
+        let orig = (clip.is_some() || rect != [0, 0, w, h]).then(|| px.to_vec());
+        match strength {
+            None => raster::blur(px, w, h, sigma, scratch),
+            Some(k) => raster::glow(px, w, h, sigma, k.clamp(0.0, 2.0), scratch),
+        }
+        if let Some(o) = &orig {
+            keep_outside(px, o, w, h, rect);
+        }
+        if let (Some(c), Some(o)) = (&clip, &orig) {
+            apply_clip(px, w, h, c, Some(o));
+        }
+    })?;
+    if let Some(c) = clip {
+        ctx.borrow_mut().recycle_mask(c);
+    }
     Ok(())
 }
 
@@ -1179,20 +1317,33 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     });
     reg(interp, ctx, ".blurbegin", |i, ctx| {
         let blur = i.pop_f64()? * ctx.borrow().unit_scale();
-        begin_pending(i, ctx, LayerEnd { blur, ..PLAIN })
+        let clip = take_clip(ctx);
+        begin_pending(
+            i,
+            ctx,
+            LayerEnd {
+                blur,
+                clip,
+                ..PLAIN
+            },
+        )
     });
     reg(interp, ctx, ".glowbegin", |i, ctx| {
         let (strength, radius) = (i.pop_f64()?, i.pop_f64()?);
         let radius = radius * ctx.borrow().unit_scale();
+        let clip = take_clip(ctx);
         begin_pending(
             i,
             ctx,
             LayerEnd {
                 glow: (radius, strength),
+                clip,
                 ..PLAIN
             },
         )
     });
+    reg(interp, ctx, ".maskbegin", mask_begin);
+    reg(interp, ctx, ".maskend", mask_end);
     reg(interp, ctx, ".layerend", |i, ctx| {
         let Some(end) = ctx.borrow_mut().pending.pop() else {
             return fail(
@@ -1204,6 +1355,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let px = ctx.borrow().px_scale;
         let (cw, ch) = i.canvas_size();
         let rect = ctx.borrow().effect_rect(cw as usize, ch as usize);
+        let spread = end.blur > 0.0 || end.glow.1 > 0.0;
         if end.blur > 0.0 {
             with_canvas_pixels(i, ctx, |p, w, h, scratch| {
                 raster::blur(p, w, h, end.blur * px, scratch);
@@ -1223,6 +1375,12 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 clear_outside(p, w, h, rect);
             })?;
         }
+        if let Some(clip) = end.clip {
+            if spread {
+                with_canvas_pixels(i, ctx, |p, w, h, _| apply_clip(p, w, h, &clip, None))?;
+            }
+            ctx.borrow_mut().recycle_mask(clip);
+        }
         end_layer(i, ctx, end.opacity, end.blend)
     });
     reg(interp, ctx, "endlayer", |i, ctx| {
@@ -1235,31 +1393,14 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let blend = blend_named(ctx, &name)?;
         end_layer(i, ctx, opacity, blend)
     });
-    reg(interp, ctx, "blurlayer", |i, ctx| {
+    // The native halves of blurlayer and glowlayer, after `.clipmask`.
+    reg(interp, ctx, ".blurlayer", |i, ctx| {
         let radius = i.pop_f64()?;
-        let sigma = radius * ctx.borrow().px_scale * ctx.borrow().unit_scale();
-        let (cw, ch) = i.canvas_size();
-        let rect = ctx.borrow().effect_rect(cw as usize, ch as usize);
-        with_canvas_pixels(i, ctx, |px, w, h, scratch| {
-            let orig = (rect != [0, 0, w, h]).then(|| px.to_vec());
-            raster::blur(px, w, h, sigma, scratch);
-            if let Some(orig) = orig {
-                keep_outside(px, &orig, w, h, rect);
-            }
-        })
+        spread_layer(i, ctx, radius, None)
     });
-    reg(interp, ctx, "glowlayer", |i, ctx| {
+    reg(interp, ctx, ".glowlayer", |i, ctx| {
         let (strength, radius) = (i.pop_f64()?, i.pop_f64()?);
-        let sigma = radius * ctx.borrow().px_scale * ctx.borrow().unit_scale();
-        let (cw, ch) = i.canvas_size();
-        let rect = ctx.borrow().effect_rect(cw as usize, ch as usize);
-        with_canvas_pixels(i, ctx, |px, w, h, scratch| {
-            let orig = (rect != [0, 0, w, h]).then(|| px.to_vec());
-            raster::glow(px, w, h, sigma, strength.clamp(0.0, 2.0), scratch);
-            if let Some(orig) = orig {
-                keep_outside(px, &orig, w, h, rect);
-            }
-        })
+        spread_layer(i, ctx, radius, Some(strength))
     });
     reg(interp, ctx, "vignette", |i, ctx| {
         let amount = i.pop_f64()?.clamp(0.0, 1.0);

@@ -83,6 +83,11 @@ pub(crate) struct Ctx {
     /// the interpreter for a moment.
     pub spare: Option<Page>,
     pub scratch: Vec<u8>,
+    /// The clip `.clipmask` just captured, for the effect that asked for
+    /// it: `Some(None)` when nothing is clipped away.
+    pub clip_taken: Option<Option<ClipMask>>,
+    /// Alpha buffers of finished clip masks, kept to be reused.
+    pub mask_pool: Vec<Vec<u8>>,
 
     pub params: BTreeMap<String, Value>,
     pub signals: Signals,
@@ -134,8 +139,20 @@ pub(crate) struct Comp {
 
 pub(crate) const MAX_COMPS: usize = 16;
 
+/// The clip in force when a blur or glow began, as coverage: what the
+/// spread of the effect is confined to. Captured by painting through the
+/// interpreter's own clip, so a rotated, curved or nested clip and its
+/// anti-aliased edge are honoured exactly.
+#[derive(Clone, Debug)]
+pub(crate) struct ClipMask {
+    /// One byte of coverage per canvas pixel, 0 (clipped away) to 255.
+    pub alpha: Vec<u8>,
+    /// The pixels with any coverage (x0, y0, x1, y1); outside it, nothing.
+    pub support: [usize; 4],
+}
+
 /// How a layer combinator finishes its layer.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct LayerEnd {
     pub opacity: f64,
     pub blend: crate::raster::Blend,
@@ -143,6 +160,8 @@ pub(crate) struct LayerEnd {
     pub blur: f64,
     /// Glow radius and strength, strength 0 for none.
     pub glow: (f64, f64),
+    /// For a blur or glow, the clip in force when it began, if it clips.
+    pub clip: Option<ClipMask>,
 }
 
 pub(crate) const MAX_SCOPES: usize = 256;
@@ -170,6 +189,8 @@ impl Ctx {
             views: Vec::new(),
             spare: None,
             scratch: Vec::new(),
+            clip_taken: None,
+            mask_pool: Vec::new(),
             params: BTreeMap::new(),
             signals: Signals::default(),
             params_seen: BTreeMap::new(),
@@ -218,6 +239,13 @@ impl Ctx {
         r
     }
 
+    /// Keep a finished mask's buffer for the next one (a few at most).
+    pub fn recycle_mask(&mut self, m: ClipMask) {
+        if self.mask_pool.len() <= MAX_LAYERS {
+            self.mask_pool.push(m.alpha);
+        }
+    }
+
     /// Movie time and length as the running program sees them: inside a
     /// component, its own.
     pub fn movie_clock(&self) -> TimeScope {
@@ -244,7 +272,13 @@ impl Ctx {
         self.dt = dt;
         self.scopes.clear();
         self.scopes.push(TimeScope::window(t, self.duration));
-        self.pending.clear();
+        if let Some(m) = self.clip_taken.take().flatten() {
+            self.recycle_mask(m);
+        }
+        let ends: Vec<LayerEnd> = self.pending.drain(..).collect();
+        for m in ends.into_iter().filter_map(|e| e.clip) {
+            self.recycle_mask(m);
+        }
         self.poses.clear();
         self.views.clear();
         self.comps.clear();
