@@ -290,3 +290,15 @@ fn gusts_over_many_long_lived_particles_are_refused_not_followed() {
         started.elapsed()
     );
 }
+
+#[test]
+fn a_periodic_gusting_emitter_repeats_exactly_whatever_its_period() {
+    // A period that is not a whole number of 1/60 s cells.
+    let src = "<< /Size [200 100] /Duration 4 /FPS 10 /Background [0 0 0] >> animation
+        /scene { << /At [20 50] /Period 1.01 /Rate 10 /Life 0.8 /Speed 60 /Gust [500 0] /GustFreq 10 >>
+                 { 1 setgray 0 0 2 0 360 arc fill } particles } def";
+    let mut m = psanim::Movie::load(src, &psanim::Options::default()).unwrap();
+    let a = m.render_at(0.5 + 1.01).unwrap().premultiplied.to_vec();
+    let b = m.render_at(0.5 + 2.02).unwrap().premultiplied.to_vec();
+    assert_eq!(a, b);
+}

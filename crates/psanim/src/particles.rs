@@ -258,6 +258,17 @@ impl Emitter {
         self.life.0.max(self.life.1)
     }
 
+    /// The length of one gust cell: 1/60 s, or for a periodic emitter the
+    /// nearest length that divides its period, so the grid (and so every
+    /// path) repeats exactly each period.
+    fn cell(&self) -> f64 {
+        if self.period > 0.0 {
+            self.period / (self.period / GUST_CELL).round().max(1.0)
+        } else {
+            GUST_CELL
+        }
+    }
+
     fn gusty(&self) -> bool {
         self.gust != (0.0, 0.0)
     }
@@ -326,8 +337,9 @@ impl Emitter {
             return Ok(());
         }
         let start = (t - self.max_life()).max(first);
-        let j0 = (start / GUST_CELL).floor() - 1.0;
-        let j1 = (t / GUST_CELL).floor() + 1.0;
+        let h = self.cell();
+        let j0 = (start / h).floor() - 1.0;
+        let j1 = (t / h).floor() + 1.0;
         // Cells are counted from j0 in floating point: past 2^53 adding one
         // no longer moves, so such times are refused, not looped over.
         if !(j0.is_finite() && j1.is_finite())
@@ -338,7 +350,7 @@ impl Emitter {
             return Err(format!(
                 "particles: a /Gust over {:.0} s of particle life is too long to follow (at most {:.0} s): shorten /Life, or start emitting later",
                 t - start,
-                MAX_GUST_CELLS as f64 * GUST_CELL
+                MAX_GUST_CELLS as f64 * h
             ));
         }
         self.gust_j0 = j0;
@@ -364,7 +376,7 @@ impl Emitter {
 
     /// The gusting part of the wind in grid cell `j`.
     fn gust_in(&self, seed: i64, j: f64) -> (f64, f64) {
-        let s = (j + 0.5) * GUST_CELL;
+        let s = (j + 0.5) * self.cell();
         (
             self.gust.0 * self.noise(seed, self.salt * 7.0 + 0.25, s, self.gust_freq),
             self.gust.1 * self.noise(seed, self.salt * 7.0 + 0.75, s, self.gust_freq),
@@ -435,7 +447,7 @@ fn flight(
     let (mut p, mut v, mut s) = (p0, v0, born);
     let k = e.drag;
     // Whole cells all take the same factors: work them out once.
-    let h = GUST_CELL;
+    let h = e.cell();
     let (eh, fh) = if k < 1e-9 {
         (1.0, h)
     } else {
@@ -533,7 +545,7 @@ fn particle(
         v0.1 += e.inherit * (b.1 - a.1) / (2.0 * h);
     }
     if e.gusty() {
-        charge_gust(ctx, age / GUST_CELL + 1.0)?;
+        charge_gust(ctx, age / e.cell() + 1.0)?;
     }
     let (mut p, mut v) = flight(e, seed, p0, v0, born, t);
     if e.sway != (0.0, 0.0) {
@@ -831,7 +843,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             let c = ctx.borrow();
             let set = c.particles.last().expect("current() found a set");
             let cost = if set.emitters[p.emitter].gusty() {
-                (n as f64 + 1.0) * ((set.t - p.born) / GUST_CELL + 1.0)
+                (n as f64 + 1.0) * ((set.t - p.born) / set.emitters[p.emitter].cell() + 1.0)
             } else {
                 0.0
             };

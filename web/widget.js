@@ -237,6 +237,9 @@ export class PsAnimWidget extends HTMLElement {
     const round = this.#timeMode() === "loop" ? Math.floor(elapsed / this.meta.duration) : 0;
     if (this.lastRound != null && round !== this.lastRound) {
       for (const name of this.eventNames) this.engine.clearEvents(name);
+      // A new round is a new picture even when the frame number is the
+      // same (a one-frame loop): the clock signal and the events changed.
+      this.dirty = true;
     }
     this.lastRound = round;
     this.lastT = t;
