@@ -68,6 +68,10 @@ pub(crate) struct Ctx {
     pub signals: Signals,
     /// Names `param` was asked for and the defaults given, for `info`.
     pub params_seen: BTreeMap<String, String>,
+    /// Reels `reelduration` measured while the program's top level ran, with
+    /// the length it reported. Checked once the program is fully defined: a
+    /// custom transition defined after the measurement was counted as a clip.
+    pub measured_reels: Vec<(Vec<Value>, f64)>,
 
     /// Components being set up or drawn, innermost last. Inside one, the
     /// movie-level facts (`globaltime`, `duration`, `movieseed`, `param`)
@@ -136,6 +140,7 @@ impl Ctx {
             params_seen: BTreeMap::new(),
             comps: Vec::new(),
             base_dir: None,
+            measured_reels: Vec::new(),
             hint: None,
         }
     }

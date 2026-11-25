@@ -131,8 +131,13 @@ built; `docs/roadmap.md` ranks it.
   them. Porting them is optional tidying, not a fix.
 
 - `reelduration` cannot tell an undefined clip from an undefined
-  transition when called before they are defined; a transition must be
-  named `t-...` or defined first. Wrong order silently lengthens the film.
+  transition when called before they are defined, so it takes built-in
+  names and `t-...` for transitions. A custom transition with another name,
+  defined later, used to lengthen the film silently (#19); load now
+  re-plans every measured reel once the program has run and fails with
+  the entry's name if the length differs. The fix for the author is still
+  to define the transition first or name it `t-...`; a declared
+  `/name deftransition` was not needed.
 - `check`'s abrupt-change detector is a threshold on mean difference;
   it misses small pops in busy frames.
 - `MAX_OUTPUT` truncates printed text at 64 KB per collection.

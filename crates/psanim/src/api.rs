@@ -473,13 +473,13 @@ pub const API: &[ApiEntry] = &[
         "reel",
         "reelduration",
         "[ ... ]  reelduration  seconds",
-        "The total length of a reel array: the clips' durations added up, minus the transitions' (a transition overlaps the clips on both sides, so a clip's own duration includes the transitions into and out of it). Use it for /Duration: define the reel array first, then `<< /Duration film reelduration ... >> animation`.",
+        "The total length of a reel array: the clips' durations added up, minus the transitions' (a transition overlaps the clips on both sides, so a clip's own duration includes the transitions into and out of it). Use it for /Duration: define the reel array first, then `<< /Duration film reelduration ... >> animation`. It runs before the clips and your own transitions exist, so it takes the built-in transitions and any name starting `t-` for transitions and every other name for a clip; once the program has loaded, a measurement that a custom transition (any other name) would have changed is an error naming it, not a longer film.",
     ),
     e(
         "reel",
         "transitions",
         "-  transitions  dict",
-        "The dictionary of transitions. To define your own, put a procedure there: `transitions /t-shutter { ... } put`, then use `[dur /t-shutter]` in a reel. Name it with a `t-` prefix, or define it before the reel is measured with reelduration: otherwise the entry is taken for a clip. It is called with `procA procB u`: draw the frame that is u (0 to 1, linear) of the way from A to B. A and B are ready-made procedures that draw each clip with its own clock still running; call them inside gsave/grestore with whatever clip, transform or layer the transition needs.",
+        "The dictionary of transitions. To define your own, put a procedure there: `transitions /t-shutter { ... } put`, then use `[dur /t-shutter]` in a reel. Name it with a `t-` prefix, or define it before the reel is measured with reelduration: otherwise reelduration counts the entry as a clip, and loading the movie fails, naming it. It is called with `procA procB u`: draw the frame that is u (0 to 1, linear) of the way from A to B. A and B are ready-made procedures that draw each clip with its own clock still running; call them inside gsave/grestore with whatever clip, transform or layer the transition needs.",
     ),
     e(
         "input",
