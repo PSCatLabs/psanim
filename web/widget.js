@@ -72,6 +72,7 @@ export class PsAnimWidget extends HTMLElement {
 
   constructor() {
     super();
+    this._request = 0;
     const root = this.attachShadow({ mode: "open" });
     root.innerHTML = `<style>${css}</style><canvas part="canvas"></canvas><pre class="err" role="alert"></pre>`;
     this.canvas = root.querySelector("canvas");
@@ -146,14 +147,19 @@ export class PsAnimWidget extends HTMLElement {
   async attributeChangedCallback(name, old, value) {
     if (old === value) return;
     if (name === "src" && value) {
+      // A later src or entry supersedes this fetch: only the newest request
+      // may open its movie, whatever order the responses arrive in.
+      const request = ++this._request;
       try {
         const r = await fetch(value);
         if (!r.ok) throw new Error(`cannot fetch ${value}: ${r.status}`);
-        this.source = await r.text();
+        const text = await r.text();
+        if (request === this._request) this.source = text;  // (the setter moves _request on)
       } catch (e) {
-        this.#fail(e);
+        if (request === this._request) this.#fail(e);
       }
     } else if (name === "entry" && value) {
+      ++this._request;
       this._entry = value;
       this._source = null;
       this.#open();
@@ -168,6 +174,7 @@ export class PsAnimWidget extends HTMLElement {
   }
 
   set source(text) {
+    ++this._request; // supersedes any src fetch still in flight
     this._source = text;
     this._entry = null;
     this.#open();
