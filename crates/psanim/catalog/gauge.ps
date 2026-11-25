@@ -11,7 +11,7 @@
 /pkchart use
 
 /Title (CPU) param /ttl exch def                         % the panel's title; () for none
-/Signal null param /sig exch def                         % the host signal to show, e.g. /cpu; null plays /Values
+/Signal null param dup type /stringtype eq { cvn } if /sig exch def                         % the host signal to show, e.g. /cpu; null plays /Values
 /Values null param /vals exch def                        % without a signal: values played evenly across the duration (null: a demo)
 /Range [0 100] param /rng exch def                       % the values at the two ends of the arc
 /Thresholds [/good 70 /warn 90 /bad] param /ths exch def % the colours by value

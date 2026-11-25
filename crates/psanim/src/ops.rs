@@ -325,6 +325,9 @@ fn keep_outside(px: &mut [u8], orig: &[u8], w: usize, h: usize, r: [usize; 4]) {
     }
 }
 
+/// The most points `alignpath` compares (its work grows as the square).
+const ALIGN_MAX_POINTS: usize = 2048;
+
 pub(crate) fn with_canvas_pixels(
     i: &mut Interp,
     ctx: &Shared,
@@ -1038,6 +1041,16 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 ctx,
                 PsError::Rangecheck,
                 "alignpath: both arrays must hold the same number of x y pairs (use the same count with resamplepath)",
+            );
+        }
+        // Quadratic native work outside the interpreter's budgets: cap it.
+        if a.len() / 2 > ALIGN_MAX_POINTS {
+            return fail(
+                ctx,
+                PsError::Limitcheck,
+                format!(
+                    "alignpath: at most {ALIGN_MAX_POINTS} points per outline (resample to fewer)"
+                ),
             );
         }
         i.push_numbers(&pathmath::align_outline(&a, &b));

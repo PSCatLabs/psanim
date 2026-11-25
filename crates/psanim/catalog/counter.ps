@@ -14,7 +14,7 @@
 /Label (stars on GitHub) param /lbl exch def     % the words under the number
 /From 0 param /n0 exch def                       % where the count starts
 /To 12431 param /n1 exch def                     % where it ends
-/Signal null param /sig exch def                 % follow this host signal instead of counting from /From to /To
+/Signal null param dup type /stringtype eq { cvn } if /sig exch def                 % follow this host signal instead of counting from /From to /To
 /Lag 0 param /lag exch def                       % with /Signal: read it this many seconds late, so it glides between updates
 /Count 0.75 param /cfrac exch def                % the part of the duration spent counting; then it settles and holds
 /Ease /expo-out param /eas exch def              % how the count runs: fast and slowing is the convention

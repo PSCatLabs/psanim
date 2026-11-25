@@ -770,3 +770,42 @@ fn chat_themes_restyle_and_a_dictionary_overrides_one_colour() {
     assert_ne!(light, dark);
     assert_ne!(light, custom);
 }
+
+#[test]
+fn signal_entries_take_the_signal_name_as_text_and_value_entries_need_no_labels() {
+    // As --param or the browser gives it: text, not a name.
+    for entry in ["counter", "gauge", "stat"] {
+        let mut opts = Options::default();
+        opts.params
+            .insert("Signal".into(), psanim::Param::Text("cpu".into()));
+        opts.signals.set("cpu", 42.0);
+        let src = psanim::catalog::source(entry).unwrap();
+        let mut m = Movie::load(src, &opts).unwrap_or_else(|e| panic!("/{entry}: {e}"));
+        m.render_at(1.0)
+            .unwrap_or_else(|e| panic!("/{entry} with Signal=(cpu): {e}"));
+    }
+    // /Values alone, no /Signals and no /Labels.
+    for entry in ["status", "timeseries"] {
+        let src = format!(
+            "<< /Size [400 300] /Duration 2 /FPS 10 >> animation
+             /x /{entry} << /Params << /Values [[1 2 3] [3 2 1]] >> >> instance
+             /scene {{ /x << >> place }} def"
+        );
+        let mut m = Movie::load(&src, &Options::default())
+            .unwrap_or_else(|e| panic!("/{entry} with /Values only: {e}"));
+        m.render_at(0.5).unwrap();
+    }
+}
+
+#[test]
+fn alignpath_refuses_an_outline_too_long_to_compare() {
+    let mut m = Movie::load(
+        "<< /Size [64 48] /Duration 1 /FPS 10 >> animation
+         /big [ 0 1 9999 { dup } for ] def
+         /scene { big big alignpath pop } def",
+        &Options::default(),
+    )
+    .unwrap();
+    let e = m.render_at(0.0).unwrap_err().to_string();
+    assert!(e.contains("at most"), "{e}");
+}

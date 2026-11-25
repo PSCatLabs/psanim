@@ -34,7 +34,9 @@ sigs null eq vals null eq and {
   } for ] def
 } if
 /n sigs null ne { sigs length } { vals length } ifelse def
-labels null eq { /labels [ sigs { 32 string cvs } forall ] def } if
+labels null eq {
+  /labels sigs null ne { [ sigs { 32 string cvs } forall ] } { [ 1 1 n { 3 string cvs (series ) exch strcat } for ] } ifelse def
+} if
 /value-of {
   sigs null ne { sigs exch get lag signalago }
   { vals exch get globaltime duration div 1 fmod 1 index length 1 sub mul valueat } ifelse

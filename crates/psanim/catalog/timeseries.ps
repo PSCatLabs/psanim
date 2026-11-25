@@ -39,7 +39,9 @@ sigs null eq vals null eq and {
   } for ] def
 } if
 /n sigs null ne { sigs length } { vals length } ifelse 4 min def
-labels null eq { /labels [ sigs { 32 string cvs } forall ] def } if
+labels null eq {
+  /labels sigs null ne { [ sigs { 32 string cvs } forall ] } { [ 1 1 n { 3 string cvs (series ) exch strcat } for ] } ifelse def
+} if
 
 /tnow { sigs null ne { signaltime } { globaltime } ifelse } def
 % i ta tb k readings -> [v ...]
