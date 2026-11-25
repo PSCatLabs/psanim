@@ -819,6 +819,77 @@ fn blur_and_glow_spread_light() {
 }
 
 #[test]
+fn blur_and_glow_stay_inside_a_within_box() {
+    // The box is x 16..48, rows 12..36. The blur and the glow are drawn
+    // inside it and must not spread past it; the backdrop is kept.
+    for effect in [
+        "4 { 1 setgray 0 0 32 24 rectfill } blurred",
+        "4 1.5 { 1 setgray 0 0 32 24 rectfill } glowing",
+        "beginlayer 1 setgray 0 0 32 24 rectfill 4 blurlayer 1 endlayer",
+        "beginlayer 1 setgray 0 0 32 24 rectfill 4 1.5 glowlayer 1 endlayer",
+        "1 setgray 0 0 32 24 rectfill 4 blurlayer",
+    ] {
+        let mut m = load(&format!(
+            "/scene {{ 0 0 0.5 setrgbcolor 0 0 64 48 rectfill [16 12 32 24] {{ {effect} }} within }} def"
+        ));
+        let f = m.render_frame(0).unwrap();
+        for y in 0..48 {
+            for x in 0..64 {
+                if !((16..48).contains(&x) && (12..36).contains(&y)) {
+                    assert_eq!(px(&f, x, y), [0, 0, 128, 255], "{effect}: {x},{y}");
+                }
+            }
+        }
+        assert_eq!(px(&f, 32, 24)[0], 255, "{effect}: the middle is lit");
+    }
+}
+
+#[test]
+fn a_glow_follows_a_rotated_clip_exactly() {
+    // A square clip turned 45 degrees: a diamond about (50, 50) reaching
+    // 28 pixels each way. (30, 30) lies inside the diamond's bounding box
+    // but outside the diamond, within the glow's reach: it must stay dark.
+    let mut m = Movie::load(
+        "<< /Size [100 100] /Duration 1 /FPS 10 /Background [0 0 0] >> animation
+         /scene { gsave 50 50 translate 45 rotate -20 -20 40 40 rectclip
+                  6 1.5 { 0.5 setgray -50 -50 100 100 rectfill } glowing grestore } def",
+        &Options::default(),
+    )
+    .unwrap();
+    let f = m.render_frame(0).unwrap();
+    assert!(px(&f, 50, 50)[0] > 128, "the glow brightens the inside");
+    for (x, y) in [(30, 30), (70, 70), (30, 70), (70, 30)] {
+        assert_eq!(
+            px(&f, x, y),
+            [0, 0, 0, 255],
+            "{x},{y} is outside the diamond"
+        );
+    }
+}
+
+#[test]
+fn a_blur_ends_inside_the_clip_it_began_in() {
+    // Not the clip in force where it ends: a clip set and kept by the
+    // body does not decide where the blur may spread...
+    let mut m = load(
+        "/scene { [16 12 32 24] { 4 { 1 setgray 0 0 32 24 rectfill } blurred } within
+                  8 { 0 0 4 4 rectclip 1 setgray 0 0 4 4 rectfill } blurred } def",
+    );
+    let f = m.render_frame(0).unwrap();
+    // ...but the clip it began under (none here) does: the corner square's
+    // blur reaches past its own clip.
+    assert!(
+        px(&f, 6, 47 - 2)[0] > 0,
+        "the blur spreads past the body's own clip"
+    );
+    assert_eq!(
+        px(&f, 14, 24),
+        [0, 0, 0, 255],
+        "and the within box still holds"
+    );
+}
+
+#[test]
 fn an_unclosed_layer_is_reported_and_does_not_poison_the_next_frame() {
     let mut m = load("/scene { frame 1 eq { beginlayer } if 1 setgray 0 0 64 48 rectfill } def");
     let e = m.render_frame(1).unwrap_err();

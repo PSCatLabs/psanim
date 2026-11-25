@@ -206,6 +206,29 @@ fn blur_glow_and_grain_inside_a_component_stay_in_its_box() {
 }
 
 #[test]
+fn a_glow_inside_a_within_inside_a_component_stays_in_the_within_box() {
+    // The component's box is x 80..120, rows 30..70; the within box inside
+    // it is x 90..110, rows 40..60.
+    let mut m = load(
+        "/g << /Size [40 40] /Scene { [10 10 20 20] { 6 1.5 { 1 setgray 0 0 20 20 rectfill } glowing } within } >> component
+         /scene { 0 0 0.3 setrgbcolor 0 0 200 100 rectfill /g << /Box [80 30 40 40] >> place } def",
+    );
+    let f = m.render_at(0.0).unwrap();
+    let w = f.width as usize;
+    for (k, p) in f.premultiplied.chunks_exact(4).enumerate() {
+        let (x, y) = (k % w, k / w);
+        if !((90..110).contains(&x) && (40..60).contains(&y)) {
+            assert_eq!(
+                &p[..3],
+                &[0, 0, 77],
+                "pixel {x},{y} touched outside the within box"
+            );
+        }
+    }
+    assert_eq!(f.premultiplied[(50 * w + 100) * 4], 255);
+}
+
+#[test]
 fn a_movie_redefining_a_word_does_not_change_it_inside_a_component() {
     // The movie defines scale, between and rgbof for itself; the component
     // still means PostScript's scale, the prelude's between and pkstage's rgbof.

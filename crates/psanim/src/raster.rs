@@ -311,6 +311,50 @@ pub fn blur(buf: &mut [u8], w: usize, h: usize, sigma: f64, scratch: &mut Vec<u8
     }
 }
 
+/// Confine `buf` to a clip: scale every pixel by its coverage in `alpha`
+/// (one byte a pixel), zero outside `support` (x0, y0, x1, y1).
+pub fn mask_multiply(buf: &mut [u8], w: usize, h: usize, alpha: &[u8], support: [usize; 4]) {
+    let [x0, y0, x1, y1] = support;
+    for y in 0..h {
+        let row = &mut buf[y * w * 4..(y + 1) * w * 4];
+        if y < y0 || y >= y1 || x1 <= x0 {
+            row.fill(0);
+            continue;
+        }
+        row[..x0 * 4].fill(0);
+        row[x1 * 4..].fill(0);
+        let a = &alpha[y * w..(y + 1) * w];
+        for x in x0..x1 {
+            let k = u32::from(a[x]);
+            if k == 255 {
+                continue;
+            }
+            for c in &mut row[x * 4..x * 4 + 4] {
+                *c = mul255(u32::from(*c), k) as u8;
+            }
+        }
+    }
+}
+
+/// Where a clip covers a pixel, the effect's result; where it does not,
+/// the pixel as it was (`orig`); in between, a mix by coverage. For an
+/// effect run on a canvas that has things outside the clip to keep.
+pub fn mask_mix(buf: &mut [u8], orig: &[u8], alpha: &[u8]) {
+    for ((p, o), a) in buf.chunks_exact_mut(4).zip(orig.chunks_exact(4)).zip(alpha) {
+        match *a {
+            255 => {}
+            0 => p.copy_from_slice(o),
+            k => {
+                let k = u32::from(k);
+                for (c, oc) in p.iter_mut().zip(o) {
+                    let v = mul255(u32::from(*c), k) + mul255(u32::from(*oc), 255 - k);
+                    *c = v.min(255) as u8;
+                }
+            }
+        }
+    }
+}
+
 /// Add a blurred copy of `buf` back onto itself, `strength` times: a glow
 /// around everything bright. `strength` 1 is a full-strength halo.
 pub fn glow(buf: &mut [u8], w: usize, h: usize, sigma: f64, strength: f64, scratch: &mut Vec<u8>) {

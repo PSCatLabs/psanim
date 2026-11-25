@@ -450,13 +450,13 @@ pub const API: &[ApiEntry] = &[
         "layer",
         "blurlayer",
         "radius  blurlayer  -",
-        "Blur everything drawn on the current layer so far (Gaussian, radius in canvas units).",
+        "Blur everything drawn on the current layer so far (Gaussian, radius in canvas units). Only inside the current clip: what lies outside it is left as it was.",
     ),
     e(
         "layer",
         "glowlayer",
         "radius strength  glowlayer  -",
-        "Add a soft halo around everything on the current layer: a blurred copy added back, strength 0..2. The halo's light is the shape's own, spread out: a thin line needs a larger radius and a strength above 1 to show.",
+        "Add a soft halo around everything on the current layer: a blurred copy added back, strength 0..2. The halo's light is the shape's own, spread out: a thin line needs a larger radius and a strength above 1 to show. Only inside the current clip, like blurlayer.",
     ),
     e(
         "layer",
@@ -474,13 +474,13 @@ pub const API: &[ApiEntry] = &[
         "layer",
         "blurred",
         "radius proc  blurred  -",
-        "Draw proc out of focus.",
+        "Draw proc out of focus. The blur stays inside the clip in force when it begins (a within box, a rectclip, any clip path).",
     ),
     e(
         "layer",
         "glowing",
         "radius strength proc  glowing  -",
-        "Draw proc with a halo of light. Try 8 1 for solid shapes, 24 1.6 for thin strokes.",
+        "Draw proc with a halo of light. Try 8 1 for solid shapes, 24 1.6 for thin strokes. The halo stays inside the clip in force when it begins.",
     ),
     e(
         "layer",
