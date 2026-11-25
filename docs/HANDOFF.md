@@ -133,8 +133,14 @@ built; `docs/roadmap.md` ranks it.
 - `reelduration` cannot tell an undefined clip from an undefined
   transition when called before they are defined; a transition must be
   named `t-...` or defined first. Wrong order silently lengthens the film.
-- `check`'s abrupt-change detector is a threshold on mean difference;
-  it misses small pops in busy frames.
+- `check`'s pop detector (per tile, against the same tile in the pairs
+  either side; docs/cli.md) is tuned on the gallery and test movies, not
+  proven. It flags intended discrete changes too (cuts between clips, a
+  stepped value) and there is no way to mark a cut as intended. It scans
+  a fixed set of about 230 frames of a pure movie, so a pop elsewhere in a
+  long movie is found only by `check --all`; a movie with state is scanned
+  only around its sampled frames. Rendering a pure movie's frames is cheap
+  enough that `--all` costs seconds; for the slowest pieces it is minutes.
 - `MAX_OUTPUT` truncates printed text at 64 KB per collection.
 - The browser player renders on the main thread and has no way to show
   `print` output.

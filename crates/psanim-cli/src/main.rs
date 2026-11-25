@@ -2,6 +2,7 @@
 
 mod args;
 mod encode;
+mod scan;
 
 use std::io::Write;
 use std::path::Path;
@@ -512,6 +513,13 @@ fn cmd_render(rest: &[String]) -> Result<(), Fail> {
     Ok(())
 }
 
+/// Stretches of 24 consecutive frames `check` scans for pops beyond its
+/// sampled frames, in a pure movie: about 230 frames, whatever the machine.
+const SWEEP_CHUNKS: u64 = 8;
+/// The longest that scan may take. Only a movie with very slow frames gets
+/// near it, and then its findings depend on the machine's speed.
+const SWEEP_CEILING: std::time::Duration = std::time::Duration::from_secs(8);
+
 /// One sampled moment of `check`.
 struct Sample {
     index: u64,
@@ -546,54 +554,47 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
     let mut samples: Vec<Sample> = Vec::new();
     let mut flat = Vec::new();
     let mut next = Vec::new();
-    // A movie whose frames depend on the ones before pays, at each sample,
-    // for every frame since the last sample: divide that out, so the
-    // figure is the cost of one frame.
-    let sequential = meta.mode != psanim::Mode::Pure;
-    let consecutive = picks.windows(2).all(|w| w[1] == w[0] + 1) && picks.len() > 1;
-    let mut prev: Option<Vec<u8>> = None;
+    // Each sampled frame is rendered with the frames around it: its motion
+    // is the change to the next, and the pairs either side say whether that
+    // change is a pop. (A movie whose frames depend on the ones before pays
+    // for every frame since the last sample: render_ms divides that out, so
+    // the figure is the cost of one frame.)
+    let last = end - 1;
+    let mut scan = scan::Scanner::new(&movie, matte, last);
     for &index in &picks {
-        let started = Instant::now();
-        let frame = movie.render_frame(index)?;
-        let mut millis = started.elapsed().as_secs_f64() * 1e3;
-        let time = frame.time;
-        raster::flatten_onto(frame.premultiplied, matte, &mut flat);
-        if sequential {
-            millis /= movie.last_frame_ticks().max(1) as f64;
-        }
-        let stats = raster::stats(&flat, w, h);
-        if consecutive {
-            // Every frame is sampled: motion is the difference between
-            // neighbours, with no extra rendering.
-            if let (Some(p), Some(last)) = (&prev, samples.last_mut()) {
-                last.motion = raster::difference(p, &flat);
-            }
-            prev = Some(flat.clone());
-            samples.push(Sample {
-                index,
-                time,
-                millis,
-                stats,
-                motion: 0.0,
-            });
-            continue;
-        }
-        // The frame after it, to measure motion.
-        let motion = if index + 1 < meta.frames {
-            let f2 = movie.render_frame(index + 1)?;
-            raster::flatten_onto(f2.premultiplied, matte, &mut next);
-            raster::difference(&flat, &next)
+        // A pure movie's pops are looked for by the sweep below; its
+        // samples need only the next frame. Another movie is looked at
+        // around each sample, which costs little beside reaching it.
+        if meta.mode == psanim::Mode::Pure && !c.has("all") {
+            scan.window(&mut movie, index, index + 1, None)?;
         } else {
-            0.0
-        };
+            scan.window(
+                &mut movie,
+                index.saturating_sub(2).max(first),
+                index + 3,
+                None,
+            )?;
+        }
+        let Some(f) = scan.get(index) else { continue };
         samples.push(Sample {
             index,
-            time,
-            millis,
-            stats,
-            motion,
+            time: f.time,
+            millis: f.millis,
+            stats: raster::stats(&f.flat, w, h),
+            motion: scan.motion(index).unwrap_or(0.0),
         });
     }
+    // Pops anywhere else: a pure movie renders in any order, so a fixed
+    // set of stretches of consecutive frames spread over it is scanned
+    // (every frame with --all). A movie that depends on its history is only
+    // scanned around the samples.
+    let sweep_started = Instant::now();
+    let mut cut_short = false;
+    if !c.has("all") {
+        cut_short = scan.sweep(&mut movie, first, SWEEP_CHUNKS, SWEEP_CEILING)?;
+    }
+    let sweep_ms = sweep_started.elapsed().as_secs_f64() * 1e3;
+    let possible = (end - first).saturating_sub(5) as usize;
     // Judgements an agent would otherwise have to look at pixels to make.
     let mut warnings: Vec<String> = Vec::new();
     // A run of blank frames at the very start or end is a fade from or to
@@ -647,12 +648,77 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
         .collect();
     motions.sort_by(f64::total_cmp);
     let median = motions.get(motions.len() / 2).copied().unwrap_or(0.0);
+    let found = scan.findings();
+    if cut_short {
+        notes.push(format!("the scan for pops hit its {} s time limit with frames this slow, so which pairs it covered, and what it found, depend on the machine's speed", SWEEP_CEILING.as_secs()));
+    }
+    // Whole-frame cuts among the samples: the mean difference is enough for
+    // a change that fills the frame.
     for s in &samples {
         if s.motion > 0.08 && s.motion > 8.0 * median.max(1e-4) {
-            if s.index + 1 >= meta.frames {
-                continue; // the loop's join is judged below
+            if s.index + 1 >= meta.frames || found.pops.iter().any(|p| p.frame == s.index) {
+                continue; // the loop's join is judged below; a pop is reported once
             }
             warnings.push(format!("abrupt change after frame {} (t={:.2}s): difference {:.3} against a typical {median:.4}. A hard cut is fine if intended; otherwise something pops", s.index, s.time, s.motion));
+        }
+    }
+    // Local pops, found tile by tile. A place that changes in steps again
+    // and again is a readout or typing, and changes this frequent anywhere
+    // are a style (sparkle, particles): notes, not a warning each.
+    let covered = found.covered;
+    for (area, frames) in &found.repeated {
+        notes.push(format!(
+            "the area x {:.0}..{:.0}, y {:.0}..{:.0} changes in steps, {} times in the scanned frames (after frames {:?}{}): taken as a readout or typing, not a pop",
+            area[0], area[2], area[1], area[3], frames.len(),
+            &frames[..frames.len().min(5)],
+            if frames.len() > 5 { "..." } else { "" }
+        ));
+    }
+    if meta.mode == psanim::Mode::Persistent {
+        // Marks appearing are what a painting does. Only a change that
+        // fills much of the frame (a cut) is a warning there.
+        let (cuts, marks): (Vec<_>, Vec<_>) = found.pops.iter().partition(|p| p.tiles > 8);
+        if !marks.is_empty() {
+            notes.push(format!(
+                "{} local change{} in the scanned frames (marks appearing on the canvas, after frames {:?}): expected in a persistent movie, not reported one by one",
+                marks.len(),
+                if marks.len() == 1 { "" } else { "s" },
+                marks.iter().map(|p| p.frame).take(6).collect::<Vec<_>>()
+            ));
+        }
+        for p in cuts {
+            warnings.push(format!(
+                "abrupt change after frame {} (t={:.2}s): {} of {} tiles change by {:.3} between this frame and the next, against {:.3} either side. A hard cut is fine if intended; otherwise something pops",
+                p.frame, meta.time_of(p.frame), p.tiles, p.total_tiles, p.change, p.around
+            ));
+        }
+    } else if found.pops.len() > 3 && found.pops.len() * 20 > covered {
+        let at: Vec<u64> = found.pops.iter().map(|p| p.frame).take(6).collect();
+        notes.push(format!(
+            "{} of {covered} scanned frame pairs have a small element appearing or vanishing (after frames {at:?}...): taken as an effect, not reported one by one",
+            found.pops.len()
+        ));
+    } else {
+        for p in found.pops.iter().take(5) {
+            warnings.push(format!(
+                "abrupt change after frame {} (t={:.2}s): {} of {} tiles near x {:.0}..{:.0}, y {:.0}..{:.0} (canvas units) change by {:.3} between this frame and the next, against {:.3} in the pairs either side. Something appears, vanishes or jumps there. A hard cut is fine if intended; otherwise something pops (`psanim sheet --frame {},{}` to see it)",
+                p.frame, meta.time_of(p.frame), p.tiles, p.total_tiles,
+                p.area[0], p.area[2], p.area[1], p.area[3], p.change, p.around,
+                p.frame, p.frame + 1
+            ));
+        }
+        if found.pops.len() > 5 {
+            warnings.push(format!(
+                "and {} more abrupt changes, after frames {:?}",
+                found.pops.len() - 5,
+                found
+                    .pops
+                    .iter()
+                    .skip(5)
+                    .take(10)
+                    .map(|p| p.frame)
+                    .collect::<Vec<_>>()
+            ));
         }
     }
     // A loop's join, measured directly whatever was sampled: the step from
@@ -693,6 +759,7 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
                 "mean_frame_ms": mean_ms,
                 "slowest_frame": slowest.map(|s| json!({"frame": s.index, "ms": s.millis})),
                 "loop_seam": seam.map(|(join, typical)| json!({"step": join, "typical_step": typical})),
+                "pop_scan": {"pairs_judged": covered, "pairs_possible": possible, "ms": (sweep_ms * 10.0).round() / 10.0},
                 "warnings": warnings, "notes": notes, "printed": movie.take_output(),
                 "samples": samples.iter().map(|s| json!({
                     "frame": s.index, "time": s.time, "ms": (s.millis * 100.0).round() / 100.0,
@@ -732,6 +799,18 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
             s.index, s.millis
         );
     }
+    println!(
+        "  scanned {covered} of {possible} frame pairs for pops, tile by tile{}",
+        if c.has("all") {
+            String::new()
+        } else if meta.mode != psanim::Mode::Pure {
+            " (around the sampled frames only; `--all` scans every frame)".to_string()
+        } else if covered < possible {
+            format!(" ({sweep_ms:.0} ms; `--all` scans every frame)")
+        } else {
+            format!(" ({sweep_ms:.0} ms)")
+        }
+    );
     if let Some((join, typical)) = seam {
         println!("  loop join: step {join:.4} against {typical:.4} beside it");
     }

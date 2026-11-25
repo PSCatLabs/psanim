@@ -23,6 +23,7 @@ scripts/build_wasm.sh && node scripts/wasm_smoke.mjs     # the browser build
 | Documentation | `tests/docs.rs` | every `postscript` fence in the skill and docs runs as a movie; every example and gallery piece loads and renders |
 | Parallel rendering | `src/render.rs` tests | parallel equals serial, in order; errors and sink failures stop the render |
 | Contact sheets | `src/sheet.rs` tests | every thumbnail is on the sheet |
+| `psanim check` | `crates/psanim-cli/tests/check.rs`, `raster.rs` tests | a small pop in a busy frame is flagged, also where no sampled frame is; steady fast motion, fades, wipes and counters that step are not |
 | The browser ABI | `crates/psanim-wasm` test, `scripts/wasm_smoke.mjs` | load, render, signals, errors through the C ABI, natively and in Node |
 | PSCat's host API | `tests/host_api.rs` in the PSCat branch | see [pscat-integration](pscat-integration.md) |
 
