@@ -74,9 +74,9 @@ let frame = movie.render_at(clock.seconds())?;
 ```
 
 The program reads them with `/mousex signal` and `/click sinceevent`.
-A live event track keeps its last 256 events (older ones still count in
-`eventcount`); `clear_events` forgets a track, for a host whose clock
-starts over. The same program renders
+A live event track keeps every event, so `eventcount` and `sinceevent`
+answer exactly at any time; `clear_events` forgets a track, for a host
+whose clock starts over. The same program renders
 offline with those signals loaded from a file.
 
 `set_signal` replaces the signal with a constant. A dashboard wants the

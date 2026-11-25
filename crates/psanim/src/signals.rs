@@ -72,14 +72,7 @@ pub struct Signals {
     pub tracks: BTreeMap<String, Track>,
     /// Event times in seconds, ascending.
     pub events: BTreeMap<String, Vec<f64>>,
-    /// Events a live host has dropped from the front of a track to keep it
-    /// short ([`Signals::push_event`]); `eventcount` still counts them.
-    pub dropped: BTreeMap<String, usize>,
 }
-
-/// The most events [`Signals::push_event`] keeps per track; older ones are
-/// dropped (and still counted).
-pub const LIVE_EVENTS_KEPT: usize = 256;
 
 impl Signals {
     /// Set `name` to a constant: what a live host does before each frame.
@@ -132,31 +125,25 @@ impl Signals {
             return (None, 0);
         };
         let n = times.partition_point(|e| *e <= t);
-        let dropped = self.dropped.get(name).copied().unwrap_or(0);
-        (n.checked_sub(1).map(|i| t - times[i]), n + dropped)
+        (n.checked_sub(1).map(|i| t - times[i]), n)
     }
 
     /// Add an event at time `t` to the track `name`: what a live host does
     /// when the viewer clicks or presses a key. Times may arrive in any
-    /// order. A live host can run for days, so a track keeps only its last
-    /// [`LIVE_EVENTS_KEPT`] events; the dropped ones still count in
-    /// `eventcount`.
+    /// order. Every event is kept, so `eventcount` and `sinceevent` answer
+    /// exactly at any time, earlier ones included: events are clicks and
+    /// keys, eight bytes each, and a host whose clock starts over (a looping
+    /// widget) calls [`Signals::clear_events`] as it does.
     pub fn push_event(&mut self, name: &str, t: f64) {
         let times = self.events.entry(name.to_string()).or_default();
         let at = times.partition_point(|e| *e <= t);
         times.insert(at, t);
-        if times.len() > LIVE_EVENTS_KEPT {
-            let extra = times.len() - LIVE_EVENTS_KEPT;
-            times.drain(..extra);
-            *self.dropped.entry(name.to_string()).or_default() += extra;
-        }
     }
 
     /// Forget every event of the track `name` (a live host whose clock
     /// starts over, as a looping widget's does).
     pub fn clear_events(&mut self, name: &str) {
         self.events.remove(name);
-        self.dropped.remove(name);
     }
 
     /// Read signals from CSV text: a header row naming the columns, the
@@ -219,11 +206,7 @@ impl Signals {
     /// Merge `other` into this set; its entries replace same-named ones.
     pub fn extend(&mut self, other: Signals) {
         self.tracks.extend(other.tracks);
-        for name in other.events.keys() {
-            self.dropped.remove(name);
-        }
         self.events.extend(other.events);
-        self.dropped.extend(other.dropped);
     }
 }
 
@@ -232,23 +215,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn live_events_insert_in_order_and_keep_counting_when_trimmed() {
+    fn live_events_insert_in_order_and_answer_at_any_time() {
         let mut s = Signals::default();
         s.push_event("click", 2.0);
         s.push_event("click", 1.0);
         assert_eq!(s.last_event("click", 1.5), (Some(0.5), 1));
         assert_eq!(s.last_event("click", 3.0), (Some(1.0), 2));
-        for k in 0..LIVE_EVENTS_KEPT + 10 {
+        for k in 1..=1000 {
             s.push_event("tick", k as f64);
         }
-        assert_eq!(s.events["tick"].len(), LIVE_EVENTS_KEPT);
-        let end = (LIVE_EVENTS_KEPT + 9) as f64;
-        assert_eq!(
-            s.last_event("tick", end),
-            (Some(0.0), LIVE_EVENTS_KEPT + 10)
-        );
+        // Earlier times still see exactly the events before them.
+        assert_eq!(s.last_event("tick", 0.0), (None, 0));
+        assert_eq!(s.last_event("tick", 10.5), (Some(0.5), 10));
+        assert_eq!(s.last_event("tick", 1000.0), (Some(0.0), 1000));
         s.clear_events("tick");
-        assert_eq!(s.last_event("tick", end), (None, 0));
+        assert_eq!(s.last_event("tick", 1000.0), (None, 0));
     }
 
     #[test]
