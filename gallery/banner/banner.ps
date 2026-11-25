@@ -1,0 +1,104 @@
+%!PS
+% Poster: 39
+% Banner
+%
+% A dot-matrix printer in a dark office at night prints a job header on
+% green-bar paper, tears the page off, and starts a banner: HELLO in letters
+% made of characters, printed sideways down the paper. The header says to turn
+% your head left, so the film does: the picture rolls a quarter turn and the
+% letters stand up as they print, one to a sheet, each sheet torn off as its
+% letter is done. At the end the printer slides away and the five sheets arrive
+% side by side along their perforations, spelling the word.
+%
+% The printer is the catalog's /dotmatrix; the five sheets are the same entry
+% with /Sheet true (one finished page, flat). The film writes only the job and
+% the camera. The job is invented.
+
+/report (JOB 4471  BANNER RUN  03:12:07\n========================================\nSPOOL     QUEUE 1 OF 1\nFORM      TRACTOR 9.5 X 11 GREENBAR\nPINS      9    MODE DRAFT   70 CPS\nRIBBON    FRESH (CHANGED 03:09)\n\nLOADING BANNER TEXT ......... OK\nSIDEWAYS FEED ............... OK\nPAGES REQUIRED ................ 5\n\nSEE NEXT PAGES. TURN YOUR HEAD LEFT.\n\n----------------------------------------\nEND OF JOB HEADER) def
+/word (HELLO) def
+
+<< /Size [1280 720] /FPS 30 /Duration 41 /Background [0.04 0.03 0.03]
+   /Title (Banner)
+   /Description (A dot-matrix printer in a dark office prints a job header, tears the page off, then a banner sideways down the paper: the header says to turn your head left, so the picture rolls a quarter turn and the letters stand up as they print, one to a sheet. The five sheets end side by side along their perforations, spelling HELLO. The catalog's dotmatrix entry.)
+>> animation
+
+% The job: its 15 lines and the 3 the printer feeds first make the first page of 18
+% lines. A banner letter is 6 columns of 3 lines, 18 lines, so every letter is a
+% page of its own and each page tears off as it fills. The times in the camera
+% below were read from this job's plan, which these parameters fix.
+/job /dotmatrix << /Seed 4471 /Params << /Window [720 1000] /Text report /Banner word /PageLines 18
+      /Tear /each /Speed 70 /Quality /Draft /Paper /greenbar /Backdrop false >> >> instance
+% The finished pages: the same text and settings, one page each, lying flat.
+/s0 /dotmatrix << /Seed 4471 /Params << /Sheet true /Window [720 1000] /Top 0 /Text () /Banner word /PageLines 18 /Page 0 >> >> instance
+/s1 /dotmatrix << /Seed 4471 /Params << /Sheet true /Window [720 1000] /Top 0 /Text () /Banner word /PageLines 18 /Page 1 >> >> instance
+/s2 /dotmatrix << /Seed 4471 /Params << /Sheet true /Window [720 1000] /Top 0 /Text () /Banner word /PageLines 18 /Page 2 >> >> instance
+/s3 /dotmatrix << /Seed 4471 /Params << /Sheet true /Window [720 1000] /Top 0 /Text () /Banner word /PageLines 18 /Page 3 >> >> instance
+/s4 /dotmatrix << /Seed 4471 /Params << /Sheet true /Window [720 1000] /Top 0 /Text () /Banner word /PageLines 18 /Page 4 >> >> instance
+/sheets [ /s0 /s1 /s2 /s3 /s4 ] def
+
+% ---- the camera --------------------------------------------------------------------------
+/turnat 10.6 def  /turnto 13.0 def           % the picture rolls a quarter turn, as the first letter starts
+/leaveat 34.0 def                              % the printer slides out of the picture
+/sheetsat 34.3 def  /sheetgap 0.3 def  /sheetfly 1.7 def
+/sheetscale 0.54 def
+
+% ---- the room: a lamp over the desk, dark all round ----------------------------------------
+/room {
+  << /ShadingType 3 /ColorSpace /DeviceRGB /Coords [ 640 380 0 640 380 820 ]
+     /Function << /FunctionType 2 /Domain [0 1] /C0 [0.20 0.145 0.10] /C1 [0.035 0.028 0.03] /N 0.8 >>
+     /Extend [true true] >> shfill
+} def
+
+% ---- the printer, rolled by the camera ---------------------------------------------------------
+/printerlayer {
+  turnat turnto /cubic-inout tween /rot exch def
+  leaveat leaveat 1.9 add /cubic-inout tween /slide exch def
+  /ang rot 90 mul def
+  slide 1 lt {
+    gsave
+      % the picture rolls about the print line, which travels from low centre to the right
+      640 rot 326 mul add  134 rot 226 mul add                    % where the print line goes
+      2 copy  /ay exch def /ax exch def pop pop
+      ax ang sin 366 mul sub slide 900 mul add  ay ang cos 366 mul add  translate  ang rotate
+      /job << /Box [ -360 -500 720 1000 ] /After /hold >> place
+    grestore
+  } if
+} def
+
+% ---- the five sheets arriving, to lie in a row ----------------------------------------------------
+/sheetrow {
+  gsave
+    640 360 translate  1 36 41 /sine-inout tween 0.07 mul add dup scale  -640 -360 translate
+    /s0 componentsize sheetscale mul /sh exch def sheetscale mul /sw exch def   % a sheet's width and height, scaled
+    /spacing sh 0.963 mul def
+    0 1 4 { /k exch def
+      sheetsat k sheetgap mul add dup sheetfly add /cubic-out tween /se exch def
+      se 0 gt {
+        640 k 2 sub spacing mul add /tx exch def
+        gsave
+          tx 1 se sub 1420 tx sub mul add 360 translate  90 rotate
+          sheets k get << /Box [ sw 2 div neg sh 2 div neg sw sh ] /After /hold >> place
+        grestore
+      } if
+    } for
+  grestore
+} def
+
+/caption {
+  38 40 /smooth tween dup 0 gt {
+    gsave
+      /Courier-Bold findfont 20 scalefont setfont
+      0.95 0.85 0.65 setrgbcolor setalpha
+      (JOB 4471 COMPLETE  *  5 PAGES  *  TEAR AT THE PERFORATIONS) dup stringwidth pop 2 div 640 exch sub 36 moveto show
+    grestore
+  } { pop } ifelse
+} def
+
+/scene {
+  room
+  printerlayer
+  sheetrow
+  caption
+  0.25 vignette
+  now 0.9 /smooth tween 1 exch sub dup 0 gt { 0 setgray setalpha 0 0 width height rectfill } { pop } ifelse
+} def
