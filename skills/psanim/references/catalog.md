@@ -131,6 +131,37 @@ End credits rolling upward at a steady speed: headings, roles beside names, cent
 | /Settle | `0.12` | fraction of the box's height over which the roll slows to its stop (0 for none) |
 | /Theme | `/inherit` | a theme name (/paper /dusk ..), or /inherit for the movie's |
 
+## `/dotmatrix`: Dot-matrix printer
+
+A dot-matrix printer on tractor-feed paper: the head sweeps across laying down each character's dot columns as it passes, both ways if you like, the paper steps up a line at a time, the ribbon is faintly uneven, and the page tears off at its perforation. Draft or near-letter quality, green-bar or plain paper, and sideways banners.
+
+720x640, 11.3 s. `/x /dotmatrix component`, then `/x << /Box [..] >> place`.
+
+| Param | Default | Meaning |
+|---|---|---|
+| /Backdrop | `true` | the dark inside of the printer behind the paper (false: transparent) |
+| /Banner | `null` | big letters printed sideways after the text (capitals, digits, punctuation): (HELLO) |
+| /BannerChar | `(#)` | the character the big letters are made of |
+| /BannerFeed | `0.05` | seconds a line feed takes in a banner |
+| /BannerSpeed | `400` | characters a second while a banner is printing (it is printed in a fast mode) |
+| /Bidirectional | `true` | true: prints on the way back too; false: returns blank to the left each line |
+| /Cols | `40` | characters across the paper (longer lines wrap) |
+| /Feed | `0.14` | seconds a line feed takes |
+| /Hold | `1.2` | seconds to rest at the end |
+| /Ink | `0.4` | 0 to 1: how uneven the ribbon is (dots paler in streaks); 0 is perfectly even |
+| /Page | `0` | the page /Sheet shows, from 0 |
+| /PageLines | `24` | lines from one perforation to the next |
+| /Paper | `/greenbar` | /greenbar (pale green bars every three lines) or /plain |
+| /Quality | `/Draft` | /Draft (one pass, 5 by 9 dots a character) or /NLQ (two passes: the second puts dots half a step over and down between lit neighbours, so strokes run together) |
+| /Ribbon | `[0.07 0.07 0.12]` | the ink colour [r g b] |
+| /Sheet | `false` | true: not the printer but one finished page lying flat (the paper alone), for laying the pages of a banner out |
+| /Speed | `60` | characters a second while the head is printing |
+| /Start | `0.4` | seconds before the first movement |
+| /Tear | `/end` | /end (the last page tears off), /each (every page does as it fills) or /none |
+| /Text | `null` | what to print: a string with \n between lines, or an array of strings; a demo report if none and no /Banner |
+| /Top | `3` | blank lines fed before the first printed one |
+| /Window | `[720 640]` | the picture's size: width height |
+
 ## `/fire`: Fire
 
 A flame that loops: stylized, as flat tongues in two or three colours, or realistic, a hot body with glow, flicker, rising embers and faint smoke. Height, width, intensity and wind take it from a candle to a campfire to a torch.

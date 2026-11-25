@@ -1,0 +1,687 @@
+%!PS
+% Catalog entry: dotmatrix. A dot-matrix printer on tractor-feed paper: the print
+% head sweeps across a line laying down each character's dot columns as it passes,
+% the paper steps up a line at a time, and at the end the page tears off at its
+% perforation.
+% In a movie:  /pr /dotmatrix component   then   /pr << /Box [x y w h] /After /hold >> place
+% With a report of your own (lines separated by \n, or an array of strings):
+%   /pr /dotmatrix << /Params << /Text (NIGHTLY RUN\nALL JOBS OK) /Paper /plain /Quality /NLQ >> >> instance
+% Placed small, the type shrinks with the paper: from about 360 units wide it still
+% reads, smaller it is texture; /Cols 20 doubles the type. Place it with /After /hold:
+% the last picture it holds is the emptied printer after the tear, or with /Tear /none
+% the printout still in the machine.
+% A banner, the classic big letters printed sideways down the paper, is /Banner (HELLO):
+% each letter is a column bitmap of the entry's own font, one printed line a pixel
+% row, so the page has to be turned a quarter turn to the left to read it.
+%
+% /Sheet true shows one finished page lying flat, the paper alone: the same text and
+% settings give the same page the printer would tear off, so the pages of a banner
+% can be laid side by side after they have been printed.
+%
+% The whole print run is a plan made once at the start: every sweep of the head,
+% every paper feed, every tear has its time. A frame is a function of the time:
+% the head is wherever the plan puts it, and a dot is on the paper if the head has
+% passed it by then. The ink follows the instance's /Seed: it is a little uneven,
+% as a ribbon is, and differently for another instance.
+%
+% The 9-pin dot font below is original (5 columns of 9 pins, with real descenders
+% below the baseline), derived from the 7-row font of the ledmatrix entry; the two
+% tables are copies and a shared font library should unify them. Each lit cell is
+% a round ink dot.
+
+/Text null param /text0 exch def                 % what to print: a string with \n between lines, or an array of strings; a demo report if none and no /Banner
+/Banner null param /banner exch def              % big letters printed sideways after the text (capitals, digits, punctuation): (HELLO)
+/BannerChar (#) param /bchar exch def            % the character the big letters are made of
+/Paper /greenbar param dup type /stringtype eq { cvn } if /paper exch def  % /greenbar (pale green bars every three lines) or /plain
+/Quality /Draft param dup type /stringtype eq { cvn } if /quality exch def % /Draft (one pass, 5 by 9 dots a character) or /NLQ (two passes: the second puts dots half a step over and down between lit neighbours, so strokes run together)
+/Speed 60 param /speed exch def                  % characters a second while the head is printing
+/Bidirectional true param dup type /booleantype ne { 0 ne } if /bidir exch def  % true: prints on the way back too; false: returns blank to the left each line
+/Cols 40 param cvi /cols exch def                % characters across the paper (longer lines wrap)
+/PageLines 24 param cvi /pagel exch def          % lines from one perforation to the next
+/Tear /end param dup type /booleantype eq { { /end } { /none } ifelse } if dup type /stringtype eq { cvn } if /tear exch def % /end (the last page tears off), /each (every page does as it fills) or /none
+/Ink 0.4 param /ink exch def                     % 0 to 1: how uneven the ribbon is (dots paler in streaks); 0 is perfectly even
+/Ribbon [0.07 0.07 0.12] param /ribbon exch def  % the ink colour [r g b]
+/Feed 0.14 param /feeddur exch def               % seconds a line feed takes
+/BannerSpeed 400 param /bspeed exch def          % characters a second while a banner is printing (it is printed in a fast mode)
+/BannerFeed 0.05 param /bfeed exch def           % seconds a line feed takes in a banner
+/Top 3 param cvi /topm exch def                  % blank lines fed before the first printed one
+/Start 0.4 param /start0 exch def                % seconds before the first movement
+/Hold 1.2 param /hold exch def                   % seconds to rest at the end
+/Window [720 640] param aload pop /wh exch def /ww exch def  % the picture's size: width height
+/Sheet false param dup type /booleantype ne { 0 ne } if /sheetmode exch def  % true: not the printer but one finished page lying flat (the paper alone), for laying the pages of a banner out
+/Page 0 param cvi /pagen exch def                % the page /Sheet shows, from 0
+/Backdrop true param dup type /booleantype ne { 0 ne } if /backdrop exch def  % the dark inside of the printer behind the paper (false: transparent)
+
+/glyphs7 [
+  [ ( ) (...) (...) (...) (...) (...) (...) (...) ]
+  [ (!) (#) (#) (#) (#) (#) (.) (#) ]
+  [ (") (#.#) (#.#) (#.#) (...) (...) (...) (...) ]
+  [ (#) (.#.#.) (.#.#.) (#####) (.#.#.) (#####) (.#.#.) (.#.#.) ]
+  [ ($) (..#..) (.####) (#.#..) (.###.) (..#.#) (####.) (..#..) ]
+  [ (%) (##..#) (##.#.) (...#.) (..#..) (.#...) (.#.##) (#..##) ]
+  [ (&) (.##..) (#..#.) (#.#..) (.#...) (#.#.#) (#..#.) (.##.#) ]
+  [ (') (#) (#) (#) (.) (.) (.) (.) ]
+  [ (\() (..#) (.#.) (#..) (#..) (#..) (.#.) (..#) ]
+  [ (\)) (#..) (.#.) (..#) (..#) (..#) (.#.) (#..) ]
+  [ (*) (.....) (#.#.#) (.###.) (#####) (.###.) (#.#.#) (.....) ]
+  [ (+) (.....) (..#..) (..#..) (#####) (..#..) (..#..) (.....) ]
+  [ (,) (..) (..) (..) (..) (..) (.#) (#.) ]
+  [ (-) (.....) (.....) (.....) (#####) (.....) (.....) (.....) ]
+  [ (.) (.) (.) (.) (.) (.) (.) (#) ]
+  [ (/) (....#) (....#) (...#.) (..#..) (.#...) (#....) (#....) ]
+  [ (0) (.###.) (#...#) (#..##) (#.#.#) (##..#) (#...#) (.###.) ]
+  [ (1) (..#..) (.##..) (..#..) (..#..) (..#..) (..#..) (.###.) ]
+  [ (2) (.###.) (#...#) (....#) (...#.) (..#..) (.#...) (#####) ]
+  [ (3) (.###.) (#...#) (....#) (..##.) (....#) (#...#) (.###.) ]
+  [ (4) (...#.) (..##.) (.#.#.) (#..#.) (#####) (...#.) (...#.) ]
+  [ (5) (#####) (#....) (####.) (....#) (....#) (#...#) (.###.) ]
+  [ (6) (..##.) (.#...) (#....) (####.) (#...#) (#...#) (.###.) ]
+  [ (7) (#####) (....#) (...#.) (..#..) (.#...) (.#...) (.#...) ]
+  [ (8) (.###.) (#...#) (#...#) (.###.) (#...#) (#...#) (.###.) ]
+  [ (9) (.###.) (#...#) (#...#) (.####) (....#) (...#.) (.##..) ]
+  [ (:) (.) (.) (#) (.) (.) (#) (.) ]
+  [ (;) (..) (..) (.#) (..) (.#) (.#) (#.) ]
+  [ (<) (...#.) (..#..) (.#...) (#....) (.#...) (..#..) (...#.) ]
+  [ (=) (.....) (.....) (#####) (.....) (#####) (.....) (.....) ]
+  [ (>) (.#...) (..#..) (...#.) (....#) (...#.) (..#..) (.#...) ]
+  [ (?) (.###.) (#...#) (....#) (...#.) (..#..) (.....) (..#..) ]
+  [ (@) (.###.) (#...#) (#.###) (#.#.#) (#.###) (#....) (.####) ]
+  [ (A) (.###.) (#...#) (#...#) (#####) (#...#) (#...#) (#...#) ]
+  [ (B) (####.) (#...#) (#...#) (####.) (#...#) (#...#) (####.) ]
+  [ (C) (.###.) (#...#) (#....) (#....) (#....) (#...#) (.###.) ]
+  [ (D) (####.) (#...#) (#...#) (#...#) (#...#) (#...#) (####.) ]
+  [ (E) (#####) (#....) (#....) (####.) (#....) (#....) (#####) ]
+  [ (F) (#####) (#....) (#....) (####.) (#....) (#....) (#....) ]
+  [ (G) (.###.) (#...#) (#....) (#.###) (#...#) (#...#) (.###.) ]
+  [ (H) (#...#) (#...#) (#...#) (#####) (#...#) (#...#) (#...#) ]
+  [ (I) (###) (.#.) (.#.) (.#.) (.#.) (.#.) (###) ]
+  [ (J) (..###) (...#.) (...#.) (...#.) (...#.) (#..#.) (.##..) ]
+  [ (K) (#...#) (#..#.) (#.#..) (##...) (#.#..) (#..#.) (#...#) ]
+  [ (L) (#....) (#....) (#....) (#....) (#....) (#....) (#####) ]
+  [ (M) (#...#) (##.##) (#.#.#) (#.#.#) (#...#) (#...#) (#...#) ]
+  [ (N) (#...#) (##..#) (#.#.#) (#.#.#) (#..##) (#...#) (#...#) ]
+  [ (O) (.###.) (#...#) (#...#) (#...#) (#...#) (#...#) (.###.) ]
+  [ (P) (####.) (#...#) (#...#) (####.) (#....) (#....) (#....) ]
+  [ (Q) (.###.) (#...#) (#...#) (#...#) (#.#.#) (#..#.) (.##.#) ]
+  [ (R) (####.) (#...#) (#...#) (####.) (#.#..) (#..#.) (#...#) ]
+  [ (S) (.####) (#....) (#....) (.###.) (....#) (....#) (####.) ]
+  [ (T) (#####) (..#..) (..#..) (..#..) (..#..) (..#..) (..#..) ]
+  [ (U) (#...#) (#...#) (#...#) (#...#) (#...#) (#...#) (.###.) ]
+  [ (V) (#...#) (#...#) (#...#) (#...#) (#...#) (.#.#.) (..#..) ]
+  [ (W) (#...#) (#...#) (#...#) (#.#.#) (#.#.#) (##.##) (#...#) ]
+  [ (X) (#...#) (#...#) (.#.#.) (..#..) (.#.#.) (#...#) (#...#) ]
+  [ (Y) (#...#) (#...#) (.#.#.) (..#..) (..#..) (..#..) (..#..) ]
+  [ (Z) (#####) (....#) (...#.) (..#..) (.#...) (#....) (#####) ]
+  [ ([) (###) (#..) (#..) (#..) (#..) (#..) (###) ]
+  [ (\\) (#....) (#....) (.#...) (..#..) (...#.) (....#) (....#) ]
+  [ (]) (###) (..#) (..#) (..#) (..#) (..#) (###) ]
+  [ (^) (..#..) (.#.#.) (#...#) (.....) (.....) (.....) (.....) ]
+  [ (_) (.....) (.....) (.....) (.....) (.....) (.....) (#####) ]
+  [ (`) (#.) (.#) (..) (..) (..) (..) (..) ]
+  [ (a) (.....) (.....) (.###.) (....#) (.####) (#...#) (.####) ]
+  [ (b) (#....) (#....) (#.##.) (##..#) (#...#) (##..#) (#.##.) ]
+  [ (c) (.....) (.....) (.###.) (#...#) (#....) (#...#) (.###.) ]
+  [ (d) (....#) (....#) (.##.#) (#..##) (#...#) (#..##) (.##.#) ]
+  [ (e) (.....) (.....) (.###.) (#...#) (#####) (#....) (.###.) ]
+  [ (f) (.##.) (#..#) (#...) (###.) (#...) (#...) (#...) ]
+  [ (g) (.....) (.###.) (#...#) (#...#) (.####) (....#) (.###.) ]
+  [ (h) (#....) (#....) (#.##.) (##..#) (#...#) (#...#) (#...#) ]
+  [ (i) (.#.) (...) (##.) (.#.) (.#.) (.#.) (.##) ]
+  [ (j) (..#.) (....) (.##.) (..#.) (..#.) (#.#.) (.#..) ]
+  [ (k) (#....) (#....) (#..#.) (#.#..) (##...) (#.#..) (#..#.) ]
+  [ (l) (##.) (.#.) (.#.) (.#.) (.#.) (.#.) (.##) ]
+  [ (m) (.....) (.....) (##.#.) (#.#.#) (#.#.#) (#.#.#) (#.#.#) ]
+  [ (n) (.....) (.....) (#.##.) (##..#) (#...#) (#...#) (#...#) ]
+  [ (o) (.....) (.....) (.###.) (#...#) (#...#) (#...#) (.###.) ]
+  [ (p) (.....) (#.##.) (##..#) (#...#) (##..#) (#.##.) (#....) ]
+  [ (q) (.....) (.##.#) (#..##) (#...#) (#..##) (.##.#) (....#) ]
+  [ (r) (.....) (.....) (#.##.) (##..#) (#....) (#....) (#....) ]
+  [ (s) (.....) (.....) (.####) (#....) (.###.) (....#) (####.) ]
+  [ (t) (.#..) (.#..) (###.) (.#..) (.#..) (.#..) (..##) ]
+  [ (u) (.....) (.....) (#...#) (#...#) (#...#) (#..##) (.##.#) ]
+  [ (v) (.....) (.....) (#...#) (#...#) (#...#) (.#.#.) (..#..) ]
+  [ (w) (.....) (.....) (#...#) (#...#) (#.#.#) (#.#.#) (.#.#.) ]
+  [ (x) (.....) (.....) (#...#) (.#.#.) (..#..) (.#.#.) (#...#) ]
+  [ (y) (.....) (#...#) (#...#) (#...#) (.####) (....#) (.###.) ]
+  [ (z) (.....) (.....) (#####) (...#.) (..#..) (.#...) (#####) ]
+  [ ({) (.##) (.#.) (.#.) (#..) (.#.) (.#.) (.##) ]
+  [ (|) (#) (#) (#) (#) (#) (#) (#) ]
+  [ (}) (##.) (.#.) (.#.) (..#) (.#.) (.#.) (##.) ]
+  [ (~) (.....) (.##.#) (#.##.) (.....) (.....) (.....) (.....) ]
+  [ (\260) (.#.) (#.#) (.#.) (...) (...) (...) (...) ]
+] def
+% rows beyond the 7 of the table: the descenders of 9 pins (rows 7 and 8, below the baseline)
+/glyphs9 [
+  [ (g) (.....) (.....) (.##.#) (#..##) (#...#) (#..##) (.##.#) (....#) (.###.) ]
+  [ (j) (..#.) (....) (.##.) (..#.) (..#.) (..#.) (..#.) (#.#.) (.#..) ]
+  [ (p) (.....) (.....) (#.##.) (##..#) (#...#) (##..#) (#.##.) (#....) (#....) ]
+  [ (q) (.....) (.....) (.##.#) (#..##) (#...#) (#..##) (.##.#) (....#) (....#) ]
+  [ (y) (.....) (.....) (#...#) (#...#) (#...#) (#..##) (.##.#) (....#) (.###.) ]
+] def
+
+% array-of-row-strings first -> its columns as bit masks (row 0 the lowest bit)
+/rowscols {
+  /rs0 exch def /rarr exch def
+  rarr rs0 get length /rw exch def
+  rw array /rc exch def
+  0 1 rw 1 sub { /ci exch def
+    0 /rm exch def
+    rs0 1 rarr length 1 sub { /ri exch def
+      rarr ri get dup length ci gt { ci get 35 eq } { pop false } ifelse
+      { /rm rm 1 ri rs0 sub bitshift add def } if
+    } for
+    rc ci rm put
+  } for
+  rc
+} def
+/fnt 300 dict def
+[ glyphs7 glyphs9 ] { { /g exch def fnt g 0 get 0 get g 1 rowscols put } forall } forall
+/gcols { % character code -> its columns
+  dup fnt exch known not { dup 97 ge 1 index 122 le and { 32 sub } { pop 63 } ifelse } if
+  dup fnt exch known not { pop 63 } if
+  fnt exch get
+} def
+/upcols { % character code -> its columns, capitals for lower case (the banner has 7 rows)
+  dup 97 ge 1 index 122 le and { 32 sub } if gcols
+} def
+
+% ---- the text as lines ----------------------------------------------------------
+/lbuf 4000 array def  /nl 0 def
+/addline { lbuf nl 3 -1 roll put /nl nl 1 add def } def
+/addwrapped { % string: a line, broken at the paper's width
+  /aw exch def
+  aw length 0 eq { () addline } {
+    { aw length cols le { aw addline exit } if
+      aw 0 cols getinterval addline
+      /aw aw cols aw length cols sub getinterval def } loop
+  } ifelse
+} def
+/bn-k cols 7 idiv 5 min 1 max def               % characters a banner pixel is across
+/bn-lpc bn-k 0.6 mul round cvi 1 max def         % printed lines a banner pixel is down
+/bn-pad cols bn-k 7 mul sub 2 idiv 0 max def
+/bannerline { % mask -> a string: row 0, the top of the letter, at the right edge
+  /bm exch def
+  cols string /bs exch def
+  0 1 cols 1 sub { bs exch 32 put } for
+  0 1 6 { /br exch def
+    bm br neg bitshift 1 and 1 eq {
+      0 1 bn-k 1 sub { bs exch 6 br sub bn-k mul bn-pad add add bchar 0 get put } for
+    } if
+  } for
+  bs
+} def
+/addbanner { % (WORD)
+  { upcols /bcs exch def
+    0 1 bcs length 1 sub { bcs exch get bannerline /bl exch def
+      bn-lpc { bl addline } repeat } for
+    () bn-lpc { dup addline } repeat pop
+  } forall
+} def
+/demo (NIGHTLY BATCH   RUN 0412\n----------------------------------------\nPAYROLL        OK      00:41\nLEDGER         OK      01:12\nINVENTORY      WARN    01:57\n  3 items below reorder level\nARCHIVE        OK      02:30\n----------------------------------------\nPack my box with five dozen jugs.\n0 ERRORS    1 WARNING\nEND OF REPORT) def
+
+topm { () addline } repeat
+text0 null eq banner null eq and { demo } { text0 } ifelse
+dup null eq { pop } {
+  dup type /stringtype eq { dup length 0 eq { pop [] } { splitlines } ifelse } if
+  { addwrapped } forall
+} ifelse
+/bstart nl def
+banner null ne { banner addbanner } if
+/lns lbuf 0 nl getinterval def
+
+% ---- the page: sizes ------------------------------------------------------------
+/sidew 22 def                                    % the printer's side plates
+/mrg 1 def  /strip 3.4 def                       % margin and sprocket strips, in characters
+/cw ww sidew 2 mul sub cols mrg 2 mul add strip 2 mul add div def   % a character cell across
+/dp cw 6 div def                                 % one dot column
+/lp cw 5 3 div mul def                           % a line (6 to the inch when a character is 10 to the inch)
+/rp dp 5 6 div mul def                           % one pin row
+/sheetpad 8 def
+sheetmode { /wh pagel lp mul sheetpad 2 mul add def } if       % a flat page: the window is the page
+/pw cols mrg 2 mul add strip 2 mul add cw mul def
+/px0 ww pw sub 2 div def
+/xl px0 strip mrg add cw mul add def             % the left of the first character
+/yslot 108 def                                   % the printer's top, where the paper comes out
+/printY yslot lp 1.05 mul add def                % the line the head prints on
+/nlq quality /NLQ eq { 1 } { 0 } ifelse def
+/dotr dp quality /NLQ eq { 0.38 } { 0.43 } ifelse mul def
+
+% ---- the plan: sweeps of the head, feeds of the paper, tears ----------------------
+% hseg: [ t0 t1 x0 x1 kind ] head moves (kind 1 prints, 0 repositions)
+% fseg: [ t0 t1 p0 p1 ] paper feeds, p in lines
+% swi:  a line's sweeps, two a line: [ t0 t1 dir xstart xend ] or null
+% tears: [ t0 duration boundary ]
+/hseg nl 4 mul 20 add array def  /hn 0 def
+/fseg nl 3 mul 20 add array def  /fn 0 def
+/swi nl 2 mul array def
+/tears nl 2 add array def  /tn 0 def
+/addhseg { 5 array astore hseg hn 3 -1 roll put /hn hn 1 add def } def
+/extent { % (str) -> first last, or -1 -1 for a blank line
+  /es exch def
+  /ef -1 def /el -1 def
+  0 1 es length 1 sub { /ek exch def es ek get 32 ne { ef 0 lt { /ef ek def } if /el ek def } if } for
+  ef el
+} def
+/retfac 2.6 def                                  % the carriage returns this much faster than it prints
+/tcur start0 def  /tpaper 0 def  /hx xl def  /pcur 0 def  /tfinal start0 def
+/doposition { % x: move the head there, from where it is, taking time
+  /px exch def
+  px hx sub abs dup 0.5 gt {
+    cw div lspd div retfac div 0.06 max /pd exch def
+    tcur tcur pd add hx px 0 addhseg  /tcur tcur pd add def  /hx px def
+  } { pop } ifelse
+} def
+/dofeed { % one line feed, after the last one and the head
+  tcur tpaper max /tf exch def
+  fseg fn [ tf tf fdn add pcur pcur 1 add ] put  /fn fn 1 add def
+  /pcur pcur 1 add def  /tpaper tf fdn add 0.03 add def  /tcur tf def
+  /tfinal tpaper def
+} def
+/dotear { % boundary: form feed to it, pause, rip
+  /tb exch def
+  tcur tpaper max /tf exch def
+  tb 0.9 add pcur sub /fdist exch def
+  fdist 0.01 gt {
+    fdist 22 div 0.22 max /fdur exch def
+    fseg fn [ tf tf fdur add pcur tb 0.9 add ] put  /fn fn 1 add def
+    /pcur tb 0.9 add def  /tf tf fdur add def
+  } if
+  tf 0.4 add /tt exch def
+  tears tn [ tt 1.05 tb ] put  /tn tn 1 add def
+  /tf tt 1.05 add def
+  /tfinal tf def  /tcur tf def  /tpaper tf def
+} def
+/retract { % after a page has gone: the paper draws back to the top of the next form
+  fseg fn [ tcur tcur 0.3 add pcur pcur 0.9 sub ] put  /fn fn 1 add def
+  /pcur pcur 0.9 sub def  /tpaper tcur 0.3 add 0.05 add def  /tfinal tpaper def
+} def
+/lspd speed def  /fdn feeddur def
+0 1 nl 1 sub { /li exch def
+  li bstart ge { /lspd bspeed def /fdn bfeed def } if
+  lns li get extent /el exch def /ef exch def
+  ef 0 lt { dofeed } {
+    /xa xl ef cw mul add def  /xb xl el 1 add cw mul add def
+    0 1 nlq { /ly exch def
+      bidir { hx xa sub abs hx xb sub abs le { 1 } { -1 } ifelse } { 1 } ifelse /dir exch def
+      dir 0 gt { xa xb } { xb xa } ifelse /xe exch def /xs exch def
+      xs doposition
+      ly 0 eq { /tcur tcur tpaper max def } if
+      xe xs sub abs cw div lspd div /pd exch def
+      swi li 2 mul ly add [ tcur tcur pd add dir xs xe ] put
+      tcur tcur pd add xs xe 1 addhseg
+      /tcur tcur pd add def  /hx xe def
+    } for
+    /tcur tcur 0.02 add def
+    dofeed
+  } ifelse
+  tear /each eq li 1 add pagel mod 0 eq and li 1 add nl lt and { li 1 add dotear retract } if
+} for
+/finalb nl pagel div ceiling pagel mul cvi def
+tear /none eq not { finalb dotear } if
+/endtime tfinal hold add def
+/tearthere tn 0 gt def
+
+<< /Size [ ww wh ] /Duration sheetmode { 1 } { endtime } ifelse /Background /transparent
+   /Title (Dot-matrix printer)
+   /Description (A dot-matrix printer on tractor-feed paper: the head sweeps across laying down each character's dot columns as it passes, both ways if you like, the paper steps up a line at a time, the ribbon is faintly uneven, and the page tears off at its perforation. Draft or near-letter quality, green-bar or plain paper, and sideways banners.)
+>> animation
+
+% ---- the ink: one array of dots a line, by pass and tone, made once --------------
+/inkf { % x line -> 0..1, a smooth field the ribbon's wear makes along a line
+  /ik exch def /ix exch def
+  0.5
+  ix 0.65 mul [ ik 11 ] hash01 360 mul add sin 0.33 mul add
+  ix 2.1 mul [ ik 12 ] hash01 360 mul add sin 0.17 mul add
+} def
+/tonelevel { % dot x, line, jitter -> tone 0..3
+  /tj exch def inkf /tf exch def
+  0.97 ink 0.9 1 tf sub mul 0.3 tj mul add mul sub
+  4 mul floor cvi 0 max 3 min
+} def
+/maxd cols 90 mul def
+/gbuf 8 array def  /gcnt 8 array def
+0 1 7 { gbuf exch maxd array put } for
+/dots nl array def
+/adddot { % x y pass: one dot of ink, in its tone's array
+  /dly exch def /dyu exch def /dxu exch def
+  dxu li [ li dxu dyu dly ] hash01 tonelevel dly 4 mul add /gg exch def
+  gbuf gg get gcnt gg get dxu put
+  gbuf gg get gcnt gg get 1 add dyu put
+  gcnt gg gcnt gg get 2 add put
+} def
+/lit? { % mask row -> bool
+  dup 0 lt 1 index 8 gt or { pop pop false } { neg bitshift 1 and 1 eq } ifelse
+} def
+0 1 nl 1 sub { /li exch def
+  0 1 7 { gcnt exch 0 put } for
+  % a flat page has dots only for its own lines
+  sheetmode li pagen pagel mul lt li pagen 1 add pagel mul ge or and { () } { lns li get } ifelse /ls exch def
+  0 1 ls length 1 sub { /ci exch def
+    ls ci get gcols /cm exch def
+    cm length /gw exch def  5 gw sub 2 idiv /goff exch def
+    0 1 gw 1 sub { /gi exch def
+      cm gi get /mask exch def
+      gi gw 1 sub lt { cm gi 1 add get } { 0 } ifelse /mnext exch def
+      ci 6 mul goff add gi add 0.5 add dp mul xl add /cx0 exch def
+      0 1 8 { /ro exch def
+        3 ro sub rp mul /cy0 exch def
+        mask ro lit? {
+          cx0 cy0 0 adddot
+          nlq 1 eq {      % near letter quality: a second pass puts dots between the lit neighbours, so strokes run together
+            mnext ro lit? { cx0 dp 0.5 mul add cy0 1 adddot } if
+            mask ro 1 add lit? { cx0 cy0 rp 0.5 mul sub 1 adddot } if
+            mnext ro 1 add lit? { cx0 dp 0.5 mul add cy0 rp 0.5 mul sub 1 adddot } if
+            mnext ro 1 sub lit? { cx0 dp 0.5 mul add cy0 rp 0.5 mul add 1 adddot } if
+          } if
+        } if
+      } for
+    } for
+  } for
+  /row 8 array def
+  0 1 7 { /gg exch def
+    row gg gbuf gg get 0 gcnt gg get getinterval gcnt gg get array copy put
+  } for
+  dots li row put
+} for
+
+% ---- the clock of the print run: where the head and the paper are -----------------------
+/headat { % -> x of the head now
+  xl /hxn exch def
+  0 1 hn 1 sub { hseg exch get /sg exch def
+    sg 0 get now le {
+      now sg 1 get ge { /hxn sg 3 get def } {
+        now sg 0 get sub sg 1 get sg 0 get sub div /u exch def
+        sg 4 get 0 eq { u u mul 3 2 u mul sub mul /u exch def } if
+        /hxn sg 2 get sg 3 get sg 2 get sub u mul add def
+      } ifelse
+    } { exit } ifelse
+  } for
+  hxn
+} def
+/paperat { % -> how many lines the paper has been fed
+  0 /pn exch def
+  0 1 fn 1 sub { fseg exch get /sg exch def
+    sg 0 get now le {
+      now sg 1 get ge { /pn sg 3 get def } {
+        now sg 0 get sub sg 1 get sg 0 get sub div /u exch def
+        u u mul 3 2 u mul sub mul /u exch def
+        /pn sg 2 get sg 3 get sg 2 get sub u mul add def
+      } ifelse
+    } { exit } ifelse
+  } for
+  pn
+} def
+/yS { P 0.5 add exch sub lp mul printY add } def   % a place on the paper, in lines down from the top of line 0 -> y
+
+% ---- the paper --------------------------------------------------------------------------
+/ragy { % x boundary -> a little tear in the edge
+  /rb exch def 3 div floor /rx exch def
+  [ rx rb 3 add ] hash01 0.5 sub 5 mul
+} def
+/bandpath { % s0 s1, either may be null for no edge: the paper between two boundaries, torn where they are
+  /bs1 exch def /bs0 exch def
+  newpath
+  px0 6 sub bs1 null eq { -3000 } { bs1 yS px0 6 sub bs1 ragy add } ifelse moveto
+  px0 6 sub 4 px0 pw add 6 add {
+    bs1 null eq { -3000 } { dup bs1 ragy bs1 yS add } ifelse
+    lineto
+  } for
+  px0 pw add 6 add bs0 null eq { 3000 } { bs0 yS px0 pw add 6 add bs0 ragy add } ifelse lineto
+  px0 pw add 6 add -4 px0 6 sub {
+    bs0 null eq { 3000 } { dup bs0 ragy bs0 yS add } ifelse
+    lineto
+  } for
+  closepath
+} def
+/paperc [0.975 0.968 0.94] def
+/barc   [0.80 0.91 0.81] def
+/sheet { % s0 s1: the paper from boundary s0 to s1, with its bars, holes, perforations and what is printed on it
+  /ss1 exch def /ss0 exch def
+  P 0.5 add wh 2 lp mul add printY sub lp div sub ss0 max /st exch def    % the top and bottom of what can be seen
+  P 0.5 add printY 2 lp mul add lp div add ss1 min /sb exch def
+  sb st gt {
+    paperc aload pop setrgbcolor
+    px0 sb yS pw st yS sb yS sub rectfill
+    paper /greenbar eq {
+      barc aload pop setrgbcolor
+      st 3 div floor cvi 1 sb 3 div ceiling cvi 1 sub { /bm exch def
+        bm 2 mod 0 eq {
+          bm 3 mul st max /bt exch def  bm 3 mul 3 add sb min /bb exch def
+          bb bt gt { px0 strip cw mul add bb yS pw strip cw mul 2 mul sub bt yS bb yS sub rectfill } if
+        } if
+      } for
+      0.55 0.72 0.57 setrgbcolor 0.5 setlinewidth                      % a printed rule at the edge of each bar
+      st 3 div floor cvi 1 sb 3 div ceiling cvi { /bm exch def
+        bm 3 mul dup st ge exch sb le and {
+          px0 strip cw mul add bm 3 mul yS moveto pw strip cw mul 2 mul sub 0 rlineto stroke
+        } if
+      } for
+    } if
+    % the sprocket strips: a perforated line down each, and a hole every three lines
+    0.6 0.6 0.58 setrgbcolor 0.6 setlinewidth [ 1.6 2.2 ] 0 setdash
+    px0 strip cw mul add sb yS moveto 0 st yS sb yS sub rlineto stroke
+    px0 pw add strip cw mul sub sb yS moveto 0 st yS sb yS sub rlineto stroke
+    [] 0 setdash
+    0.1 0.1 0.12 setrgbcolor
+    st 1.5 sub 3 div floor cvi 1 sb 1.5 sub 3 div ceiling cvi { /hm exch def
+      hm 3 mul 1.5 add dup st ge exch sb le and {
+        px0 strip cw mul 2 div add hm 3 mul 1.5 add yS lp 0.23 mul 0 360 arc fill
+        px0 pw add strip cw mul 2 div sub hm 3 mul 1.5 add yS lp 0.23 mul 0 360 arc fill
+      } if
+    } for
+    % the perforations between pages
+    0.8 setlinewidth
+    st pagel div ceiling cvi pagel mul pagel sb {
+      /pb exch def
+      pb st gt pb sb lt and {
+        0.62 0.62 0.6 setrgbcolor [ 3 2.5 ] 0 setdash
+        px0 pb yS moveto pw 0 rlineto stroke
+        1 setgray 0.5 setalpha px0 pb yS 1.2 sub moveto pw 0 rlineto stroke 1 setalpha
+        [] 0 setdash
+      } if
+    } for
+    % the print
+    1 setlinecap
+    st floor cvi 0 max /li0 exch def
+    sb ceiling cvi 1 sub nl 1 sub min /li1 exch def
+    li0 1 li1 { drawline } for
+  } if
+} def
+
+% ---- the ink: what the head has struck by now --------------------------------------------
+/tonea [ 0.36 0.56 0.8 0.97 ] def
+/tonerm [ 0.82 0.92 1 1.06 ] def
+/swstate { % sweep or null -> mode lim: 0 nothing yet, 1 all of it, 2 the dots at or left of lim, 3 at or right of it
+  dup null eq { pop 0 0 } {
+    /sa exch def
+    tnow sa 0 get lt { 0 0 } {
+      tnow sa 1 get ge { 1 0 } {
+        tnow sa 0 get sub sa 1 get sa 0 get sub div /su exch def
+        sa 4 get sa 3 get sub su mul sa 3 get add
+        sa 2 get 0 gt { 2 } { 3 } ifelse exch
+      } ifelse
+    } ifelse
+  } ifelse
+} def
+/plotall { /pa exch def
+  0 2 pa length 2 sub { /pk exch def pa pk get pa pk 1 add get moveto 0 0 rlineto } for
+} def
+/plotle { /plim exch def /pa exch def
+  0 2 pa length 2 sub { /pk exch def pa pk get dup plim le { pa pk 1 add get moveto 0 0 rlineto } { pop } ifelse } for
+} def
+/plotge { /plim exch def /pa exch def
+  0 2 pa length 2 sub { /pk exch def pa pk get dup plim ge { pa pk 1 add get moveto 0 0 rlineto } { pop } ifelse } for
+} def
+/drawline { % line index: the dots the head has struck by now
+  /dl exch def
+  swi dl 2 mul get swstate /l0 exch def /m0 exch def
+  swi dl 2 mul 1 add get swstate /l1 exch def /m1 exch def
+  m0 0 eq m1 0 eq and not {
+    gsave
+    0 dl 0.5 add yS translate
+    ribbon aload pop setrgbcolor
+    0 1 3 { /tb exch def
+      tonea tb get setalpha  dotr tonerm tb get mul 2 mul setlinewidth
+      newpath
+      0 1 nlq { /ly exch def
+        ly 0 eq { m0 l0 } { m1 l1 } ifelse /lm exch def /mm exch def
+        mm 0 gt {
+          dots dl get ly 4 mul tb add get /pa exch def
+          pa length 0 gt {
+            mm 1 eq { pa plotall } { mm 2 eq { pa lm plotle } { pa lm plotge } ifelse } ifelse
+          } if
+        } if
+      } for
+      stroke
+    } for
+    grestore
+  } if
+} def
+
+% ---- the machine ---------------------------------------------------------------------------
+/rrect { % x y w h r : a rounded rectangle path
+  6 dict begin /r exch def /h exch def /w exch def /y exch def /x exch def
+  x r add y moveto  x w add y x w add y h add r arcto 4 { pop } repeat
+  x w add y h add x y h add r arcto 4 { pop } repeat
+  x y h add x y r arcto 4 { pop } repeat
+  x y x w add y r arcto 4 { pop } repeat closepath end
+} def
+/cavity {
+  0.075 0.075 0.09 setrgbcolor 0 0 ww wh rectfill
+  0 setgray                                         % the paper's shadow on the back of the printer
+  1 1 4 { /ck exch def 0.07 setalpha px0 ck 2 mul sub 0 pw ck 4 mul add wh rectfill } for
+  1 setalpha
+} def
+/rail {
+  /ry printY lp 1.55 mul add def
+  0.2 0.2 0.23 setrgbcolor sidew ry 3.5 sub ww sidew 2 mul sub 7 rectfill
+  0.62 0.64 0.69 setrgbcolor sidew ry 2.5 sub ww sidew 2 mul sub 5 rectfill
+  0.86 0.88 0.92 setrgbcolor sidew ry 0.5 add ww sidew 2 mul sub 1.6 rectfill
+  0.3 0.3 0.34 setrgbcolor sidew ry 2.5 sub ww sidew 2 mul sub 1.2 rectfill
+} def
+/carriage { % head x
+  /chx exch def
+  gsave chx printY translate
+  % its shadow on the paper
+  0 setgray 0.16 setalpha cw 1.25 mul neg 4 sub lp 0.1 mul 7 sub cw 2.5 mul lp 1.5 mul rectfill 1 setalpha
+  % the body, hung from the rail
+  0.17 0.18 0.21 setrgbcolor cw 1.25 mul neg lp 0.5 mul cw 2.5 mul lp 1.05 mul 3 rrect fill
+  0.3 0.31 0.35 setrgbcolor cw 1.1 mul neg lp 0.6 mul cw 2.2 mul lp 0.5 mul 2 rrect fill        % the ribbon cartridge
+  0.12 0.12 0.14 setrgbcolor cw 0.7 mul neg lp 1.1 mul cw 1.4 mul lp 0.3 mul 2 rrect fill
+  1 setgray 0.1 setalpha cw 1.2 mul neg lp 1.5 mul cw 2.4 mul 1.5 rectfill 1 setalpha
+  % the nose, and the mask round the place where the pins strike
+  0.1 0.1 0.12 setrgbcolor
+  cw 0.62 mul neg lp 0.5 mul moveto cw 0.62 mul lp 0.5 mul lineto cw 0.5 mul lp 0.32 mul lineto cw 0.5 mul neg lp 0.32 mul lineto closepath fill
+  0.05 0.05 0.07 setrgbcolor 1.3 setlinewidth 0.9 setalpha
+  cw 0.5 mul neg lp 0.53 mul neg cw lp 0.85 mul rectstroke
+  1 setalpha
+  grestore
+} def
+/tractors {
+  [ px0 px0 pw add strip cw mul sub ] {
+    /tx exch def
+    0.52 0.53 0.57 setrgbcolor tx 1 sub yslot 1 sub strip cw mul 2 add lp 2.3 mul 3 rrect fill
+    0.74 0.75 0.79 setrgbcolor tx 2 add yslot lp 2.3 mul add 4 sub strip cw mul 4 sub 2 rectfill
+    0.3 0.3 0.33 setrgbcolor
+    tx strip cw mul 2 div add lp 0.9 mul yslot add 3.2 0 360 arc fill
+    tx strip cw mul 2 div add lp 1.7 mul yslot add 3.2 0 360 arc fill
+  } forall
+} def
+/leds {
+  /ledc [ [1 0.2 0.15] [0.3 1 0.4] [1 0.7 0.15] ] def
+  /ledon [ true tearing not tearing flashing and ] def
+  0 1 2 { /lk exch def
+    ledc lk get aload pop setrgbcolor
+    ledon lk get { 1 } { 0.15 } ifelse setalpha
+    ww 0.1 mul lk 36 mul add yslot 52 sub 3.5 0 360 arc fill
+    1 setalpha
+  } for
+} def
+/body {
+  0.8 0.76 0.67 setrgbcolor 0 0 ww yslot rectfill
+  0.9 0.87 0.79 setrgbcolor 0 yslot 6 sub ww 6 rectfill
+  0.58 0.55 0.48 setrgbcolor 0 0 ww 5 rectfill
+  0.04 0.04 0.05 setrgbcolor px0 6 sub yslot 4 sub pw 12 add 5.5 rectfill      % the slot the paper comes out of
+  0.2 0.2 0.23 setrgbcolor ww 0.06 mul yslot 62 sub ww 0.88 mul 44 4 rrect fill
+  leds
+  /Courier-Bold findfont 8 scalefont setfont
+  0.78 0.8 0.84 setrgbcolor
+  ww 0.1 mul 8 sub yslot 70 sub 2 add moveto (PWR) show
+  ww 0.1 mul 28 add yslot 70 sub 2 add moveto (ON LINE) show
+  ww 0.1 mul 78 add yslot 70 sub 2 add moveto (PAPER) show
+  /Courier-Bold findfont 11 scalefont setfont
+  0.9 0.9 0.92 setrgbcolor ww 0.7 mul yslot 46 sub moveto (DM-9) show
+  0.12 0.12 0.14 setrgbcolor 0.8 setlinewidth                                   % vents
+  0 1 5 { ww 0.4 mul exch 5 mul add yslot 52 sub moveto 0 22 rlineto stroke } for
+} def
+/plates {
+  0.17 0.17 0.19 setrgbcolor 0 yslot sidew wh yslot sub rectfill  ww sidew sub yslot sidew wh yslot sub rectfill
+  1 setgray 0.1 setalpha sidew 2 sub yslot 2 wh yslot sub rectfill ww sidew sub yslot 2 wh yslot sub rectfill 1 setalpha
+} def
+
+% ---- one frame ----------------------------------------------------------------------------------
+/machinescene {
+  /P paperat def
+  /topb null def  /flyk -1 def
+  0 1 tn 1 sub { /tk exch def tears tk get aload pop /tb exch def /td exch def /ts exch def
+    ts now le {
+      /topb tb def
+      now ts td add lt {
+        /flyk tk def  /flyu now ts sub td div def  /flyb tb def
+        tk 0 gt { tears tk 1 sub get 2 get } { null } ifelse /flyp exch def
+      } if
+    } if
+  } for
+  /tearing false def  /flashing false def
+  0 1 tn 1 sub { tears exch get aload pop pop /td exch def /ts exch def
+    now ts 0.4 sub ge now ts td add le and { /tearing true def } if
+    now ts 0.4 sub ge now ts lt and now 6 mul floor cvi 2 mod 0 eq and { /flashing true def } if
+  } for
+  backdrop { cavity } if
+  % the paper in the machine: whatever has not been torn off
+  gsave
+    topb null ne { topb null bandpath clip newpath } if
+    topb null eq { -100000 } { topb } ifelse 100000 sheet
+  grestore
+  % a page being torn off: lifted from the left, then away
+  flyk 0 ge {
+    /ppx px0 pw add def  /ppy flyb yS def
+    flyu 0.3 lt {
+      flyu 0.3 div /fa exch def
+      0 0 fa fa mul 3 2 fa mul sub mul -9 mul
+    } {
+      flyu 0.3 sub 0.7 div dup mul /fv exch def
+      flyu 0.3 sub 0.7 div -100 mul fv wh 400 add mul -9 fv -30 mul add
+    } ifelse
+    /fang exch def /flift exch def /fdx exch def
+    gsave
+      fdx flift translate  ppx ppy translate fang rotate ppx neg ppy neg translate
+      flyp flyb bandpath clip newpath
+      flyp null eq { -100000 } { flyp } ifelse flyb sheet
+    grestore
+  } if
+  rail
+  headat carriage
+  tractors
+  backdrop { plates } if
+  body
+} def
+
+% ---- a finished page, lying flat -----------------------------------------------------------------
+/sheetscene {
+  /s0 pagen pagel mul def
+  /printY 0 def
+  /P s0 0.5 sub wh sheetpad sub lp div add def
+  0 setgray
+  1 1 4 { /ck exch def 0.06 setalpha px0 ck 1.5 mul sub sheetpad ck 1.5 mul sub 3 add pw ck 3 mul add wh sheetpad 2 mul sub ck 3 mul add 3 sub rectfill } for
+  1 setalpha
+  s0 s0 pagel add sheet
+  0.62 0.62 0.6 setrgbcolor 0.8 setlinewidth [ 3 2.5 ] 0 setdash
+  px0 s0 yS moveto pw 0 rlineto stroke
+  px0 s0 pagel add yS moveto pw 0 rlineto stroke
+  [] 0 setdash
+} def
+/scene {
+  /tnow sheetmode { 1e9 } { now } ifelse def
+  sheetmode { sheetscene } { machinescene } ifelse
+} def

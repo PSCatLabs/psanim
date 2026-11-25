@@ -20,6 +20,7 @@ pub const CATALOG: &[(&str, &str)] = &[
     ("confetti", include_str!("../catalog/confetti.ps")),
     ("crawl", include_str!("../catalog/crawl.ps")),
     ("credits", include_str!("../catalog/credits.ps")),
+    ("dotmatrix", include_str!("../catalog/dotmatrix.ps")),
     ("fire", include_str!("../catalog/fire.ps")),
     ("fireworks", include_str!("../catalog/fireworks.ps")),
     ("ledmatrix", include_str!("../catalog/ledmatrix.ps")),
