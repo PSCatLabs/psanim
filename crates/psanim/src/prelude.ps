@@ -505,5 +505,321 @@ end
   { fitted } if
 } bind def
 
+% --- playlists: scenes that cycle, for signage -----------------------------------------
+% A playlist is a component whose scene plays other scenes in turn, each held a few
+% seconds, joined by the reel's transitions, and loops: the last scene hands over to the
+% first. In setup:  /lobby [ [8 /welcome] [1 /dissolve] [8 (events.ps)] [1 /wipe-left] ]
+% << >> playlist   then in the scene  /lobby << /Box [x y w h] >> place.
+% A round is one pass through the scenes on the list; each frame builds the reel for the
+% round it is in and plays it, so the transitions, the clocks and the seam are the reel's.
+% Each scene dictionary has sc- keys (hold, what, opts, dout, kout, days, from, to, ...).
+/.pls 16 dict def                                   % playlist records, by name
+/.plclock << /on false /t 0 >> def                 % what `weektime` answers
+/.pldaybit << /mon 1 /tue 2 /wed 4 /thu 8 /fri 16 /sat 32 /sun 64
+              /weekdays 31 /weekend 96 /daily 127 >> def
+/.pldayno << /mon 0 /tue 1 /wed 2 /thu 3 /fri 4 /sat 5 /sun 6 >> def
+% day | [days]  .pldays  mask     /mon .. /sun, /weekdays /weekend /daily, or 0 (Monday) to 6
+/.pldays {
+  dup type /arraytype eq { 0 exch { .pldays or } forall } {
+    dup type /integertype eq {
+      dup 0 lt 1 index 6 gt or { (playlist: a day number is 0 (Monday) to 6 (Sunday)) .comperror } if
+      1 exch bitshift
+    } {
+      dup type /stringtype eq { cvn } if
+      dup .pldaybit exch known not {
+        (playlist: a day is /mon /tue /wed /thu /fri /sat /sun, /weekdays, /weekend, /daily, or 0 (Monday) to 6) .comperror
+      } if
+      .pldaybit exch get
+    } ifelse
+  } ifelse
+} def
+% day  .pldayidx  0..6
+/.pldayidx {
+  dup type /integertype eq {
+    dup 0 lt 1 index 6 gt or { (playlist: /Day is 0 (Monday) to 6) .comperror } if
+  } {
+    dup type /stringtype eq { cvn } if
+    dup .pldayno exch known not { (playlist: /Day is /mon .. /sun, or 0 (Monday) to 6) .comperror } if
+    .pldayno exch get
+  } ifelse
+} def
+% hours | (H:MM) | (H:MM:SS)  .pltime  seconds
+/.pltime {
+  dup type /stringtype eq {
+    (:) search {                               % post match pre
+      cvi 3600 mul exch pop exch               % secs post
+      (:) search { cvi 60 mul exch pop exch cvi add add } { cvi 60 mul add } ifelse
+    } { cvr 3600 mul } ifelse
+  } { 3600 mul } ifelse
+} def
+% /name .pltrans bool    a transition: in `transitions`, or named t-... (defined before it plays)
+/.pltrans {
+  transitions 1 index known { pop true } {
+    64 string cvs (t-) anchorsearch { pop pop true } { pop false } ifelse
+  } ifelse
+} def
+/.plisproc { dup where { exch get dup xcheck exch type /arraytype eq and } { pop false } ifelse } def
+% bg  .plground    paint a ground: a colour [r g b] or a procedure
+/.plground { dup type /arraytype eq 1 index xcheck not and { aload pop backdrop } { exec } ifelse } def
+% mask n  .plbits  [ i ... ]    the set bits below n
+/.plbits {
+  4 dict begin
+    /bn exch def /bm exch def
+    [ 0 1 bn 1 sub { dup bm exch neg bitshift 1 and 0 ne { } { pop } ifelse } for ]
+  end
+} def
+% (path)|array  .plsrc  array    a playlist's entries, or a file that holds them
+/.plsrc {
+  dup type /stringtype eq {
+    mark exch .comppath run
+    counttomark 1 ne { cleartomark (a playlist file holds one array: [ [hold /scene] [dur /transition] ... ]) .comperror } if
+    exch pop
+  } if
+  dup type /arraytype ne { (a playlist is an array: [ [hold /scene] [dur /transition] [hold /scene] ... ]) .comperror } if
+} def
+% -> [ scene dicts ]    from pp-a, each with the transition written after it (pp-o's
+%                       /Transition if none) and without those for the other orientation
+/.plnorm {
+  pp-o /Transition [1 /dissolve] .dget /pn-dt exch def
+  pn-dt type /arraytype ne pn-dt length 2 ne or
+    { (playlist: /Transition is [seconds /name], e.g. [1 /dissolve]) .comperror } if
+  pn-dt 1 get .pltrans not
+    { (playlist: /Transition names no transition: see `transitions`) .comperror } if
+  /pn-skip false def
+  mark
+  pp-a {
+    /pn-e exch def
+    pn-e type /arraytype ne pn-e length 2 lt or pn-e length 3 gt or {
+      (playlist: each entry is [hold /scene], [hold /scene << options >>] or [seconds /transition]) .comperror
+    } if
+    pn-e 0 get type dup /integertype eq exch /realtype eq or not
+      { (playlist: each entry starts with a number of seconds) .comperror } if
+    pn-e 1 get type /nametype eq { pn-e 1 get .pltrans } { false } ifelse
+    pn-e length 2 eq and {
+      pn-skip not {
+        counttomark 0 eq { (playlist: a transition goes after a scene, not first) .comperror } if
+        pn-e 0 get 0 lt { (playlist: a transition lasts 0 seconds or more) .comperror } if
+        dup /sc-dout pn-e 0 get put
+        dup /sc-kout pn-e 1 get put
+      } if
+    } {
+      pn-e 0 get 0 le { (playlist: a scene is held for more than 0 seconds) .comperror } if
+      pn-e length 3 eq { pn-e 2 get } { << >> } ifelse /pn-eo exch def
+      pn-eo type /dicttype ne { (playlist: a scene's options are a dictionary: [8 /name << /Params << >> >>]) .comperror } if
+      pn-eo /Orientation null .dget dup null eq { pop true } { pp-land { /landscape } { /portrait } ifelse eq } ifelse {
+        /pn-skip false def
+        << /sc-hold pn-e 0 get /sc-what pn-e 1 get /sc-opts pn-eo
+           /sc-dout pn-dt 0 get /sc-kout pn-dt 1 get >>
+      } { /pn-skip true def } ifelse
+    } ifelse
+  } forall
+  ]
+} def
+% the scene's what, without running it if it is a procedure (a name would run it)
+/.plwhat { /sc-what load } def
+% d idx .plone  [cname what opts]?    one scene's fields; a scene that needs a component set
+%                                     up leaves a triple to do it with, outside any dictionary
+/.plone {
+  exch begin
+    /sc-idx exch def
+    sc-opts /Days /daily .dget .pldays /sc-days exch def
+    sc-opts /From 0 .dget .pltime /sc-from exch def
+    sc-opts /To 24 .dget .pltime /sc-to exch def
+    /sc-kind
+      .plwhat type /nametype eq {
+        .comps .plwhat known { /comp } {
+          .plwhat .plisproc { /proc } {
+            .plwhat .catknown { /comp } {
+              (playlist: /) .plwhat 64 string cvs strcat
+              ( is not a component, a procedure or a catalog entry: define it before the playlist) strcat .comperror
+            } ifelse
+          } ifelse
+        } ifelse
+      } {
+        .plwhat type /stringtype eq .plwhat type /dicttype eq or { /comp } {
+          .plwhat type /arraytype eq .plwhat xcheck and { /proc } {
+            (playlist: a scene is a name, a file name, a component dictionary or a procedure) .comperror
+          } ifelse
+        } ifelse
+      } ifelse
+    def
+    sc-kind /comp eq {
+      .plwhat type /nametype eq .comps .plwhat known and
+      sc-opts /Params known not and sc-opts /Seed known not and sc-opts /Fill known not and {
+        /sc-cname .plwhat def
+      } {
+        /sc-cname pp-n 64 string cvs (.) strcat sc-idx 12 string cvs strcat cvn def
+        [ sc-cname .plwhat sc-opts ]
+      } ifelse
+    } if
+  end
+} def
+% cname what opts .plmake    set a scene's component up (runs the scene's own setup)
+/.plmake {
+  1 index type /nametype eq { instance } {
+    dup /Seed null .dget exch /Params null .dget .mkinst .comps 3 1 roll put
+  } ifelse
+} def
+% d .plclip    the procedure that draws one scene over its own ground, full bleed
+/.plclip {
+  begin
+    sc-kind /comp eq sc-opts /Fill false .dget and {
+      .comps sc-cname get /size pf-box 2 get pf-box 3 get 2 array astore put
+    } if
+    /sc-clip
+      [
+        sc-opts /Background pf-bg .dget
+        dup type /arraytype eq 1 index xcheck not and { aload pop /backdrop cvx } { /exec cvx } ifelse
+        sc-kind /proc eq {
+          pf-box .plwhat dup type /nametype eq { load } if /within cvx
+        } {
+          sc-cname
+          << /Box pf-box /Before /hold /After
+             sc-cname .compget /loop get { /loop } { /hold } ifelse >>
+          /place cvx
+        } ifelse
+      ] cvx
+    def
+  end
+} def
+% /name arr opts .plprepare  /name rec triples     (no scene's code runs here)
+/.plprepare {
+  32 dict begin
+    /pp-o exch def  /pp-a exch def  /pp-n exch def
+    pp-o type /dicttype ne { (playlist: the options are a dictionary: << /Safe 0.05 >>, or << >>) .comperror } if
+    pp-o /Size [ width height ] .dget aload pop /pp-h exch def /pp-w exch def
+    pp-o /Safe 0 .dget /pp-safe exch def
+    pp-safe 0 lt pp-safe 0.4 gt or { (playlist: /Safe is the fraction of each edge kept clear, 0 to 0.4) .comperror } if
+    /pp-box [ pp-w pp-safe mul  pp-h pp-safe mul
+              pp-w 1 pp-safe 2 mul sub mul  pp-h 1 pp-safe 2 mul sub mul ] def
+    /pp-land pp-w pp-h ge def
+    .plnorm /pp-s exch def
+    pp-s length 0 eq { (playlist: there are no scenes on the list) .comperror } if
+    pp-s length 60 gt { (playlist: a playlist holds at most 60 scenes) .comperror } if
+    /pp-tr [
+      0 1 pp-s length 1 sub { dup pp-s exch get exch .plone } for
+    ] def
+    pp-n
+    << /scenes pp-s /opts pp-o /size [pp-w pp-h] /box pp-box
+       /bg pp-o /Background [0.05 0.06 0.09] .dget
+       /guides pp-o /Guides false .dget
+       /host pp-o /Clock /playlist .dget /signal eq >>
+    pp-tr
+  end
+} def
+% /name rec .plfinish    build the clips, work out the schedule and register
+/.plfinish {
+  24 dict begin
+    /pf-r exch def  /pf-n exch def
+    /pf-bg pf-r /bg get def  /pf-box pf-r /box get def
+    /pf-o pf-r /opts get def
+    pf-r /scenes get { .plclip } forall
+    pf-r /sched [ pf-r /scenes get { begin [ sc-hold sc-dout add sc-days sc-from sc-to ] end } forall ] put
+    pf-r /start pf-o /Day 0 .dget .pldayidx 86400 mul pf-o /Time 0 .dget .pltime add put
+    pf-r /scheduled
+      false pf-r /scenes get { begin sc-days 127 ne sc-from 0 ne or sc-to 86400 ne or end or } forall
+    put
+    pf-r /cycle 0 pf-r /scenes get { begin sc-hold sc-dout add end add } forall put
+    .pls pf-n pf-r put
+    pf-n << /Size pf-r /size get
+            /Duration
+              pf-r /scheduled get { pf-o /Duration 604800 .dget } { pf-r /cycle get } ifelse
+            /Loop true
+            /Scene [ pf-n /.plscene cvx ] cvx >>
+  end
+  component
+} def
+% /name entries-or-(file) opts  playlist
+/playlist {
+  exch .plsrc exch .plprepare
+  { aload pop .plmake } forall
+  .plfinish
+} def
+% /name playlistduration  seconds    one round at the playlist's start time: the length of
+%                                    its loop (a scheduled list's rounds can change later)
+/playlistduration {
+  4 dict begin
+    .pls exch get /pd-r exch def
+    pd-r /sched get pd-r /start get 0 .plsolve pop pop exch pop
+    pd-r /sched get length .plbits
+    0 exch { pd-r /sched get exch get 0 get add } forall
+  end
+} def
+% seconds since Monday 00:00 for what is on screen: in a playlist, its /Day and /Time plus its
+% clock; elsewhere the host's `weektime` signal.
+/weektime { .plclock /on get { .plclock /t get } { /weektime signal } ifelse } bind def
+% rec mask prev next .plreel  arr din    the reel for one round, and how far into it the
+%   round starts: the first scene's clock has been running since the last round's hand-over
+/.plreel {
+  16 dict begin
+    /pr-nx exch def /pr-pv exch def /pr-m exch def
+    /pr-sc exch /scenes get def
+    /pr-n pr-sc length def
+    /pr-act pr-m pr-n .plbits def
+    /pr-nxa pr-nx pr-n .plbits def
+    /pr-pva pr-pv pr-n .plbits def
+    /pr-din
+      pr-pva length 0 gt { pr-sc pr-pva dup length 1 sub get get /sc-dout get } { 0 } ifelse
+    def
+    /pr-last pr-sc pr-act dup length 1 sub get get /sc-dout get def
+    [
+      0 1 pr-act length 1 sub {
+        /pr-j exch def
+        /pr-d pr-sc pr-act pr-j get get def
+        pr-j 0 eq { pr-din } { pr-sc pr-act pr-j 1 sub get get /sc-dout get } ifelse
+        pr-d /sc-hold get add pr-d /sc-dout get add
+        pr-d /sc-clip get
+        2 array astore
+        pr-d /sc-dout get 0 gt { pr-d /sc-dout get pr-d /sc-kout get 2 array astore } if
+      } for
+      % the last scene hands over to the next round's first scene (or to nothing)
+      pr-last 0 gt {
+        pr-nxa length 0 gt {
+          pr-sc pr-nxa 0 get get /pr-nd exch def
+          pr-last pr-nd /sc-hold get add pr-nd /sc-dout get add pr-nd /sc-clip get
+        } { pr-last 1 add { } } ifelse
+        2 array astore
+      } if
+    ]
+    pr-din
+  end
+} def
+% box .plguides   the safe area, as a dashed rectangle, for checking a layout
+/.plguides {
+  gsave 1 0.25 0.45 setrgbcolor width 300 div setlinewidth
+  [ width 80 div dup ] 0 setdash newpath aload pop rectstroke grestore
+} def
+% rec arr tp wk .plrun    play the round's reel at time tp, with `weektime` at wk
+/.plrun {
+  [ .plclock /t get .plclock /on get ]       % rec arr tp wk old
+  exch .plclock exch /t exch put             % rec arr tp old
+  .plclock /on true put
+  3 1 roll                                   % rec old arr tp
+  1 index length 0 eq {
+    pop pop 1 index /bg get .plground         % nothing is scheduled: just the ground
+  } {
+    exch [ exch /reel cvx ] cvx              % rec old tp proc
+    1000000 exch timewindow
+  } ifelse
+  aload pop
+  .plclock exch /on exch put
+  .plclock exch /t exch put
+} def
+% /name .plscene    the playlist's scene: which round is it, and play it
+/.plscene {
+  .pls exch get
+  8 dict begin
+    /ps-r exch def
+    /ps-t now def
+    ps-r /sched get ps-r /start get ps-t .plsolve
+    /ps-nx exch def /ps-pv exch def /ps-m exch def /ps-r0 exch def
+    ps-r
+    ps-m 0 eq { [ ] 0 } { ps-r ps-m ps-pv ps-nx .plreel ps-t ps-r0 sub add } ifelse
+    ps-r /host get { /weektime signal } { ps-r /start get ps-t add } ifelse
+  end
+  .plrun
+  dup /guides get { /box get .plguides } { pop } ifelse
+} def
+
 % Pictures are composed over a transparent page; a program draws its own
 % ground, or declares /Background.

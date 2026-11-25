@@ -222,3 +222,37 @@ Rejected: running each instance in its own interpreter (cost, and the
 drawing must land in the host's page); a `/Params` key in the declaration
 (the movie's own `param` defaults already say it, and keep a component
 file runnable on its own).
+
+## Playlists (added for 0.2)
+
+A playlist (`playlist`, `playlistduration`, `weektime`) is a component whose
+scene plays other scenes in turn, for signage. It follows the same
+constraints: no scene graph, nothing owns a clock, a frame is a function of
+time.
+
+- **It reuses the reel.** Each frame builds the reel for the round it is in
+  and plays it, so the transitions (the `transitions` dictionary, including a
+  program's own), the clips' clocks and the validation are the reel's. What
+  is new is only the loop: the reel is padded with the next round's first
+  scene as a last clip and played from the length of the last hand-over in,
+  so at the wrap both copies of the first scene are at the same moment.
+- **Scenes are components, placed by `place`**, each over its own ground so
+  a transition works as in a reel. A playlist is itself registered as a
+  component, so it is placed, timed, and nested like any other.
+- **Time of day is data, never the wall clock.** A playlist knows /Day and
+  /Time at its own time 0 (the movie takes them from `param`) and `weektime`
+  is that plus its clock. A frame stays a pure function of time. A live host
+  can instead set a `weektime` signal (/Clock /signal).
+- **Schedules are per round.** Which scenes are on the list is chosen when a
+  round starts, so a scene is never cut off and the hand-over always goes to
+  a scene that will play. Finding the round that contains a time without
+  playing the rounds before it is native (`src/playlist.rs`: a stretch of
+  rounds with one set is skipped arithmetically, so a render of a long run
+  costs the same per frame). Rejected: a fixed-length round with a substitute
+  scene for each one that is off the list (a scene could then never be left
+  out, only replaced).
+- **The list is PostScript data in a file**, read like a component file: no
+  parser to write or to disagree with the language, typed `/Params`, comments,
+  the same read roots. A line-oriented format would have needed its own quoting.
+- **No library word owns a clock**: `weektime` is read, not driven; a scene
+  that shows a clock owns none.

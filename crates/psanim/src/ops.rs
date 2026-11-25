@@ -325,6 +325,7 @@ fn end_layer(i: &mut Interp, ctx: &Shared, opacity: f64, blend: Blend) -> OpResu
 pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     crate::vocab::install(interp, ctx);
     crate::catalog::install(interp, ctx);
+    crate::playlist::install(interp, ctx);
     // --- declaration ----------------------------------------------------
     reg(interp, ctx, ".animation", |i, ctx| {
         let decl = i.pop_value()?;

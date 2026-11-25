@@ -55,6 +55,7 @@ mod error;
 pub mod motion;
 mod ops;
 pub mod pathmath;
+pub mod playlist;
 pub mod raster;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod render;
