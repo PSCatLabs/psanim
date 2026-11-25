@@ -158,3 +158,83 @@ fn a_fade_is_not_flagged() {
         "{warnings:?}"
     );
 }
+
+const LEAK: &str = "
+<< /Size [200 100] /Duration 2 /FPS 10 >> animation
+/buf 4 string def
+buf 0 65 put
+/scene {
+  1 1 1 setrgbcolor 20 20 100 40 rectfill
+  buf 0 buf 0 get 1 add put
+  buf 0 get 255 div 0 0 setrgbcolor 130 20 40 40 rectfill
+} def";
+
+#[test]
+fn a_write_into_a_setup_string_is_reported() {
+    let warnings = check("leak", LEAK, &[]);
+    let leak: Vec<_> = warnings.iter().filter(|w| w.contains("string")).collect();
+    assert_eq!(leak.len(), 1, "{warnings:?}");
+    assert!(leak[0].contains("`buf`"), "{}", leak[0]);
+    assert!(leak[0].contains("dup length string copy"), "{}", leak[0]);
+}
+
+#[test]
+fn a_string_inside_a_dictionary_is_found_too() {
+    let source = LEAK
+        .replace(
+            "/buf 4 string def\nbuf 0 65 put",
+            "/state << /buf 4 string >> def\nstate /buf get 0 65 put",
+        )
+        .replace(
+            "buf 0 buf 0 get 1 add put",
+            "state /buf get 0 state /buf get 0 get 1 add put",
+        )
+        .replace("buf 0 get 255", "state /buf get 0 get 255");
+    let warnings = check("leakdict", &source, &[]);
+    assert!(
+        warnings.iter().any(|w| w.contains("`state/buf`")),
+        "{warnings:?}"
+    );
+}
+
+#[test]
+fn a_scene_that_copies_the_string_first_is_clean() {
+    let source = LEAK.replace(
+        "/scene {\n",
+        "/scene {\n  /buf buf dup length string copy def\n",
+    );
+    let warnings = check("noleak", &source, &[]);
+    assert!(
+        !warnings.iter().any(|w| w.contains("string")),
+        "{warnings:?}"
+    );
+}
+
+#[test]
+fn a_string_only_read_is_clean() {
+    let source = "
+<< /Size [200 100] /Duration 1 /FPS 10 >> animation
+/label (hello) def
+/scene { 1 1 1 setrgbcolor /Helvetica findfont 20 scalefont setfont 10 40 moveto label show } def";
+    let warnings = check("readonly", source, &[]);
+    assert!(
+        !warnings.iter().any(|w| w.contains("string")),
+        "{warnings:?}"
+    );
+}
+
+#[test]
+fn a_stateful_movie_may_keep_state_in_a_string() {
+    // Strings are exempt from rollback, which a stateful movie knows about
+    // (modes.md says not to keep state in them); `check` does not second-guess.
+    let source = "
+<< /Size [200 100] /Duration 1 /FPS 10 >> animation
+/buf 4 string def
+/step { buf 0 buf 0 get 1 add put } def
+/scene { 1 1 1 setrgbcolor 20 20 100 40 rectfill } def";
+    let warnings = check("stateful", source, &[]);
+    assert!(
+        !warnings.iter().any(|w| w.contains("string")),
+        "{warnings:?}"
+    );
+}

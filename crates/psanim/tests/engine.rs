@@ -1278,3 +1278,39 @@ fn pscat_libraries_work_inside_a_movie() {
     );
     assert_ne!(m.render_frame(3).unwrap().premultiplied, &a[..]);
 }
+
+#[test]
+fn strings_written_by_a_scene_survive_the_rollback_and_are_found() {
+    // `restore` does not roll string contents back: a scene that writes into
+    // a string made in setup changes it for every later frame.
+    let mut m = load(
+        "/buf 4 string def buf 0 65 put
+         /table << /name (abc) /rows [ (xy) (zw) ] /note (read only) >> def
+         /scene { buf 0 buf 0 get 1 add put
+                  table /rows get 1 get 0 66 put
+                  /local 4 string def local 0 7 put } def",
+    );
+    let before = m.string_snapshot().unwrap().expect("a pure movie");
+    assert!(
+        before.len() >= 5,
+        "buf, name, two rows, note: {}",
+        before.len()
+    );
+    assert!(
+        m.string_snapshot()
+            .unwrap()
+            .unwrap()
+            .changed_since(&before)
+            .is_empty()
+    );
+    m.render_frame(0).unwrap();
+    m.render_frame(1).unwrap();
+    let after = m.string_snapshot().unwrap().unwrap();
+    assert_eq!(after.changed_since(&before), vec!["buf", "table/rows[1]"]);
+}
+
+#[test]
+fn only_a_pure_movie_has_a_string_snapshot() {
+    let mut m = load("/step { } def /scene { } def");
+    assert!(m.string_snapshot().unwrap().is_none());
+}

@@ -278,6 +278,70 @@ struct Checkpoint {
     canvas: Option<Vec<u8>>,
 }
 
+/// A fingerprint of every string that setup left in userdict, directly or
+/// inside the dictionaries and arrays it holds, taken by
+/// [`Movie::string_snapshot`].
+///
+/// PostScript's `restore` does not roll back the contents of a string, so a
+/// scene that `put`s into a string made in setup changes it for every later
+/// frame, and frames stop being functions of their time. Two snapshots of a
+/// pure movie, one after setup and one after frames, tell which strings
+/// changed.
+#[derive(Clone, Debug, Default)]
+pub struct StringSnapshot {
+    /// Path (`buf`, `table/name`, `rows[3]`) to a hash of the bytes.
+    strings: BTreeMap<String, u64>,
+}
+
+impl StringSnapshot {
+    /// How many strings were fingerprinted.
+    pub fn len(&self) -> usize {
+        self.strings.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.strings.is_empty()
+    }
+
+    /// Paths of the strings whose bytes differ from `before`'s, in order.
+    pub fn changed_since(&self, before: &StringSnapshot) -> Vec<String> {
+        self.strings
+            .iter()
+            .filter(|(path, hash)| before.strings.get(*path).is_some_and(|h| h != *hash))
+            .map(|(path, _)| path.clone())
+            .collect()
+    }
+}
+
+/// FNV-1a, 64 bit: deterministic and enough to tell edited bytes.
+fn hash_bytes(bytes: &[u8]) -> u64 {
+    let mut h = 0xcbf2_9ce4_8422_2325u64;
+    for b in bytes {
+        h = (h ^ u64::from(*b)).wrapping_mul(0x0100_0000_01b3);
+    }
+    h ^ (bytes.len() as u64)
+}
+
+/// Record the strings inside `value`, which sits at `path`.
+fn collect_strings(path: &str, value: &Value, depth: usize, out: &mut BTreeMap<String, u64>) {
+    match value {
+        Value::String(bytes) => {
+            out.insert(path.to_string(), hash_bytes(bytes));
+        }
+        Value::Array(items) if depth < 8 => {
+            for (i, v) in items.iter().enumerate() {
+                collect_strings(&format!("{path}[{i}]"), v, depth + 1, out);
+            }
+        }
+        Value::Dict(entries) if depth < 8 => {
+            for (k, v) in entries {
+                collect_strings(&format!("{path}/{k}"), v, depth + 1, out);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// A loaded animation program. See the [crate docs](crate).
 pub struct Movie {
     interp: Interp,
@@ -629,6 +693,40 @@ impl Movie {
     /// jumping ahead or back applies everything in between.
     pub fn last_frame_ticks(&self) -> u64 {
         self.last_ticks
+    }
+
+    /// Fingerprint the strings reachable from userdict, after rolling a
+    /// pure movie back to its setup checkpoint (so what a frame defined is
+    /// gone and what it wrote into a string is not). `None` for a stateful
+    /// or persistent movie, which keeps state on purpose.
+    ///
+    /// Taken right after [`Movie::load`] and again after some frames, the
+    /// two differ exactly in the strings a scene wrote into: see
+    /// [`StringSnapshot::changed_since`].
+    pub fn string_snapshot(&mut self) -> Result<Option<StringSnapshot>, Error> {
+        if self.meta.mode != Mode::Pure {
+            return Ok(None);
+        }
+        let phase = Phase::Setup;
+        self.rollback(0, phase)?;
+        self.interp.clear_operands();
+        self.exec(phase, "[ userdict { pop } forall ]")?;
+        let keys = self
+            .interp
+            .pop_value()
+            .map_err(|_| Error::new(phase, "internal", "userdict's names could not be read"))?;
+        let mut snap = StringSnapshot::default();
+        for key in keys.as_array().unwrap_or(&[]) {
+            let Some(name) = key.as_text() else { continue };
+            match self.interp.lookup(name) {
+                Some(Value::Other(_)) | None => {
+                    // A procedure, an operator, or a value too large to
+                    // copy out. Only the last matters, and it is rare.
+                }
+                Some(v) => collect_strings(name, &v, 0, &mut snap.strings),
+            }
+        }
+        Ok(Some(snap))
     }
 
     /// Replace the value of signal `name` from now on: what a live host

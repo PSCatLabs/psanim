@@ -554,6 +554,8 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
     let mut samples: Vec<Sample> = Vec::new();
     let mut flat = Vec::new();
     let mut next = Vec::new();
+    // A pure movie's strings after setup, to compare with after its frames.
+    let strings_before = movie.string_snapshot()?;
     // Each sampled frame is rendered with the frames around it: its motion
     // is the change to the next, and the pairs either side say whether that
     // change is a pop. (A movie whose frames depend on the ones before pays
@@ -746,6 +748,30 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
             };
             warnings.push(format!(
                 "the loop does not close cleanly: the step from the last frame to the first is {join:.4}, {how}. Something does not return to where it started: check that every angle is a whole number of turns over the loop (`k turns`), allowing for each part's symmetry. `psanim sheet --seam 6` shows the join"
+            ));
+        }
+    }
+    // A scene that writes into a string made in setup: `restore` does not
+    // roll string contents back, so the write outlives the frame.
+    if let Some(before) = &strings_before
+        && let Some(after) = movie.string_snapshot()?
+    {
+        let changed = after.changed_since(before);
+        if let Some(first_path) = changed.first() {
+            let name = first_path
+                .split(['/', '['])
+                .next()
+                .unwrap_or(first_path.as_str());
+            let list = changed
+                .iter()
+                .take(5)
+                .map(|p| format!("`{p}`"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let more = if changed.len() > 5 { ", and more" } else { "" };
+            warnings.push(format!(
+                "a frame wrote into {} made in setup: {list}{more}. PostScript's `restore` does not roll back the contents of a string, so the change stays for every later frame: a frame is no longer a function of its time, and a parallel render differs from a serial one. Copy the string inside the scene before writing to it (`/{name} {name} dup length string copy def`), or build it there",
+                if changed.len() == 1 { "a string" } else { "strings" }
             ));
         }
     }

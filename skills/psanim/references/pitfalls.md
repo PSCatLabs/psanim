@@ -101,6 +101,36 @@ in `--json` output as `printed`. Remove them before the final render.
   open, the next frame still starts clean, but later lookups in *this*
   frame resolve in the stale dictionary.
 
+## A frame depends on the frames rendered before it (strings)
+
+Every frame starts with a `restore`, which rolls back arrays, dictionaries
+and names, **but not the contents of a string**. A scene that `put`s into
+a string made in setup (a buffer, a text it edits in place) changes that
+string for every later frame. The picture then depends on which frames
+were rendered before: a parallel render differs from a serial one, and
+`psanim frame --at 5` differs from frame 150 of the full render.
+`psanim check` reports it, naming the string
+("a frame wrote into a string made in setup: `buf`").
+
+```postscript partial
+/buf 16 string def              % setup
+/scene { buf 0 now cvi put  ... } def                         % wrong: the write stays
+/scene { /buf buf dup length string copy def
+         buf 0 now cvi put  ... } def                         % right: a copy that is the frame's own
+```
+
+Copy the string inside the scene (`s dup length string copy` makes a new
+one) or build the string there. Reading a setup string is fine; so is
+`def`ing a new string in the scene (that is rolled back). The same goes
+for a string held in an array or a dictionary made in setup: `check`
+looks inside them. It does not look inside a procedure body, so a literal
+`(abc)` written into by the scene is not caught.
+
+Stateful and persistent movies keep their state on purpose, and `check`
+does not report this for them; but they should still not keep state in a
+string, because seeking back replays ticks over a string that did not
+roll back (modes.md).
+
 ## A name I defined broke something else
 
 `/width 300 def`, `/frame { ... } def`, `/span ... def`, `/dt ... def`

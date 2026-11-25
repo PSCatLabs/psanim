@@ -7,7 +7,7 @@ psanim <command> <program.ps> [options]
 | Command | Does |
 |---|---|
 | `info` | Prints what the program declares: canvas, output size, duration, frames, mode, seed, parameters. |
-| `check` | Loads the program and renders a sample of frames small. Reports errors, blank frames, no motion, abrupt changes, a loop that does not close, and timings. |
+| `check` | Loads the program and renders a sample of frames small. Reports errors, blank frames, no motion, abrupt changes, a loop that does not close, strings written by a frame, and timings. |
 | `frame` | Renders one frame to a PNG. |
 | `sheet` | Renders several frames onto one labelled contact-sheet PNG. |
 | `render` | Renders the movie to `.mp4`, `.webm`, `.gif`, or a directory of PNGs. |
@@ -91,7 +91,8 @@ Epicycles: 1280x720 units, 22s at 30 fps = 660 frames, pure
   or a pop.
 
 Warnings: every frame blank; blank frames in the middle; a slow start or
-early end; nothing moves; an abrupt change; for a `/Loop true` movie, a join whose step is larger than the
+early end; nothing moves; an abrupt change; a write into a string made in
+setup; for a `/Loop true` movie, a join whose step is larger than the
 steps beside it. Notes (not problems): opening from or closing to the
 background; frequent small changes taken as an effect.
 
@@ -130,3 +131,14 @@ every one. If frames are so slow that the scan reaches its 8 second limit,
 a note says its coverage now depends on the machine. A movie with state
 (stateful or persistent) is scanned only in a run of six frames around each
 sampled frame, because reaching a frame costs every tick before it.
+
+**A string written in a frame.** After setup, `check` fingerprints every
+string reachable from `userdict` (strings in the dictionaries and arrays
+it holds too), and again after the sampled frames, once the interpreter
+has been rolled back. PostScript's `restore` does not roll back the
+contents of a string, so a string that differs was written by a scene and
+leaks into every later frame. The warning names it (`buf`, `table/name`,
+`rows[3]`) and gives the fix, copying the string inside the scene
+(`/buf buf dup length string copy def`). Only pure movies are checked:
+stateful and persistent ones keep state on purpose. A literal string in a
+procedure body is not looked at.
