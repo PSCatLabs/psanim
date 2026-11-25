@@ -62,7 +62,8 @@ pub mod signals;
 mod vocab;
 
 pub use engine::{
-    Budget, Frame, Meta, Mode, MotionBlur, Movie, Options, PRELUDE, Param, Printed, Scale,
+    Budget, Frame, Meta, Mode, MotionBlur, Movie, Options, PREAMBLE_WARN_SECONDS, PRELUDE, Param,
+    Printed, Scale,
 };
 pub use error::{Error, Phase, TraceLine};
 pub use ops::TRANSITIONS;

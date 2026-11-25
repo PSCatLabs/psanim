@@ -296,6 +296,87 @@ fn printed_output_in_setup_is_cut_too() {
     assert_eq!(m2.take_output(), p.text);
 }
 
+/// A clock that advances 0.1 s each time it is read: whatever it times
+/// looks like it took 0.1 s.
+fn slow_clock() -> f64 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static TICKS: AtomicU64 = AtomicU64::new(0);
+    TICKS.fetch_add(1, Ordering::SeqCst) as f64 * 0.1
+}
+
+/// A clock that advances a millisecond each time it is read.
+fn fast_clock() -> f64 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static TICKS: AtomicU64 = AtomicU64::new(0);
+    TICKS.fetch_add(1, Ordering::SeqCst) as f64 * 0.001
+}
+
+fn meta_with_clock(source: &str, clock: Option<fn() -> f64>) -> psanim::Meta {
+    let options = Options {
+        clock,
+        ..Options::default()
+    };
+    Movie::load(source, &options)
+        .unwrap_or_else(|e| panic!("{e}"))
+        .meta()
+        .clone()
+}
+
+#[test]
+fn a_slow_preamble_is_measured_and_warned_about() {
+    let src = format!("/helper {{ 1 add }} def\n{HEAD}/scene {{ }} def");
+    let slow = meta_with_clock(&src, Some(slow_clock));
+    assert!(slow.preamble_seconds.unwrap() > psanim::PREAMBLE_WARN_SECONDS);
+    assert!(!slow.preamble_printed);
+    let w = slow.preamble_warning().expect("a warning");
+    assert!(
+        w.contains("before `animation`") && w.contains("runs twice"),
+        "{w}"
+    );
+    assert!(w.contains("after `animation`"), "{w}");
+    // The meta JSON carries both facts.
+    assert!(slow.to_json()["preamble_ms"].as_f64().unwrap() > 50.0);
+    assert_eq!(slow.to_json()["preamble_printed"], false);
+}
+
+#[test]
+fn a_quick_quiet_preamble_is_not_warned_about() {
+    let src = format!("/helper {{ 1 add }} def\n{HEAD}/scene {{ }} def");
+    let m = meta_with_clock(&src, Some(fast_clock));
+    assert!(m.preamble_seconds.unwrap() < psanim::PREAMBLE_WARN_SECONDS);
+    assert_eq!(m.preamble_warning(), None);
+    // Without a clock nothing is measured, and nothing is warned about.
+    let m = meta_with_clock(&src, None);
+    assert_eq!(m.preamble_seconds, None);
+    assert_eq!(m.preamble_warning(), None);
+    // A program with no `animation` has no preamble.
+    let m = meta_with_clock("/scene { } def", Some(slow_clock));
+    assert_eq!(m.preamble_seconds, None);
+    assert_eq!(m.preamble_warning(), None);
+    // Code after `animation` is not the preamble, however slow.
+    let m = meta_with_clock(
+        &format!("{HEAD}1 1 100000 {{ pop }} for /scene {{ }} def"),
+        None,
+    );
+    assert_eq!(m.preamble_warning(), None);
+}
+
+#[test]
+fn a_printing_preamble_is_warned_about_and_printed_once() {
+    let src = format!("(preamble) =\n{HEAD}(setup) =\n/scene {{ }} def");
+    let mut m = Movie::load(&src, &Options::default()).unwrap();
+    assert!(m.meta().preamble_printed);
+    let w = m.meta().preamble_warning().expect("a warning");
+    assert!(w.contains("prints") && w.contains("runs twice"), "{w}");
+    // The probe pass printed it too; only the real pass's output is shown.
+    assert_eq!(m.take_output(), "preamble\nsetup\n");
+    // Printing after `animation` alone is no reason to warn.
+    let src = format!("{HEAD}(setup) =\n/scene {{ }} def");
+    let m = Movie::load(&src, &Options::default()).unwrap();
+    assert!(!m.meta().preamble_printed);
+    assert_eq!(m.meta().preamble_warning(), None);
+}
+
 #[test]
 fn globally_reads_movie_time_inside_a_scope() {
     assert_eq!(

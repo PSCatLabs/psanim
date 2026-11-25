@@ -69,3 +69,66 @@ fn check_json_says_when_output_was_cut() {
     );
     assert_eq!(quiet["output_truncated"], false);
 }
+
+fn warnings(result: &serde_json::Value) -> Vec<String> {
+    result["warnings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|w| w.as_str().unwrap().to_string())
+        .collect()
+}
+
+fn preamble_warning(result: &serde_json::Value) -> Option<String> {
+    warnings(result)
+        .into_iter()
+        .find(|w| w.contains("before `animation`"))
+}
+
+const SCENE: &str = "/scene { 0.5 setgray 0 0 64 48 rectfill } def";
+
+#[test]
+fn check_warns_about_a_slow_preamble() {
+    // Two million iterations: well over the 50 ms threshold.
+    let r = run_json(
+        "preamble_slow",
+        &format!("1 1 2000000 {{ 3 mul pop 1 }} for\n{HEAD}{SCENE}"),
+        &["check", "--count", "2"],
+    );
+    let w = preamble_warning(&r).expect("a warning about the preamble");
+    assert!(
+        w.contains("runs twice") && w.contains("after `animation`"),
+        "{w}"
+    );
+    assert!(w.contains("takes "), "{w}");
+    assert!(r["movie"]["preamble_ms"].as_f64().unwrap() > 50.0);
+}
+
+#[test]
+fn check_warns_about_a_printing_preamble_and_shows_the_print_once() {
+    let r = run_json(
+        "preamble_prints",
+        &format!("(hello) =\n{HEAD}{SCENE}"),
+        &["check", "--count", "2"],
+    );
+    let w = preamble_warning(&r).expect("a warning about the preamble");
+    assert!(w.contains("prints") && w.contains("runs twice"), "{w}");
+    assert_eq!(r["printed"], "hello\n");
+}
+
+#[test]
+fn check_does_not_warn_about_definitions_before_animation() {
+    let r = run_json(
+        "preamble_clean",
+        &format!("/dot {{ 2 2 rectfill }} def\n/pi2 {{ 6.2832 }} def\n{HEAD}{SCENE}"),
+        &["check", "--count", "2"],
+    );
+    assert_eq!(preamble_warning(&r), None);
+    // Slow or printing code after `animation` is not the preamble.
+    let r = run_json(
+        "preamble_after",
+        &format!("{HEAD}(hello) =\n1 1 2000000 {{ 3 mul pop 1 }} for\n{SCENE}"),
+        &["check", "--count", "2"],
+    );
+    assert_eq!(preamble_warning(&r), None);
+}

@@ -221,8 +221,19 @@ impl Common {
             motion_blur,
             read_roots,
             interrupt: None,
+            clock: Some(clock),
         })
     }
+}
+
+/// Seconds since the first call: the clock the engine times a program's
+/// code before `animation` with.
+fn clock() -> f64 {
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    START
+        .get_or_init(std::time::Instant::now)
+        .elapsed()
+        .as_secs_f64()
 }
 
 /// Parse a list like `0,1.5,3` or a single number.

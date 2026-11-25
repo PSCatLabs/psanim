@@ -121,6 +121,11 @@ pub struct Options {
     pub read_roots: Option<Vec<PathBuf>>,
     /// A flag another thread raises to stop a render in progress.
     pub interrupt: Option<Arc<AtomicBool>>,
+    /// Seconds from some fixed point, for timing the code before
+    /// `animation` (see [`Meta::preamble_warning`]). The engine keeps no
+    /// clock of its own, so a host that wants the timing passes one; with
+    /// `None` the time is not measured.
+    pub clock: Option<fn() -> f64>,
 }
 
 impl Default for Options {
@@ -136,6 +141,7 @@ impl Default for Options {
             motion_blur: None,
             read_roots: None,
             interrupt: None,
+            clock: None,
         }
     }
 }
@@ -198,9 +204,35 @@ pub struct Meta {
     /// psanim words the program redefined in setup (`/width 300 def`).
     /// Its own code then gets its definition instead of the engine's.
     pub shadowed: Vec<String>,
+    /// Seconds the program's code before `animation` took in the probe
+    /// pass, which runs it a second time. `None` when no clock was given
+    /// in [`Options`] or the program does not call `animation`.
+    pub preamble_seconds: Option<f64>,
+    /// The code before `animation` printed something.
+    pub preamble_printed: bool,
 }
 
+/// A preamble slower than this many seconds is worth a warning: it runs
+/// twice on every load.
+pub const PREAMBLE_WARN_SECONDS: f64 = 0.05;
+
 impl Meta {
+    /// A warning for a program whose code before `animation` prints or
+    /// takes more than [`PREAMBLE_WARN_SECONDS`]: the declaration is read
+    /// by a first pass that runs that code, so it runs twice.
+    pub fn preamble_warning(&self) -> Option<String> {
+        let slow = self.preamble_seconds.filter(|s| *s > PREAMBLE_WARN_SECONDS);
+        let what = match (slow, self.preamble_printed) {
+            (Some(s), true) => format!("prints and takes {:.0} ms", s * 1e3),
+            (Some(s), false) => format!("takes {:.0} ms", s * 1e3),
+            (None, true) => "prints".to_string(),
+            (None, false) => return None,
+        };
+        Some(format!(
+            "the code before `animation` {what}, and it runs twice: the declaration is found by a first pass that runs everything above it. Move that code after `animation`; above it keep only cheap definitions"
+        ))
+    }
+
     /// The time frame `index` shows.
     pub fn time_of(&self, index: u64) -> f64 {
         index as f64 / self.fps
@@ -231,6 +263,8 @@ impl Meta {
             "motion_blur": self.motion_blur.map(|m| serde_json::json!({"samples": m.samples, "shutter": m.shutter})),
             "params": self.params,
             "shadowed": self.shadowed,
+            "preamble_ms": self.preamble_seconds.map(|s| s * 1e3),
+            "preamble_printed": self.preamble_printed,
         })
     }
 }
@@ -437,8 +471,8 @@ impl Movie {
     pub fn load(source: &str, options: &Options) -> Result<Movie, Error> {
         // Pass 1, the probe: run just far enough to read the declaration,
         // which decides the canvas the real interpreter is built with.
-        let decl = probe(source, options)?;
-        let mut decl = Declaration::read(decl.as_ref())?;
+        let probed = probe(source, options)?;
+        let mut decl = Declaration::read(probed.decl.as_ref())?;
         if let Some(fps) = options.fps {
             decl.fps = fps;
         }
@@ -596,6 +630,8 @@ impl Movie {
             .pop_value()
             .map_err(|_| Error::new(Phase::Setup, "internal", "no checkpoint was taken"))?;
 
+        // Only this pass's printing is kept: the probe's interpreter is
+        // gone, so what the code before `animation` prints is shown once.
         let mut setup_output = String::new();
         let mut setup_truncated = false;
         push_output(
@@ -631,6 +667,8 @@ impl Movie {
                 motion_blur: decl.motion_blur,
                 params,
                 shadowed,
+                preamble_seconds: probed.seconds,
+                preamble_printed: probed.printed,
             },
             scene: decl.scene,
             step,
@@ -1128,10 +1166,22 @@ fn describe(interp: &mut Interp, ctx: &Rc<RefCell<Ctx>>, phase: Phase, err: &PsE
     e
 }
 
+/// What the probe pass found out.
+struct Probed {
+    /// The dictionary `animation` was given, if it was called.
+    decl: Option<Value>,
+    /// Seconds the program's code before `animation` took, when a clock
+    /// was given and `animation` was called.
+    seconds: Option<f64>,
+    /// That code printed something. (The text is dropped with the
+    /// probe's interpreter: the real pass prints it again, once.)
+    printed: bool,
+}
+
 /// Run the program in a throwaway interpreter until `animation` is called,
 /// and return the dictionary it was given. A program that never calls it
 /// runs to its end here and gets the defaults.
-fn probe(source: &str, options: &Options) -> Result<Option<Value>, Error> {
+fn probe(source: &str, options: &Options) -> Result<Probed, Error> {
     let mut interp = Interp::with_page(64, 64).expect("a small page");
     let ctx = Rc::new(RefCell::new(Ctx::new()));
     {
@@ -1147,8 +1197,19 @@ fn probe(source: &str, options: &Options) -> Result<Option<Value>, Error> {
         .set_limits(options.budget.setup)
         .map_err(|e| Error::new(Phase::Load, "options", e.to_string()))?;
     run(&mut interp, &ctx, Phase::Setup, PRELUDE)?;
+    let started = options.clock.map(|clock| clock());
     run(&mut interp, &ctx, Phase::Setup, source)?;
-    Ok(ctx.borrow_mut().decl.take())
+    let seconds = options
+        .clock
+        .zip(started)
+        .map(|(clock, started)| clock() - started);
+    let decl = ctx.borrow_mut().decl.take();
+    let called = decl.is_some();
+    Ok(Probed {
+        seconds: seconds.filter(|_| called),
+        printed: called && !interp.captured_stdout().is_empty(),
+        decl,
+    })
 }
 
 /// The `animation` dictionary, read and checked.

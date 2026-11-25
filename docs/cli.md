@@ -98,5 +98,17 @@ Epicycles: 1280x720 units, 22s at 30 fps = 660 frames, pure
 
 Warnings: every frame blank; blank frames in the middle; a slow start or
 early end; nothing moves; an abrupt change; for a `/Loop true` movie, a
-join whose step is larger than the steps beside it. Notes (not problems):
+join whose step is larger than the steps beside it; code before
+`animation` that prints or takes more than 50 ms. Notes (not problems):
 opening from or closing to the background.
+
+**Code before `animation` runs twice.** The declaration is found by a
+first pass that runs the program in a throwaway interpreter until
+`animation` is called (the canvas must exist before the real pass can
+start). Everything above `animation` therefore runs in both passes. That
+is harmless for definitions, but a loop that builds a table, or a `print`,
+is paid for twice. `check` times the first pass and warns when that code
+prints or takes more than 50 ms (`PREAMBLE_WARN_SECONDS` in the engine);
+the fix is to move it below `animation`. What it prints is shown once (the
+first pass's output is dropped). `info --json` and `check --json` report
+`preamble_ms` and `preamble_printed` in `movie`.

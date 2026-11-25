@@ -150,6 +150,16 @@ Cures, in order:
 4. For a picture that only accumulates (a painting), use `/Persist true`
    so each frame paints only what is new (modes.md).
 
+## `check` warns that the code before `animation` runs twice
+
+The declaration is read by a first pass that runs the program up to
+`animation`, so everything above it runs twice: once to find the canvas,
+once for real. Definitions are free; a table built in a loop, a library
+`use`, or a `print` above `animation` is paid for twice (and `check`
+warns when that code prints or takes more than 50 ms). Move it below
+`animation`. Only `storyboard` and the arrays `reelduration` reads need to
+be above it. What it prints is shown once.
+
 ## `check` says cover 0 but the frame is not empty
 
 `cover` is the fraction of pixels that differ from the frame's most

@@ -629,6 +629,9 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
             notes.push("closes to the background".into());
         }
     }
+    if let Some(w) = meta.preamble_warning() {
+        warnings.push(w);
+    }
     if !meta.shadowed.is_empty() {
         warnings.push(format!(
             "the program redefines psanim's own word{} {}: its code now gets its definition, not the engine's. Rename (for example /{}-x)",
