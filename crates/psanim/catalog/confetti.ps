@@ -5,28 +5,30 @@
 % In a movie:  /yay /confetti component   then   /yay << /Box [x y w h] >> place
 % The blast times are an event track: pass your own /Bursts and react to
 % the same array with `sincelast`.
-/Style /cannons param dup type /stringtype eq { cvn } if /style exch def                     % /cannons (from both bottom corners), /burst (from behind the message), /rain (a steady fall)
+% A value given as text (`--param Palette=dusk`, `--param Bursts='[1 2]'`) as a name or an array.
+/astext { dup type /stringtype eq { dup length 0 gt { dup 0 get 91 eq { cvx exec } { cvn } ifelse } { cvn } ifelse } if } bind def
+/Style /cannons param astext /style exch def                     % /cannons (from both bottom corners), /burst (from behind the message), /rain (a steady fall)
+/Bursts null param astext /bursts exch def                       % blast times on its own clock (the event track); null: the style's
+bursts null eq {
+  /bursts style /cannons eq { [0.25 1.7] } { style /burst eq { [0.35] } { [] } ifelse } ifelse def
+} if
+% It lasts until the last blast's pieces have landed, and at least 5 s.
+/lastburst 0 bursts { max } forall def
 << /Size [1280 720]
-   /Duration style /cannons eq { 6.5 } { style /rain eq { 6 } { 5 } ifelse } ifelse
+   /Duration style /rain eq { 6 } { lastburst 4.85 add 5 max } ifelse
    /Background /transparent
    /Title (Confetti)
-   /Description (Confetti that tumbles, sways and flutters down around a message, which arrives with the first blast and pulses on every one. Styles: cannons from both corners (6.5 s), one burst from behind the message (5 s), a steady rain (6 s). /Seed on the instance changes the pieces.)
+   /Description (Confetti that tumbles, sways and flutters down around a message, which arrives with the first blast and pulses on every one. Styles: cannons from both corners, one burst from behind the message, a steady rain. It lasts until the last pieces are gone (6.55 s for the cannons); place it with /After /hold to keep the message up after that. /Seed on the instance changes the pieces.)
 >> animation
 
 /pktype use
-% A value given as text (`--param Palette=dusk`, `--param Bursts='[1 2]'`) as a name or an array.
-/astext { dup type /stringtype eq { dup length 0 gt { dup 0 get 91 eq { cvx exec } { cvn } ifelse } { cvn } ifelse } if } bind def
 
 /Message (Huzzah!) param /msg exch def                    % the headline; () for none
 /Detail (The builds passed) param /detail exch def        % a smaller line under it; () for none
-/Bursts null param astext /bursts exch def                       % blast times on its own clock (the event track); null: the style's
 /Palette /festive param astext /palette exch def                 % /festive, a theme name (its accents and fonts), or [[r g b] ...]
 /Backdrop [0.99 0.97 0.93] param astext /bgc exch def            % [r g b] behind it all, or /none to fall over your own picture
 /Ink [0.15 0.13 0.22] param astext /inkc exch def                % the message's colour
 
-bursts null eq {
-  /bursts style /cannons eq { [0.25 1.7] } { style /burst eq { [0.35] } { [] } ifelse } ifelse def
-} if
 /cols
   palette type /arraytype eq { palette } {
   palette /festive eq {

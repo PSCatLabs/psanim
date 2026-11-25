@@ -6,7 +6,7 @@
 % Built from the catalog: /fireworks, /confetti and /spinner, placed as
 % components; the reactions read the bursts with `sincelast`.
 % Poster: 6.9
-<< /Size [1280 720] /Duration 11 /FPS 30 /Background [0.03 0.035 0.07]
+<< /Size [1280 720] /Duration 12 /FPS 30 /Background [0.03 0.035 0.07]
    /Title (Huzzah)
    /Description (A release pipeline turns green stage by stage, and each pass gets a bigger celebration: a single shell, a burst of confetti, then a fireworks finale with confetti cannons fired on its bursts.)
 >> animation
@@ -40,10 +40,10 @@
    /Message (Huzzah!) /Detail (The builds passed) >> >> instance
 /fstart 2 passed firstburst add fbursts 0 get sub def      % when the finale starts, on the movie's clock
 /hostbursts [ fbursts { fstart add } forall ] def
-% Confetti cannons fire on two of the finale's bursts: its first and its
-% ninth, as the crescendo starts.
+% Confetti cannons fire on two of the finale's bursts, its first and its
+% fourth, so the paper has landed before the film ends.
 /cannons /confetti << /Seed 5 /Params << /Style /cannons /Message () /Detail ()
-   /Backdrop /none /Bursts [ fbursts 0 get fbursts 8 get ] >> >> instance
+   /Backdrop /none /Bursts [ fbursts 0 get fbursts 3 get ] >> >> instance
 
 % ---- a stage, at rest -------------------------------------------------------------------------
 /tick {                                          % box tick: a check mark at its right end

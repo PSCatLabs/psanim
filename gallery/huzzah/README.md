@@ -1,6 +1,6 @@
 # Huzzah
 
-An 11 second celebration card (1280x720, 30 fps). A release pipeline turns
+A 12 second celebration card (1280x720, 30 fps). A release pipeline turns
 green one stage at a time, and each pass gets a bigger celebration. When
 the build passes, one small shell goes up. When the tests pass, confetti
 bursts out from behind them. When the deploy passes, the pipeline moves

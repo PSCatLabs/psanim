@@ -5,26 +5,10 @@
 % The burst times are an event track: pass your own /Bursts and react to
 % the same array with `sincelast` (inside `a { ... } delayed` for an
 % instance placed at /At a).
-/Style /show param dup type /stringtype eq { cvn } if /style exch def                        % /show (six shells), /single (one, for a small success), /finale (a crescendo)
-<< /Size [1280 720]
-   /Duration style /single eq { 3.5 } { style /finale eq { 6.5 } { 6 } ifelse } ifelse
-   /Background /transparent
-   /Title (Fireworks)
-   /Description (Shells rise on trails and burst into glowing stars that fall and fade behind a message, which arrives with the first burst and pulses on every one. Styles: a show (6 s), a single shell for a small success (3.5 s), a finale (6.5 s). /Seed on the instance changes the shells.)
->> animation
-
-/pktype use
 % A value given as text (`--param Palette=dusk`, `--param Bursts='[1 2]'`) as a name or an array.
 /astext { dup type /stringtype eq { dup length 0 gt { dup 0 get 91 eq { cvx exec } { cvn } ifelse } { cvn } ifelse } if } bind def
-
-/Message (Huzzah!) param /msg exch def                    % the headline; () for none
-/Detail (The builds passed) param /detail exch def        % a smaller line under it; () for none
+/Style /show param astext /style exch def                        % /show (six shells), /single (one, for a small success), /finale (a crescendo)
 /Bursts null param astext /bursts exch def                       % burst times on its own clock (the event track); null: the style's
-/Palette /festive param astext /palette exch def                 % /festive, a theme name (its accents and fonts), or [[r g b] ...]
-/Sky true param astext dup type /nametype eq { /true eq } if /sky exch def                             % paint a night sky; false to burst over your own picture
-/Weight 1 param /wt exch def                              % line weight of the stars and trails: more for a small placement
-
-% ---- the plan: when, where and what each shell is ---------------------------------
 bursts null eq {
   /bursts
     style /single eq { [0.9] } {
@@ -32,6 +16,24 @@ bursts null eq {
                      { [0.8 1.45 2.05 2.7 3.25 3.8] } ifelse } ifelse
   def
 } if
+% It lasts until the last burst's stars have gone, and at least 3.5 s.
+/lastburst 0 bursts { max } forall def
+<< /Size [1280 720]
+   /Duration lastburst 3.1 add 3.5 max
+   /Background /transparent
+   /Title (Fireworks)
+   /Description (Shells rise on trails and burst into glowing stars that fall and fade behind a message, which arrives with the first burst and pulses on every one. Styles: a show, a single shell for a small success, a finale. It lasts until the last stars are gone (6.9 s for the show); place it with /After /hold to keep the message up after that. /Seed on the instance changes the shells.)
+>> animation
+
+/pktype use
+
+/Message (Huzzah!) param /msg exch def                    % the headline; () for none
+/Detail (The builds passed) param /detail exch def        % a smaller line under it; () for none
+/Palette /festive param astext /palette exch def                 % /festive, a theme name (its accents and fonts), or [[r g b] ...]
+/Sky true param astext dup type /nametype eq { /true eq } if /sky exch def                             % paint a night sky; false to burst over your own picture
+/Weight 1 param /wt exch def                              % line weight of the stars and trails: more for a small placement
+
+% ---- the plan: when, where and what each shell is ---------------------------------
 /cols
   palette type /arraytype eq { palette } {
   palette /festive eq {

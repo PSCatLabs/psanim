@@ -6,9 +6,9 @@ Ready-made elements, each a movie of its own. Place one as a component (see comp
 
 ## `/confetti`: Confetti
 
-Confetti that tumbles, sways and flutters down around a message, which arrives with the first blast and pulses on every one. Styles: cannons from both corners (6.5 s), one burst from behind the message (5 s), a steady rain (6 s). /Seed on the instance changes the pieces.
+Confetti that tumbles, sways and flutters down around a message, which arrives with the first blast and pulses on every one. Styles: cannons from both corners, one burst from behind the message, a steady rain. It lasts until the last pieces are gone (6.55 s for the cannons); place it with /After /hold to keep the message up after that. /Seed on the instance changes the pieces.
 
-1280x720, 6.5 s. `/x /confetti component`, then `/x << /Box [..] >> place`.
+1280x720, 6.55 s. `/x /confetti component`, then `/x << /Box [..] >> place`.
 
 | Param | Default | Meaning |
 |---|---|---|
@@ -22,9 +22,9 @@ Confetti that tumbles, sways and flutters down around a message, which arrives w
 
 ## `/fireworks`: Fireworks
 
-Shells rise on trails and burst into glowing stars that fall and fade behind a message, which arrives with the first burst and pulses on every one. Styles: a show (6 s), a single shell for a small success (3.5 s), a finale (6.5 s). /Seed on the instance changes the shells.
+Shells rise on trails and burst into glowing stars that fall and fade behind a message, which arrives with the first burst and pulses on every one. Styles: a show, a single shell for a small success, a finale. It lasts until the last stars are gone (6.9 s for the show); place it with /After /hold to keep the message up after that. /Seed on the instance changes the shells.
 
-1280x720, 6 s. `/x /fireworks component`, then `/x << /Box [..] >> place`.
+1280x720, 6.9 s. `/x /fireworks component`, then `/x << /Box [..] >> place`.
 
 | Param | Default | Meaning |
 |---|---|---|
