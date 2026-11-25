@@ -148,7 +148,8 @@ first checkpoint.
 ## Sizing
 
 The movie declares its size in canvas units. The widget fits its
-element's CSS width: scale = element width x device pixel ratio (at most
+element's CSS width (300 pixels unless the page sets one; the canvas
+never sizes the element, or a 2x screen would grow it on every resize): scale = element width x device pixel ratio (at most
 2) / movie width, so a 960-unit clock in a 476-pixel column renders at
 952 pixels on a 2x screen. A `scale` attribute fixes it instead. A
 `ResizeObserver` reopens the movie at the new scale when the width

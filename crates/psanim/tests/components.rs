@@ -44,7 +44,15 @@ fn speed_hold_and_loop() {
         "{PROBE}/scene {{ /probe << /Speed 2 /After /hold >> place }} def"
     ));
     assert!(printed(&mut m, 0.5).starts_with("[1.0 1.0 "));
-    assert!(printed(&mut m, 3.0).starts_with("[2.0 2.0 "));
+    // Held inside its last frame, just before its end.
+    let held = printed(&mut m, 3.0);
+    let t: f64 = held[1..]
+        .split_whitespace()
+        .next()
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert!(t < 2.0 && t > 1.9999, "{held}");
     let mut m = load(&format!(
         "{PROBE}/scene {{ /probe << /After /loop /At 1 /Before /hold >> place }} def"
     ));
@@ -323,4 +331,13 @@ fn film_grain_follows_the_instance_seed() {
     };
     assert_eq!(grain(3), grain(3));
     assert_ne!(grain(3), grain(4));
+}
+
+#[test]
+fn holding_keeps_a_drawing_made_in_a_half_open_window() {
+    let mut m = load(
+        "/c << /Size [10 10] /Duration 1 /Scene { 0 1 { (shown) == } during } >> component
+         /scene { /c << /After /hold >> place } def",
+    );
+    assert_eq!(printed(&mut m, 3.0), "(shown)");
 }

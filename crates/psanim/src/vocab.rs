@@ -145,7 +145,9 @@ pub fn fade_ticks(lo: f64, hi: f64, n: f64) -> Vec<(f64, f64)> {
     if !(range.is_finite() && range > 0.0) {
         return vec![(lo, 1.0)];
     }
-    let raw = range / n.max(1.0);
+    // About n ticks, and never more than a few hundred: the loops below
+    // are native and do not see the interpreter's budgets.
+    let raw = range / n.clamp(1.0, 200.0);
     let mag = 10f64.powf(raw.log10().floor());
     // The nice steps 1, 2, 5 (x 10^k) below and above the ideal step.
     let ladder = [0.5, 1.0, 2.0, 5.0, 10.0, 20.0];
@@ -165,23 +167,38 @@ pub fn fade_ticks(lo: f64, hi: f64, n: f64) -> Vec<(f64, f64)> {
     let s = s * s * (3.0 - 2.0 * s);
     let on = |v: f64, step: f64| ((v / step).round() * step - v).abs() < step * 1e-6;
     let mut out = Vec::new();
-    let mut k = (lo / fine - 1e-9).ceil();
-    while k * fine <= hi + fine * 1e-9 && out.len() < 400 {
+    // Tick indices are counted in floating point: far from zero, adding
+    // one stops moving, so such a range gets a single tick instead.
+    if (lo / fine).abs() > 1.0e15 || (hi / fine).abs() > 1.0e15 {
+        return vec![(lo, 1.0)];
+    }
+    const MAX_TICK_STEPS: u32 = 1000;
+    let k0 = (lo / fine - 1e-9).ceil();
+    for i in 0..MAX_TICK_STEPS {
+        let k = k0 + f64::from(i);
+        if k * fine > hi + fine * 1e-9 {
+            break;
+        }
         let v = (k * fine / fine).round() * fine;
         let a = if on(v, coarse) { 1.0 } else { 1.0 - s };
         if a > 0.0 {
             out.push((v, a));
         }
-        k += 1.0;
     }
-    // Coarse ticks that are not on the fine grid (5 when fine is 2).
-    let mut k = (lo / coarse - 1e-9).ceil();
-    while k * coarse <= hi + coarse * 1e-9 && out.len() < 800 {
-        let v = (k * coarse / coarse).round() * coarse;
-        if !on(v, fine) && s > 0.0 {
-            out.push((v, s));
+    // Coarse ticks that are not on the fine grid (5 when fine is 2); none
+    // at all while the coarse set is invisible.
+    if s > 0.0 {
+        let k0 = (lo / coarse - 1e-9).ceil();
+        for i in 0..MAX_TICK_STEPS {
+            let k = k0 + f64::from(i);
+            if k * coarse > hi + coarse * 1e-9 {
+                break;
+            }
+            let v = (k * coarse / coarse).round() * coarse;
+            if !on(v, fine) {
+                out.push((v, s));
+            }
         }
-        k += 1.0;
     }
     out.sort_by(|a, b| a.0.total_cmp(&b.0));
     out
@@ -216,7 +233,9 @@ pub fn nice_ticks(lo: f64, hi: f64, n: f64) -> Vec<f64> {
     if !(range.is_finite() && range > 0.0) {
         return vec![lo];
     }
-    let raw = range / n.max(1.0);
+    // About n ticks, and never more than a few hundred: the loops below
+    // are native and do not see the interpreter's budgets.
+    let raw = range / n.clamp(1.0, 200.0);
     let mag = 10f64.powf(raw.log10().floor());
     let step = [1.0, 2.0, 2.5, 5.0, 10.0]
         .iter()
@@ -985,6 +1004,15 @@ fn parse_clock(text: &str) -> Option<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fade_ticks_is_bounded_whatever_it_is_asked() {
+        // A trillion ticks asked for, or a range far from zero: a few
+        // hundred at most, at once.
+        assert!(fade_ticks(0.0, 100.0, 1.0e12).len() <= 800);
+        assert!(!fade_ticks(1.0e300, 1.0e300 + 1.0e290, 5.0).is_empty());
+        assert_eq!(fade_ticks(1.0e18, 1.0e18 + 10.0, 5.0).len(), 1);
+    }
 
     #[test]
     fn times_of_day_parse() {

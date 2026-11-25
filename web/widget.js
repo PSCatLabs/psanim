@@ -68,7 +68,11 @@ export function secondsSinceMidnight(d = new Date()) {
 }
 
 const css = `
-:host { display: inline-block; position: relative; line-height: 0; }
+:host { display: inline-block; position: relative; line-height: 0; width: 300px; }
+/* The host's width comes from CSS (300px unless the page says otherwise),
+   never from the canvas: the canvas's pixel buffer is sized from the host's
+   width times the device pixel ratio, so letting the canvas size the host
+   would grow it on every resize. */
 :host(:focus-visible) { outline: 2px solid #ffc94d; outline-offset: 2px; }
 canvas { display: block; width: 100%; height: auto; }
 .err { position: absolute; inset: 0; margin: 0; padding: 8px; overflow: auto; background: rgba(60, 12, 16, 0.94);

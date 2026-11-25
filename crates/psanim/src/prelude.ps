@@ -674,7 +674,9 @@ end
     pl-t pl-d ge {
       pl-o /After pl-r /loop get { /loop } { /hide } ifelse .dget
       dup /loop eq { pop /pl-t pl-t pl-d fmod def }
-      { /hold eq { /pl-t pl-d def } { /pl-live false def } ifelse } ifelse
+      % hold a hair before the end, inside the last frame: a time of exactly
+      % the duration is outside every half-open window (`during`, reels)
+      { /hold eq { /pl-t pl-d dup abs 1e-9 mul 1e-6 add sub def } { /pl-live false def } ifelse } ifelse
     } if
     pl-live {
       pl-o /Box [0 0 width height] .dget
