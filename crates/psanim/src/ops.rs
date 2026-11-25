@@ -948,11 +948,12 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         )
     });
     reg(interp, ctx, ".blurbegin", |i, ctx| {
-        let blur = i.pop_f64()?;
+        let blur = i.pop_f64()? * ctx.borrow().unit_scale();
         begin_pending(i, ctx, LayerEnd { blur, ..PLAIN })
     });
     reg(interp, ctx, ".glowbegin", |i, ctx| {
         let (strength, radius) = (i.pop_f64()?, i.pop_f64()?);
+        let radius = radius * ctx.borrow().unit_scale();
         begin_pending(
             i,
             ctx,
@@ -1002,14 +1003,14 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     });
     reg(interp, ctx, "blurlayer", |i, ctx| {
         let radius = i.pop_f64()?;
-        let sigma = radius * ctx.borrow().px_scale;
+        let sigma = radius * ctx.borrow().px_scale * ctx.borrow().unit_scale();
         with_canvas_pixels(i, ctx, |px, w, h, scratch| {
             raster::blur(px, w, h, sigma, scratch)
         })
     });
     reg(interp, ctx, "glowlayer", |i, ctx| {
         let (strength, radius) = (i.pop_f64()?, i.pop_f64()?);
-        let sigma = radius * ctx.borrow().px_scale;
+        let sigma = radius * ctx.borrow().px_scale * ctx.borrow().unit_scale();
         with_canvas_pixels(i, ctx, |px, w, h, scratch| {
             raster::glow(px, w, h, sigma, strength.clamp(0.0, 2.0), scratch)
         })
@@ -1087,11 +1088,13 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         Ok(())
     });
     // --- components (native halves; see prelude.ps) ----------------------
-    // t dur seed params .comppush -    open a component's clock: its movie
-    //                                  time t of dur, its seed, and the
-    //                                  values its `param` lookups get
-    //                                  (a dictionary, or null for none).
+    // t dur seed params unit .comppush -    open a component's clock: its
+    //                                  movie time t of dur, its seed, the
+    //                                  values its `param` lookups get (a
+    //                                  dictionary, or null for none), and
+    //                                  the device length of its unit.
     reg(interp, ctx, ".comppush", |i, ctx| {
+        let unit = i.pop_f64()?;
         let params = match i.pop_value()? {
             Value::Dict(entries) => entries,
             Value::Null => Vec::new(),
@@ -1114,11 +1117,17 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             ));
             return Err(PsError::Limitcheck);
         }
+        let scale = if c.px_scale > 0.0 && unit.is_finite() && unit > 0.0 {
+            unit / c.px_scale
+        } else {
+            1.0
+        };
         c.comps.push(crate::ctx::Comp {
             t,
             dur,
             seed,
             params,
+            scale,
         });
         drop(c);
         push_scope(ctx, TimeScope { t, dur })

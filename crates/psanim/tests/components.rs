@@ -159,3 +159,25 @@ fn mistakes_are_explained() {
     let e = load_err("/p << /Setup { /x 1 def } >> component");
     assert!(e.contains("must define its scene"), "{e}");
 }
+
+#[test]
+fn blur_inside_a_component_scales_with_its_box() {
+    // A 10-unit square blurred by 2 units, drawn at 1:1 and at 4x: the
+    // soft edge is four times as wide at 4x.
+    let mut m = load(
+        "/b << /Size [20 20] /Scene { 2 { 1 1 1 setrgbcolor 5 5 10 10 rectfill } blurred } >> component
+         /scene { /b << /Box [0 0 20 20] >> place /b << /Box [100 0 80 80] >> place } def",
+    );
+    let f = m.render_at(0.0).unwrap();
+    let alpha = |x: u32, y: u32| f.premultiplied[((y * f.width + x) * 4) as usize];
+    // Width of the ramp along a row through each square's middle.
+    let ramp = |y: u32, x0: u32, x1: u32| {
+        (x0..x1)
+            .filter(|&x| (8..248).contains(&alpha(x, y)))
+            .count()
+    };
+    let small = ramp(100 - 10, 0, 20);
+    let big = ramp(100 - 40, 100, 180);
+    assert!(small >= 1, "small ramp {small}");
+    assert!(big >= 3 * small, "small {small}, big {big}");
+}
