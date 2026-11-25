@@ -93,7 +93,7 @@
 
 /setc { aload pop setrgbcolor } def
 /fillframe { setc 0 0 1280 720 rectfill } def       % (not `backdrop`: it ignores a transition's clip)
-/fmod { 2 copy div floor mul sub } def              % a b -> a mod b, for reals, in 0..b
+/fmod-x { 2 copy div floor mul sub } def            % a b -> a mod b, for reals, in 0..b
 
 % cx cy rx ry ell : append an ellipse to the path (the CTM is put back, so
 % a stroke keeps an even width)
@@ -152,7 +152,7 @@
     /L 2000 def
     newpath
     0 1 n 1 sub { /i exch def
-      /gx [i seed 1] hash01 L mul W-fl add vx0 sub L fmod vx0 add def
+      /gx [i seed 1] hash01 L mul W-fl add vx0 sub L fmod-x vx0 add def
       /gy W-y 14 sub [i seed 2] hash01 34 mul sub  gx W-amp W-wl W-ph wave2 0.6 mul add def
       gx gy moveto 12 [i seed 3] hash01 22 mul add 0 rlineto
     } for
@@ -169,7 +169,7 @@
     /sl 0.28 def
     newpath
     0 1 n 1 sub { /i exch def
-      /yy 790 now spd mul [i seed 2] hash01 900 mul add 900 fmod sub def
+      /yy 790 now spd mul [i seed 2] hash01 900 mul add 900 fmod-x sub def
       /xx [i seed 1] hash01 1750 mul 260 sub 790 yy sub sl mul add def
       xx yy moveto len sl mul neg len rlineto
     } for
@@ -194,7 +194,7 @@
       /cyc tt per div floor def
       /u tt cyc per mul sub 0.55 div def
       u 1 lt {
-        /rx [i seed cyc 3] hash01 2000 mul vx0 sub 2000 fmod vx0 add def
+        /rx [i seed cyc 3] hash01 2000 mul vx0 sub 2000 fmod-x vx0 add def
         1 u sub 0.55 mul setalpha
         newpath rx  y0 [i seed cyc 4] hash01 y1 y0 sub mul add  3 u 17 mul add  dup 0.3 mul ell stroke
       } if
@@ -670,7 +670,7 @@ transitions /t-drain {
   /vx0 -40 def /vx1 1320 def
   % rings of the pipe
   dk1 setc 9 setlinewidth
-  0 1 9 { 340 mul sc sub 3400 fmod 500 sub  newpath 330 46 350 ell stroke } for
+  0 1 9 { 340 mul sc sub 3400 fmod-x 500 sub  newpath 330 46 350 ell stroke } for
   % the opening: night sky and river beyond, with a rim of light
   n0 setc newpath ex 330 er 0 360 arc fill
   14 0.9 { 0.45 0.55 0.80 setrgbcolor 4 setlinewidth newpath ex 330 er 0 360 arc stroke } glowing
@@ -682,7 +682,7 @@ transitions /t-drain {
   grestore
   % eyes in the dark, sliding by with the wall
   1.3 4.2 {
-    /blink now 0.2 sub 1.3 fmod 0.12 lt now 0.25 lt or def
+    /blink now 0.2 sub 1.3 fmod-x 0.12 lt now 0.25 lt or def
     blink not {
       6 1.0 { eye setc
         /exx 2110 sc sub def
@@ -693,7 +693,7 @@ transitions /t-drain {
   dk3 setc 2.2 setlinewidth 1 setlinecap
   0 1 4 { /i exch def
     /per 1.7 [i 1] hash01 1.3 mul add def
-    /age now [i 2] hash01 per mul add per fmod def
+    /age now [i 2] hash01 per mul add per fmod-x def
     /dx [i 3] hash01 1100 mul 90 add def
     age 0.62 lt {
       /dy 600 age dup mul 950 mul sub def
@@ -710,7 +710,7 @@ transitions /t-drain {
   now 1.5 ge {
     bx floatpose
     301 1.3 [0 14 3 6 7 2] keyframes wiggle add  1 drop sub -70 mul add
-    3 1 roll 1 drop sub 330 mul add 3 -1 roll
+    3 1 roll 1 drop sub 560 mul add 3 -1 roll
     1.0 drawboat
   } if
   dk3 setc vx0 vx1 W-y 6 sub 0 W-amp W-wl W-ph strip
