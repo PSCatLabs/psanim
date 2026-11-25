@@ -15,10 +15,7 @@
           [ 16.5  60 (Demo day rehearsal)       (Room Heron)] ] param /events exch def
 
 /hours { weektime 86400 fmod 3600 div } def
-/clocktext {                      % hours -> (HH:MM)
-  dup floor cvi /h exch def  h sub 60 mul 0.0001 add floor cvi /m exch def
-  h 2 zeropad (:) strcat m 2 zeropad strcat
-} def
+/clocktext { 3600 mul 0.001 add fmtday 0 5 getinterval } def   % hours -> (HH:MM), a millisecond to spare against rounding
 /state {                          % event -> /past, /now or /later
   /e exch def
   e 0 get /t exch def  e 1 get 60 div t add /end exch def
@@ -33,7 +30,7 @@
 
   /accent ink /title 4.8 vmin face (TODAY) head /nw placetext
   (TODAY) /glyphs 0.05 /rise kinetic
-  /muted ink /body 4.2 vmin face hours clocktext head /ne showin
+  /muted ink /body 4.2 vmin face weektime fmtday 0 5 getinterval head /ne showin
 
   % the first event still to come is the next one
   /nextseen false def
