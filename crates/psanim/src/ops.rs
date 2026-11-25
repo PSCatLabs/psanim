@@ -389,7 +389,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                     dur: b - a,
                 },
             )?;
-            i.push_value(&body);
+            i.push_value(&body)?;
             i.push_bool(true);
         } else {
             i.push_bool(false);
@@ -408,7 +408,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                     dur: (s.dur - a).max(0.0),
                 },
             )?;
-            i.push_value(&body);
+            i.push_value(&body)?;
             i.push_bool(true);
         } else {
             i.push_bool(false);
@@ -421,7 +421,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let s = ctx.borrow().scope();
         if s.t < b {
             push_scope(ctx, TimeScope { t: s.t, dur: b })?;
-            i.push_value(&body);
+            i.push_value(&body)?;
             i.push_bool(true);
         } else {
             i.push_bool(false);
@@ -439,7 +439,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 dur: s.dur - d,
             },
         )?;
-        i.push_value(&body);
+        i.push_value(&body)?;
         Ok(())
     });
     reg(interp, ctx, ".timescaled", |i, ctx| {
@@ -453,7 +453,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 dur: s.dur * k.abs(),
             },
         )?;
-        i.push_value(&body);
+        i.push_value(&body)?;
         Ok(())
     });
     reg(interp, ctx, ".looped", |i, ctx| {
@@ -474,7 +474,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 dur: p,
             },
         )?;
-        i.push_value(&body);
+        i.push_value(&body)?;
         Ok(())
     });
     reg(interp, ctx, ".pingpong", |i, ctx| {
@@ -491,7 +491,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let phase = s.t.rem_euclid(2.0 * p);
         let t = if phase < p { phase } else { 2.0 * p - phase };
         push_scope(ctx, TimeScope { t, dur: p })?;
-        i.push_value(&body);
+        i.push_value(&body)?;
         Ok(())
     });
     reg(interp, ctx, ".attime", |i, ctx| {
@@ -499,14 +499,14 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let t = i.pop_f64()?;
         let s = ctx.borrow().scope();
         push_scope(ctx, TimeScope { t, dur: s.dur })?;
-        i.push_value(&body);
+        i.push_value(&body)?;
         Ok(())
     });
     reg(interp, ctx, ".timewindow", |i, ctx| {
         let body = pop_proc(i, ctx, "timewindow")?;
         let (dur, t) = (i.pop_f64()?, i.pop_f64()?);
         push_scope(ctx, TimeScope { t, dur })?;
-        i.push_value(&body);
+        i.push_value(&body)?;
         Ok(())
     });
     reg(interp, ctx, ".globally", |i, ctx| {
@@ -516,7 +516,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             (c.global_t, c.duration)
         };
         push_scope(ctx, TimeScope { t, dur })?;
-        i.push_value(&body);
+        i.push_value(&body)?;
         Ok(())
     });
     reg(interp, ctx, ".reversed", |i, ctx| {
@@ -529,7 +529,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 dur: s.dur,
             },
         )?;
-        i.push_value(&body);
+        i.push_value(&body)?;
         Ok(())
     });
     reg(interp, ctx, ".timepop", |_, ctx| {
@@ -569,7 +569,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 if matches!(pair[1], Value::Null) {
                     break; // a gap: nothing plays
                 }
-                i.push_value(&pair[1]);
+                i.push_value(&pair[1])?;
                 let body = pop_proc(i, ctx, "sequence")?;
                 push_scope(
                     ctx,
@@ -578,7 +578,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                         dur,
                     },
                 )?;
-                i.push_value(&body);
+                i.push_value(&body)?;
                 i.push_bool(true);
                 return Ok(());
             }
@@ -616,10 +616,10 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 i.push_real((t - clip.start) / lead);
                 i.push_real(t - clip.start);
                 i.push_real(clip.dur);
-                i.push_value(clip.body);
+                i.push_value(clip.body)?;
                 i.push_real(t - prev.start);
                 i.push_real(prev.dur);
-                i.push_value(prev.body);
+                i.push_value(prev.body)?;
                 i.push_int(2);
                 return Ok(());
             }
@@ -630,7 +630,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                     .get(k + 1)
                     .is_some_and(|n| n.lead.is_some() && t >= n.start);
                 if !next_lead {
-                    i.push_value(clip.body);
+                    i.push_value(clip.body)?;
                     let body = pop_proc(i, ctx, "reel")?;
                     push_scope(
                         ctx,
@@ -639,7 +639,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                             dur: clip.dur,
                         },
                     )?;
-                    i.push_value(&body);
+                    i.push_value(&body)?;
                     i.push_int(1);
                     return Ok(());
                 }
@@ -702,7 +702,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let u = i.pop_f64()?;
         match lerp_value(&a, &b, u) {
             Some(v) => {
-                i.push_value(&v);
+                i.push_value(&v)?;
                 Ok(())
             }
             None => fail(
@@ -760,7 +760,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         };
         let t = ctx.borrow().scope().t;
         let v = eval_keys(ctx, &items, t)?;
-        i.push_value(&v);
+        i.push_value(&v)?;
         Ok(())
     });
     reg(interp, ctx, "keyat", |i, ctx| {
@@ -769,7 +769,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         };
         let t = i.pop_f64()?;
         let v = eval_keys(ctx, &items, t)?;
-        i.push_value(&v);
+        i.push_value(&v)?;
         Ok(())
     });
     reg(interp, ctx, "wiggle", |i, ctx| {
@@ -1075,7 +1075,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         c.params_seen.entry(name.clone()).or_insert(shown);
         let v = c.params.get(&name).cloned().unwrap_or(default);
         drop(c);
-        i.push_value(&v);
+        i.push_value(&v)?;
         Ok(())
     });
     reg(interp, ctx, "signal", |i, ctx| {

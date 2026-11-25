@@ -688,7 +688,7 @@ impl Movie {
                     .exec(phase, &self.draw_program(true))
                     .and_then(|()| self.check_stack(phase, &self.scene.clone()));
                 self.interp.clear_operands();
-                self.interp.push_value(&guard);
+                self.push_save(phase, &guard)?;
                 self.exec(phase, "cleardictstack restore")?;
                 drawn?;
                 self.check_layers(phase)?;
@@ -720,7 +720,7 @@ impl Movie {
                         .exec(phase, &program)
                         .and_then(|()| self.check_stack(phase, &overlay));
                     self.interp.clear_operands();
-                    self.interp.push_value(&guard);
+                    self.push_save(phase, &guard)?;
                     self.exec(phase, "cleardictstack restore")?;
                     drawn?;
                     self.check_layers(phase)?;
@@ -811,6 +811,12 @@ impl Movie {
             .map_err(|_| Error::new(phase, "internal", "the checkpoint was lost"))
     }
 
+    fn push_save(&mut self, phase: Phase, save: &Value) -> Result<(), Error> {
+        self.interp
+            .push_value(save)
+            .map_err(|_| Error::new(phase, "internal", "the checkpoint could not be restored"))
+    }
+
     fn check_layers(&mut self, phase: Phase) -> Result<(), Error> {
         let open = self.ctx.borrow().layers.len();
         if open == 0 {
@@ -875,7 +881,7 @@ impl Movie {
         self.checkpoints.truncate(k + 1);
         self.interp.clear_operands();
         let save = self.checkpoints[k].save.clone();
-        self.interp.push_value(&save);
+        self.push_save(phase, &save)?;
         self.exec(phase, "cleardictstack restore save")?;
         self.checkpoints[k].save = self.pop_save(phase)?;
         self.cursor = self.checkpoints[k].tick;
@@ -948,7 +954,7 @@ impl Movie {
                 .exec(phase, &self.draw_program(false))
                 .and_then(|()| self.check_stack(phase, &self.scene.clone()));
             self.interp.clear_operands();
-            self.interp.push_value(&guard);
+            self.push_save(phase, &guard)?;
             self.exec(phase, "cleardictstack restore")?;
             drawn?;
             self.check_layers(phase)?;

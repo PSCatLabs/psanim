@@ -570,7 +570,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 .iter()
                 .map(|m| Value::Name(m.name.into()))
                 .collect(),
-        ));
+        ))?;
         Ok(())
     });
     // /name .motionkind -> bool   true for an emphasis.
@@ -588,7 +588,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let t = ctx.borrow().scope().t;
         match smooth_keys(&items, t) {
             Ok(v) => {
-                i.push_value(&v);
+                i.push_value(&v)?;
                 Ok(())
             }
             Err(e) => fail(ctx, PsError::Rangecheck, e),
@@ -617,7 +617,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         };
         match v {
             Some(v) => {
-                i.push_value(&v);
+                i.push_value(&v)?;
                 Ok(())
             }
             None => fail(
@@ -655,7 +655,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 .filter(|w| !w.is_empty())
                 .map(|w| Value::String(w.to_vec()))
                 .collect(),
-        ));
+        ))?;
         Ok(())
     });
     reg(interp, ctx, "splitlines", |i, _| {
@@ -669,7 +669,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 .into_iter()
                 .map(|l| Value::String(l.to_vec()))
                 .collect(),
-        ));
+        ))?;
         Ok(())
     });
 
@@ -697,7 +697,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 )
             })
             .collect();
-        i.push_value(&Value::Array(lines));
+        i.push_value(&Value::Array(lines))?;
         Ok(())
     });
     // (old) (new) difflines -> [ [ /same|/del|/add (line) oldindex newindex ] ... ]
@@ -715,7 +715,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 ])
             })
             .collect();
-        i.push_value(&Value::Array(rows));
+        i.push_value(&Value::Array(rows))?;
         Ok(())
     });
 
