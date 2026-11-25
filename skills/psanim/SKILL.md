@@ -147,6 +147,7 @@ is too low: an entrance is three tweens, a diagram is arithmetic. The
 | `pkcode` | `codeblock` (typing, focus), `codediff` | [explain.md](references/explain.md) |
 | `pkchart` | `plotframe`, `plotaxes`, `bars`, `hbars`, `plotline`, `donut` | [explain.md](references/explain.md) |
 | `pkink` | tapered strokes, `revealalong`, `around`, gradients | [ink.md](references/ink.md) |
+| `pkfigure` | a rig for characters that dance: `dancepose` from a beat, `squashed`, `limb`, `eye`, `mouth`, `spring` | [figure.md](references/figure.md) |
 
 The way of working they assume: **draw each thing at rest, in a box, in
 theme colours; then say when it arrives and by what motion.** Start from
@@ -284,6 +285,7 @@ detail) is in [storytelling.md](references/storytelling.md).
 | Text: fitting, wrapping, kinetic type, counters, captions, end credits | [references/type.md](references/type.md) |
 | Diagrams, code, charts | [references/explain.md](references/explain.md) |
 | Brush marks, self-drawing textured strokes, PSCat media in motion | [references/ink.md](references/ink.md) |
+| A character that dances to a beat (Twiddle, and your own) | [references/figure.md](references/figure.md) |
 | How to structure an explanation or a story | [references/storytelling.md](references/storytelling.md) |
 | Every core word, stack effect and meaning | [references/vocabulary.md](references/vocabulary.md) (generated; same as `psanim api --markdown`) |
 | Every library word | [references/vocabulary-libraries.md](references/vocabulary-libraries.md) (generated) |

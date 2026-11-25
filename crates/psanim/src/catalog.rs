@@ -27,6 +27,7 @@ pub const CATALOG: &[(&str, &str)] = &[
     ("spinner", include_str!("../catalog/spinner.ps")),
     ("terminal", include_str!("../catalog/terminal.ps")),
     ("testdots", include_str!("../catalog/testdots.ps")),
+    ("twiddle", include_str!("../catalog/twiddle.ps")),
 ];
 
 /// The source of a catalog entry, by name.

@@ -4,7 +4,7 @@
 use psanim::{Frame, Movie, Options};
 
 const HEAD: &str = "<< /Size [200 120] /Duration 4 /FPS 10 /Background [0 0 0] >> animation
-/pkstage use /pkmotion use /pktype use /pkdiagram use /pkcode use /pkchart use /pkink use\n";
+/pkstage use /pkmotion use /pktype use /pkdiagram use /pkcode use /pkchart use /pkink use /pkfigure use\n";
 
 fn load(body: &str) -> Movie {
     Movie::load(&format!("{HEAD}{body}"), &Options::default()).unwrap_or_else(|e| panic!("{e}"))
@@ -1146,4 +1146,61 @@ fn a_band_of_a_stroke_is_revealed_for_persistent_painting() {
         ink_at(&mut m, 0.0).map(|b| (b.0, b.1, b.2, b.3)),
         Some((60, 45, 100, 75))
     );
+}
+
+// --- pkfigure ------------------------------------------------------------
+
+#[test]
+fn a_dance_step_hops_higher_when_louder_and_grins_on_a_big_kick() {
+    let pose = |loud: f64, since: f64| {
+        eval_at(
+            "",
+            &format!(
+                "<< /Beat 4 /Since {since} /Length 0.5 /Loud {loud} >> dancepose \
+                 dup /Hop get == /Eyes get =="
+            ),
+            0.0,
+        )
+    };
+    let quiet = pose(0.2, 0.19);
+    let loud = pose(1.0, 0.19);
+    assert!(nums(&loud)[0] > nums(&quiet)[0] * 1.5, "{quiet} / {loud}");
+    assert!(loud.contains("grin"), "{loud}");
+    assert!(quiet.contains("open"), "{quiet}");
+    // On the beat itself and once landed, the feet are on the ground.
+    assert_eq!(nums(&pose(1.0, 0.0))[0], 0.0);
+    assert_eq!(nums(&pose(1.0, 0.49))[0], 0.0);
+}
+
+#[test]
+fn a_spring_starts_at_one_and_dies_away_and_poses_blend() {
+    let v = nums(&eval_at(
+        "",
+        "0 1.7 4.5 spring == -1 1.7 4.5 spring == 3 1.7 4.5 spring abs 0.01 lt ==",
+        0.0,
+    ));
+    assert_eq!(&v[..2], &[1.0, 0.0]);
+    let out = eval_at(
+        "",
+        "restpose << /Beat 0 /Since 0.1 /Length 0.5 /Loud 0.2 >> dancepose 0.5 blendpose \
+         dup /ArmR get == /Eyes get ==",
+        0.0,
+    );
+    // Halfway: arms between hanging (14) and the first move's (up), the eyes the dance's.
+    assert!(nums(&out)[0] > 14.0 && nums(&out)[0] < 149.0, "{out}");
+    assert!(out.contains("open"), "{out}");
+}
+
+#[test]
+fn squashed_keeps_the_feet_on_the_ground_and_leaves_no_dictionary_open() {
+    // A point on the ground stays put under any squash; the proc sees the caller's dictionaries.
+    let out = eval_at(
+        "/mine 7 def",
+        "0 0.7 0.2 { 0 0 transform exch round cvi == round cvi == mine == } squashed \
+         0 0 transform exch round cvi == round cvi ==",
+        0.0,
+    );
+    let v = nums(&out);
+    assert_eq!(v[2], 7.0, "{out}");
+    assert_eq!((v[0], v[1]), (v[3], v[4]), "{out}");
 }

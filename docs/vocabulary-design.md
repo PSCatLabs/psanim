@@ -134,11 +134,31 @@ for the common case.
 | `pkcode` | `codeblock`, `codelinebox`, `codediff` | native tokenizer and diff |
 | `pkchart` | `plotframe`, `plotaxes`, `bars`, `hbars`, `plotline`, `plotmark`, `plotrule`, `dots`, `donut` | pktype |
 | `pkink` | `revealalong`, `revealband`, `around`, `brushstroke`, `boxgradient` | pkstage |
+| `pkfigure` | `squashed`, `limb`, `eye`, `mouth`, `spring`, `dancepose`, `restpose`, `blendpose` | pkstage |
 
 Libraries are PostScript source compiled into the binary and loaded with
 `/pkmotion use`. They are opt-in so that a movie's namespace holds only
 what it asked for; a word used without its library produces an error
 that names the library.
+
+### Why characters have a library of their own
+
+`pkfigure` came with the catalog's first character (`/twiddle`, #51). A
+dancing character is a pose computed from a beat, then a drawing that
+reads it. The drawing is each character's own, so it stays in the
+character's catalog entry, where `psanim catalog twiddle` shows it to
+anyone who wants to copy it. The rest is shared by every dancer: the
+bounce, the limbs, the faces and the dance step. A library is the only
+place two catalog entries can share code. pkmotion was the wrong home,
+because its words measure and place an arbitrary drawing, and a rig
+draws a particular kind of one.
+
+The same rules as everywhere else apply. No word reads the clock:
+`dancepose` takes the beat index, the seconds since that beat and the
+loudness, so an entry can read the beat from a tempo, an event track or
+a signal. A pose is a plain dictionary of numbers, not an object. The
+lag of an antenna, an ear or a tail is `spring`, a closed form in the
+time since the jolt, so the frames stay pure.
 
 ### What is in Rust and what is in PostScript
 
@@ -147,7 +167,7 @@ anything that is data processing rather than drawing (tokenizing,
 diffing, number formatting, tick selection, ranks), and anything that
 needs the flattened path (`taperpath`). In PostScript: everything that
 draws, so an author can read a library word, copy it and change it. The
-libraries are about 1,750 lines of PostScript.
+libraries are about 2,000 lines of PostScript.
 
 ### Conventions
 
