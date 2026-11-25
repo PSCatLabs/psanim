@@ -119,6 +119,10 @@ pub struct Options {
     /// program to the libraries built into the interpreter. Writes are
     /// never allowed.
     pub read_roots: Option<Vec<PathBuf>>,
+    /// The directory relative paths in `loadcomponent` are read from:
+    /// normally the movie file's own. `None` reads them from the current
+    /// directory.
+    pub base_dir: Option<PathBuf>,
     /// A flag another thread raises to stop a render in progress.
     pub interrupt: Option<Arc<AtomicBool>>,
 }
@@ -135,6 +139,7 @@ impl Default for Options {
             budget: Budget::trusted(),
             motion_blur: None,
             read_roots: None,
+            base_dir: None,
             interrupt: None,
         }
     }
@@ -470,6 +475,7 @@ impl Movie {
             c.px_scale = scale;
             c.signals = options.signals.clone();
             c.params = host_params(&options.params);
+            c.base_dir = options.base_dir.clone();
             c.running = Running::Setup;
             c.begin_moment(0, 0.0, 1.0 / decl.fps);
         }
@@ -1085,6 +1091,7 @@ fn probe(source: &str, options: &Options) -> Result<Option<Value>, Error> {
         c.running = Running::Probe;
         c.params = host_params(&options.params);
         c.signals = options.signals.clone();
+        c.base_dir = options.base_dir.clone();
         c.begin_moment(0, 0.0, 1.0 / 30.0);
     }
     configure(&mut interp, &ctx, options)?;

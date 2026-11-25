@@ -140,6 +140,7 @@ is too low: an entrance is three tweens, a diagram is arithmetic. The
 | `pkstage` | boxes (`[x y w h]`) and layout, themes (`/accent ink`, `/title 40 face`), `lookat` (camera by box), `spotlight` | [stage.md](references/stage.md) |
 | `pkmotion` | `2 /pop { ... } enters`: entrances, exits and emphasis for any drawing, by name | [stage.md](references/stage.md) |
 | (core) | `script` / `then` (one thing after another), `storyboard` (named beats), `cascade`, `within` | [stage.md](references/stage.md) |
+| (core) | `component`, `instance`, `place`: a movie written on its own, placed in another in a box at a time | [components.md](references/components.md) |
 | `pktype` | text in boxes, wrapping, `kinetic` type, counters, captions | [type.md](references/type.md) |
 | `pkdiagram` | `node`, `edge` (with flowing pulses), `group`, `note`, `circled` | [explain.md](references/explain.md) |
 | `pkcode` | `codeblock` (typing, focus), `codediff` | [explain.md](references/explain.md) |
@@ -284,6 +285,7 @@ detail) is in [storytelling.md](references/storytelling.md).
 | How to structure an explanation or a story | [references/storytelling.md](references/storytelling.md) |
 | Every core word, stack effect and meaning | [references/vocabulary.md](references/vocabulary.md) (generated; same as `psanim api --markdown`) |
 | Every library word | [references/vocabulary-libraries.md](references/vocabulary-libraries.md) (generated) |
+| Building a movie from parts: components, instances, placing them | [references/components.md](references/components.md) |
 | Low-level recipes: write-on, cameras, particles, loops, reels, keyframes | [references/patterns.md](references/patterns.md) |
 | What goes wrong and why | [references/pitfalls.md](references/pitfalls.md) |
 | Making it good: timing, easing, composition, colour, how to review motion | [references/craft.md](references/craft.md) |

@@ -69,10 +69,31 @@ pub(crate) struct Ctx {
     /// Names `param` was asked for and the defaults given, for `info`.
     pub params_seen: BTreeMap<String, String>,
 
+    /// Components being set up or drawn, innermost last. Inside one, the
+    /// movie-level facts (`globaltime`, `duration`, `movieseed`, `param`)
+    /// are the component's own.
+    pub comps: Vec<Comp>,
+    /// The directory relative component paths are read from: the movie
+    /// file's own, when the host knows it.
+    pub base_dir: Option<std::path::PathBuf>,
+
     /// A plain-language explanation an operator leaves before it fails,
     /// picked up by the engine for the error report.
     pub hint: Option<String>,
 }
+
+/// One open component: its own clock, length, seed and parameters.
+#[derive(Clone, Debug)]
+pub(crate) struct Comp {
+    /// The component's own movie time, seconds from its start.
+    pub t: f64,
+    pub dur: f64,
+    pub seed: i64,
+    /// The values its `param` lookups get; a name not here gets the default.
+    pub params: Vec<(String, Value)>,
+}
+
+pub(crate) const MAX_COMPS: usize = 16;
 
 /// How a layer combinator finishes its layer.
 #[derive(Clone, Copy, Debug)]
@@ -113,8 +134,28 @@ impl Ctx {
             params: BTreeMap::new(),
             signals: Signals::default(),
             params_seen: BTreeMap::new(),
+            comps: Vec::new(),
+            base_dir: None,
             hint: None,
         }
+    }
+
+    /// The seed randomness draws from: the innermost component's, or the
+    /// movie's.
+    pub fn seed(&self) -> i64 {
+        self.comps.last().map_or(self.seed, |c| c.seed)
+    }
+
+    /// Movie time and length as the running program sees them: inside a
+    /// component, its own.
+    pub fn movie_clock(&self) -> TimeScope {
+        self.comps.last().map_or(
+            TimeScope {
+                t: self.global_t,
+                dur: self.duration,
+            },
+            |c| TimeScope { t: c.t, dur: c.dur },
+        )
     }
 
     /// The innermost time scope: local time and window.
@@ -139,6 +180,7 @@ impl Ctx {
         self.pending.clear();
         self.poses.clear();
         self.views.clear();
+        self.comps.clear();
         self.hint = None;
     }
 }

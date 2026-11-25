@@ -15,7 +15,9 @@
 
 % --- declaration ---------------------------------------------------------
 % dict animation -      declare the movie; first statement of a program.
-/animation { .animation { quit } if } bind def
+/animation {
+  .compst /n get 0 gt { .companimation } { .animation { quit } if } ifelse
+} bind def
 
 % --- time scopes -----------------------------------------------------------
 % Time is part of the state a drawing procedure runs in, like the CTM. Each
@@ -238,7 +240,9 @@ end
   dup type /stringtype eq { cvn } if
   dup .pk /used get exch known { pop } {
     dup .pk /used get exch true put
-    .libsource cvx exec
+    % Into userdict, whoever asks: a component's setup loading a library
+    % must not keep it to itself, since every later `use` skips it.
+    userdict begin .libsource cvx exec end
   } ifelse
 } bind def
 
@@ -345,6 +349,141 @@ end
 %                          along the direction of travel. The path is kept.
 /onpath {
   exch pathpoint gsave 3 1 roll translate rotate newpath exec grestore
+} bind def
+
+% --- components: movies placed inside movies ---------------------------------------------
+% A component is written like a movie (a declaration, setup, a scene) and
+% each instance of it keeps its own names, clock, seed and parameters. The
+% instance's dictionary is open while its setup and scene run: that is its
+% namespace, not a dictionary left around somebody else's procedure.
+/.comps 32 dict def
+/.compst << /n 0 /a 16 array >> def                  % instances being set up, innermost last
+/.compcur { .compst /a get .compst /n get 1 sub get } bind def
+% dict key default .dget -> value      dict's value for key, or the default
+/.dget { 3 1 roll 2 copy known { get exch pop } { pop pop } ifelse } bind def
+% /name .mine -> dict     the library state dictionary called name, as this
+%                         instance may change it: inside a component a
+%                         private copy, made the first time it is asked for.
+/.mine {
+  /.isinst where {
+    1 index 2 copy known { get exch pop } {
+      pop exch userdict 1 index get dup length dict copy
+      3 copy put 3 1 roll pop pop
+    } ifelse
+  } { userdict exch get } ifelse
+} bind def
+% decl .companimation     `animation`, called while an instance is set up:
+%                         read its declaration instead of the movie's.
+/.companimation {
+  dup type /dicttype ne { (a component's animation takes a dictionary) .comperror } if
+  .compcur /decl known { (a component calls animation once) .comperror } if
+  .compcur /decl 2 index put
+  dup /Persist false .dget { (a component cannot /Persist: only the movie's own canvas persists) .comperror } if
+  dup /Step known { (a component cannot have a /Step: simulations run only as the movie itself) .comperror } if
+  .compcur /size 2 index /Size [1280 720] .dget put
+  .compcur /dur  2 index /Duration 5 .dget put
+  .compcur /loop 2 index /Loop false .dget put
+  .compcur /bg   2 index /Background null .dget dup /transparent eq { pop null } if put
+  .compcur /scene 2 index /Scene /scene .dget put
+  .compcur /seed get null eq { .compcur /seed 2 index /Seed 1 .dget put } if
+  pop
+  .compcur /dur get .compcur /seed get .compset
+  .compcur /size get aload pop .viewpush
+  .compcur /view true put
+} bind def
+% src seed params .mkinst -> record     set up one instance. src is the
+%                                       component's dictionary or file name;
+%                                       seed and params may be null.
+/.mkinst {
+  16 dict
+  dup /params 3 index put
+  dup /seed 4 index put
+  dup /src 5 index put
+  4 1 roll pop pop pop
+  dup /view false put
+  dup /ns 64 dict put
+  dup /ns get
+    dup /.isinst true put
+    dup /.pk << /used .pk /used get /cur 32 array /depth 0 /beats 1 dict /storylen 0 /bpm 120 >>
+    dup /cur get 0 0 put put
+  pop
+  .compst /n get 16 ge { (components are set up more than 16 deep: does one load itself?) .comperror } if
+  .compst /a get .compst /n get 2 index put
+  .compst /n 2 copy get 1 add put
+  0 5 1 3 index /params get .comppush
+  dup /ns get begin                   % the instance's names, while its setup runs
+    dup /src get exch pop dup type /stringtype eq {
+      .comppath run
+    } {
+      dup animation
+      dup /Setup known { /Setup get exec } { pop } ifelse
+    } ifelse
+  end
+  .compcur /decl known not { << >> .companimation } if
+  .compcur /view get { .viewpop } if
+  .comppop
+  .compst /n 2 copy get 1 sub put
+  .compst /a get .compst /n get get
+  dup /ns get /step known { (a component cannot define step: simulations run only as the movie itself) .comperror } if
+  dup /scene get dup type /nametype eq {
+    1 index /ns get 1 index known not {
+      (a component must define its scene: /scene { ... } def, or /Scene { ... } in its dictionary) .comperror
+    } if
+    1 index /ns get exch get
+  } if
+  1 index exch /scene exch put
+} bind def
+/.compget {
+  .comps 1 index known not {
+    (no component named /) exch 64 string cvs strcat
+    (: define it in setup with /name (file.ps) component or /name << ... >> component) strcat .comperror
+  } if
+  .comps exch get
+} bind def
+% /name dict-or-(file.ps) component      define a component and set up its
+%                                       first instance, under the same name.
+/component { null null .mkinst .comps 3 1 roll put } bind def
+% /new /name << /Seed s /Params << ... >> >> instance
+%                                       another instance of a component, set
+%                                       up again with its own seed and params.
+/instance {
+  dup /Seed null .dget exch /Params null .dget
+  3 -1 roll .compget /src get 3 1 roll .mkinst .comps 3 1 roll put
+} bind def
+/componentduration { .compget /dur get } bind def      % /name -> seconds
+/componentsize { .compget /size get aload pop } bind def % /name -> w h
+% bg t dur seed params ns scene .placed     draw one instance at its time t.
+/.placed {
+  7 -1 roll dup null ne { aload pop backdrop } { pop } ifelse
+  6 2 roll .comppush
+  exch begin exec end .comppop
+} bind def
+% /name opts place      draw an instance. opts (all optional): /At start time
+%                       (0), /Speed (1), /Box [x y w h] (the whole view),
+%                       /Before /hide or /hold, /After /hide /hold or /loop
+%                       (/loop if the component declares /Loop, else /hide).
+/place {
+  12 dict begin
+    /pl-o exch def /pl-r exch .compget def
+    /pl-d pl-r /dur get def
+    /pl-t now pl-o /At 0 .dget sub pl-o /Speed 1 .dget mul def
+    /pl-live true def
+    pl-t 0 lt {
+      pl-o /Before /hide .dget /hold eq { /pl-t 0 def } { /pl-live false def } ifelse
+    } if
+    pl-t pl-d ge {
+      pl-o /After pl-r /loop get { /loop } { /hide } ifelse .dget
+      dup /loop eq { pop /pl-t pl-t pl-d fmod def }
+      { /hold eq { /pl-t pl-d def } { /pl-live false def } ifelse } ifelse
+    } if
+    pl-live {
+      pl-o /Box [0 0 width height] .dget
+      pl-r /size get aload pop
+      [ pl-r /bg get pl-t pl-d pl-r /seed get pl-r /params get pl-r /ns get pl-r /scene get /.placed cvx ] cvx
+    } if
+    pl-live
+  end
+  { fitted } if
 } bind def
 
 % Pictures are composed over a transparent page; a program draws its own

@@ -248,7 +248,7 @@
     dup themes exch known not { .notheme } if
     themes exch get
   } if
-  { theme 3 1 roll put } forall
+  /theme .mine exch { 3 copy put pop pop } forall pop
 } bind def
 /.notheme {
   pop /usetheme errordict /rangecheck get exec

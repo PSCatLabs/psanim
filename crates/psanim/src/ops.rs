@@ -340,7 +340,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         Ok(())
     });
     reg(interp, ctx, "globaltime", |i, ctx| {
-        i.push_real(ctx.borrow().global_t);
+        i.push_real(ctx.borrow().movie_clock().t);
         Ok(())
     });
     reg(interp, ctx, "frame", |i, ctx| {
@@ -356,7 +356,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         Ok(())
     });
     reg(interp, ctx, "duration", |i, ctx| {
-        i.push_real(ctx.borrow().duration);
+        i.push_real(ctx.borrow().movie_clock().dur);
         Ok(())
     });
     reg(interp, ctx, "width", |i, ctx| {
@@ -370,7 +370,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         Ok(())
     });
     reg(interp, ctx, "movieseed", |i, ctx| {
-        i.push_int(ctx.borrow().seed);
+        i.push_int(ctx.borrow().seed());
         Ok(())
     });
 
@@ -511,11 +511,8 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     });
     reg(interp, ctx, ".globally", |i, ctx| {
         let body = pop_proc(i, ctx, "globally")?;
-        let (t, dur) = {
-            let c = ctx.borrow();
-            (c.global_t, c.duration)
-        };
-        push_scope(ctx, TimeScope { t, dur })?;
+        let clock = ctx.borrow().movie_clock();
+        push_scope(ctx, clock)?;
         i.push_value(&body)?;
         Ok(())
     });
@@ -776,7 +773,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let (amp, freq) = (i.pop_f64()?, i.pop_f64()?);
         let key = pop_key(i, ctx, "wiggle: key freq amp")?;
         let c = ctx.borrow();
-        i.push_real(wiggle(c.seed, key, c.scope().t * freq) * amp);
+        i.push_real(wiggle(c.seed(), key, c.scope().t * freq) * amp);
         Ok(())
     });
     reg(interp, ctx, "turns", |i, ctx| {
@@ -801,7 +798,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             0.0
         } * std::f64::consts::TAU;
         i.push_real(crate::ctx::noise2(
-            c.seed,
+            c.seed(),
             key,
             radius * a.cos(),
             radius * a.sin(),
@@ -820,7 +817,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 "hash01 takes a number or an array of numbers as its key",
             );
         };
-        i.push_real(hash01(ctx.borrow().seed, &keys));
+        i.push_real(hash01(ctx.borrow().seed(), &keys));
         Ok(())
     });
 
@@ -1065,6 +1062,17 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let default = i.pop_value()?;
         let name = i.pop_name()?;
         let mut c = ctx.borrow_mut();
+        // Inside a component, its own parameters and nothing of the host's.
+        if let Some(comp) = c.comps.last() {
+            let v = comp
+                .params
+                .iter()
+                .find(|(k, _)| *k == name)
+                .map_or(default, |(_, v)| v.clone());
+            drop(c);
+            i.push_value(&v)?;
+            return Ok(());
+        }
         let shown = match &default {
             Value::String(s) => format!("({})", String::from_utf8_lossy(s)),
             Value::Name(n) => format!("/{n}"),
@@ -1078,6 +1086,100 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         i.push_value(&v)?;
         Ok(())
     });
+    // --- components (native halves; see prelude.ps) ----------------------
+    // t dur seed params .comppush -    open a component's clock: its movie
+    //                                  time t of dur, its seed, and the
+    //                                  values its `param` lookups get
+    //                                  (a dictionary, or null for none).
+    reg(interp, ctx, ".comppush", |i, ctx| {
+        let params = match i.pop_value()? {
+            Value::Dict(entries) => entries,
+            Value::Null => Vec::new(),
+            _ => {
+                return fail(
+                    ctx,
+                    PsError::Typecheck,
+                    "a component's /Params must be a dictionary: << /Height 0.8 >>",
+                );
+            }
+        };
+        let seed = i.pop_int()?;
+        let dur = i.pop_f64()?;
+        let t = i.pop_f64()?;
+        let mut c = ctx.borrow_mut();
+        if c.comps.len() >= crate::ctx::MAX_COMPS {
+            c.hint = Some(format!(
+                "components are nested more than {} deep: is a component placing itself?",
+                crate::ctx::MAX_COMPS
+            ));
+            return Err(PsError::Limitcheck);
+        }
+        c.comps.push(crate::ctx::Comp {
+            t,
+            dur,
+            seed,
+            params,
+        });
+        drop(c);
+        push_scope(ctx, TimeScope { t, dur })
+    });
+    // dur seed .compset -     the component's declaration has been read:
+    //                         set its length and seed.
+    reg(interp, ctx, ".compset", |i, ctx| {
+        let seed = i.pop_int()?;
+        let dur = i.pop_f64()?;
+        let mut c = ctx.borrow_mut();
+        let Some(comp) = c.comps.last_mut() else {
+            return Err(PsError::Rangecheck);
+        };
+        comp.dur = dur;
+        comp.seed = seed;
+        let t = comp.t;
+        if let Some(s) = c.scopes.last_mut() {
+            *s = TimeScope { t, dur };
+        }
+        Ok(())
+    });
+    reg(interp, ctx, ".comppop", |_, ctx| {
+        let mut c = ctx.borrow_mut();
+        if c.comps.pop().is_some() && c.scopes.len() > 1 {
+            c.scopes.pop();
+        }
+        Ok(())
+    });
+    // (why) .comperror -     fail with a rangecheck that explains why.
+    reg(interp, ctx, ".comperror", |i, ctx| {
+        let why = i.pop_string()?;
+        fail(ctx, PsError::Rangecheck, String::from_utf8_lossy(&why))
+    });
+    reg(interp, ctx, ".compdepth", |i, ctx| {
+        let n = ctx.borrow().comps.len();
+        i.push_int(n as i64);
+        Ok(())
+    });
+    // (path) .comppath (path)  a relative path read from the movie's own
+    //                          directory, when the host said what it is.
+    reg(interp, ctx, ".comppath", |i, ctx| {
+        let path = match i.pop_value()? {
+            Value::String(s) => String::from_utf8_lossy(&s).into_owned(),
+            Value::Name(n) => n,
+            _ => {
+                return fail(
+                    ctx,
+                    PsError::Typecheck,
+                    "loadcomponent takes a file name as a string: /fire (fire.ps) loadcomponent",
+                );
+            }
+        };
+        let p = std::path::Path::new(&path);
+        let full = match &ctx.borrow().base_dir {
+            Some(dir) if p.is_relative() => dir.join(p),
+            _ => p.to_path_buf(),
+        };
+        i.push_string(full.to_string_lossy().as_bytes());
+        Ok(())
+    });
+
     reg(interp, ctx, "signal", |i, ctx| {
         let name = i.pop_name()?;
         let c = ctx.borrow();

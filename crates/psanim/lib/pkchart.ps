@@ -19,9 +19,9 @@
 
 % box [x0 x1] [y0 y1] plotframe -
 /plotframe {
-  aload pop .plot /y1 3 -1 roll put .plot /y0 3 -1 roll put
-  aload pop .plot /x1 3 -1 roll put .plot /x0 3 -1 roll put
-  aload pop .plot /h 3 -1 roll put .plot /w 3 -1 roll put .plot /y 3 -1 roll put .plot /x 3 -1 roll put
+  aload pop /.plot .mine /y1 3 -1 roll put /.plot .mine /y0 3 -1 roll put
+  aload pop /.plot .mine /x1 3 -1 roll put /.plot .mine /x0 3 -1 roll put
+  aload pop /.plot .mine /h 3 -1 roll put /.plot .mine /w 3 -1 roll put /.plot .mine /y 3 -1 roll put /.plot .mine /x 3 -1 roll put
 } bind def
 /plotbox { .plot begin [ x y w h ] end } bind def
 % x y plotpoint -> X Y     data to canvas
@@ -49,7 +49,7 @@
       gsave
         theme /stroke get 0.6 mul setlinewidth /body ax-size face
         % y ticks and grid
-        ax-o /YValues known { ax-o /YValues get } { .plot /y0 get .plot /y1 get ax-o /YTicks 5 .opt niceticks } ifelse {
+        ax-o /YValues known { ax-o /YValues get } { /.plot .mine /y0 get /.plot .mine /y1 get ax-o /YTicks 5 .opt niceticks } ifelse {
           /ax-v exch def
           0 ax-v plotpoint /ax-ty exch def pop
           ax-o /Grid true .opt {
@@ -71,7 +71,7 @@
           } for
         } {
           ax-o /XTicks 5 .opt 0 gt ax-o /XValues known or {
-            ax-o /XValues known { ax-o /XValues get } { .plot /x0 get .plot /x1 get ax-o /XTicks 5 .opt niceticks } ifelse {
+            ax-o /XValues known { ax-o /XValues get } { /.plot .mine /x0 get /.plot .mine /x1 get ax-o /XTicks 5 .opt niceticks } ifelse {
               /ax-v exch def
               ax-v 0 plotpoint pop /ax-tx exch def
               /muted ink ax-u setalpha
@@ -125,7 +125,7 @@
     plotbox aload pop /bs-h exch def /bs-w exch def /bs-y exch def /bs-x exch def
     /bs-slot bs-w bs-n div def
     /bs-bw bs-slot 1 bs-o /Gap 0.3 .opt sub mul def
-    0 .plot /y0 get max 0 exch plotpoint /bs-base exch def pop
+    0 /.plot .mine /y0 get max 0 exch plotpoint /bs-base exch def pop
     /bs-size bs-o /Size 2.2 vmin .opt def
     gsave
       0 1 bs-n 1 sub { /bs-i exch def
@@ -204,7 +204,7 @@
   4 dict begin
     /sl-v exch def /sl-n sl-v length def
     [ 0 1 sl-n 1 sub { /sl-i exch def
-      [ .plot /x0 get .plot /x1 get .plot /x0 get sub sl-i sl-n 1 sub 1 max div mul add  sl-v sl-i get ]
+      [ /.plot .mine /x0 get /.plot .mine /x1 get /.plot .mine /x0 get sub sl-i sl-n 1 sub 1 max div mul add  sl-v sl-i get ]
     } for ]
   end
   plotline
@@ -212,8 +212,8 @@
 % - plotarea -     close the current line down to the bottom of the frame,
 %                  for filling under a curve
 /plotarea {
-  currentpoint pop .plot /y get lineto
-  .plot /x get .plot /y get lineto closepath
+  currentpoint pop /.plot .mine /y get lineto
+  /.plot .mine /x get /.plot .mine /y get lineto closepath
 } bind def
 % [ [x y] ... ] u radius dots -     a dot at each point, popping in one
 %                                   after another as u goes 0 to 1
@@ -278,17 +278,17 @@
         pr-o /Role /muted .opt ink theme /stroke get 0.6 mul setlinewidth
         newpath
         pr-o /Y known {
-          .plot /x0 get pr-o /Y get plotpoint moveto .plot /x1 get pr-o /Y get plotpoint lineto
+          /.plot .mine /x0 get pr-o /Y get plotpoint moveto /.plot .mine /x1 get pr-o /Y get plotpoint lineto
         } {
-          pr-o /X get .plot /y0 get plotpoint moveto pr-o /X get .plot /y1 get plotpoint lineto
+          pr-o /X get /.plot .mine /y0 get plotpoint moveto pr-o /X get /.plot .mine /y1 get plotpoint lineto
         } ifelse
         gsave pr-o /Dash true .opt { [ pr-size 0.35 mul dup ] 0 setdash } if 0 pr-u trimpath stroke grestore
         pr-o /Label known {
           pr-u setalpha /body pr-size face
           pr-o /Y known {
-            .plot /x1 get pr-o /Y get plotpoint pr-size 0.35 mul add moveto pr-o /Label get showright
+            /.plot .mine /x1 get pr-o /Y get plotpoint pr-size 0.35 mul add moveto pr-o /Label get showright
           } {
-            pr-o /X get .plot /y1 get plotpoint pr-size 0.9 mul sub exch pr-size 0.4 mul add exch moveto pr-o /Label get show
+            pr-o /X get /.plot .mine /y1 get plotpoint pr-size 0.9 mul sub exch pr-size 0.4 mul add exch moveto pr-o /Label get show
           } ifelse
           1 setalpha
         } if
@@ -310,8 +310,8 @@
       gsave
         pm-o /Drop true .opt {
           /muted ink theme /stroke get 0.5 mul setlinewidth [ pm-size 0.3 mul dup ] 0 setdash
-          newpath pm-x pm-y plotpoint moveto pm-x .plot /y0 get plotpoint lineto
-          pm-x pm-y plotpoint moveto .plot /x0 get pm-y plotpoint lineto
+          newpath pm-x pm-y plotpoint moveto pm-x /.plot .mine /y0 get plotpoint lineto
+          pm-x pm-y plotpoint moveto /.plot .mine /x0 get pm-y plotpoint lineto
           0 pm-u 2 mul 1 min trimeach stroke [] 0 setdash
         } if
         pm-o /Role /accent .opt ink

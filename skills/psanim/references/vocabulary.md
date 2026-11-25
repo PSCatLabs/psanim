@@ -582,6 +582,38 @@ Run proc, which draws for a canvas w by h, scaled to fit inside the box and cent
 
 Load one of psanim's libraries, once: /pkstage /pkmotion /pktype /pkdiagram /pkcode /pkchart /pkink. Call it in setup, after `animation`. A library loads the ones it needs. `psanim api --libs` lists them; `psanim api --lib pkmotion` lists one's words.
 
+## Components: movies placed inside movies
+
+### `component`
+
+`/name dict-or-(file.ps)  component  -`
+
+Define a component and set up its first instance under the same name. A component is written like a movie: from a file, the file's own `animation` declaration, setup and `scene`; inline, a dictionary with the declaration's keys (/Size, /Duration, /Loop, /Seed, /Background) and /Setup { } and /Scene { }. Its setup runs once, in a dictionary of its own, so its names do not reach the movie or another instance; inside it `width`, `height`, `duration`, `globaltime`, `movieseed` and `param` are the component's. A file name is read from the movie's own directory. Call it in setup.
+
+### `instance`
+
+`/new /name << /Seed s /Params << ... >> >>  instance  -`
+
+Another instance of a component, set up again: /Seed for its randomness, /Params for its `param` lookups (a name not given gets the default the component wrote). Inside a component, `param` reads only these, never the host's --param values. Call it in setup.
+
+### `place`
+
+`/name opts  place  -`
+
+Draw an instance into the scene. opts (all optional): /At the movie time it starts (0), /Speed (1), /Box [x y w h] its declared size is fitted into (the whole view), /Before /hide or /hold (its first frame), /After /hide /hold (its last frame) or /loop (default /loop if it declared /Loop true, else /hide). Inside, `now` and `globaltime` run from 0 at /At. It paints its /Background only if it declares one. Place the same instance as often as you like: each placement is drawn from its own time.
+
+### `componentduration`
+
+`/name  componentduration  seconds`
+
+The /Duration an instance declared, for timing the movie around it.
+
+### `componentsize`
+
+`/name  componentsize  w h`
+
+The /Size an instance declared, for choosing a box with its aspect.
+
 ## Storyboards, scripts and cascades
 
 ### `storyboard`

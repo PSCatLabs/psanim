@@ -2,7 +2,7 @@
 //! flag is an error that names the flag, not something silently ignored.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use psanim::{Budget, Limits, MotionBlur, Options, Param, Scale, Signals};
 
@@ -220,6 +220,12 @@ impl Common {
             budget,
             motion_blur,
             read_roots,
+            base_dir: self
+                .file
+                .as_ref()
+                .and_then(|f| f.parent())
+                .filter(|d| !d.as_os_str().is_empty())
+                .map(Path::to_path_buf),
             interrupt: None,
         })
     }

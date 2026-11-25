@@ -194,3 +194,31 @@ fresh agents with only the skill and a brief for an ambitious film each,
 with a required friction report. Their reports changed the libraries and
 the skill; the evaluation lists what changed and what the experiment
 measured.
+
+## Components (added for 0.2)
+
+A movie can be built from parts written on their own (`component`,
+`instance`, `place`). The constraints above still hold: there is no scene
+graph, nothing owns a clock, and a box is a plain array. A component is
+not an object with bounds: it is a movie whose scene is called, at a time
+the host computes, inside `fitted`.
+
+What makes a component more than a procedure is isolation:
+
+- **Names.** Each instance gets a dictionary, open while its setup and
+  scene run. This is the one place the prelude opens a dictionary around
+  code it did not write, and it is the point: that dictionary is the
+  component's namespace, not one left around a caller's procedure.
+  Libraries always load into userdict, whoever calls `use`.
+- **Clock, seed, parameters.** A native stack of component frames
+  (`Ctx::comps`) makes `globaltime`, `duration`, `globally`, `movieseed`,
+  the noise words and `param` answer for the innermost component. Signals
+  and events stay on the movie's clock: they come from outside.
+- **Library state.** Libraries that change a shared dictionary (pkstage's
+  `theme`, pkchart's current plot) do it through `.mine`, which inside a
+  component gives a private copy made on first use.
+
+Rejected: running each instance in its own interpreter (cost, and the
+drawing must land in the host's page); a `/Params` key in the declaration
+(the movie's own `param` defaults already say it, and keep a component
+file runnable on its own).
