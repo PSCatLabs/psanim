@@ -36,10 +36,9 @@ box, at any delay, in any theme, including inside themselves:
   rectangle turned a quarter turn, which is again a golden rectangle.
 - `around` for the twelve petals and `brushstroke` (a tapered stroke) for
   each petal and for the runner's wake.
-- A seamless loop under delay. `turns` measures against the current time
-  window, which `delayed` shortens, so the piece defines `laps` against
-  the film's `duration` instead: every late voice then closes too.
-  `psanim check` confirms the join.
+- A seamless loop under delay. `delayed` only shifts the clock, so `turns`
+  inside it is the film's own value from a moment earlier: every late
+  voice closes too. `psanim check` confirms the join.
 
 About 4 ms a frame at full size.
 

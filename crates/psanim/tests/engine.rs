@@ -326,6 +326,46 @@ fn sequence_gap_and_wiggle_array_key() {
     assert_eq!(w, eval_at("", "[3 7] 2 50 wiggle", 4));
 }
 
+/// `delayed` only shifts the clock: `turns` and `loopnoise` inside it are
+/// the undelayed value from `d` seconds earlier, so a loop still closes
+/// (issue 40). `progress` and `span` still see the shortened window.
+#[test]
+fn delayed_is_a_pure_shift_for_turns_and_loopnoise() {
+    // The film is 2 s at 10 fps: frame 5 is t = 0.5, frame 3 is t = 0.3.
+    assert_eq!(eval_at("", "0.2 { 2 turns } delayed", 5), 108.0);
+    assert_eq!(
+        eval_at("", "0.2 { 2 turns } delayed", 5),
+        eval_at("", "2 turns", 3)
+    );
+    assert_eq!(
+        eval_at("", "0.2 { 4 0.8 loopnoise } delayed", 5),
+        eval_at("", "4 0.8 loopnoise", 3)
+    );
+    // Through the words built on it.
+    assert_eq!(
+        eval_at("", "3 0.1 { 2 turns } staggered", 5),
+        eval_at("", "2 turns", 2)
+    );
+    assert_eq!(
+        eval_at("", "[ 0 0 ] 0.1 { pop pop 2 turns } cascade add", 5),
+        eval_at("", "2 turns", 5) + eval_at("", "2 turns", 4)
+    );
+    // The loop closes: a delayed turn gains whole turns over the film.
+    let gain =
+        eval_at("", "0.3 { 3 turns } delayed", 19) - eval_at("", "0.3 { 3 turns } delayed", 0);
+    let step =
+        eval_at("", "0.3 { 3 turns } delayed", 1) - eval_at("", "0.3 { 3 turns } delayed", 0);
+    assert!((gain + step - 1080.0).abs() < 0.01, "{gain} {step}");
+    // Inside a window the loop is the window, delayed or not.
+    assert_eq!(
+        eval_at("", "0 1 { 0.1 { 3 turns } delayed } during", 5),
+        432.0
+    );
+    // progress and span keep the shortened window, as they always did.
+    assert!((eval_at("", "0.2 { progress } delayed", 5) - 0.3 / 1.8).abs() < 0.001);
+    assert!((eval_at("", "0.2 { span } delayed", 5) - 1.8).abs() < 0.001);
+}
+
 #[test]
 fn polypath_turns_and_loopnoise() {
     assert_eq!(eval_at("", "[0 0 10 0 10 10] polypath pathlength", 0), 20.0);

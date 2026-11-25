@@ -73,6 +73,12 @@ Full reasoning in `docs/architecture.md`.
     box.
 11. **Libraries are opt-in** (`use`), to keep a movie's namespace small;
     an unloaded library's word fails with a hint naming the library.
+12. **A time scope has a window and a cycle.** `progress` and `span` use
+    the window; `turns` and `loopnoise` use the cycle, which equals the
+    window except under `delayed` (and `staggered`, `cascade`, `echoed`),
+    a pure shift that shortens the window but leaves the cycle, so a loop
+    closes in a late copy too. `after` and `enters` restart the clock and
+    keep the shortened window as the cycle.
 
 ## How the gallery was made, and what it taught
 
@@ -122,9 +128,6 @@ built; `docs/roadmap.md` ranks it.
 
 - Motions rasterize what moves (soft at large scale-ups) and cost a
   layer each, about 1 to 1.5 ms at 720p.
-- `delayed` shortens `span` as well as shifting `now`, so `turns` drifts
-  under a delay (Canon defines its own `laps`). Changing that would
-  change existing films; it is documented instead.
 - Cuts between storyboard beats leave single blank frames unless
   something persists across them; only `check --all` sees them.
 - The round-two films' hand-built helpers duplicate words added after

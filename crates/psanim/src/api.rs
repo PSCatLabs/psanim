@@ -160,7 +160,7 @@ pub const API: &[ApiEntry] = &[
         "scope",
         "delayed",
         "d proc  delayed  -",
-        "Run proc with its clock d seconds behind: whatever it does happens d seconds later.",
+        "Run proc with its clock d seconds behind: whatever it does happens d seconds later. A pure shift: `span` and `progress` see the window shortened by d, but `turns` and `loopnoise` are the undelayed values from d seconds earlier.",
     ),
     e(
         "scope",
@@ -286,13 +286,13 @@ pub const API: &[ApiEntry] = &[
         "clock",
         "turns",
         "k  turns  degrees",
-        "k whole turns spread over the current window: k * 360 * (now / span). The angle for anything that must come home when a loop closes; k must be a whole number (or a whole number divided by the part's rotational symmetry).",
+        "k whole turns spread over the current window: k * 360 * now / (the window's length). The angle for anything that must come home when a loop closes; k must be a whole number (or a whole number divided by the part's rotational symmetry). Under `delayed` (and so `staggered`, `cascade`, `echoed`) the length is the undelayed window's, so it is the undelayed angle from that much earlier and a late copy still closes the loop.",
     ),
     e(
         "value",
         "loopnoise",
         "key radius  loopnoise  v",
-        "Smooth random motion in -1..1 (key is a number or an array of numbers) that returns exactly to its start at the end of the current window: noise sampled around a circle. A larger radius wanders more. For organic drift in a seamless loop, where wiggle would not close.",
+        "Smooth random motion in -1..1 (key is a number or an array of numbers) that returns exactly to its start after the current window's length: noise sampled around a circle. A larger radius wanders more. For organic drift in a seamless loop, where wiggle would not close. Under `delayed` the length is the undelayed window's, so a late copy still closes.",
     ),
     e(
         "value",
