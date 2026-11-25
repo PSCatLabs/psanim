@@ -231,3 +231,24 @@ fn a_gust_over_an_enormous_life_is_refused_not_followed() {
     let e = m.render_at(1.0).unwrap_err().to_string();
     assert!(e.contains("too long to follow"), "{e}");
 }
+
+#[test]
+fn an_enormous_time_never_hangs_a_stream() {
+    // A stream that stopped at 1 s: at 1e20 s there is simply nothing.
+    let mut m = psanim::Movie::load(
+        "<< /Size [64 48] /Duration 2 /FPS 10 >> animation
+         /scene { 1e20 { << /Rate 1 /To 1 >> { } particles } attime } def",
+        &psanim::Options::default(),
+    )
+    .unwrap();
+    m.render_at(0.5).unwrap();
+    // A stream that never stops: refused, not looped over.
+    let mut m = psanim::Movie::load(
+        "<< /Size [64 48] /Duration 2 /FPS 10 >> animation
+         /scene { 1e20 { << /Rate 1 /Life 2 >> { } particles } attime } def",
+        &psanim::Options::default(),
+    )
+    .unwrap();
+    let e = m.render_at(0.5).unwrap_err().to_string();
+    assert!(e.contains("too large"), "{e}");
+}

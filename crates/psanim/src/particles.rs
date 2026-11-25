@@ -576,9 +576,33 @@ pub(crate) fn live(
             } else {
                 first
             };
-            let last = ((t - from) * rate).floor();
-            let mut n = first;
-            while n <= last {
+            let mut last = ((t - from) * rate).floor();
+            if wrap.is_none() && e.to.is_finite() {
+                // Nothing is emitted after /To, however late it is now.
+                last = last.min(((e.to - from) * rate).ceil());
+            }
+            if first > last {
+                continue;
+            }
+            // Slots are counted in floating point: past 2^53 adding one no
+            // longer moves, so refuse such a time rather than loop for ever
+            // (this loop is native and does not see the budgets).
+            if !(first.is_finite() && last.is_finite())
+                || first.abs() > 9.0e15
+                || last.abs() > 9.0e15
+            {
+                return fail(
+                    ctx,
+                    PsError::Limitcheck,
+                    "particles: the time is too large to count a stream's particles at; a stream that keeps emitting needs a time it can count to",
+                );
+            }
+            let span = (last - first) as u64 + 1;
+            if span > 4 * MAX_PARTICLES as u64 + 4 {
+                return too_many(ctx);
+            }
+            for k in 0..span {
+                let n = first + k as f64;
                 let slot = match wrap {
                     Some(m) => n.rem_euclid(m),
                     None => n,
@@ -594,7 +618,6 @@ pub(crate) fn live(
                         out.push(p);
                     }
                 }
-                n += 1.0;
             }
         }
     }
