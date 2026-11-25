@@ -63,7 +63,10 @@ pub mod signals;
 mod vocab;
 
 pub use catalog::CATALOG;
-pub use engine::{Budget, Frame, Meta, Mode, MotionBlur, Movie, Options, PRELUDE, Param, Scale};
+pub use engine::{
+    Budget, Frame, Meta, Mode, MotionBlur, Movie, Options, PREAMBLE_WARN_SECONDS, PRELUDE, Param,
+    Printed, Scale,
+};
 pub use error::{Error, Phase, TraceLine};
 pub use ops::TRANSITIONS;
 pub use signals::Signals;

@@ -125,6 +125,11 @@ pub struct Options {
     pub base_dir: Option<PathBuf>,
     /// A flag another thread raises to stop a render in progress.
     pub interrupt: Option<Arc<AtomicBool>>,
+    /// Seconds from some fixed point, for timing the code before
+    /// `animation` (see [`Meta::preamble_warning`]). The engine keeps no
+    /// clock of its own, so a host that wants the timing passes one; with
+    /// `None` the time is not measured.
+    pub clock: Option<fn() -> f64>,
 }
 
 impl Default for Options {
@@ -141,6 +146,7 @@ impl Default for Options {
             read_roots: None,
             base_dir: None,
             interrupt: None,
+            clock: None,
         }
     }
 }
@@ -203,9 +209,35 @@ pub struct Meta {
     /// psanim words the program redefined in setup (`/width 300 def`).
     /// Its own code then gets its definition instead of the engine's.
     pub shadowed: Vec<String>,
+    /// Seconds the program's code before `animation` took in the probe
+    /// pass, which runs it a second time. `None` when no clock was given
+    /// in [`Options`] or the program does not call `animation`.
+    pub preamble_seconds: Option<f64>,
+    /// The code before `animation` printed something.
+    pub preamble_printed: bool,
 }
 
+/// A preamble slower than this many seconds is worth a warning: it runs
+/// twice on every load.
+pub const PREAMBLE_WARN_SECONDS: f64 = 0.05;
+
 impl Meta {
+    /// A warning for a program whose code before `animation` prints or
+    /// takes more than [`PREAMBLE_WARN_SECONDS`]: the declaration is read
+    /// by a first pass that runs that code, so it runs twice.
+    pub fn preamble_warning(&self) -> Option<String> {
+        let slow = self.preamble_seconds.filter(|s| *s > PREAMBLE_WARN_SECONDS);
+        let what = match (slow, self.preamble_printed) {
+            (Some(s), true) => format!("prints and takes {:.0} ms", s * 1e3),
+            (Some(s), false) => format!("takes {:.0} ms", s * 1e3),
+            (None, true) => "prints".to_string(),
+            (None, false) => return None,
+        };
+        Some(format!(
+            "the code before `animation` {what}, and it runs twice: the declaration is found by a first pass that runs everything above it. Move that code after `animation`; above it keep only cheap definitions"
+        ))
+    }
+
     /// The time frame `index` shows.
     pub fn time_of(&self, index: u64) -> f64 {
         index as f64 / self.fps
@@ -236,6 +268,8 @@ impl Meta {
             "motion_blur": self.motion_blur.map(|m| serde_json::json!({"samples": m.samples, "shutter": m.shutter})),
             "params": self.params,
             "shadowed": self.shadowed,
+            "preamble_ms": self.preamble_seconds.map(|s| s * 1e3),
+            "preamble_printed": self.preamble_printed,
         })
     }
 }
@@ -301,6 +335,8 @@ pub struct Movie {
     last_steps: u64,
     /// What the program printed and nobody has collected yet.
     output: String,
+    /// `output` was cut at [`MAX_OUTPUT`].
+    output_truncated: bool,
     /// The persistent canvas, set aside while a frame's overlay is shown.
     kept: Option<Page>,
     /// The overlay procedure of a persistent movie, if it defines one.
@@ -319,6 +355,42 @@ const NATIVE_WORDS: &[&str] = &[
 
 /// The most printed text a movie keeps between calls of `take_output`.
 const MAX_OUTPUT: usize = 64 * 1024;
+
+/// The line that ends printed text cut at [`MAX_OUTPUT`].
+const TRUNCATION_MARK: &str = "[output truncated at 64 KB]\n";
+
+/// What a program printed since the last collection.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Printed {
+    /// The text. When it was cut at 64 KB it ends with a line saying so.
+    pub text: String,
+    /// More was printed than `text` holds.
+    pub truncated: bool,
+}
+
+/// Add `bytes` to `out`, keeping at most [`MAX_OUTPUT`] bytes and ending
+/// with a line that says so when anything was dropped.
+fn push_output(out: &mut String, truncated: &mut bool, bytes: &[u8]) {
+    if *truncated || bytes.is_empty() {
+        return;
+    }
+    let text = String::from_utf8_lossy(bytes);
+    let room = MAX_OUTPUT.saturating_sub(out.len());
+    if text.len() <= room {
+        out.push_str(&text);
+        return;
+    }
+    let mut cut = room;
+    while !text.is_char_boundary(cut) {
+        cut -= 1;
+    }
+    out.push_str(&text[..cut]);
+    if !out.is_empty() && !out.ends_with('\n') {
+        out.push('\n');
+    }
+    out.push_str(TRUNCATION_MARK);
+    *truncated = true;
+}
 
 fn short_repr(v: &Value) -> String {
     let s = match v {
@@ -404,8 +476,8 @@ impl Movie {
     pub fn load(source: &str, options: &Options) -> Result<Movie, Error> {
         // Pass 1, the probe: run just far enough to read the declaration,
         // which decides the canvas the real interpreter is built with.
-        let decl = probe(source, options)?;
-        let mut decl = Declaration::read(decl.as_ref())?;
+        let probed = probe(source, options)?;
+        let mut decl = Declaration::read(probed.decl.as_ref())?;
         if let Some(fps) = options.fps {
             decl.fps = fps;
         }
@@ -571,7 +643,15 @@ impl Movie {
             .pop_value()
             .map_err(|_| Error::new(Phase::Setup, "internal", "no checkpoint was taken"))?;
 
-        let setup_output = String::from_utf8_lossy(interp.captured_stdout()).into_owned();
+        // Only this pass's printing is kept: the probe's interpreter is
+        // gone, so what the code before `animation` prints is shown once.
+        let mut setup_output = String::new();
+        let mut setup_truncated = false;
+        push_output(
+            &mut setup_output,
+            &mut setup_truncated,
+            interp.captured_stdout(),
+        );
         interp.capture_stdout();
         let frames = ((decl.duration * decl.fps - 1e-9).ceil().max(1.0)) as u64;
         // Checkpoints about every two seconds, and never more than 64 deep.
@@ -600,6 +680,8 @@ impl Movie {
                 motion_blur: decl.motion_blur,
                 params,
                 shadowed,
+                preamble_seconds: probed.seconds,
+                preamble_printed: probed.printed,
             },
             scene: decl.scene,
             step,
@@ -615,6 +697,7 @@ impl Movie {
             frame_limits: options.budget.frame,
             last_steps: 0,
             output: setup_output,
+            output_truncated: setup_truncated,
             kept: None,
             overlay,
             last_ticks: 0,
@@ -767,12 +850,7 @@ impl Movie {
         let r = run(&mut self.interp, &self.ctx, phase, program);
         let printed = self.interp.captured_stdout();
         if !printed.is_empty() {
-            if self.output.len() < MAX_OUTPUT {
-                self.output.push_str(&String::from_utf8_lossy(printed));
-                if self.output.len() >= MAX_OUTPUT {
-                    self.output.push_str("\n[output truncated]\n");
-                }
-            }
+            push_output(&mut self.output, &mut self.output_truncated, printed);
             self.interp.capture_stdout();
         }
         if self.frame_limits.max_steps.is_some() {
@@ -814,8 +892,23 @@ impl Movie {
     /// What the program has printed (`print`, `=`, `==`, `pstack`) since
     /// the last call, as text. Printing is how a program is debugged:
     /// `psanim frame` shows it.
+    ///
+    /// Output is kept to 64 KB between calls; past that it is dropped and
+    /// the text ends with `[output truncated at 64 KB]`. [`take_printed`]
+    /// reports that as a flag too.
+    ///
+    /// [`take_printed`]: Movie::take_printed
     pub fn take_output(&mut self) -> String {
-        std::mem::take(&mut self.output)
+        self.take_printed().text
+    }
+
+    /// Like [`take_output`](Movie::take_output), saying whether the text
+    /// was cut at 64 KB.
+    pub fn take_printed(&mut self) -> Printed {
+        Printed {
+            text: std::mem::take(&mut self.output),
+            truncated: std::mem::take(&mut self.output_truncated),
+        }
     }
 
     fn pop_save(&mut self, phase: Phase) -> Result<Value, Error> {
@@ -1086,10 +1179,22 @@ fn describe(interp: &mut Interp, ctx: &Rc<RefCell<Ctx>>, phase: Phase, err: &PsE
     e
 }
 
+/// What the probe pass found out.
+struct Probed {
+    /// The dictionary `animation` was given, if it was called.
+    decl: Option<Value>,
+    /// Seconds the program's code before `animation` took, when a clock
+    /// was given and `animation` was called.
+    seconds: Option<f64>,
+    /// That code printed something. (The text is dropped with the
+    /// probe's interpreter: the real pass prints it again, once.)
+    printed: bool,
+}
+
 /// Run the program in a throwaway interpreter until `animation` is called,
 /// and return the dictionary it was given. A program that never calls it
 /// runs to its end here and gets the defaults.
-fn probe(source: &str, options: &Options) -> Result<Option<Value>, Error> {
+fn probe(source: &str, options: &Options) -> Result<Probed, Error> {
     let mut interp = Interp::with_page(64, 64).expect("a small page");
     let ctx = Rc::new(RefCell::new(Ctx::new()));
     {
@@ -1106,8 +1211,19 @@ fn probe(source: &str, options: &Options) -> Result<Option<Value>, Error> {
         .set_limits(options.budget.setup)
         .map_err(|e| Error::new(Phase::Load, "options", e.to_string()))?;
     run(&mut interp, &ctx, Phase::Setup, PRELUDE)?;
+    let started = options.clock.map(|clock| clock());
     run(&mut interp, &ctx, Phase::Setup, source)?;
-    Ok(ctx.borrow_mut().decl.take())
+    let seconds = options
+        .clock
+        .zip(started)
+        .map(|(clock, started)| clock() - started);
+    let decl = ctx.borrow_mut().decl.take();
+    let called = decl.is_some();
+    Ok(Probed {
+        seconds: seconds.filter(|_| called),
+        printed: called && !interp.captured_stdout().is_empty(),
+        decl,
+    })
 }
 
 /// The `animation` dictionary, read and checked.

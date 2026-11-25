@@ -89,8 +89,11 @@ checkpoint.
 ## Debugging a program from the host
 
 `Movie::take_output()` returns what the program printed with `=`, `==`,
-`print` and `pstack` since the last call. `Movie::last_frame_steps()` is
-the interpreter's step count for the last frame when a step budget is set.
+`print` and `pstack` since the last call. Output is kept to 64 KB per
+call; past that the text ends with a line `[output truncated at 64 KB]`.
+`Movie::take_printed()` returns the same text with a `truncated` flag.
+`Movie::last_frame_steps()` is the interpreter's step count for the last
+frame when a step budget is set.
 
 ## Building blocks
 

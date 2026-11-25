@@ -86,6 +86,9 @@ position) gives a different answer when called inside `during` or
 Print it. `now ==`, `x y pstack`, `(reached here) =` in setup or in the
 scene are shown by `psanim frame` (on stderr) and `psanim check`, and are
 in `--json` output as `printed`. Remove them before the final render.
+Only the first 64 KB is kept: a line `[output truncated at 64 KB]` ends the
+text, and `--json` has `"output_truncated": true`. Print less (one value
+per frame, or `frame 0 eq { ... } if`).
 
 ## A name I defined has the wrong value
 
@@ -146,6 +149,16 @@ Cures, in order:
    default for a pure movie).
 4. For a picture that only accumulates (a painting), use `/Persist true`
    so each frame paints only what is new (modes.md).
+
+## `check` warns that the code before `animation` runs twice
+
+The declaration is read by a first pass that runs the program up to
+`animation`, so everything above it runs twice: once to find the canvas,
+once for real. Definitions are free; a table built in a loop, a library
+`use`, or a `print` above `animation` is paid for twice (and `check`
+warns when that code prints or takes more than 50 ms). Move it below
+`animation`. Only `storyboard` and the arrays `reelduration` reads need to
+be above it. What it prints is shown once.
 
 ## `check` says cover 0 but the frame is not empty
 

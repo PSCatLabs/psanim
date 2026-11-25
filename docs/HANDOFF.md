@@ -52,7 +52,13 @@ Full reasoning in `docs/architecture.md`.
    (`.fadebegin` and friends), so a body sees its caller's stack.
 5. **The declaration is found by a probe pass**: the program runs in a
    throwaway interpreter until `animation`, which `quit`s. Code before
-   `animation` therefore runs twice; keep it to definitions.
+   `animation` therefore runs twice; keep it to definitions. The probe's
+   printing is dropped (the real pass prints once), and `check` warns when
+   that code prints or takes over 50 ms (`Meta::preamble_warning`; the
+   host passes `Options::clock` because the engine keeps no clock). Not
+   removed: letting `animation` size the canvas in place would also have
+   to rebuild the interpreter's scale, seed and the `width` / `height`
+   the preamble sees, which is a larger change than the warning.
 6. **`backdrop` respects the CTM and clip** so reels can wipe and push
    clips that start with one.
 7. **PSCat changes are general.** Nothing in `pscat::host` knows about
@@ -143,7 +149,11 @@ built; `docs/roadmap.md` ranks it.
   `/name deftransition` was not needed.
 - `check`'s abrupt-change detector is a threshold on mean difference;
   it misses small pops in busy frames.
-- `MAX_OUTPUT` truncates printed text at 64 KB per collection.
+- Code before `animation` still runs twice (see decision 5); `check`
+  warns when it prints or takes over 50 ms, but nothing prevents it.
+- `MAX_OUTPUT` truncates printed text at 64 KB per collection. The text
+  then ends with `[output truncated at 64 KB]` and `--json` says
+  `"output_truncated": true`.
 - The browser player renders on the main thread and has no way to show
   `print` output.
 - Dropping a `Movie` from thread-local teardown panics (a PSCat interner

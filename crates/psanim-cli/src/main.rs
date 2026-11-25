@@ -328,10 +328,10 @@ fn cmd_frame(rest: &[String]) -> Result<(), Fail> {
     let stats = raster::stats(&flat, w as usize, h as usize);
     write_file(&out, &png)?;
     // What the program printed (`==`, `print`, `pstack`): the debugger.
-    let printed = movie.take_output();
-    if !c.json && !printed.is_empty() {
-        eprint!("{printed}");
-        if !printed.ends_with('\n') {
+    let printed = movie.take_printed();
+    if !c.json && !printed.text.is_empty() {
+        eprint!("{}", printed.text);
+        if !printed.text.ends_with('\n') {
             eprintln!();
         }
     }
@@ -339,7 +339,8 @@ fn cmd_frame(rest: &[String]) -> Result<(), Fail> {
         println!(
             "{}",
             json!({"ok": true, "output": out, "frame": index, "time": time, "width": w, "height": h,
-                   "render_seconds": elapsed, "stats": stats_json(&stats), "printed": printed})
+                   "render_seconds": elapsed, "stats": stats_json(&stats), "printed": printed.text,
+                   "output_truncated": printed.truncated})
         );
     } else if !c.quiet {
         eprintln!(
@@ -632,6 +633,9 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
             notes.push("closes to the background".into());
         }
     }
+    if let Some(w) = meta.preamble_warning() {
+        warnings.push(w);
+    }
     if !meta.shadowed.is_empty() {
         warnings.push(format!(
             "the program redefines psanim's own word{} {}: its code now gets its definition, not the engine's. Rename (for example /{}-x)",
@@ -689,6 +693,7 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
     }
     let slowest = samples.iter().max_by(|a, b| a.millis.total_cmp(&b.millis));
     let mean_ms = samples.iter().map(|s| s.millis).sum::<f64>() / samples.len().max(1) as f64;
+    let printed = movie.take_printed();
     if c.json {
         println!(
             "{}",
@@ -697,7 +702,8 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
                 "mean_frame_ms": mean_ms,
                 "slowest_frame": slowest.map(|s| json!({"frame": s.index, "ms": s.millis})),
                 "loop_seam": seam.map(|(join, typical)| json!({"step": join, "typical_step": typical})),
-                "warnings": warnings, "notes": notes, "printed": movie.take_output(),
+                "warnings": warnings, "notes": notes, "printed": printed.text,
+                "output_truncated": printed.truncated,
                 "samples": samples.iter().map(|s| json!({
                     "frame": s.index, "time": s.time, "ms": (s.millis * 100.0).round() / 100.0,
                     "motion": (s.motion * 1e5).round() / 1e5, "stats": stats_json(&s.stats)})).collect::<Vec<_>>(),
@@ -742,11 +748,19 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
     for n in &notes {
         println!("  note: {n}");
     }
-    let printed = movie.take_output();
-    if !printed.is_empty() {
+    if !printed.text.is_empty() {
         println!("  printed by the program:");
-        for line in printed.lines().take(40) {
+        let lines: Vec<&str> = printed.text.lines().collect();
+        // The line saying the output was cut is the last one: keep it.
+        let shown = lines.len() - usize::from(printed.truncated);
+        for line in lines.iter().take(shown.min(40)) {
             println!("    {line}");
+        }
+        if shown > 40 {
+            println!("    ... ({} more lines)", shown - 40);
+        }
+        if printed.truncated {
+            println!("    {}", lines[lines.len() - 1]);
         }
     }
     if warnings.is_empty() {
