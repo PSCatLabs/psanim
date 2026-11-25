@@ -20,6 +20,10 @@ use pscat::{Interp, PsError};
 use crate::ctx::{hash01, noise2, wiggle};
 use crate::ops::{Shared, eval_keys, fail, reg};
 
+/// The most gust cells one emitter may tabulate for a frame (about 4.8
+/// hours of particle life at 60 cells a second).
+const MAX_GUST_CELLS: usize = 1 << 20;
+
 /// How many particles one `particles` call may draw.
 pub(crate) const MAX_PARTICLES: usize = 200_000;
 /// The cell of the grid a gusting wind is held constant over, in seconds.
@@ -267,13 +271,36 @@ impl Emitter {
         }
     }
 
-    /// Tabulate the gust for the cells particles alive at `t` have seen.
-    fn prepare(&mut self, seed: i64, t: f64) {
+    /// Tabulate the gust for the cells particles alive at `t` have seen:
+    /// from the later of `t - life` and the first emission, so a long
+    /// /Life costs only the time the emitter has actually run. Refuses a
+    /// table larger than [`MAX_GUST_CELLS`], since the walk through it is
+    /// native and does not see the interpreter's budgets.
+    fn prepare(&mut self, seed: i64, t: f64) -> Result<(), String> {
+        self.gust_cells = Vec::new();
         if !self.gusty() {
-            return;
+            return Ok(());
         }
-        let j0 = ((t - self.max_life()) / GUST_CELL).floor() - 1.0;
+        let first_burst = self.bursts.iter().copied().fold(f64::INFINITY, f64::min);
+        let first_stream = if self.rate > 0.0 {
+            self.from
+        } else {
+            f64::INFINITY
+        };
+        let first = first_burst.min(first_stream);
+        if !first.is_finite() || first > t {
+            return Ok(()); // nothing emitted yet, so no particle needs a gust
+        }
+        let start = (t - self.max_life()).max(first);
+        let j0 = (start / GUST_CELL).floor() - 1.0;
         let j1 = (t / GUST_CELL).floor() + 1.0;
+        if !(j1 - j0).is_finite() || j1 - j0 > MAX_GUST_CELLS as f64 {
+            return Err(format!(
+                "particles: a /Gust over {:.0} s of particle life is too long to follow (at most {:.0} s): shorten /Life, or start emitting later",
+                t - start,
+                MAX_GUST_CELLS as f64 * GUST_CELL
+            ));
+        }
         self.gust_j0 = j0;
         self.gust_cells = Vec::new();
         let mut j = j0;
@@ -282,6 +309,7 @@ impl Emitter {
             self.gust_cells.push(g);
             j += 1.0;
         }
+        Ok(())
     }
 
     /// The gust in grid cell `j`, from the table when it is there.
@@ -638,7 +666,9 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         for (k, d) in dicts.iter().enumerate() {
             match Emitter::parse(d, centre, k) {
                 Ok(mut e) => {
-                    e.prepare(seed, t);
+                    if let Err(msg) = e.prepare(seed, t) {
+                        return fail(ctx, PsError::Limitcheck, msg);
+                    }
                     emitters.push(e)
                 }
                 Err(msg) => return fail(ctx, PsError::Typecheck, msg),

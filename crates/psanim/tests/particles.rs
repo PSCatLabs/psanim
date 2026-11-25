@@ -202,3 +202,32 @@ fn sincelast_reads_an_array_of_times() {
     let mut m = load("/scene { 2 { [1 2.5 4] sincelast = } delayed } def");
     assert_eq!(printed(&mut m, 3.5), "0.5");
 }
+
+#[test]
+fn a_gust_over_an_enormous_life_is_refused_not_followed() {
+    // A billion-second life with nothing emitted: nothing to tabulate.
+    let mut m = psanim::Movie::load(
+        "<< /Size [64 48] /Duration 2 /FPS 10 >> animation
+         /scene { << /Life 1000000000 /Rate 0 /Gust [1 1] >> { } particles } def",
+        &psanim::Options::default(),
+    )
+    .unwrap();
+    m.render_at(1.0).unwrap();
+    // Emitting since time 0: only the second of life so far is followed.
+    let mut m = psanim::Movie::load(
+        "<< /Size [64 48] /Duration 2 /FPS 10 >> animation
+         /scene { << /Life 3000 /Rate 5 /Gust [1 1] >> { } particles } def",
+        &psanim::Options::default(),
+    )
+    .unwrap();
+    m.render_at(1.0).unwrap();
+    // A burst a long time before now, still alive: refused with a reason.
+    let mut m = psanim::Movie::load(
+        "<< /Size [64 48] /Duration 2 /FPS 10 >> animation
+         /scene { << /Life 1000000000 /Bursts [-100000000] /Count 1 /Gust [1 1] >> { } particles } def",
+        &psanim::Options::default(),
+    )
+    .unwrap();
+    let e = m.render_at(1.0).unwrap_err().to_string();
+    assert!(e.contains("too long to follow"), "{e}");
+}
