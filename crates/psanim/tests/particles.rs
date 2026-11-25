@@ -302,3 +302,22 @@ fn a_periodic_gusting_emitter_repeats_exactly_whatever_its_period() {
     let b = m.render_at(0.5 + 2.02).unwrap().premultiplied.to_vec();
     assert_eq!(a, b);
 }
+
+#[test]
+fn many_gust_tables_count_against_the_budget_before_they_are_built() {
+    let mut m = psanim::Movie::load(
+        "<< /Size [64 48] /Duration 2 /FPS 10 >> animation
+         /e << /Count 0 /Bursts [0] /Life 17000 /Gust [1 1] >> def
+         /scene { 16000 { [ 100 { e } repeat ] { } particles } attime } def",
+        &psanim::Options::default(),
+    )
+    .unwrap();
+    let started = std::time::Instant::now();
+    let e = m.render_at(0.5).unwrap_err().to_string();
+    assert!(e.contains("gust"), "{e}");
+    assert!(
+        started.elapsed().as_secs() < 10,
+        "took {:?}",
+        started.elapsed()
+    );
+}

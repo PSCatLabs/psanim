@@ -392,3 +392,15 @@ fn a_rotated_components_blur_stays_inside_its_rotated_box() {
     // And the middle is white.
     assert!(px(100, 50)[0] > 200);
 }
+
+#[test]
+fn a_component_using_a_library_its_child_loaded_still_owns_its_words() {
+    let mut m = load(
+        "/outer << /Size [10 10]
+             /Setup { /child << /Setup { /pkstage use } /Scene { } >> component /pkstage use }
+             /Scene { /accent rgbof pop pop == } >> component
+         /rgbof { pop 9 8 7 } def
+         /scene { /outer << >> place } def",
+    );
+    assert_eq!(printed(&mut m, 0.0), "1.0");
+}

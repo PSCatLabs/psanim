@@ -381,7 +381,16 @@ end
 .pk /cur get 0 0 put
 /use {
   dup type /stringtype eq { cvn } if
-  dup .pk /used get exch known { pop } {
+  dup .pk /used get exch known {
+    pop
+    % Already loaded (perhaps by a component this one placed): a component
+    % asking for it still gets the library's words in its own namespace,
+    % from .base, so the movie's later names cannot change them for it.
+    /.isinst where {
+      .base { .compword { 2 index 2 index known { pop pop } { 2 index 3 1 roll put } ifelse } { pop pop } ifelse } forall
+      pop
+    } if
+  } {
     dup .pk /used get exch true put
     % Into userdict, whoever asks: a component's setup loading a library
     % must not keep it to itself, since every later `use` skips it. What it
@@ -553,12 +562,16 @@ end
 %                         instance may change it: inside a component a
 %                         private copy, made the first time it is asked for.
 /.mine {
+  % A library loading (`use` runs it with userdict current) sets up the
+  % shared state, whoever asked for it: not a component's private copy.
+  currentdict userdict eq { userdict exch get } {
   /.isinst where {
     1 index 2 copy known { get exch pop } {
       pop exch userdict 1 index get dup length dict copy
       3 copy put 3 1 roll pop pop
     } ifelse
   } { userdict exch get } ifelse
+  } ifelse
 } bind def
 % decl .companimation     `animation`, called while an instance is set up:
 %                         read its declaration instead of the movie's.

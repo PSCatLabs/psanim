@@ -302,15 +302,13 @@ impl Emitter {
         }
     }
 
-    /// Tabulate the gust for the cells particles alive at `t` have seen:
-    /// from the later of `t - life` and the first emission, so a long
-    /// /Life costs only the time the emitter has actually run. Refuses a
-    /// table larger than [`MAX_GUST_CELLS`], since the walk through it is
-    /// native and does not see the interpreter's budgets.
-    fn prepare(&mut self, seed: i64, t: f64) -> Result<(), String> {
-        self.gust_cells = Vec::new();
+    /// The gust cells particles alive at `t` have seen, as (first cell,
+    /// count), or None when no particle needs a gust; an error when the
+    /// span is too long to follow. Nothing is computed yet, so the caller
+    /// can charge the work first.
+    fn table_span(&self, t: f64) -> Result<Option<(f64, usize)>, String> {
         if !self.gusty() {
-            return Ok(());
+            return Ok(None);
         }
         let first_burst = self.bursts.iter().copied().fold(f64::INFINITY, f64::min);
         let first_stream = if self.rate > 0.0 {
@@ -320,7 +318,7 @@ impl Emitter {
         };
         let first = first_burst.min(first_stream);
         if !first.is_finite() || first > t {
-            return Ok(()); // nothing emitted yet, so no particle needs a gust
+            return Ok(None); // nothing emitted yet, so no particle needs a gust
         }
         // Nothing alive: every particle was born more than a life ago.
         let last_burst = self
@@ -334,7 +332,7 @@ impl Emitter {
             f64::NEG_INFINITY
         };
         if t - last_burst.max(last_stream) > self.max_life() {
-            return Ok(());
+            return Ok(None);
         }
         let start = (t - self.max_life()).max(first);
         let h = self.cell();
@@ -353,15 +351,21 @@ impl Emitter {
                 MAX_GUST_CELLS as f64 * h
             ));
         }
-        self.gust_j0 = j0;
+        Ok(Some((j0, (j1 - j0).max(0.0) as usize + 1)))
+    }
+
+    /// Tabulate the gust over `span` (from [`Emitter::table_span`]).
+    fn fill_table(&mut self, seed: i64, span: Option<(f64, usize)>) {
         self.gust_cells = Vec::new();
-        let count = (j1 - j0).max(0.0) as usize + 1;
+        let Some((j0, count)) = span else {
+            return;
+        };
+        self.gust_j0 = j0;
         self.gust_cells.reserve(count);
         for k in 0..count {
             let g = self.gust_in(seed, j0 + k as f64);
             self.gust_cells.push(g);
         }
-        Ok(())
     }
 
     /// The gust in grid cell `j`, from the table when it is there.
@@ -744,9 +748,16 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         for (k, d) in dicts.iter().enumerate() {
             match Emitter::parse(d, centre, k) {
                 Ok(mut e) => {
-                    if let Err(msg) = e.prepare(seed, t) {
-                        return fail(ctx, PsError::Limitcheck, msg);
+                    // Every emitter's table counts against the moment's
+                    // gust budget before it is built.
+                    let span = match e.table_span(t) {
+                        Ok(span) => span,
+                        Err(msg) => return fail(ctx, PsError::Limitcheck, msg),
+                    };
+                    if let Some((_, count)) = span {
+                        charge_gust(ctx, count as f64)?;
                     }
+                    e.fill_table(seed, span);
                     emitters.push(e)
                 }
                 Err(msg) => return fail(ctx, PsError::Typecheck, msg),
