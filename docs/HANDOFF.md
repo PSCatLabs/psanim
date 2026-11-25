@@ -135,7 +135,9 @@ built; `docs/roadmap.md` ranks it.
   named `t-...` or defined first. Wrong order silently lengthens the film.
 - `check`'s abrupt-change detector is a threshold on mean difference;
   it misses small pops in busy frames.
-- `MAX_OUTPUT` truncates printed text at 64 KB per collection.
+- `MAX_OUTPUT` truncates printed text at 64 KB per collection. The text
+  then ends with `[output truncated at 64 KB]` and `--json` says
+  `"output_truncated": true`.
 - The browser player renders on the main thread and has no way to show
   `print` output.
 - Dropping a `Movie` from thread-local teardown panics (a PSCat interner

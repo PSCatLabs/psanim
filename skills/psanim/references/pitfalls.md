@@ -86,6 +86,9 @@ position) gives a different answer when called inside `during` or
 Print it. `now ==`, `x y pstack`, `(reached here) =` in setup or in the
 scene are shown by `psanim frame` (on stderr) and `psanim check`, and are
 in `--json` output as `printed`. Remove them before the final render.
+Only the first 64 KB is kept: a line `[output truncated at 64 KB]` ends the
+text, and `--json` has `"output_truncated": true`. Print less (one value
+per frame, or `frame 0 eq { ... } if`).
 
 ## A name I defined has the wrong value
 

@@ -234,6 +234,69 @@ fn what_a_program_prints_is_collected() {
 }
 
 #[test]
+fn printed_output_cut_at_64_kb_says_so() {
+    // 3000 lines of 41 bytes: about 120 KB, twice what is kept.
+    let mut m =
+        load("/scene { 1 1 3000 { pop (0123456789012345678901234567890123456789) = } for } def");
+    assert_eq!(
+        m.take_printed(),
+        psanim::Printed::default(),
+        "setup printed nothing"
+    );
+    m.render_frame(0).unwrap();
+    let p = m.take_printed();
+    assert!(p.truncated);
+    assert!(p.text.ends_with("[output truncated at 64 KB]\n"));
+    let marker = "\n[output truncated at 64 KB]\n".len();
+    assert!(
+        p.text.len() <= 64 * 1024 + marker,
+        "{} bytes kept",
+        p.text.len()
+    );
+    assert!(p.text.len() > 64 * 1024 - 64, "most of the 64 KB is kept");
+    // Each collection starts fresh: a short print afterwards is whole.
+    m.render_frame(1).unwrap();
+    let p = m.take_printed();
+    assert!(p.truncated, "the second frame prints as much again");
+    let mut quiet = load("/scene { frame 1 eq { (short) = } if } def");
+    quiet.render_frame(0).unwrap();
+    assert!(!quiet.take_printed().truncated);
+    quiet.render_frame(1).unwrap();
+    assert_eq!(
+        quiet.take_printed(),
+        psanim::Printed {
+            text: "short\n".into(),
+            truncated: false
+        }
+    );
+}
+
+#[test]
+fn printed_output_under_the_limit_is_whole() {
+    let mut m =
+        load("/scene { 1 1 1000 { pop (0123456789012345678901234567890123456789) = } for } def");
+    m.render_frame(0).unwrap();
+    let p = m.take_printed();
+    assert!(!p.truncated);
+    assert_eq!(p.text.len(), 1000 * 41);
+    assert!(!p.text.contains("truncated"));
+}
+
+#[test]
+fn printed_output_in_setup_is_cut_too() {
+    let mut m =
+        load("1 1 3000 { pop (0123456789012345678901234567890123456789) = } for /scene { } def");
+    let p = m.take_printed();
+    assert!(p.truncated);
+    assert!(p.text.ends_with("[output truncated at 64 KB]\n"));
+    assert!(p.text.len() <= 64 * 1024 + 40);
+    // `take_output` gives the same text.
+    let mut m2 =
+        load("1 1 3000 { pop (0123456789012345678901234567890123456789) = } for /scene { } def");
+    assert_eq!(m2.take_output(), p.text);
+}
+
+#[test]
 fn globally_reads_movie_time_inside_a_scope() {
     assert_eq!(
         eval_at("", "-1 0.5 2 { pop { now } globally } during", 9),

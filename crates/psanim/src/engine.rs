@@ -296,6 +296,8 @@ pub struct Movie {
     last_steps: u64,
     /// What the program printed and nobody has collected yet.
     output: String,
+    /// `output` was cut at [`MAX_OUTPUT`].
+    output_truncated: bool,
     /// The persistent canvas, set aside while a frame's overlay is shown.
     kept: Option<Page>,
     /// The overlay procedure of a persistent movie, if it defines one.
@@ -314,6 +316,42 @@ const NATIVE_WORDS: &[&str] = &[
 
 /// The most printed text a movie keeps between calls of `take_output`.
 const MAX_OUTPUT: usize = 64 * 1024;
+
+/// The line that ends printed text cut at [`MAX_OUTPUT`].
+const TRUNCATION_MARK: &str = "[output truncated at 64 KB]\n";
+
+/// What a program printed since the last collection.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Printed {
+    /// The text. When it was cut at 64 KB it ends with a line saying so.
+    pub text: String,
+    /// More was printed than `text` holds.
+    pub truncated: bool,
+}
+
+/// Add `bytes` to `out`, keeping at most [`MAX_OUTPUT`] bytes and ending
+/// with a line that says so when anything was dropped.
+fn push_output(out: &mut String, truncated: &mut bool, bytes: &[u8]) {
+    if *truncated || bytes.is_empty() {
+        return;
+    }
+    let text = String::from_utf8_lossy(bytes);
+    let room = MAX_OUTPUT.saturating_sub(out.len());
+    if text.len() <= room {
+        out.push_str(&text);
+        return;
+    }
+    let mut cut = room;
+    while !text.is_char_boundary(cut) {
+        cut -= 1;
+    }
+    out.push_str(&text[..cut]);
+    if !out.is_empty() && !out.ends_with('\n') {
+        out.push('\n');
+    }
+    out.push_str(TRUNCATION_MARK);
+    *truncated = true;
+}
 
 fn short_repr(v: &Value) -> String {
     let s = match v {
@@ -558,7 +596,13 @@ impl Movie {
             .pop_value()
             .map_err(|_| Error::new(Phase::Setup, "internal", "no checkpoint was taken"))?;
 
-        let setup_output = String::from_utf8_lossy(interp.captured_stdout()).into_owned();
+        let mut setup_output = String::new();
+        let mut setup_truncated = false;
+        push_output(
+            &mut setup_output,
+            &mut setup_truncated,
+            interp.captured_stdout(),
+        );
         interp.capture_stdout();
         let frames = ((decl.duration * decl.fps - 1e-9).ceil().max(1.0)) as u64;
         // Checkpoints about every two seconds, and never more than 64 deep.
@@ -602,6 +646,7 @@ impl Movie {
             frame_limits: options.budget.frame,
             last_steps: 0,
             output: setup_output,
+            output_truncated: setup_truncated,
             kept: None,
             overlay,
             last_ticks: 0,
@@ -754,12 +799,7 @@ impl Movie {
         let r = run(&mut self.interp, &self.ctx, phase, program);
         let printed = self.interp.captured_stdout();
         if !printed.is_empty() {
-            if self.output.len() < MAX_OUTPUT {
-                self.output.push_str(&String::from_utf8_lossy(printed));
-                if self.output.len() >= MAX_OUTPUT {
-                    self.output.push_str("\n[output truncated]\n");
-                }
-            }
+            push_output(&mut self.output, &mut self.output_truncated, printed);
             self.interp.capture_stdout();
         }
         if self.frame_limits.max_steps.is_some() {
@@ -801,8 +841,23 @@ impl Movie {
     /// What the program has printed (`print`, `=`, `==`, `pstack`) since
     /// the last call, as text. Printing is how a program is debugged:
     /// `psanim frame` shows it.
+    ///
+    /// Output is kept to 64 KB between calls; past that it is dropped and
+    /// the text ends with `[output truncated at 64 KB]`. [`take_printed`]
+    /// reports that as a flag too.
+    ///
+    /// [`take_printed`]: Movie::take_printed
     pub fn take_output(&mut self) -> String {
-        std::mem::take(&mut self.output)
+        self.take_printed().text
+    }
+
+    /// Like [`take_output`](Movie::take_output), saying whether the text
+    /// was cut at 64 KB.
+    pub fn take_printed(&mut self) -> Printed {
+        Printed {
+            text: std::mem::take(&mut self.output),
+            truncated: std::mem::take(&mut self.output_truncated),
+        }
     }
 
     fn pop_save(&mut self, phase: Phase) -> Result<Value, Error> {

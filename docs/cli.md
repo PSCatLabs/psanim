@@ -17,6 +17,12 @@ psanim <command> <program.ps> [options]
 Every command takes `--json` for a machine-readable result on stdout.
 Errors are JSON too in that mode, with `"ok": false`.
 
+What the program prints (`=`, `==`, `print`, `pstack`) is shown by `frame`
+(on stderr) and `check`, and is `"printed"` in their JSON. At most 64 KB
+is kept per command; past that the text ends with
+`[output truncated at 64 KB]` and the JSON has `"output_truncated": true`
+(`false` otherwise).
+
 ## Selecting frames
 
 | Option | Meaning | Commands |

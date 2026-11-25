@@ -61,7 +61,9 @@ pub mod sheet;
 pub mod signals;
 mod vocab;
 
-pub use engine::{Budget, Frame, Meta, Mode, MotionBlur, Movie, Options, PRELUDE, Param, Scale};
+pub use engine::{
+    Budget, Frame, Meta, Mode, MotionBlur, Movie, Options, PRELUDE, Param, Printed, Scale,
+};
 pub use error::{Error, Phase, TraceLine};
 pub use ops::TRANSITIONS;
 pub use signals::Signals;
