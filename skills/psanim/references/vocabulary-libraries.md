@@ -678,3 +678,55 @@ Fill a box with a gradient between two colours (roles or [r g b]) along an angle
 
 A small steady offset within amount either way, fixed by key: the hand-set unevenness of a row of marks. The same key always gives the same offset.
 
+## pkfigure: a rig for characters that dance
+
+Load with `/pkfigure use`.
+
+### `squashed`
+
+`hop squash lean proc  squashed  -`
+
+Run proc with a character's bounce: the origin on the ground under it, lifted by hop, squashed (squash < 1) or stretched (> 1) keeping its area, and leaned (x moves lean times y). Draw the figure standing on y = 0 and the squash stays anchored to its feet. No dictionary is open around proc.
+
+### `limb`
+
+`x y angle len r  limb  ex ey`
+
+Fill an arm or a leg from the joint (x, y): len long, 2r thick, round at both ends, in the current colour. angle is from straight down, counter-clockwise (90 points right, -90 left, 180 straight up). Leaves where it ends, for a hand or a foot: `0.9 1.4 armR 0.7 0.14 limb 0.2 0 360 arc fill`.
+
+### `eye`
+
+`x y r opts  eye  -`
+
+A cartoon eye about r wide either side of x, taller than wide. opts: /State /open (with two highlights), /blink (a line), /grin (shut tight, ^), /sleep (shut softly, a lid curved down); /Look how far it has turned right, in eye widths; /Ink and /Shine colours (roles or [r g b]).
+
+### `mouth`
+
+`x y w opts  mouth  -`
+
+A cartoon mouth, its top edge centred at (x, y), w wide either side: a smile when shut, opening downward into a D with a tongue as /Open goes from 0 to 1. opts: /Open, /Ink, /Tongue.
+
+### `spring`
+
+`t freq damp  spring  u`
+
+1 at t = 0, swinging about 0 at freq Hz and dying away at rate damp; 0 before. Multiply by how far a part was left behind by a jolt t seconds ago: an antenna's bobble, an ear, a tail lagging behind a hop, as a function of time and not of the last frame.
+
+### `dancepose`
+
+`beat  dancepose  pose`
+
+A dance step as numbers, from a beat the caller reads (a tempo, an event track, a signal): beat is << /Beat index /Since seconds /Length seconds-per-beat /Loud 0..1 /Sing 0..1 >>. The pose has /Hop /Squash /Lean (for `squashed`), /ArmL /ArmR (degrees raised), /LiftL /LiftR /Spread (feet), /Eyes (/open /grin /wink) /Look, /Mouth (0..1) and /BobX /BobY (a bobble left behind). Eight moves, one a beat; louder beats hop higher, and a beat at /Loud 0.75 or more is a grin. Lengths are in body half-widths.
+
+### `restpose`
+
+`-  restpose  pose`
+
+A pose standing still with the eyes softly shut: asleep, with the same keys as `dancepose`.
+
+### `blendpose`
+
+`a b u  blendpose  pose`
+
+The pose u of the way from a to b: numbers in between, anything else (the eyes) a's until halfway and b's after. For settling from a dance into rest, or waking.
+

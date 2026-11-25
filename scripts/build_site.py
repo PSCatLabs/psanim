@@ -184,7 +184,7 @@ BY_SOURCE["docs/gallery.md"] = "gallery.html"
 # The library chapters are a visual cookbook: every runnable example in
 # them is rendered and shown, looping, under its code.
 COOKBOOK = {"stage.md", "type.md", "explain.md", "ink.md", "storytelling.md"}
-LIBRARIES = "pkstage pkmotion pktype pkdiagram pkcode pkchart pkink".split()
+LIBRARIES = "pkstage pkmotion pktype pkdiagram pkcode pkchart pkink pkfigure".split()
 
 def with_films(text, stem):
     """Insert a marker after each runnable fence and render its film."""

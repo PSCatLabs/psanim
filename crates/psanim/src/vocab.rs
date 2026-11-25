@@ -53,6 +53,11 @@ pub const LIBRARIES: &[(&str, &str, &str)] = &[
         include_str!("../lib/pkink.ps"),
         "tapered strokes, strokes that draw themselves in any medium, gradients, radial repetition",
     ),
+    (
+        "pkfigure",
+        include_str!("../lib/pkfigure.ps"),
+        "a rig for cartoon characters: bounce, limbs, eyes, mouths, springs, and a dance step from the beat",
+    ),
 ];
 
 fn spec_from(i: &mut Interp, ctx: &Shared) -> Result<Spec, PsError> {
