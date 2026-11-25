@@ -356,8 +356,14 @@ end
   dup .pk /used get exch known { pop } {
     dup .pk /used get exch true put
     % Into userdict, whoever asks: a component's setup loading a library
-    % must not keep it to itself, since every later `use` skips it.
+    % must not keep it to itself, since every later `use` skips it. What it
+    % defines is also kept in .base, for components (see .mkinst).
+    userdict dup length dict copy exch
     userdict begin .libsource cvx exec end
+    userdict {                                    % before /k v
+      2 index 2 index known { 2 index 2 index get 1 index ne } { true } ifelse
+      { .base 3 1 roll put } { pop pop } ifelse
+    } forall pop
   } ifelse
 } bind def
 
@@ -481,6 +487,13 @@ end
   3 -1 roll 4 -1 roll exch 3 -1 roll exch % xmin ymin xmax ymax
   4 array astore
 } bind def
+% /k v .compword -> /k v bool    is this a word a component should keep:
+%                               an operator or a procedure, not state
+/.compword {
+  dup type /operatortype eq { true } {
+    dup type dup /arraytype eq exch /packedarraytype eq or { dup xcheck } { false } ifelse
+  } ifelse
+} bind def
 /.unitlen { 1 0 dtransform dup mul exch dup mul add sqrt } bind def   % device length of a unit here
 /.compcur { .compst /a get .compst /n get 1 sub get } bind def
 % dict key default .dget -> value      dict's value for key, or the default
@@ -527,6 +540,11 @@ end
   dup /view false put
   dup /ns 64 dict put
   dup /ns get
+    % The words it was written against, whatever the movie has since
+    % defined under the same names: PostScript's operators, the prelude's
+    % and the libraries' procedures. Its own definitions come after.
+    systemdict { .compword { 2 index 3 1 roll put } { pop pop } ifelse } forall
+    .base { .compword { 2 index 3 1 roll put } { pop pop } ifelse } forall
     dup /.isinst true put
     dup /.pk << /used .pk /used get /cur 32 array /depth 0 /beats 1 dict /storylen 0 /bpm 120 >>
     dup /cur get 0 0 put put
@@ -622,3 +640,7 @@ end
 
 % Pictures are composed over a transparent page; a program draws its own
 % ground, or declares /Background.
+
+% The prelude's own words, as the libraries' will be when they load: a
+% component sees these whatever names the movie defines (see .mkinst).
+/.base userdict dup length 256 add dict copy def
