@@ -124,6 +124,14 @@ interpreter, and should not need to.
 - The prelude never opens a dictionary around a user procedure, so a
   body's `def` lands where its author expects, and every prelude
   procedure is `bind`-ed.
+- `onplane` (perspective) needs the painting operators to project what
+  they paint, and a native operator cannot call a built-in. While a plane
+  is open, the prelude puts projecting `fill`, `stroke`, `show` and the
+  like into userdict in front of the built-ins, and takes them out (and
+  puts back whatever was there) when the last plane closes. Outside
+  `onplane` the built-ins are untouched, so they cost nothing extra and
+  errors are reported where they happen; the price is that procedures
+  `bind`-ed earlier (the prelude's, the libraries') paint flat inside it.
 
 The vocabulary is one table (`api.rs`). `psanim api`, the reference in
 the docs and the agent skill are generated from it, and tests check it

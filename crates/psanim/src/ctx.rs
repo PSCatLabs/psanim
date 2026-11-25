@@ -99,6 +99,9 @@ pub(crate) struct Ctx {
     pub comps: Vec<Comp>,
     /// The particles of each open `particles` call, innermost last.
     pub particles: Vec<crate::particles::ParticleSet>,
+    /// Planes opened by `onplane`, innermost last: where the plane is, and
+    /// the CTM (as `currentmatrix` gives it) the plane's coordinates are in.
+    pub planes: Vec<(crate::plane::Plane, [f64; 6])>,
     /// The directory relative component paths are read from: the movie
     /// file's own, when the host knows it.
     pub base_dir: Option<std::path::PathBuf>,
@@ -168,6 +171,7 @@ impl Ctx {
             params_seen: BTreeMap::new(),
             comps: Vec::new(),
             particles: Vec::new(),
+            planes: Vec::new(),
             base_dir: None,
             measured_reels: Vec::new(),
             hint: None,
@@ -240,6 +244,7 @@ impl Ctx {
         self.views.clear();
         self.comps.clear();
         self.particles.clear();
+        self.planes.clear();
         self.hint = None;
     }
 }

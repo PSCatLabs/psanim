@@ -415,6 +415,18 @@ pub const API: &[ApiEntry] = &[
         "B's points (from resamplepath, a closed outline) started from the place that lies closest to A's, as a new array; if B runs the other way round it is also reversed, since a morph between opposite senses collapses on the way. Morph A into the result with `morphpath` and every point travels the least, so a shape melts into the next rather than twisting. Do it once in setup for each pair you will morph, not per frame (it costs n squared).",
     ),
     e(
+        "path",
+        "projectpath",
+        "plane  projectpath  -",
+        "Replace the current path by its projection onto a plane in perspective (the plane dictionary as onplane takes it), in the current user space. Curves are cut into chords about a pixel long on the screen; straight edges stay straight, as they do in perspective; open subpaths stay open, and the part of the path behind the eye is cut away.",
+    ),
+    e(
+        "path",
+        "planepoint",
+        "x y plane  planepoint  x' y' opacity",
+        "Where the point (x, y) of a plane (as onplane takes it) appears on the screen, and the opacity the plane's /Fade leaves there. For placing a flat thing (a label, a sprite) at a place on the plane. An error if the point is behind the eye.",
+    ),
+    e(
         "layer",
         "beginlayer",
         "-  beginlayer  -",
@@ -497,6 +509,12 @@ pub const API: &[ApiEntry] = &[
         "camera",
         "cx cy zoom angle  camera  -",
         "Set the transformation so the world point (cx, cy) is at the centre of the frame, magnified by zoom and rotated by angle. Wrap in gsave/grestore.",
+    ),
+    e(
+        "canvas",
+        "onplane",
+        "proc plane  onplane  -",
+        "Run proc with its painting laid on a plane in 3D and seen in perspective: fill, eofill, stroke, rectfill, rectstroke, clip, eoclip, rectclip and the show family (show, ashow, widthshow, awidthshow) are projected when proc calls them. Procedures bind-ed before (the prelude's, the pk libraries') hold the built-ins and paint flat. The plane's coordinates are the user space onplane was called in; proc's own translate, scale and rotate move things on the plane. plane is a dictionary: /Tilt degrees the plane is tipped back about the x axis through the origin (0 faces you, 90 is a floor seen edge-on; +y goes away), /Turn degrees then turned about the vertical axis, /Depth how far the origin is pushed behind the screen, /Eye [x y] the point the eye is straight in front of (default [0 0]), /Distance how far the eye is from the screen (default the view's width), /Fade [z0 z1] the depth behind the screen over which ink fades out (each painted path takes one opacity, from the depth of its middle). Strokes go through strokepath, so line widths lie on the plane and shrink with distance. Ink behind the eye is cut away. image, shfill, kshow, xshow and glyphshow are not projected.",
     ),
     e(
         "text",

@@ -95,6 +95,22 @@ fn every_entry_is_complete_and_categories_are_known() {
     assert_eq!(psanim::api::lookup("now").unwrap().category, "clock");
 }
 
+/// The built-ins the prelude redefines so `onplane` can project them.
+const PAINTERS: &[&str] = &[
+    "fill",
+    "eofill",
+    "stroke",
+    "show",
+    "ashow",
+    "widthshow",
+    "awidthshow",
+    "rectfill",
+    "rectstroke",
+    "clip",
+    "eoclip",
+    "rectclip",
+];
+
 #[test]
 fn every_public_name_the_prelude_defines_is_documented() {
     // The prelude's public names are the `/name { ... } bind def` lines
@@ -110,6 +126,11 @@ fn every_public_name_the_prelude_defines_is_documented() {
             let name = rest.split_whitespace().next().unwrap();
             // Transition names live in their own dictionary.
             if psanim::TRANSITIONS.contains(&name) {
+                continue;
+            }
+            // Built-in painting operators the prelude wraps for `onplane`:
+            // PostScript's own, documented there.
+            if PAINTERS.contains(&name) {
                 continue;
             }
             assert!(

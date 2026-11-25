@@ -18,6 +18,7 @@ pub const CATALOG: &[(&str, &str)] = &[
     ("clock-ledsign", include_str!("../catalog/clock-ledsign.ps")),
     ("clock-morph", include_str!("../catalog/clock-morph.ps")),
     ("confetti", include_str!("../catalog/confetti.ps")),
+    ("crawl", include_str!("../catalog/crawl.ps")),
     ("credits", include_str!("../catalog/credits.ps")),
     ("fire", include_str!("../catalog/fire.ps")),
     ("fireworks", include_str!("../catalog/fireworks.ps")),

@@ -1557,3 +1557,110 @@ fn pscat_libraries_work_inside_a_movie() {
     );
     assert_ne!(m.render_frame(3).unwrap().premultiplied, &a[..]);
 }
+
+/// How many pixels of row `y` have any ink.
+fn lit_in_row(frame: &psanim::Frame, y: u32) -> usize {
+    (0..frame.width)
+        .filter(|&x| px(frame, x, y)[0] > 40)
+        .count()
+}
+
+#[test]
+fn onplane_facing_the_eye_is_plain_drawing() {
+    let draw = "1 setgray 8 8 40 30 rectfill 2 setlinewidth newpath 32 24 10 0 360 arc stroke";
+    let mut a = load(&format!("/scene {{ {draw} }} def"));
+    let mut b = load(&format!("/scene {{ {{ {draw} }} << >> onplane }} def"));
+    let (fa, fb) = (a.render_frame(0).unwrap(), b.render_frame(0).unwrap());
+    let differ = fa
+        .premultiplied
+        .iter()
+        .zip(fb.premultiplied)
+        .filter(|(p, q)| p.abs_diff(**q) > 24)
+        .count();
+    // The stroke is outlined by strokepath and filled, so its edge pixels
+    // may round differently; the shapes are the same.
+    assert!(differ < 40, "{differ} channels differ");
+}
+
+#[test]
+fn onplane_foreshortens_what_is_far() {
+    // A square on a floor tilted away: its far edge is narrower and it is
+    // squashed vertically. Rows are counted from the top of the frame.
+    let mut m = load(
+        "/scene { 32 4 translate
+           { 1 setgray -20 0 40 40 rectfill } << /Tilt 70 /Distance 60 >> onplane } def",
+    );
+    let f = m.render_frame(0).unwrap();
+    let near = lit_in_row(&f, 43);
+    let far = (0..43)
+        .rev()
+        .map(|y| (y, lit_in_row(&f, y)))
+        .take_while(|r| r.1 > 0)
+        .last()
+        .unwrap();
+    assert!(near >= 38, "near edge {near}");
+    assert!(far.1 * 3 < near * 2, "far edge {} vs near {near}", far.1);
+    assert!(far.0 > 30, "squashed: the top is at row {}", far.0);
+}
+
+#[test]
+fn onplane_leaves_defs_where_they_belong_and_the_built_ins_alone() {
+    // A def inside lands in the caller's dictionary; afterwards fill is the
+    // built-in again, even after nested planes.
+    let v = eval_at(
+        "",
+        "{ /q 7 def { } << >> onplane userdict /fill known { /q q 100 add def } if } << >> onplane
+         userdict /fill known { 1000 } { q } ifelse",
+        0,
+    );
+    assert_eq!(v, 107.0);
+}
+
+#[test]
+fn onplane_projects_text_strokes_and_clips() {
+    let mut m = load(
+        "/scene { 32 2 translate 1 setgray
+           { /Helvetica-Bold findfont 14 scalefont setfont
+             -28 0 moveto (AB) show (CD) show 2 0 (EF) ashow
+             3 setlinewidth newpath -25 30 moveto 25 30 lineto stroke
+             newpath -30 20 moveto 30 20 lineto 30 25 lineto -30 25 lineto closepath clip -30 0 60 60 rectfill
+           } << /Tilt 50 /Distance 120 >> onplane } def",
+    );
+    let f = m.render_frame(0).unwrap_or_else(|e| panic!("{e}"));
+    assert!(lit_in_row(&f, 40) > 20, "the text is drawn");
+}
+
+#[test]
+fn onplane_cuts_away_what_is_behind_the_eye_and_fades_the_distance() {
+    // The plane tipped flat: -y runs towards and past the eye.
+    let mut m = load(
+        "/scene { 32 24 translate 1 setgray
+           { -20 -5000 40 5010 rectfill } << /Tilt 90 /Distance 50 /Eye [0 20] >> onplane } def",
+    );
+    let f = m.render_frame(0).unwrap_or_else(|e| panic!("{e}"));
+    assert!(lit_in_row(&f, 47) > 0);
+    // Past the end of the fade, nothing is drawn.
+    let mut m = load(
+        "/scene { 1 setgray { 0 0 64 48 rectfill } << /Depth 500 /Fade [100 200] >> onplane } def",
+    );
+    let f = m.render_frame(0).unwrap();
+    assert!(f.premultiplied.chunks_exact(4).all(|p| p[0] < 10));
+}
+
+#[test]
+fn planepoint_and_projectpath() {
+    // Twice as far from the eye: half the size, about the eye point.
+    let v = eval_at(
+        "",
+        "40 20 << /Depth 100 /Distance 100 >> planepoint pop exch pop",
+        0,
+    );
+    assert_eq!(v, 10.0);
+    let v = eval_at(
+        "",
+        "newpath 0 0 moveto 40 0 lineto 40 20 lineto closepath
+         << /Depth 100 /Distance 100 >> projectpath pathbbox pop exch pop exch pop",
+        0,
+    );
+    assert_eq!(v, 20.0);
+}

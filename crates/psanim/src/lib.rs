@@ -35,7 +35,7 @@
 //! - [`api`] is the animation vocabulary as data, the reference's source.
 //! - [`render`] renders ranges of frames on several threads.
 //! - [`sheet`] lays frames out as a contact sheet.
-//! - [`raster`], [`ease`], [`pathmath`] and [`signals`] are the pure
+//! - [`raster`], [`ease`], [`pathmath`], [`plane`] and [`signals`] are the pure
 //!   building blocks, usable on their own.
 //!
 //! The crate has no platform dependencies beyond the PSCat library: it
@@ -56,6 +56,7 @@ pub mod motion;
 mod ops;
 mod particles;
 pub mod pathmath;
+pub mod plane;
 pub mod raster;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod render;

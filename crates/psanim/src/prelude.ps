@@ -13,6 +13,91 @@
 %   - Every procedure is `bind`-ed, so a user redefining `exec` or `now`
 %     for themselves does not change what these do.
 
+% --- perspective: painting on a plane ----------------------------------------
+% `onplane` runs a procedure whose painting lands on a plane in 3D. While a
+% plane is open, the painting operators below stand in userdict in front of
+% the built-ins: each turns what it paints into a path (strokepath,
+% charpath), projects it (`.planeproject`, native) and fills that. They are
+% put there when the first plane opens and taken away (and whatever userdict
+% held under those names put back) when the last one closes, so outside
+% `onplane` the built-ins are untouched, cost nothing and report errors where
+% they happen. No dictionary is opened around the caller's procedure: its
+% `def`s land where they would anyway. A procedure that was `bind`-ed (the
+% prelude's, the pk libraries') holds the built-ins and paints flat.
+/.sysfill   systemdict /fill   get def
+/.syseofill systemdict /eofill get def
+/.sysstroke systemdict /stroke get def
+/.sysclip   systemdict /clip   get def
+/.syseoclip systemdict /eoclip get def
+% op .planeink -   project the current path onto the innermost plane and
+%                  paint it with op at the opacity the fade leaves; the path
+%                  is left as it was
+/.planeink {
+  gsave .planectm setmatrix .planeproject
+  dup 0 gt { currentalpha mul setalpha exec } { pop pop } ifelse
+  grestore
+} bind def
+% x y w h .planerect -   append a rectangle (rectfill's operands: four
+%                        numbers, or an array of them in fours)
+/.planerect1 { 4 2 roll moveto 1 index 0 rlineto 0 exch rlineto neg 0 rlineto closepath } bind def
+/.planerect {
+  dup type /arraytype eq { aload length 4 idiv { .planerect1 } repeat } { .planerect1 } ifelse
+} bind def
+% (s) .planeshow -   show as charpath, projected, moving the current point
+/.planeshow {
+  gsave currentpoint newpath moveto false charpath currentpoint
+  { .sysfill } .planeink grestore moveto
+} bind def
+% ax ay cx cy char (s) .planeshows -   the show family, a character at a time
+/.planeshows {
+  {
+    1 string dup 0 3 index put .planeshow
+    1 index eq { 2 index 2 index rmoveto } if
+    4 index 4 index rmoveto
+  } forall pop pop pop pop pop
+} bind def
+% proc op .planeclip -   project the path and clip to it (op: clip, eoclip)
+/.planeclip {
+  matrix currentmatrix .planectm setmatrix .planeproject pop setmatrix exec
+} bind def
+/.planeops <<
+  /fill   { { .sysfill } .planeink newpath } bind
+  /eofill { { .syseofill } .planeink newpath } bind
+  /stroke { gsave strokepath { .sysfill } .planeink grestore newpath } bind
+  /show   { .planeshow } bind
+  /ashow  { 0 0 -1 4 -1 roll .planeshows } bind
+  /widthshow  { 0 0 6 2 roll .planeshows } bind
+  /awidthshow { 6 3 roll 4 -1 roll .planeshows } bind
+  /rectfill   { gsave newpath .planerect { .sysfill } .planeink grestore } bind
+  /rectstroke { gsave newpath .planerect strokepath { .sysfill } .planeink grestore } bind
+  /clip   { { .sysclip } .planeclip } bind
+  /eoclip { { .syseoclip } .planeclip } bind
+  /rectclip { newpath .planerect { .sysclip } .planeclip newpath } bind
+>> def
+/.planeheld 16 dict def   % what userdict held under those names
+/.planeinstall {
+  .planeops {
+    userdict 2 index known { .planeheld 2 index userdict 4 index get put } if
+    userdict 3 1 roll put
+  } forall
+} bind def
+/.planeuninstall {
+  .planeops { pop
+    .planeheld 1 index known
+    { dup .planeheld exch get userdict 2 index 3 -1 roll put .planeheld exch undef }
+    { userdict exch undef } ifelse
+  } forall
+} bind def
+% proc plane onplane -   run proc with its painting on the plane
+/onplane {
+  matrix currentmatrix .planebegin
+  .planedepth 1 eq { .planeinstall } if
+  exec
+  .planeend .planedepth 0 eq { .planeuninstall } if
+} bind def
+% plane projectpath -    replace the current path by its projection
+/projectpath { matrix currentmatrix .projectpath } bind def
+
 % --- declaration ---------------------------------------------------------
 % dict animation -      declare the movie; first statement of a program.
 /animation {

@@ -1,0 +1,115 @@
+%!PS
+% Poster: 22
+% The Salt Roads
+%
+% The opening crawl of a film that does not exist: a title and three
+% paragraphs recede over a starfield towards a vanishing point, fading as
+% they go; then the camera tilts down past the last of the words to the
+% night side of a planet, as a sun comes round its rim.
+%
+% Techniques
+%   - The crawl is the catalog's /crawl entry, placed as a component with
+%     its own words, type and colours. It lays the text out once in setup
+%     (title centred, paragraphs justified) and draws each line as one
+%     path inside `onplane`, which projects it onto a tilted plane and
+%     fades it by its depth.
+%   - The camera tilt is a translate: stars, crawl and planet are all
+%     drawn in one space that slides up as the camera looks down. The
+%     stars are scattered over a field taller than the frame, so there are
+%     stars to tilt down to.
+%   - The planet is a dark disc under a rim of light: concentric strokes,
+%     fainter outward, inside `glowing`. The sun is a disc in a halo of
+%     faint discs, clipped to the sky (eoclip with the planet's disc), so
+%     it rises from behind the rim as the tilt ends.
+<< /Size [1280 720] /Duration 50 /FPS 30
+   /Background [0.004 0.006 0.018]
+   /Title (The Salt Roads)
+   /Description (An opening crawl for a film that does not exist: justified text receding on a tilted plane over stars, then a slow camera tilt down to a planet at sunrise.)
+>> animation
+
+/story /crawl << /Params <<
+  /Title [ (CHAPTER SEVEN) (THE SALT ROADS) ]
+  /Text [
+    (For three hundred years the salt caravans crossed the dark between the Ember Worlds, steered by lighthouses that nobody alive remembers building.)
+    (When the light at Corvane went out, the Guild of Pilots blamed the smugglers, the smugglers blamed the Guild, and one by one the caravans stopped arriving.)
+    (Now Ilse Marrow, a keeper's daughter with a stolen ship and a borrowed name, is crossing the silent reach alone, carrying a lamp that should not still be burning....)
+  ]
+  /Font /AvantGarde-Demi
+  /Size 44 /Width 860 /Leading 1.32
+  /Color [0.80 0.90 0.98]
+  /TitleColor [1.0 0.86 0.62]
+  /Tilt 60
+  /Stars 0 /Sky /none
+>> >> instance
+
+% the camera tilt: how far the world has slid up, in canvas units
+/pan { 32 43 /sine-inout tween 620 mul } bind def
+
+% stars over the frame and the 620 units below it
+/stars [ 0 1 699 { /k exch def
+  [ [k 1] hash01 width mul
+    [k 2] hash01 height 620 add mul 620 sub
+    [k 3] hash01 dup mul dup mul 1.7 mul 0.45 add
+    [k 4] hash01 0.65 mul 0.2 add
+    [k 5] hash01 6.283 mul ] } for ] def
+
+/drawstars {
+  stars { aload pop /ph exch def /b exch def /r exch def
+    b now 1.1 mul ph add sin 0.2 mul 1 add mul
+    dup 0.96 mul exch dup 0.98 mul exch setrgbcolor
+    newpath r 0 360 arc fill
+  } forall
+} bind def
+
+% the planet: centre far below the frame, its rim just under the stars
+/pcx 520 def /pcy -2700 def /pr 2340 def
+/planet {
+  /dawn 37 46 /sine-out tween def
+  % the night side
+  0.012 0.018 0.035 setrgbcolor newpath pcx pcy pr 0 360 arc fill
+  % the rim of air, lit from the upper right, brighter as the sun comes
+  1 setlinecap
+  12 dawn 0.8 mul 0.25 add {
+    0 1 13 { /i exch def
+      0.33 0.60 0.95 setrgbcolor
+      1 i 14 div sub dup mul dawn 0.5 mul 0.3 add mul 0.5 mul setalpha
+      i 3 mul 2 add setlinewidth
+      newpath pcx pcy pr i 2.5 mul add 62 118 arc stroke
+    } for
+    1 setalpha
+    % the thin bright edge
+    0.75 0.88 1 setrgbcolor 2 setlinewidth
+    newpath pcx pcy pr 62 118 arc stroke
+  } glowing
+  % the sun, coming up over the rim: a disc in a halo of faint discs,
+  % clipped to the sky so the planet's edge cuts it
+  dawn 0 gt {
+    gsave
+    newpath pcx pcy pr 0 360 arc
+    -9000 -9000 moveto 18000 0 rlineto 0 18000 rlineto -18000 0 rlineto closepath
+    eoclip newpath
+    /sx pcx 77 cos pr mul add def
+    /sy pcy 77 sin pr mul add dawn 14 mul add 8 sub def
+    6 {
+      0 1 39 { /i exch def
+        i 40 div [1 0.97 0.9] [1 0.7 0.42] between aload pop setrgbcolor
+        dawn 0.045 mul setalpha
+        newpath sx sy i 40 div dup mul 170 mul dawn mul 4 add 0 360 arc fill
+      } for
+      1 setalpha 1 0.96 0.88 setrgbcolor
+      newpath sx sy dawn 10 mul 0 360 arc fill
+    } blurred
+    grestore
+  } if
+} bind def
+
+/scene {
+  gsave
+    0 pan translate
+    % the stars come up out of the dark in the first two seconds
+    0 2 /smooth tween { drawstars } faded
+    /story << /At 2 /Box [0 0 1280 720] /Speed 0.6 >> place
+    pan 1 gt { planet } if
+  grestore
+  0.25 vignette
+} def

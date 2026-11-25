@@ -288,8 +288,8 @@ detail) is in [storytelling.md](references/storytelling.md).
 | Every core word, stack effect and meaning | [references/vocabulary.md](references/vocabulary.md) (generated; same as `psanim api --markdown`) |
 | Every library word | [references/vocabulary-libraries.md](references/vocabulary-libraries.md) (generated) |
 | Building a movie from parts: components, instances, placing them | [references/components.md](references/components.md) |
-| Ready-made elements to place (spinners, clocks and more) | [references/catalog.md](references/catalog.md) (generated; `psanim catalog`) |
-| Low-level recipes: write-on, cameras, particles, loops, reels, keyframes | [references/patterns.md](references/patterns.md) |
+| Ready-made elements to place (spinners, clocks, an opening crawl, and more) | [references/catalog.md](references/catalog.md) (generated; `psanim catalog`) |
+| Low-level recipes: write-on, cameras, perspective (`onplane`), particles, loops, reels, keyframes | [references/patterns.md](references/patterns.md) |
 | What goes wrong and why | [references/pitfalls.md](references/pitfalls.md) |
 | Making it good: timing, easing, composition, colour, how to review motion | [references/craft.md](references/craft.md) |
 | Stateful simulations, persistent canvases, signals, parameters, the time of day for clocks, motion blur | [references/modes.md](references/modes.md) |
