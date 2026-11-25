@@ -7,7 +7,7 @@ psanim <command> <program.ps> [options]
 | Command | Does |
 |---|---|
 | `info` | Prints what the program declares: canvas, output size, duration, frames, mode, seed, parameters. |
-| `check` | Loads the program and renders a sample of frames small. Reports errors, blank frames, no motion, abrupt changes, a loop that does not close, and timings. |
+| `check` | Loads the program and renders a sample of frames small. Reports errors, blank frames, no motion, abrupt changes, a loop that does not close, strings written by a frame, and timings. |
 | `frame` | Renders one frame to a PNG. |
 | `sheet` | Renders several frames onto one labelled contact-sheet PNG. |
 | `render` | Renders the movie to `.mp4`, `.webm`, `.gif`, or a directory of PNGs. |
@@ -122,10 +122,11 @@ Epicycles: 1280x720 units, 22s at 30 fps = 660 frames, pure
   or a pop.
 
 Warnings: every frame blank; blank frames in the middle; a slow start or
-early end; nothing moves; an abrupt change; for a `/Loop true` movie, a
-join whose step is larger than the steps beside it; code before
-`animation` that prints or takes more than 50 ms. Notes (not problems):
-opening from or closing to the background.
+early end; nothing moves; an abrupt change; a write into a string made in
+setup; for a `/Loop true` movie, a join whose step is larger than the
+steps beside it; code before `animation` that prints or takes more than
+50 ms. Notes (not problems): opening from or closing to the background;
+frequent small changes taken as an effect.
 
 **Code before `animation` runs twice.** The declaration is found by a
 first pass that runs the program in a throwaway interpreter until
@@ -137,3 +138,50 @@ prints or takes more than 50 ms (`PREAMBLE_WARN_SECONDS` in the engine);
 the fix is to move it below `animation`. What it prints is shown once (the
 first pass's output is dropped). `info --json` and `check --json` report
 `preamble_ms` and `preamble_printed` in `movie`.
+
+**Abrupt change.** Two kinds. A change that fills the frame (a cut) is a
+whole-frame difference many times the typical one, seen among the sampled
+frames. A local pop is found tile by tile: the preview is cut into tiles
+about a twentieth of its width (16 pixels at the default 320), and a pair
+of adjacent frames is flagged where one tile's change is at least 0.04 and
+more than four times the same tile's change in the pairs just before and
+after, by at least 0.04 more. (At the default size, a white dot of 4 pixels,
+about 16 canvas units, on black just reaches it.) A pop is a spike in time, so steady fast
+motion (the same change every pair) and a fade (growing) are not flagged,
+and a small element appearing in a busy frame is: its own tile was calm.
+The warning gives the frame, the number of tiles and the area they cover
+in canvas units, and the `psanim sheet` command that shows it.
+
+Three more rules keep intended motion out of the warnings. A spike with
+another spike within three tiles in the pair before or after is motion
+(a wipe, or a fast edge crossing the frame, changes each tile for one pair
+only, tile after tile). Small changes (at most 8 tiles) that recur within a
+tile of each other (a counter, typed letters, lights coming on one by one)
+are one note naming the area and the frames, not a warning each. And more
+than one pair in twenty popping is a style (sparkle, particles): one note.
+A persistent movie is a painting that accumulates marks, so local changes
+are its substance: one note says how many, and only cuts are warnings.
+A cut, or any change over 8 tiles, is always a warning: "fine if intended".
+There is no way yet to mark a cut as intended.
+
+What is scanned. Judging a pair needs the pairs either side, so frames are
+rendered in runs. In a pure movie, besides the sampled frames and the one
+after each, `check` scans 8 runs of 24 consecutive frames (about 230
+frames) spread evenly over the movie, in an order that is a fixed function
+of the movie: the same movie gives the same findings on every machine. The
+summary line says how many of the frame pairs were covered; `--all` covers
+every one. If frames are so slow that the scan reaches its 8 second limit,
+a note says its coverage now depends on the machine. A movie with state
+(stateful or persistent) is scanned only in a run of six frames around each
+sampled frame, because reaching a frame costs every tick before it.
+
+**A string written in a frame.** After setup, `check` fingerprints every
+string reachable from `userdict` (strings in the dictionaries and arrays
+it holds too), and again after the sampled frames, once the interpreter
+has been rolled back. PostScript's `restore` does not roll back the
+contents of a string, so a string that differs was written by a scene and
+leaks into every later frame. The warning names it (`buf`, `table/name`,
+`rows[3]`) and gives the fix, copying the string inside the scene
+(`/buf buf dup length string copy def`). Only pure movies are checked:
+stateful and persistent ones keep state on purpose. A literal string in a
+procedure body is not looked at.
