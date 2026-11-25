@@ -218,18 +218,23 @@ export class PsAnimWidget extends HTMLElement {
     if (!this.meta) return;
     this.eventNames.add(name);
     // Wrap first, so clearing the last time round cannot take this event.
-    const t = this.#movieTime(this.#elapsed());
-    this.#rollover(t);
+    const elapsed = this.#elapsed();
+    const t = this.#movieTime(elapsed);
+    this.#rollover(elapsed, t);
     this.engine.event(name, t);
     this.dirty = true;
   }
 
-  /** The loop wrapped since the clock was last read: events from the last
-   * time round are in its future, so forget them. Call before adding one. */
-  #rollover(t) {
-    if (t < this.lastT) {
+  /** The loop wrapped since the clock was last read, once or many times
+   * (a hidden widget can sleep through several): events from earlier time
+   * rounds are in this one's future, so forget them. Counted on the
+   * unwrapped clock. Call before adding an event. */
+  #rollover(elapsed, t) {
+    const round = this.#timeMode() === "loop" ? Math.floor(elapsed / this.meta.duration) : 0;
+    if (this.lastRound != null && round !== this.lastRound) {
       for (const name of this.eventNames) this.engine.clearEvents(name);
     }
+    this.lastRound = round;
     this.lastT = t;
   }
 
@@ -284,6 +289,7 @@ export class PsAnimWidget extends HTMLElement {
       this.t0 ??= performance.now();   // a reopen keeps the widget's clock
       this.lastFrame = -1;
       this.lastT = 0;
+      this.lastRound = null;   // a new movie has no events from earlier rounds
       this.dirty = true;
       this.dispatchEvent(new CustomEvent("psanim-load", { detail: this.meta }));
       this.#wake();
@@ -333,7 +339,7 @@ export class PsAnimWidget extends HTMLElement {
     const fps = Math.min(Number(this.getAttribute("fps")) || meta.fps, meta.fps);
     const elapsed = this.#elapsed();
     const t = this.#movieTime(elapsed);
-    this.#rollover(t);
+    this.#rollover(elapsed, t);
     // The frame number on the movie's clock: it stops changing when a held
     // movie reaches its end, and then only an input wakes it.
     const index = Math.floor(t * fps + 1e-9);
