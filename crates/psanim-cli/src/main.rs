@@ -927,7 +927,7 @@ fn cmd_catalog(rest: &[String]) -> Result<(), Fail> {
                 "{}x{}, {} s{}. `/x /{name} component`, then `/x << /Box [..] >> place`.\n",
                 m.width,
                 m.height,
-                m.duration,
+                (m.duration * 100.0).round() / 100.0,
                 if m.looping { ", loops" } else { "" }
             );
             if !m.params.is_empty() {

@@ -91,5 +91,9 @@ otherwise it is transparent and draws over the movie.
   the first.
 - Its setup runs when `component` or `instance` is called, so call them in
   setup, not in the scene (where they would run every frame).
+- The movie's own definitions are visible inside a component, below its own
+  names: a movie that defines `/scale` or `/between` for itself changes what
+  every component it places means by those words. Give the movie's helpers
+  names of their own.
 - A file component is read from the movie's own directory and must be
   inside the read roots (`--read-root`).

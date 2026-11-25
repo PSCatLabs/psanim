@@ -13,6 +13,7 @@ use crate::ops::{Shared, fail, reg};
 
 /// Every catalog entry: its name and its source.
 pub const CATALOG: &[(&str, &str)] = &[
+    ("ledmatrix", include_str!("../catalog/ledmatrix.ps")),
     ("odometer", include_str!("../catalog/odometer.ps")),
     ("spinner", include_str!("../catalog/spinner.ps")),
     ("splitflap", include_str!("../catalog/splitflap.ps")),

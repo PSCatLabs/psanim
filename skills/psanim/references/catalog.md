@@ -4,6 +4,38 @@ Generated from `crates/psanim/catalog/` by `scripts/gen_reference.sh`. Do not ed
 
 Ready-made elements, each a movie of its own. Place one as a component (see components.md): `/x /entry component` in setup, then `/x << /Box [x y w h] /At t >> place` in the scene; `/y /entry << /Params << ... >> >> instance` makes another with other parameters. `psanim catalog NAME` prints an entry's source, which is also the way to learn from or adapt it.
 
+## `/ledmatrix`: LED matrix
+
+A grid of round LEDs with a pixel font of its own: a scrolling marquee, a ticker, a news sign with entry effects and a clock, or any pattern a procedure computes. Raw mode gives the grid at true size for driving real LEDs.
+
+600x108, 3.63 s, loops. `/x /ledmatrix component`, then `/x << /Box [..] >> place`.
+
+| Param | Default | Meaning |
+|---|---|---|
+| /Between | `0.4` | seconds of dark between messages |
+| /Cell | `null` | a procedure { col row -- level }: a pattern drawn under the text |
+| /Clock | `[9 41]` | the time /time shows when the sign starts: hour minute |
+| /ClockRate | `4` | seconds for the /time clock to advance a minute |
+| /Colour | `/amber` | /red /amber /green /white /blue, or [r g b] |
+| /Cols | `0` | LEDs across, instead of /Grid's (for --param, which cannot give an array) |
+| /Effect | `/marquee` | /scroll /marquee /static /drop /wipe /sparkle /flash /fade |
+| /Font | `0` | rows of the pixel font, 5 or 7 (0: by the grid) |
+| /Gap | `16` | blank LEDs between one marquee round and the next |
+| /Glow | `1` | halo round lit LEDs, 0 for none |
+| /Grid | `[48 7]` | LEDs across and down |
+| /Hold | `2` | seconds a message stays before it leaves (not for /scroll or /marquee) |
+| /Items | `null` | instead of Text: [ [ text effect hold colour ] ... ], shown in turn (text may be /time or /temp) |
+| /Length | `0` | seconds the entry lasts; 0 follows the messages (4 for a pattern with no text) |
+| /Look | `/panel` | /panel (a lit panel), /sign (smoked glass in a housing) or /bare (the lit LEDs only, to lay over a picture) |
+| /Pitch | `12` | canvas units from one LED to the next |
+| /Raw | `false` | true: the movie is the grid itself, one canvas unit an LED, no glow |
+| /Repeat | `true` | start the list again at the end |
+| /Rows | `0` | LEDs down, likewise |
+| /Speed | `30` | LEDs a second for /scroll and /marquee: a divisor of the frame rate keeps it even |
+| /Temp | `68` | degrees for /temp |
+| /Text | `null` | what to show: a string, or a picture (array of row strings of # and .); a demo message if none and no /Cell |
+| /Unlit | `0.1` | how bright an unlit LED is |
+
 ## `/odometer`: Odometer
 
 A number counting up on rolling digit drums: the units wheel spins, each wheel above turns only as the ones below carry, and the digits curve away at the top and bottom of the window.
@@ -24,7 +56,7 @@ A number counting up on rolling digit drums: the units wheel spins, each wheel a
 | /Start | `0.4` | seconds before it begins to move |
 | /Tail | `1.5` | seconds to hold at the end |
 | /To | `482917` | the number it reaches |
-| /Track | `null` | instead of From and To: [ [time value] ... ], eased by /Ease between the pairs |
+| /Track | `null` | instead of From and To: a keyframes list [ t v t v /ease ... ] |
 | /Wheel | `[40 60]` | one wheel's window, width and height |
 
 ## `/spinner`: Spinner
