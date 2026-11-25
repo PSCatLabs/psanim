@@ -41,6 +41,7 @@ const SWITCHES: &[&str] = &[
     "no-blur",
     "keep-frames",
     "all",
+    "sheet",
 ];
 
 impl Common {
