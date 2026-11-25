@@ -181,3 +181,26 @@ fn blur_inside_a_component_scales_with_its_box() {
     assert!(small >= 1, "small ramp {small}");
     assert!(big >= 3 * small, "small {small}, big {big}");
 }
+
+#[test]
+fn blur_glow_and_grain_inside_a_component_stay_in_its_box() {
+    let mut m = load(
+        "/g << /Size [40 40] /Scene { 6 1.5 { 1 1 1 setrgbcolor 0 0 40 40 rectfill } glowing
+                                      8 { 1 0 0 setrgbcolor 30 30 10 10 rectfill } blurred
+                                      0.5 filmgrain 0.8 vignette } >> component
+         /scene { 0 0 0.3 setrgbcolor 0 0 200 100 rectfill /g << /Box [80 30 40 40] >> place } def",
+    );
+    let f = m.render_at(0.0).unwrap();
+    let w = f.width as usize;
+    for (k, p) in f.premultiplied.chunks_exact(4).enumerate() {
+        let (x, y) = (k % w, k / w);
+        let inside = (80..120).contains(&x) && (30..70).contains(&y);
+        if !inside {
+            assert_eq!(
+                &p[..3],
+                &[0, 0, 77],
+                "pixel {x},{y} touched outside the box"
+            );
+        }
+    }
+}
