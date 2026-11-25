@@ -44,13 +44,22 @@
 
 import { PsAnim, PsAnimError } from "./psanim.js";
 
-let modulePromise = null;
+// Compiled engines, one per wasm URL. A failed fetch or compile is
+// forgotten, so a later widget (or a retry) can try again.
+const modules = new Map();
 function compiled(url) {
-  modulePromise ??= fetch(url).then((r) => {
-    if (!r.ok) throw new Error(`cannot fetch ${url}: ${r.status}`);
-    return r.arrayBuffer();
-  }).then((bytes) => WebAssembly.compile(bytes));
-  return modulePromise;
+  let p = modules.get(url);
+  if (!p) {
+    p = fetch(url)
+      .then((r) => {
+        if (!r.ok) throw new Error(`cannot fetch ${url}: ${r.status}`);
+        return r.arrayBuffer();
+      })
+      .then((bytes) => WebAssembly.compile(bytes));
+    p.catch(() => modules.delete(url));
+    modules.set(url, p);
+  }
+  return p;
 }
 
 /** Local seconds since midnight, with the fraction. */
@@ -135,6 +144,10 @@ export class PsAnimWidget extends HTMLElement {
   }
 
   disconnectedCallback() {
+    // An open still compiling or instantiating must not finish on a
+    // detached element, and a pending resize must not reopen it.
+    this.generation = (this.generation ?? 0) + 1;
+    clearTimeout(this.resizeTimer);
     this.running = false;
     this.io?.disconnect();
     this.ro?.disconnect();
@@ -232,9 +245,10 @@ export class PsAnimWidget extends HTMLElement {
         const url = this.getAttribute("wasm") ?? new URL("psanim.wasm", import.meta.url).href;
         const module = await compiled(url);
         const { exports } = await WebAssembly.instantiate(module, {});
-        if (generation !== this.generation) return;
+        if (generation !== this.generation || !this.isConnected) return;
         this.engine = new PsAnim({ exports });
       }
+      if (generation !== this.generation || !this.isConnected) return;
       let text = this._source;
       if (this._entry) {
         text = this.engine.catalog(this._entry);
