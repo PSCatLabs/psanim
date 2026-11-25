@@ -141,6 +141,7 @@ is too low: an entrance is three tweens, a diagram is arithmetic. The
 | `pkmotion` | `2 /pop { ... } enters`: entrances, exits and emphasis for any drawing, by name | [stage.md](references/stage.md) |
 | (core) | `script` / `then` (one thing after another), `storyboard` (named beats), `cascade`, `within` | [stage.md](references/stage.md) |
 | (core) | `component`, `instance`, `place`: a movie written on its own, placed in another in a box at a time | [components.md](references/components.md) |
+| (core) | `spec { ... } particles`: sparks, fireworks, confetti, snow; bursts and streams under gravity, drag and wind, every particle a function of time | [patterns.md](references/patterns.md#particles-without-state) |
 | `pktype` | text in boxes, wrapping, `kinetic` type, counters, captions, end credits | [type.md](references/type.md) |
 | `pkdiagram` | `node`, `edge` (with flowing pulses), `group`, `note`, `circled` | [explain.md](references/explain.md) |
 | `pkcode` | `codeblock` (typing, focus), `codediff` | [explain.md](references/explain.md) |
@@ -237,6 +238,7 @@ number still passes `check`). So:
 | a chart | `box [x0 x1] [y0 y1] plotframe`, `<< >> plotaxes`, `[v ...] << /Grow u >> bars`, `pts plotline 0 u trimpath stroke`, `x y << /Label (x) >> plotmark` |
 | code | `/src (...) /rust codetokens def` in setup, `src box << /Reveal u /Focus [2] >> codeblock` |
 | a sign | `/arrow sym`, `/neq sym`, `/pi sym` (a non-ASCII character in a string is a silent blank) |
+| particles | `<< /At [x y] /Bursts [1.2] /Count 120 /Gravity 80 /Drag 1.5 >> { 1 particleu sub setalpha 0 0 3 0 360 arc fill } particles` |
 
 ### What reviewers mark down
 

@@ -179,7 +179,7 @@ fn parse_keys<'a>(ctx: &Shared, items: &'a [Value]) -> Result<Vec<Key<'a>>, PsEr
     Ok(keys)
 }
 
-fn eval_keys(ctx: &Shared, items: &[Value], t: f64) -> Result<Value, PsError> {
+pub(crate) fn eval_keys(ctx: &Shared, items: &[Value], t: f64) -> Result<Value, PsError> {
     let keys = parse_keys(ctx, items)?;
     if t <= keys[0].t {
         return Ok(keys[0].v.clone());
@@ -309,6 +309,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     crate::vocab::install(interp, ctx);
     crate::catalog::install(interp, ctx);
     crate::terminal::install(interp, ctx);
+    crate::particles::install(interp, ctx);
     // --- declaration ----------------------------------------------------
     reg(interp, ctx, ".animation", |i, ctx| {
         let decl = i.pop_value()?;
@@ -799,6 +800,24 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             radius * a.cos(),
             radius * a.sin(),
         ));
+        Ok(())
+    });
+    reg(interp, ctx, "sincelast", |i, ctx| {
+        let Ok(times) = i.pop_numbers() else {
+            return fail(
+                ctx,
+                PsError::Typecheck,
+                "sincelast takes an array of times: [1.2 2.5 4] sincelast",
+            );
+        };
+        let t = ctx.borrow().scope().t;
+        // "Long ago" when none has passed, as `sinceevent` says it.
+        let last = times
+            .iter()
+            .copied()
+            .filter(|x| *x <= t)
+            .fold(f64::NAN, f64::max);
+        i.push_real(if last.is_nan() { 1.0e6 } else { t - last });
         Ok(())
     });
     reg(interp, ctx, "hash01", |i, ctx| {

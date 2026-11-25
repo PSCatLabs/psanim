@@ -1,0 +1,146 @@
+%!PS
+% Catalog entry: confetti. Paper pieces blast out, tumble (turning and
+% flipping over, so they flash), sway and flutter down around a message,
+% which arrives with the first blast and pulses on each.
+% In a movie:  /yay /confetti component   then   /yay << /Box [x y w h] >> place
+% The blast times are an event track: pass your own /Bursts and react to
+% the same array with `sincelast`.
+% A value given as text (`--param Palette=dusk`, `--param Bursts='[1 2]'`) as a name or an array.
+/astext { dup type /stringtype eq { dup length 0 gt { dup 0 get 91 eq { cvx exec } { cvn } ifelse } { cvn } ifelse } if } bind def
+/Style /cannons param astext /style exch def                     % /cannons (from both bottom corners), /burst (from behind the message), /rain (a steady fall)
+/Bursts null param astext /bursts exch def                       % blast times on its own clock (the event track); null: the style's
+bursts null eq {
+  /bursts style /cannons eq { [0.25 1.7] } { style /burst eq { [0.35] } { [] } ifelse } ifelse def
+} if
+% It lasts until the last blast's pieces have landed, and at least 5 s.
+/lastburst 0 bursts { max } forall def
+<< /Size [1280 720]
+   /Duration style /rain eq { 6 } { lastburst 4.85 add 5 max } ifelse
+   /Background /transparent
+   /Title (Confetti)
+   /Description (Confetti that tumbles, sways and flutters down around a message, which arrives with the first blast and pulses on every one. Styles: cannons from both corners, one burst from behind the message, a steady rain. It lasts until the last pieces are gone (6.55 s for the cannons); place it with /After /hold to keep the message up after that. /Seed on the instance changes the pieces.)
+>> animation
+
+/pktype use
+
+/Message (Huzzah!) param /msg exch def                    % the headline; () for none
+/Detail (The builds passed) param /detail exch def        % a smaller line under it; () for none
+/Palette /festive param astext /palette exch def                 % /festive, a theme name (its accents and fonts), or [[r g b] ...]
+/Backdrop [0.99 0.97 0.93] param astext /bgc exch def            % [r g b] behind it all, or /none to fall over your own picture
+/Ink [0.15 0.13 0.22] param astext /inkc exch def                % the message's colour
+
+/cols
+  palette type /arraytype eq { palette } {
+  palette /festive eq {
+    [[0.96 0.26 0.36] [1 0.72 0.12] [0.16 0.62 0.96] [0.24 0.78 0.46] [0.62 0.36 0.92] [1 0.48 0.20] [0.98 0.42 0.70]]
+  } {
+    palette usetheme
+    [ theme /accent get theme /accent2 get theme /accent3 get theme /good get theme /bad get ]
+  } ifelse } ifelse
+def
+/W width def /H height def
+/cf-e { 2.718281828 exch exp } bind def                  % x -> e^x
+
+% The forces every piece shares: a slow, fluttering fall.
+/air << /Gravity 240 /Sway [60 10] /SwayFreq 0.5 /Gust [50 0] /GustFreq 0.3 >> def
+% dict drag with-air -> dict      an emitter with the shared forces added and its drag
+/with-air { 1 index exch /Drag exch put air { 2 index 3 1 roll put } forall } bind def
+% Light pieces (high drag) hang and drift; heavier ones carry further.
+/spec [
+  style /cannons eq {
+    [ [W 0.03 mul 62 1] [W 0.97 mul 118 2] ] { aload pop /sd exch def /ang exch def /x exch def
+      [1.4 2.6] { /dr exch def
+        << /At [x -10] /Bursts bursts /Count 80 /Angle ang /Spread 34
+           /Speed [900 1900] /Life [4 4.8] /Seed sd 10 mul dr add >> dr with-air
+      } forall
+    } forall
+  } if
+  style /burst eq {
+    [1.4 2.6] { /dr exch def
+      << /At [W 0.5 mul H 0.45 mul] /Bursts bursts /Count 160 /Shape /sphere
+         /Speed [600 1700] /Life [3.8 4.6] /Seed 30 dr add >> dr with-air
+    } forall
+  } if
+  style /rain eq {
+    << /At [W 0.5 mul H 20 add] /Area [W 1.1 mul 0] /Rate 55 /From -2.5 /Angle -90 /Spread 30
+       /Speed [40 120] /Life 7 /Period 6 /Seed 40 >> 2 with-air
+  } if
+] def
+
+% ---- a piece -------------------------------------------------------------------------
+% A piece turns in the plane (rotate) and flips over about its own axis
+% (a scale through zero): edge-on it is a sliver, its back is darker.
+/cf-piece {
+  /k particlekey def
+  /flip [k 2] hash01 360 mul particleage [k 3] hash01 500 mul 200 add mul add cos def
+  % a shade: full on the face, darker on the back, darkest edge-on
+  /sh flip 0 lt { 0.62 } { 1 } ifelse flip abs 0.25 mul 0.75 add mul def
+  cols [k 1] hash01 cols length mul cvi get { sh mul } forall setrgbcolor
+  % fade out over the last fifth of its life
+  particleu 0.8 sub 0 max 5 mul 1 exch sub setalpha
+  [k 4] hash01 360 mul particleage [k 5] hash01 300 mul 80 add mul add rotate
+  flip abs 0.12 max flip 0 lt { neg } if 1 exch scale
+  [k 6] hash01 dup 0.72 lt {
+    pop -8 -5 16 10 rectfill                              % a square-cut piece
+  } { 0.9 lt {
+    0 0 5 0 360 arc fill                                   % a dot
+  } {
+    % a streamer: a short ribbon with a curl
+    2.4 setlinewidth 1 setlinecap
+    -14 0 moveto -7 6 0 -6 7 0 curveto 4 3 6 4 8 4 rcurveto stroke
+  } ifelse } ifelse
+} bind def
+% bool cf-pass     the pieces behind the message (false) or in front (true)
+/cf-pass {
+  /front exch def
+  spec { [particlekey 8] hash01 0.2 lt front eq { cf-piece } if } particles
+} bind def
+
+% ---- a puff of light at each cannon as it fires ------------------------------------------
+/cf-puff {
+  style /cannons eq {
+    bursts { /b exch def
+      now b sub dup 0 ge exch 0.4 lt and {
+        /f 1 now b sub 0.4 div sub def
+        % a spray of light from the muzzle, gone in 0.4 s
+        1 0.92 0.7 setrgbcolor f setalpha 3 setlinewidth 1 setlinecap
+        [[W 0.03 mul 62] [W 0.97 mul 118]] { aload pop /ang exch def /x exch def
+          -4 1 4 { /k exch def
+            gsave x 0 translate ang k 9 mul add rotate
+              30 0 moveto 30 110 1 f sub mul add [k 7] hash01 40 mul add 0 lineto stroke
+            grestore
+          } for
+        } forall
+      } if
+    } forall
+    1 setalpha
+  } if
+} bind def
+
+% ---- the message -----------------------------------------------------------------------------
+/headbox [W 0.18 mul H 0.42 mul W 0.64 mul H 0.16 mul] def
+/subbox  [W 0.20 mul H 0.31 mul W 0.60 mul H 0.065 mul] def
+/cf-words {
+  msg length 0 gt { msg headbox /display fitface msg headbox /c showin } if
+  detail length 0 gt { detail subbox /body fitface detail subbox /c showin } if
+} bind def
+/cf-message {
+  msg length detail length add 0 gt {
+    % worked out on this clock: inside `enters` the clock starts at the entrance
+    /pul bursts sincelast -8 mul -30 max cf-e 0.08 mul 1 add def
+    bursts length 0 gt { bursts 0 get 0.12 add } { 0.3 } ifelse [/pop 0.7] {
+      gsave
+        W 2 div H 0.44 mul translate pul dup scale W 2 div neg H 0.44 mul neg translate
+        inkc aload pop setrgbcolor cf-words
+      grestore
+    } enters
+  } if
+} bind def
+
+/scene {
+  bgc type /arraytype eq { bgc aload pop backdrop } if
+  cf-puff
+  false cf-pass
+  cf-message
+  true cf-pass
+} def

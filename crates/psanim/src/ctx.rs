@@ -97,6 +97,8 @@ pub(crate) struct Ctx {
     /// movie-level facts (`globaltime`, `duration`, `movieseed`, `param`)
     /// are the component's own.
     pub comps: Vec<Comp>,
+    /// The particles of each open `particles` call, innermost last.
+    pub particles: Vec<crate::particles::ParticleSet>,
     /// The directory relative component paths are read from: the movie
     /// file's own, when the host knows it.
     pub base_dir: Option<std::path::PathBuf>,
@@ -162,6 +164,7 @@ impl Ctx {
             signals: Signals::default(),
             params_seen: BTreeMap::new(),
             comps: Vec::new(),
+            particles: Vec::new(),
             base_dir: None,
             measured_reels: Vec::new(),
             hint: None,
@@ -183,10 +186,11 @@ impl Ctx {
     /// Movie time and length as the running program sees them: inside a
     /// component, its own.
     pub fn movie_clock(&self) -> TimeScope {
-        self.comps.last().map_or(
-            TimeScope::window(self.global_t, self.duration),
-            |c| TimeScope::window(c.t, c.dur),
-        )
+        self.comps
+            .last()
+            .map_or(TimeScope::window(self.global_t, self.duration), |c| {
+                TimeScope::window(c.t, c.dur)
+            })
     }
 
     /// The innermost time scope: local time and window.
@@ -209,6 +213,7 @@ impl Ctx {
         self.poses.clear();
         self.views.clear();
         self.comps.clear();
+        self.particles.clear();
         self.hint = None;
     }
 }

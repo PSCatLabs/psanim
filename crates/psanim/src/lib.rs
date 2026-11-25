@@ -54,6 +54,7 @@ mod engine;
 mod error;
 pub mod motion;
 mod ops;
+mod particles;
 pub mod pathmath;
 pub mod raster;
 #[cfg(not(target_arch = "wasm32"))]

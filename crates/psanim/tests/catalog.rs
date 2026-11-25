@@ -200,3 +200,30 @@ fn fire_reaches_a_candle_a_campfire_and_a_torch() {
     // A candle is much smaller than a campfire.
     assert!(lit[0] * 3 < lit[1], "{lit:?}");
 }
+
+#[test]
+fn a_celebrations_bursts_follow_its_bursts_param() {
+    // A single shell bursting at 2 s: nothing before it rises, stars after.
+    let src = "<< /Size [320 180] /Duration 4 /Background [0 0 0] >> animation
+        /fw /fireworks << /Params << /Style /single /Bursts [2] /Message () /Detail () /Sky false >> >> instance
+        /scene { /fw << >> place } def";
+    let mut m = Movie::load(src, &Options::default()).unwrap_or_else(|e| panic!("{e}"));
+    let ink = |m: &mut Movie, t: f64| {
+        let f = m.render_at(t).unwrap_or_else(|e| panic!("{e}"));
+        f.premultiplied
+            .chunks(4)
+            .filter(|p| p[0] > 40 || p[1] > 40 || p[2] > 40)
+            .count()
+    };
+    let before = ink(&mut m, 0.3);
+    let after = ink(&mut m, 2.3);
+    assert_eq!(before, 0);
+    assert!(after > 200, "{after} lit pixels after the burst");
+    // Confetti blasts on its own track too.
+    let src = "<< /Size [320 180] /Duration 4 /Background [0 0 0] >> animation
+        /cf /confetti << /Params << /Style /burst /Bursts [1.5] /Message () /Detail () /Backdrop /none >> >> instance
+        /scene { /cf << >> place } def";
+    let mut m = Movie::load(src, &Options::default()).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(ink(&mut m, 1.4), 0);
+    assert!(ink(&mut m, 1.8) > 200);
+}

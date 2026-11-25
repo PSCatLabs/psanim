@@ -68,6 +68,22 @@ A clock whose digits melt from one into the next, after the classic X Windows mo
 | /Start | `(00:34:56)` | time of day at movie time 0: seconds since midnight, or (HH:MM:SS) text |
 | /Theme | `/midnight` | /midnight /amber /paper /phosphor |
 
+## `/confetti`: Confetti
+
+Confetti that tumbles, sways and flutters down around a message, which arrives with the first blast and pulses on every one. Styles: cannons from both corners, one burst from behind the message, a steady rain. It lasts until the last pieces are gone (6.55 s for the cannons); place it with /After /hold to keep the message up after that. /Seed on the instance changes the pieces.
+
+1280x720, 6.5 s. `/x /confetti component`, then `/x << /Box [..] >> place`.
+
+| Param | Default | Meaning |
+|---|---|---|
+| /Backdrop | `[0.99 0.97 0.93]` | [r g b] behind it all, or /none to fall over your own picture |
+| /Bursts | `null` | blast times on its own clock (the event track); null: the style's |
+| /Detail | `(The builds passed)` | a smaller line under it; () for none |
+| /Ink | `[0.15 0.13 0.22]` | the message's colour |
+| /Message | `(Huzzah!)` | the headline; () for none |
+| /Palette | `/festive` | /festive, a theme name (its accents and fonts), or [[r g b] ...] |
+| /Style | `/cannons` | /cannons (from both bottom corners), /burst (from behind the message), /rain (a steady fall) |
+
 ## `/credits`: Credits
 
 End credits rolling upward at a steady speed: headings, roles beside names, centred names, then a final card that stops in the centre.
@@ -108,6 +124,22 @@ A flame that loops: stylized, as flat tongues in two or three colours, or realis
 | /Style | `/realistic` | /realistic or /stylized |
 | /Width | `0.42` | flame width, as a fraction of its box's width (up to 0.8; wide means several tongues) |
 | /Wind | `0` | -1 .. 1: leans the flame, carries the embers and smoke |
+
+## `/fireworks`: Fireworks
+
+Shells rise on trails and burst into glowing stars that fall and fade behind a message, which arrives with the first burst and pulses on every one. Styles: a show, a single shell for a small success, a finale. It lasts until the last stars are gone (6.9 s for the show); place it with /After /hold to keep the message up after that. /Seed on the instance changes the shells.
+
+1280x720, 6.9 s. `/x /fireworks component`, then `/x << /Box [..] >> place`.
+
+| Param | Default | Meaning |
+|---|---|---|
+| /Bursts | `null` | burst times on its own clock (the event track); null: the style's |
+| /Detail | `(The builds passed)` | a smaller line under it; () for none |
+| /Message | `(Huzzah!)` | the headline; () for none |
+| /Palette | `/festive` | /festive, a theme name (its accents and fonts), or [[r g b] ...] |
+| /Sky | `true` | paint a night sky; false to burst over your own picture |
+| /Style | `/show` | /show (six shells), /single (one, for a small success), /finale (a crescendo) |
+| /Weight | `1` | line weight of the stars and trails: more for a small placement |
 
 ## `/pipeline`: Pipeline
 

@@ -33,3 +33,4 @@ reproducible from the sources).
 | ![Ship It](img/gallery/ship-it.jpg) | [Ship It](../gallery/ship-it/ship-it.ps) | A hacker-movie night shift at an old green terminal: a release is built, one test goes red, a one-line fix, a green run, and a deploy, while a pipeline, a progress bar and a grid of test dots keep score. | 37.6 s, 1280x720, pure | `psanim render gallery/ship-it/ship-it.ps -o ship-it.mp4` |
 
 Each piece's directory has a README describing its techniques.
+| ![Huzzah](img/gallery/huzzah.jpg) | [Huzzah](../gallery/huzzah/huzzah.ps) | A release pipeline turns green stage by stage, and each pass gets a bigger celebration: a single shell, a burst of confetti, then a fireworks finale with confetti cannons fired on its bursts. | 12 s, 1280x720, pure | `psanim render gallery/huzzah/huzzah.ps -o huzzah.mp4` |
