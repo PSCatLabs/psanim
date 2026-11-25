@@ -425,5 +425,5 @@ wrong (use `globally`, or compute the value outside):
 | `during`, `onstage`, `thenfor`, `inbeat` | seconds since the window opened; `span` is its length |
 | `after`, `enters`, `then`, `frombeat` | seconds since the start time |
 | `swapped` | B: seconds since the swap. A: unchanged |
-| `delayed`, `staggered`, `cascade`, `echoed` | the outer clock, earlier by the delay (`span` is shorter by it too, so `turns` drifts: for a loop under a delay measure against `duration`) |
+| `delayed`, `staggered`, `cascade`, `echoed` | the outer clock, earlier by the delay (`span` and `progress` see the window shortened by it, but `turns` and `loopnoise` do not: they are the outer value from that much earlier, so a loop under a delay still closes) |
 | `before`, `leaves`, `emphasized`, `entering`, `leaving`, `staged`, `motion`, `within`, `faded` | unchanged |

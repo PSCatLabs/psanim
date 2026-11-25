@@ -394,13 +394,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let (b, a) = (i.pop_f64()?, i.pop_f64()?);
         let s = ctx.borrow().scope();
         if s.t >= a && s.t < b {
-            push_scope(
-                ctx,
-                TimeScope {
-                    t: s.t - a,
-                    dur: b - a,
-                },
-            )?;
+            push_scope(ctx, TimeScope::window(s.t - a, b - a))?;
             i.push_value(&body)?;
             i.push_bool(true);
         } else {
@@ -413,13 +407,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let a = i.pop_f64()?;
         let s = ctx.borrow().scope();
         if s.t >= a {
-            push_scope(
-                ctx,
-                TimeScope {
-                    t: s.t - a,
-                    dur: (s.dur - a).max(0.0),
-                },
-            )?;
+            push_scope(ctx, TimeScope::window(s.t - a, (s.dur - a).max(0.0)))?;
             i.push_value(&body)?;
             i.push_bool(true);
         } else {
@@ -432,7 +420,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let b = i.pop_f64()?;
         let s = ctx.borrow().scope();
         if s.t < b {
-            push_scope(ctx, TimeScope { t: s.t, dur: b })?;
+            push_scope(ctx, TimeScope::window(s.t, b))?;
             i.push_value(&body)?;
             i.push_bool(true);
         } else {
@@ -446,9 +434,13 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let s = ctx.borrow().scope();
         push_scope(
             ctx,
+            // A pure shift of the clock: the window shortens (so `progress`
+            // and `span` are as they always were) but the period that
+            // `turns` and `loopnoise` close over does not.
             TimeScope {
                 t: s.t - d,
                 dur: s.dur - d,
+                cycle: s.cycle,
             },
         )?;
         i.push_value(&body)?;
@@ -463,6 +455,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             TimeScope {
                 t: s.t * k,
                 dur: s.dur * k.abs(),
+                cycle: s.cycle * k.abs(),
             },
         )?;
         i.push_value(&body)?;
@@ -479,13 +472,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             );
         }
         let s = ctx.borrow().scope();
-        push_scope(
-            ctx,
-            TimeScope {
-                t: s.t.rem_euclid(p),
-                dur: p,
-            },
-        )?;
+        push_scope(ctx, TimeScope::window(s.t.rem_euclid(p), p))?;
         i.push_value(&body)?;
         Ok(())
     });
@@ -502,7 +489,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let s = ctx.borrow().scope();
         let phase = s.t.rem_euclid(2.0 * p);
         let t = if phase < p { phase } else { 2.0 * p - phase };
-        push_scope(ctx, TimeScope { t, dur: p })?;
+        push_scope(ctx, TimeScope::window(t, p))?;
         i.push_value(&body)?;
         Ok(())
     });
@@ -510,14 +497,21 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let body = pop_proc(i, ctx, "attime")?;
         let t = i.pop_f64()?;
         let s = ctx.borrow().scope();
-        push_scope(ctx, TimeScope { t, dur: s.dur })?;
+        push_scope(
+            ctx,
+            TimeScope {
+                t,
+                dur: s.dur,
+                cycle: s.cycle,
+            },
+        )?;
         i.push_value(&body)?;
         Ok(())
     });
     reg(interp, ctx, ".timewindow", |i, ctx| {
         let body = pop_proc(i, ctx, "timewindow")?;
         let (dur, t) = (i.pop_f64()?, i.pop_f64()?);
-        push_scope(ctx, TimeScope { t, dur })?;
+        push_scope(ctx, TimeScope::window(t, dur))?;
         i.push_value(&body)?;
         Ok(())
     });
@@ -536,6 +530,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             TimeScope {
                 t: s.dur - s.t,
                 dur: s.dur,
+                cycle: s.cycle,
             },
         )?;
         i.push_value(&body)?;
@@ -580,13 +575,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 }
                 i.push_value(&pair[1])?;
                 let body = pop_proc(i, ctx, "sequence")?;
-                push_scope(
-                    ctx,
-                    TimeScope {
-                        t: s.t - start,
-                        dur,
-                    },
-                )?;
+                push_scope(ctx, TimeScope::window(s.t - start, dur))?;
                 i.push_value(&body)?;
                 i.push_bool(true);
                 return Ok(());
@@ -641,13 +630,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 if !next_lead {
                     i.push_value(clip.body)?;
                     let body = pop_proc(i, ctx, "reel")?;
-                    push_scope(
-                        ctx,
-                        TimeScope {
-                            t: t - clip.start,
-                            dur: clip.dur,
-                        },
-                    )?;
+                    push_scope(ctx, TimeScope::window(t - clip.start, clip.dur))?;
                     i.push_value(&body)?;
                     i.push_int(1);
                     return Ok(());
@@ -800,12 +783,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     reg(interp, ctx, "turns", |i, ctx| {
         let k = i.pop_f64()?;
         let s = ctx.borrow().scope();
-        let u = if s.dur > 0.0 && s.dur.is_finite() {
-            s.t / s.dur
-        } else {
-            0.0
-        };
-        i.push_real(k * 360.0 * u);
+        i.push_real(k * 360.0 * s.cycle_fraction());
         Ok(())
     });
     reg(interp, ctx, "loopnoise", |i, ctx| {
@@ -813,11 +791,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let key = pop_key(i, ctx, "loopnoise: key radius")?;
         let c = ctx.borrow();
         let s = c.scope();
-        let a = if s.dur > 0.0 && s.dur.is_finite() {
-            s.t / s.dur
-        } else {
-            0.0
-        } * std::f64::consts::TAU;
+        let a = s.cycle_fraction() * std::f64::consts::TAU;
         i.push_real(crate::ctx::noise2(
             c.seed(),
             key,
@@ -1143,7 +1117,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             params,
         });
         drop(c);
-        push_scope(ctx, TimeScope { t, dur })
+        push_scope(ctx, TimeScope::window(t, dur))
     });
     // dur seed .compset -     the component's declaration has been read:
     //                         set its length and seed.
@@ -1158,7 +1132,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         comp.seed = seed;
         let t = comp.t;
         if let Some(s) = c.scopes.last_mut() {
-            *s = TimeScope { t, dur };
+            *s = TimeScope::window(t, dur);
         }
         Ok(())
     });

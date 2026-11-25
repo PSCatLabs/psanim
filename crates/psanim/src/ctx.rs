@@ -14,6 +14,26 @@ use crate::signals::Signals;
 pub(crate) struct TimeScope {
     pub t: f64,
     pub dur: f64,
+    /// The period that `turns` and `loopnoise` close over. It is the window
+    /// except under `delayed`, which only shifts the clock: there the
+    /// window shortens but the loop stays the loop it was.
+    pub cycle: f64,
+}
+
+impl TimeScope {
+    /// A scope whose loop is its window.
+    pub fn window(t: f64, dur: f64) -> Self {
+        TimeScope { t, dur, cycle: dur }
+    }
+
+    /// Local time as a fraction of the loop: 1 is one whole period.
+    pub fn cycle_fraction(&self) -> f64 {
+        if self.cycle > 0.0 && self.cycle.is_finite() {
+            self.t / self.cycle
+        } else {
+            0.0
+        }
+    }
 }
 
 /// What the engine is running, for error reports.
@@ -155,20 +175,17 @@ impl Ctx {
     /// component, its own.
     pub fn movie_clock(&self) -> TimeScope {
         self.comps.last().map_or(
-            TimeScope {
-                t: self.global_t,
-                dur: self.duration,
-            },
-            |c| TimeScope { t: c.t, dur: c.dur },
+            TimeScope::window(self.global_t, self.duration),
+            |c| TimeScope::window(c.t, c.dur),
         )
     }
 
     /// The innermost time scope: local time and window.
     pub fn scope(&self) -> TimeScope {
-        self.scopes.last().copied().unwrap_or(TimeScope {
-            t: self.global_t,
-            dur: self.duration,
-        })
+        self.scopes
+            .last()
+            .copied()
+            .unwrap_or(TimeScope::window(self.global_t, self.duration))
     }
 
     /// Start a moment: global time `t`, the scope stack holding just the
@@ -178,10 +195,7 @@ impl Ctx {
         self.global_t = t;
         self.dt = dt;
         self.scopes.clear();
-        self.scopes.push(TimeScope {
-            t,
-            dur: self.duration,
-        });
+        self.scopes.push(TimeScope::window(t, self.duration));
         self.pending.clear();
         self.poses.clear();
         self.views.clear();
