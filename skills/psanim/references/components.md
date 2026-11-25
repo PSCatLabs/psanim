@@ -190,6 +190,55 @@ seconds later. Use `componentduration` to time the movie around one.
 A component paints its /Background into its box only if it declares one;
 otherwise it is transparent and draws over the movie.
 
+## A worked example: The Builds Passed
+
+`gallery/builds-passed/builds-passed.ps` is a whole film made of catalog
+components, with a host of about a hundred lines: a terminal types
+`cargo test`, test dots fill in, the pipeline lights up a stage at a time,
+the screen clears and fireworks and confetti burst in around "Huzzah! The
+builds passed". With `--param result=fail` the same host ends the film
+differently (a red dot, a failed stage, no celebration). Its key lines, shortened,
+are below. Read it for the
+pattern:
+
+1. **Make the script once, as data**, and read times off it. The terminal
+   is given the plan (`/Plan session`), so the host can ask it when things
+   happen with `planmark`, and everything else is timed from those marks.
+2. **Make each part with `instance`** and its parameters, before the
+   declaration if the film's length depends on one (`componentduration`).
+3. **Place each in time and space** in `scene`: `/At`, `/Box`, and
+   `/Before /hold /After /hold` to keep the first and last picture.
+   Boxes are plain arrays, so `u pbox pend between` slides a part from
+   one place to another.
+4. **React to an event** by owning its track: the same `/Bursts` array goes
+   to the entry and, shifted to the movie's clock, to `sincelast`.
+
+```postscript partial
+/result (pass) param cvn /result exch def  /ok result /pass eq def     % --param result=fail
+
+/session [ [/type (cargo test)] [/mark /built] [/lines tests 0.13]    % a plan the host can ask
+           [/mark /ran] [/out ok { (24 passed) } { (1 failed) } ifelse] [/mark /result]
+         ] 5 << /Prompt ($ ) >> sessionplan def
+/tb session /built planmark def   /tr session /ran planmark def   /tt session /result planmark def
+
+/tty  /terminal << /Params << /Plan session >> >> instance
+/ci   /pipeline << /Params << /Fail ok { -1 } { 1 } ifelse /Times [ 0 tb tt tt 1 add ] >> >> instance
+/dots /testdots << /Params << /Fails ok { [] } { [12] } ifelse /Seconds tr tb sub >> >> instance
+/cheer /fireworks << /Params << /Style /finale /Bursts bursts /Message (Huzzah!) >> >> instance
+/fstart tt 2 add def                                                  % the finale, on the movie's clock
+/hostbursts [ bursts { fstart add } forall ] def                      % the same event track, to react to
+/finish ok { fstart /cheer componentduration add } { tt 5 add } ifelse def
+
+/scene {
+  /tty  << /Box [30 60 800 600] /After /hold >> place
+  /ci   << /Box [860 520 390 78] /After /hold >> place
+  /dots << /Box [880 150 350 190] /At tb /Before /hold /After /hold >> place
+  ok { /cheer << /At fstart >> place } if
+  hostbursts sincelast -9 mul 2.718281828 exch exp                    % 1 at each burst, falling away
+  0.3 mul setalpha 1 1 1 setrgbcolor 0 0 width height rectfill        % a flash on every burst
+} def
+```
+
 ## Limits
 
 - A component cannot `/Persist` or have a `/Step`: those run only as the

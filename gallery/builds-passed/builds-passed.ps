@@ -1,0 +1,99 @@
+%!PS
+% Poster: 11.6
+% The Builds Passed
+% A terminal types `cargo test`, the test dots fill in, the pipeline lights up a
+% stage at a time, the screen clears and the celebration arrives. Every part is a
+% catalog component; this file only says when each one starts and where it stands.
+%   psanim render builds-passed.ps -o a.mp4                       the builds pass
+%   psanim render builds-passed.ps --param result=fail -o b.mp4   one test fails
+
+/result (pass) param cvn /result exch def
+/ok result /pass eq def
+
+% ---- what happens on the screen: one session, with marks to time the rest by ----------
+/names [ (core::alloc) (core::free) (core::arena) (core::hash) (core::intern) (net::socket)
+  (net::close) (net::tls) (net::hello) (net::keepalive) (net::backoff) (net::pool)
+  (net::retry_limit) (io::read) (io::write) (io::seek) (io::flush) (io::mmap) (fs::open)
+  (fs::walk) (fs::watch) (cli::args) (cli::help) (cli::version) ] def
+/testlines { /acc () def
+  0 1 names length 1 sub { /i exch def
+    /acc acc (test ) strcat names i get strcat ( ... ) strcat
+        ok i 12 ne or { (ok) } { (FAILED) } ifelse strcat
+        i names length 1 sub lt { (\n) strcat } if def } for
+  acc } def
+
+/session [
+  [/wait 0.8]
+  [/type (cargo test) << /Think 0.5 >>]
+  [/mark /typed]
+  [/lines (   Compiling libc v0.2.150\n   Compiling vault v0.4.2\n    Finished test [unoptimized] in 2.9s) 0.35]
+  [/mark /built]
+  [/out (     Running unittests src/lib.rs\n\nrunning 24 tests)]
+  [/mark /run]
+  [/lines testlines 0.13]
+  [/mark /ran]
+  [/out ok { (\ntest result: ok. 24 passed; 0 failed) }
+          { (\ntest result: FAILED. 23 passed; 1 failed\nerror: test failed, to rerun pass `--lib`) } ifelse]
+  [/mark /result]
+  [/wait 1.5]
+  ok { [/mark /clear] [/clear] } if
+] 5 << /Prompt ($ ) /Typos 0.02 >> sessionplan def
+/tb session /built planmark def   /tr session /run planmark def     /ta session /ran planmark def
+/tt session /result planmark def  /tc ok { session /clear planmark } { 1000 } ifelse def   /ty session /typed planmark def
+
+% ---- the parts -----------------------------------------------------------------------------
+/bursts [0.5 1.0 1.4 1.8 2.1 2.4 2.7 3.0 3.3] def                  % the finale's event track
+/cheer /fireworks << /Seed 7 /Params << /Style /finale /Bursts bursts /Message (Huzzah!)
+    /Detail (The builds passed) >> >> instance
+/paper /confetti << /Seed 3 /Params << /Style /cannons /Message () /Detail () /Backdrop /none
+    /Bursts [ bursts 0 get bursts 4 get ] >> >> instance
+/fstart tc 0.8 add def                                              % the finale starts on the movie's clock
+/hostbursts [ bursts { fstart add } forall ] def                    % and so do the bursts, for us to react to
+/finish ok { fstart /cheer componentduration add 0.8 add } { session planlength 5 add } ifelse def
+
+<< /Size [1280 720] /Duration finish /FPS 30 /Seed 5 /Background [0.02 0.03 0.04]
+   /Title (The Builds Passed)
+   /Description (A terminal types cargo test, test dots fill in, a pipeline lights up stage by stage, and the screen clears for fireworks and confetti. Each part is a catalog component placed by a short host; --param result=fail ends it quietly instead.)
+>> animation
+/pktype use
+
+/tty  /terminal << /Params << /Plan session /Hold ok { 1 } { 5 } ifelse /PowerOn 0.8 >> >> instance
+/ci   /pipeline << /Params << /Fail ok { -1 } { 1 } ifelse
+         /Times [ ty tb tt ok { tc 0.3 sub } { tt 1 add } ifelse ] >> >> instance
+/dots /testdots << /Params << /Fails ok { [] } { [12] } ifelse /Cols 8 /Seconds ta tr sub >> >> instance
+
+% ---- the picture ------------------------------------------------------------------------------
+/term [30 60 800 600] def
+/pbox [860 520 390 78] def   /pend [520 22 460 92] def            % the pipeline, and where it settles
+/dbox [880 150 350 190] def  /dend [300 22 200 112] def            % the test dots, likewise
+
+% /name box opts at: place a component in its box, kicked a little bigger on every burst
+/at { /o exch def /b exch def
+  gsave b /c boxpoint translate
+    1 hostbursts sincelast -9 mul 2.718281828 exch exp 0.06 mul add dup scale
+    o /Box [ b 2 get 2 div neg b 3 get 2 div neg b 2 get b 3 get ] put o place
+  grestore } def
+
+/scene {
+  ok { fstart 0.3 sub } { tt 1.8 add } ifelse dup 0.8 add /quad-inout tween /u exch def   % 0 on the dashboard, 1 on the stage
+  fstart fstart 1 add /quad-inout tween /sky exch def
+  sky 0 gt { sky { /cheer << /At fstart /After /hold >> place } faded } if       % the night sky comes up behind it
+
+  tc 0.3 add tc 0.9 add /cubic-in tween /off exch def                        % the screen clears, the tube shuts to a line
+  off 1 lt {
+    ok { 1 } { 1 tt 1.5 add tt 2.8 add ramp sub } ifelse {                    % (a failed run's screen just fades)
+      gsave term /c boxpoint translate 1 1 off sub 0.01 max scale term /c boxpoint neg exch neg exch translate
+        /tty << /Box term /After /hold >> place
+      grestore } faded } if
+  ok not {                                                                   % ... or it stays, and goes quiet
+    1 0.2 0.2 setrgbcolor [tt] sincelast -3 mul 2.718281828 exch exp 0.2 mul setalpha 0 0 width height rectfill 1 setalpha
+    tt 3 add tt 4.5 add /quad-out tween { /Helvetica-Bold 5.5 vmin face [0.93 0.94 0.96] ink
+      (The builds did not pass) [0 330 width 60] /c showin
+      /Helvetica 3.2 vmin face [0.66 0.69 0.76] ink
+      (1 of 24 tests failed: net::retry_limit) [0 270 width 40] /c showin
+    } faded } if
+
+  /ci   u pbox pend between << /After /hold >> at
+  /dots u dbox dend between << /At tr 0.3 sub /Before /hold /After /hold >> at
+  ok { /paper << /At fstart >> place } if
+} def
