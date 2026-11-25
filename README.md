@@ -94,7 +94,7 @@ when it arrives and by what motion.
   animated diffs, charts that move between datasets, brush marks. About
   105 more words in seven libraries, written in PostScript.
   [Design](docs/vocabulary-design.md), [evaluation](docs/vocabulary-evaluation.md).
-- **A gallery** (`gallery/`): twenty-three films, each one file. [Index, with stills](docs/gallery.md).
+- **A gallery** (`gallery/`): thirty-five films, each one file. [Index, with stills](docs/gallery.md).
 - **An agent skill** (`skills/psanim/`) and a documentation site built
   from the same text.
 - **A host API for PSCat**, on a feature branch: what PSCat needed to

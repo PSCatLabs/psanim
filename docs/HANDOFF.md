@@ -1,8 +1,9 @@
 # Handoff: where psanim stands
 
 Written 2026-11-23 at the end of the first build; updated 2026-11-24 at
-the end of the second, which added the expressive libraries. For the next
-person or agent.
+the end of the second, which added the expressive libraries, and
+2026-11-25 at the end of the third (milestone 0.2: components, the
+catalog, and the pieces built from them). For the next person or agent.
 
 ## State
 
@@ -24,10 +25,24 @@ Working and tested on macOS (Apple silicon):
   promise and that they compose. Read `docs/vocabulary-design.md` before
   changing them and `docs/vocabulary-evaluation.md` for what agents did
   with them.
-- `gallery/`: twenty-three pieces. `skills/psanim/`: the agent skill, now
+- `gallery/`: thirty-five pieces. `skills/psanim/`: the agent skill, now
   with a chapter per kind of film (`stage`, `type`, `explain`, `ink`,
   `storytelling`). `docs/` + `scripts/build_site.py`: Markdown docs and
   the HTML site, which renders every library example as a looping film.
+- **Components and the catalog** (third build, epic #43): `component`,
+  `instance`, `place` make any movie a part of another, each instance
+  with its own names, clock, seed, parameters and box (blur, glow,
+  grain and vignette stay inside it; operators and library words mean
+  what it was written against). `crates/psanim/catalog/*.ps` holds 26
+  ready-made entries compiled in (`psanim catalog`): spinner, progress,
+  testdots, pipeline, terminal, fire, fireworks, confetti, clocks,
+  credits, crawl, chat, twiddle, splitflap, odometer, ledmatrix,
+  dotmatrix, stat, gauge, horizon, timeseries, status, counter. New core
+  words: particles, onplane (perspective), playlist, typing and session
+  plans, time of day, signals with a past. New library: pkfigure
+  (character rigs). `<psanim-widget>` runs a movie live in a page
+  (`docs/widgets.md`). Each piece of this was built on its own branch and
+  merged in `integration-0.2`; the merge commits say what met what.
 - PSCat branch `feature/psanim-library-api` in `../pscat-psanim-api`:
   on top of `feature/0.7.1` @ `72a2c4e`. Full PSCat suite green (3688
   passed). **Pushed, with a draft PR (PSCatLabs/pscat#1410, issue
