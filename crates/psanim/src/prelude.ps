@@ -34,6 +34,11 @@
 /timewindow { .timewindow exec .timepop } bind def         % t dur proc   now is t, in a window dur long
 /reversed   { .reversed   exec .timepop } bind def         % proc         now runs backward through the window
 /globally   { .globally   exec .timepop } bind def         % proc         now is the movie time again, whatever scopes are open
+/daytime    {                                              % start /sig|null  time of day, 0..86400
+  dup type /stringtype eq { cvn } if                  % a --param gives text
+  dup null eq { pop parseclock globaltime add } { exch pop signal } ifelse
+  dup 86400 div floor 86400 mul sub
+} bind def
 % i gap proc staggered: item i of a row starts gap seconds after item i-1.
 /staggered  { 3 1 roll mul exch delayed } bind def
 % [ dur proc dur proc ... ] sequence: play the procs one after another.

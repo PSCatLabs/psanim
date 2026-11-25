@@ -1029,6 +1029,54 @@ fn tempo_counts_and_kicks() {
 }
 
 #[test]
+fn time_of_day_from_a_start_and_the_movie_clock_or_a_signal() {
+    // clockparts splits and wraps; fmtday writes the 24 hour clock.
+    assert_eq!(
+        nums(&eval_at("", "45296.25 clockparts == == == ==", 0.0)),
+        [0.25, 56.0, 34.0, 12.0]
+    );
+    assert_eq!(
+        nums(&eval_at("", "-1 clockparts == == == ==", 0.0)),
+        [0.0, 59.0, 59.0, 23.0]
+    );
+    assert_eq!(eval_at("", "3725 fmtday ==", 0.0), "(01:02:05)");
+    // parseclock takes text or seconds, and says what it accepts.
+    assert_eq!(
+        nums(&eval_at(
+            "",
+            "(7:05) parseclock == 100 parseclock == (0:00:01.5) parseclock ==",
+            0.0
+        )),
+        [25500.0, 100.0, 1.5]
+    );
+    let mut m = load("/scene { (nonsense) parseclock } def");
+    let e = m
+        .render_at(0.0)
+        .map(|_| ())
+        .expect_err("a bad time is an error")
+        .to_string();
+    assert!(e.contains("HH:MM:SS"), "{e}");
+    // daytime: the start plus the movie time, across midnight.
+    assert_eq!(
+        eval_at("", "(23:59:50) null daytime fmtday ==", 15.0),
+        "(00:00:05)"
+    );
+    assert_eq!(nums(&eval_at("", "36000 null daytime ==", 2.5)), [36002.5]);
+    // With a signal name the host's value is the time and the start is ignored.
+    let mut m = load("/scene { (01:00:00) /clock daytime fmtday == } def");
+    m.set_signal("clock", 83_000.0);
+    m.take_output();
+    m.render_at(3.0).unwrap();
+    assert_eq!(m.take_output().trim(), "(23:03:20)");
+    // A signal named by text, as --param gives it, works too.
+    let mut m = load("/scene { 0 (clock) daytime == } def");
+    m.set_signal("clock", 61.5);
+    m.take_output();
+    m.render_at(0.0).unwrap();
+    assert_eq!(m.take_output().trim(), "61.5");
+}
+
+#[test]
 fn more_box_words_and_text_placed_for_kinetic() {
     let n = nums(&eval_at(
         "",

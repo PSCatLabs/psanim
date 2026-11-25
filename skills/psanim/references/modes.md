@@ -188,6 +188,48 @@ In the browser player the host sets `mousex`, `mousey` (canvas units) and
 `mousedown` before each frame; the same program runs offline with those
 signals read from a file, or 0.
 
+## Time of day
+
+A movie must not read the wall clock: it is a pure function of its own
+time, so the same render gives the same film tomorrow. A clock therefore
+gets its time from the host, in one of two ways, and `daytime` hides the
+difference:
+
+```postscript
+%!PS
+<< /Size [480 160] /Duration 12 /FPS 10 >> animation
+/Start (23:59:55) param /start exch def          % --param Start=23:59:55, or seconds
+/scene {
+  0.1 setgray 0 0 width height rectfill
+  1 setgray /Helvetica-Bold findfont 90 scalefont setfont
+  start null daytime fmtday                       % the start plus the movie's time
+  dup stringwidth pop width exch sub 2 div 40 moveto show
+} def
+```
+
+- **A render**: a start time plus the movie's own time. `start null
+  daytime` is the start (seconds since midnight, or text `HH:MM[:SS]`, which
+  is what `--param Start=12:34:56` gives) plus `globaltime`, wrapped into
+  one day. Movie time 0 shows the start; a clock placed later in a movie
+  (or inside a component) counts from where it was placed.
+- **A live page**: a signal. `start /clock daytime` is the value of the
+  signal `clock`, which the page sets to the viewer's local seconds since
+  midnight, fractions included, before each frame (`engine.setSignal(
+  "clock", secs)` in the browser player; `Movie::set_signal` in Rust).
+  The start is ignored. A page that sends only whole seconds shows a clock
+  that never animates between them: send the fraction. The shipped
+  `<psanim-player>` does not set this signal yet; a page that embeds the
+  engine does it itself.
+
+`clockparts` splits a time into hours, minutes, seconds and the fraction of
+the second (`45296.25 clockparts` leaves `12 34 56 0.25`), `fmtday` writes
+(HH:MM:SS), `parseclock` reads text or seconds. The catalog's clocks
+(`/clock-digital`, `/clock-analog`, `/clock-morph`, `/clock-ledsign`) all
+take `/Start` and `/Signal` parameters and are written with these words.
+They declare a /Duration of 24 hours so that a clock placed in a movie never
+ends before the movie does; to render one on its own, say how long you want:
+`psanim render clock-morph.ps --duration 60 --param Start=23:59:30`.
+
 ## Motion blur
 
 `/MotionBlur 8 /Shutter 0.5` in the declaration (or `--motion-blur 8`)

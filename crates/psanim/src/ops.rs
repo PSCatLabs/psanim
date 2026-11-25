@@ -897,6 +897,19 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         i.set_current_path(&path)
     });
 
+    reg(interp, ctx, "alignpath", |i, ctx| {
+        let (b, a) = (i.pop_numbers()?, i.pop_numbers()?);
+        if a.len() != b.len() || a.len() < 4 || a.len() % 2 != 0 {
+            return fail(
+                ctx,
+                PsError::Rangecheck,
+                "alignpath: both arrays must hold the same number of x y pairs (use the same count with resamplepath)",
+            );
+        }
+        i.push_numbers(&pathmath::align_outline(&a, &b));
+        Ok(())
+    });
+
     reg(interp, ctx, "polypath", |i, ctx| {
         let pts = i.pop_numbers()?;
         if pts.len() < 4 || pts.len() % 2 != 0 {
@@ -1072,6 +1085,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             Value::String(s) => format!("({})", String::from_utf8_lossy(s)),
             Value::Name(n) => format!("/{n}"),
             Value::Array(_) => v_numbers(&default),
+            Value::Null => "null".to_string(),
             v => v
                 .as_f64()
                 .map_or_else(|| "?".to_string(), |x| x.to_string()),
