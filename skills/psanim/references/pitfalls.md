@@ -163,3 +163,62 @@ very dark gradients can band. Check stills from the video itself:
 seconds is normal at the default quality (`--crf 22` halves it), and a
 GIF of it will be large whatever you do; prefer MP4 or WebM. Thin lines under 1.5 px shimmer in motion: thicken them or
 render larger.
+
+## A character does not appear
+
+The text fonts are ASCII. A string containing "π", "→", "≠" or any other
+non-ASCII character shows a blank for it, with no error. Use pktype's
+`/pi sym`, `/arrow sym`, `/neq sym`, or a run list (`showruns`).
+
+## Single blank frames between sections
+
+One section fades out by its end and the next fades in from its start,
+so the frame between them is empty; only `check --all` sees it. Let
+something persist across the cut (a rule, a progress bar, a heading
+that changes on the cut) or overlap the sections.
+
+## Hairlines between shapes that should touch
+
+N pieces tiling a shape (wedges of a disc, slices of a bar) show faint
+seams where their antialiased edges meet, worst in a sheet's small
+thumbnails. Stroke each piece in its own colour, or draw the whole
+shape underneath the pieces.
+
+## A stray line into an arc
+
+`show` leaves a current point at the end of the text. An `arc` after it
+draws a line from there to the arc's start. Begin a new shape with
+`newpath`.
+
+## The movie became stateful, or an overlay appeared, by accident
+
+`step` and `overlay` are names the engine looks for: defining a
+procedure called `step` makes the movie a simulation and the engine
+calls it every tick (usually failing with a stack underflow in your
+procedure, "in step 0"). Rename yours.
+
+## `undefined` for a word that sounds right
+
+Words like `placetext-right` or `showcentered` are easy to imagine and do
+not exist. `psanim api NAME` answers in a moment, and lists related
+words when the name is close.
+
+## Everything after one thing is translucent
+
+`setalpha` stays set for the rest of the frame, like a colour. Wrap a
+dimmed drawing in `gsave ... grestore`, or set `1 setalpha` after it.
+
+## Text I drew is invisible
+
+Text drawn before any colour is chosen is black. `ground` sets the
+colour to the theme's `/fg`; if you paint your own background, or
+change colour for one thing, say `/fg ink` before the next text.
+`fitface` and `face` choose a font, never a colour.
+
+## A name of mine broke something far away
+
+`mark`, `count`, `index`, `copy`, `length`, `load`, `step`, `frame` and
+`width` are operators or engine words. A procedure of yours with one of
+those names changes what the libraries get when they call it, and the
+error appears inside some other procedure. Prefix your names
+(`markcell`, `nlooks`).

@@ -158,11 +158,18 @@ DOCS = [
     ("guide/craft.html", "Craft", "skills/psanim/references/craft.md", "Guide"),
     ("guide/pitfalls.html", "Pitfalls", "skills/psanim/references/pitfalls.md", "Guide"),
     ("guide/modes.html", "State, inputs, blur", "skills/psanim/references/modes.md", "Guide"),
+    ("libraries/stage.html", "Staging: boxes, themes, motions", "skills/psanim/references/stage.md", "Libraries"),
+    ("libraries/type.html", "Type", "skills/psanim/references/type.md", "Libraries"),
+    ("libraries/explain.html", "Diagrams, code, charts", "skills/psanim/references/explain.md", "Libraries"),
+    ("libraries/ink.html", "Ink", "skills/psanim/references/ink.md", "Libraries"),
+    ("libraries/storytelling.html", "Storytelling", "skills/psanim/references/storytelling.md", "Libraries"),
     ("reference.html", "Vocabulary", None, "Reference"),
     ("guide/cli.html", "Command line", "docs/cli.md", "Reference"),
     ("guide/rust.html", "Rust API", "docs/rust.md", "Reference"),
     ("guide/browser.html", "Browser", "docs/wasm.md", "Reference"),
     ("guide/architecture.html", "Architecture", "docs/architecture.md", "Design"),
+    ("guide/vocabulary-design.html", "The expressive vocabulary", "docs/vocabulary-design.md", "Design"),
+    ("guide/vocabulary-evaluation.html", "Evaluating the vocabulary", "docs/vocabulary-evaluation.md", "Design"),
     ("guide/pscat.html", "psanim and PSCat", "docs/pscat-integration.md", "Design"),
     ("guide/security.html", "Security", "docs/security.md", "Design"),
     ("guide/benchmarks.html", "Benchmarks", "docs/benchmarks.md", "Design"),
@@ -171,7 +178,76 @@ DOCS = [
 ]
 BY_SOURCE = {src: out for out, _, src, _ in DOCS if src}
 BY_SOURCE["skills/psanim/references/vocabulary.md"] = "reference.html"
+BY_SOURCE["skills/psanim/references/vocabulary-libraries.md"] = "reference.html"
 BY_SOURCE["docs/gallery.md"] = "gallery.html"
+
+# The library chapters are a visual cookbook: every runnable example in
+# them is rendered and shown, looping, under its code.
+COOKBOOK = {"stage.md", "type.md", "explain.md", "ink.md", "storytelling.md"}
+LIBRARIES = "pkstage pkmotion pktype pkdiagram pkcode pkchart pkink".split()
+
+def with_films(text, stem):
+    """Insert a marker after each runnable fence and render its film."""
+    out, cur, films = [], None, []
+    for n, line in enumerate(text.split("\n")):
+        t = line.lstrip()
+        out.append(line)
+        if cur is None:
+            if t.startswith("```postscript") and "partial" not in t:
+                cur = (n + 2, [])
+        elif t.startswith("```"):
+            name = f"{stem}-{cur[0]}"
+            films.append((name, "\n".join(cur[1]) + "\n"))
+            out += ["", f"<!-- film: {name} -->", ""]
+            cur = None
+        else:
+            cur[1].append(line)
+    dest = SITE / "cookbook"
+    dest.mkdir(exist_ok=True)
+    for name, body in films:
+        if not body.lstrip().startswith("%!PS"):
+            use = " ".join(f"/{l} use" for l in LIBRARIES)
+            body = ("<< /Size [640 360] /Duration 4 /FPS 30 /Background [0.05 0.06 0.09] >> animation\n"
+                    f"{use}\n/scene {{\n{body}\n}} def\n")
+        ps, mp4 = dest / f"{name}.ps", dest / f"{name}.mp4"
+        if mp4.exists() and ps.exists() and ps.read_text() == body:
+            continue                      # unchanged since the last build
+        ps.write_text(body)
+        done = subprocess.run([str(PSANIM), "render", str(ps), "-o", str(mp4), "-q"], capture_output=True, text=True)
+        if done.returncode != 0:
+            print(f"  (cookbook: {name} failed: {done.stderr.strip()[:200]})")
+            ps.unlink()
+    return "\n".join(out)
+
+REPO_URL = "https://github.com/PSCatLabs/psanim"
+
+def source_link(page, site_path, repo_path=None, text="source"):
+    """A link that opens a PostScript file in the source dialog. `site_path`
+    is the file under site/; `repo_path` its place in the repository, if it
+    has one, for the "On GitHub" link."""
+    f = SITE / site_path
+    data = f.read_text(errors="replace") if f.exists() else ""
+    lines = len(data.rstrip("\n").split("\n")) if data else 0
+    libs = " ".join(sorted({f"crates/psanim/lib/{m}.ps" for m in re.findall(r"/(pk[a-z]+)\s+use\b", data)}))
+    github = f"{REPO_URL}/blob/main/{repo_path}" if repo_path else REPO_URL
+    return (f'<a class="view-source" href="{rel(page, site_path)}" data-name="{html.escape(Path(site_path).name)}" '
+            f'data-lines="{lines}" data-bytes="{len(data.encode())}" data-github="{github}" data-libs="{libs}">{text}</a>')
+
+def source_dialog(page):
+    return f"""<dialog id="source-dialog" class="source-dialog" aria-labelledby="source-name" data-blob="{REPO_URL}/blob/main/">
+  <div class="source-head">
+    <div class="source-title"><p class="source-name" id="source-name"></p><p class="source-meta" id="source-meta"></p></div>
+    <div class="source-actions"><a id="source-github" href="{REPO_URL}">On GitHub</a><button type="button" id="source-close">Close</button></div>
+    <p class="source-libs" id="source-libs" hidden></p>
+  </div>
+  <div class="source-body" id="source-body" tabindex="0" role="region" aria-label="Source code"></div>
+</dialog>
+<script src="{rel(page, 'source-viewer.js')}" defer></script>"""
+
+def film_tag(page, name):
+    src = rel(page, f"cookbook/{name}.mp4")
+    return (f'<figure class="film"><video src="{src}" autoplay loop muted playsinline '
+            f'preload="metadata" style="width:100%;max-width:640px;height:auto;display:block;border-radius:6px"></video></figure>')
 
 def rel(from_page, to_page):
     depth = from_page.count("/")
@@ -227,6 +303,7 @@ def shell(page, title, body, toc=None, wide=False):
 <header class="top"><nav>{top_html}</nav></header>
 {body}
 <footer class="foot">psanim · animation as PostScript programs · built on <a href="https://github.com/PSCatLabs/pscat">PSCat</a> · this site is generated by <code>scripts/build_site.py</code></footer>
+{source_dialog(page)}
 </body>
 </html>
 """
@@ -248,8 +325,11 @@ def build_docs():
             print(f"  (skipping {out}: no {source} yet)")
             continue
         text = path.read_text()
+        if path.name in COOKBOOK:
+            text = with_films(text, path.stem)
         # Diagrams: a line `<!-- diagram: name -->` in the Markdown is replaced.
         body, toc = markdown(text, linker(out, source))
+        body = re.sub(r"<p>&lt;!-- film: ([a-z0-9-]+) --&gt;</p>", lambda m: film_tag(out, m.group(1)), body)
         body = re.sub(r"<p>&lt;!-- diagram: ([a-z-]+) --&gt;</p>", lambda m: part(m.group(1) + ".svg.html"), body)
         if source == "docs/architecture.md":
             # The ASCII overview becomes the drawn one.
@@ -264,7 +344,10 @@ def build_docs():
 def build_reference():
     cats = json.loads(subprocess.run([str(PSANIM), "api", "--json"], capture_output=True, text=True, check=True).stdout)
     listing = subprocess.run([str(PSANIM), "api"], capture_output=True, text=True, check=True).stdout
-    titles = [l for l in listing.split("\n") if l and not l.startswith(" ") and not l.startswith(("Easings", "Transitions", "`"))]
+    def md(*args):
+        return subprocess.run([str(PSANIM), "api", *args, "--markdown"], capture_output=True, text=True, check=True).stdout
+    # Category titles, in the table's order: the core's, then each library's.
+    titles = re.findall(r"^## (.*)$", md() + "".join(md(lib) for lib in LIBRARIES), re.M)
     order = []
     for e in cats:
         if e["category"] not in order:
@@ -272,7 +355,7 @@ def build_reference():
     easings = re.search(r"^Easings: (.*)$", listing, re.M).group(1).split()
     transitions = re.search(r"^Transitions: (.*)$", listing, re.M).group(1).split()
     body = ['<h1>Vocabulary</h1>',
-            f'<p class="lede">Every word psanim adds to PostScript: {len(cats)} of them. Generated from the table in '
+            f'<p class="lede">Every word psanim adds to PostScript, the core and the libraries: {len(cats)} of them. Generated from the table in '
             '<code>crates/psanim/src/api.rs</code>, the same one <code>psanim api</code> prints and the test suite checks '
             'against the interpreter. Stack effects read left to right, topmost operand last.</p>',
             '<input class="filter" type="search" placeholder="Filter words…" aria-label="Filter words" '
@@ -282,6 +365,16 @@ def build_reference():
         anchor = slug(title)
         toc.append((2, anchor, title.split(":")[0]))
         body.append(f'<h2 id="{anchor}">{html.escape(title)}</h2>')
+        if cat in LIBRARIES:
+            body.append(f'<p>Load with <code>/{cat} use</code>.</p>')
+        if cat == "pkmotion":
+            film = SITE / "motions.mp4"
+            done = subprocess.run([str(PSANIM), "render", str(ROOT / "scripts/site/motions.ps"), "-o", str(film), "-q"])
+            if done.returncode == 0:
+                body.append('<figure class="diagram"><video src="motions.mp4" autoplay loop muted playsinline '
+                            'style="width:100%;height:auto;display:block;border-radius:6px"></video>'
+                            '<figcaption>Every built-in motion on the same card: entrances arrive and leave by the '
+                            'same motion, emphases fire once a cycle. Drawn by <code>scripts/site/motions.ps</code>.</figcaption></figure>')
         for e in [e for e in cats if e["category"] == cat]:
             stack = html.escape(e["stack"]).replace(f"  {e['name']}  ", f'  <b>{e["name"]}</b>  ')
             body.append(f'<div class="word" id="w-{e["name"]}"><pre class="stack">{stack}</pre>'
@@ -349,7 +442,7 @@ def build_gallery():
 {facts}
 <div class="readme">{readme_html}</div>
 <pre class="code cmd"><code>psanim render gallery/{n}/{n}.ps -o {n}.mp4</code></pre>
-<p class="links"><a href="gallery/{n}/{n}.ps">source</a> · <a href="gallery/{n}/sheet.png">contact sheet</a> · <a href="gallery/{n}/poster.png">still</a> · <a href="gallery/{n}/{n}.mp4">mp4</a>{' · <a href="gallery/' + n + '/' + n + '.gif">gif</a>' if (SITE / "gallery" / n / f"{n}.gif").exists() else ''}</p>
+<p class="links">{source_link("gallery.html", f"gallery/{n}/{n}.ps", f"gallery/{n}/{n}.ps")} · <a href="gallery/{n}/sheet.png">contact sheet</a> · <a href="gallery/{n}/poster.png">still</a> · <a href="gallery/{n}/{n}.mp4">mp4</a>{' · <a href="gallery/' + n + '/' + n + '.gif">gif</a>' if (SITE / "gallery" / n / f"{n}.gif").exists() else ''}</p>
 </div>
 <details class="source"><summary>{n}.ps · {lines} lines of PostScript</summary><pre class="code lang-postscript"><code>{source}</code></pre></details>
 </article>""")
@@ -398,8 +491,45 @@ def build_playground():
     body = part("playground.html").replace("{{EXAMPLES}}", json.dumps(examples))
     write("playground.html", shell("playground.html", "Playground", body, wide=True))
 
+def build_eval():
+    """The model comparison: the same briefs given to several models, each
+    film with its source and, if a blind review was made, its scores. Built
+    from out/eval4/ when that is there (it is not kept in the repository)."""
+    src = ROOT / "out/eval4"
+    if not src.exists():
+        return
+    dest = SITE / "eval"
+    dest.mkdir(exist_ok=True)
+    for f in list(src.glob("*-*.mp4")) + list(src.glob("*-*.ps")) + list(src.glob("*.md")):
+        shutil.copy(f, dest / f.name)
+    review, key = {}, {}
+    if (src / "blind/review.json").exists() and (src / "blind-key.json").exists():
+        review = json.loads((src / "blind/review.json").read_text())
+        key = {f"{t.split('-')[0]}-{m}": t for t, m in json.loads((src / "blind-key.json").read_text()).items()}
+    briefs = [("binsearch", "How binary search finds a number"), ("compound", "Interest on interest"), ("launch", "Measure it (kinetic type)")]
+    body = ['<h1>Same brief, three models</h1>',
+            '<p class="lede">Each film was written by a fresh agent from the psanim skill and a fixed brief, and is shown as the agent left it. '
+            'Scores are from a blind review by another model (Codex), which saw the films as A, B and C: legibility, composition, motion, overall, out of 10. '
+            '<a href="RULES.md">The rules the agents were given.</a></p>']
+    for b, title in briefs:
+        body.append(f'<h2 id="{b}">{html.escape(title)} <small style="font-weight:400;font-size:.6em"><a href="{b}.md">brief</a></small></h2>'
+                    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin:0 0 36px">')
+        for m in ["opus", "sonnet", "haiku"]:
+            name = f"{b}-{m}"
+            r = review.get(key.get(name, ""), {})
+            score = (f'<p style="margin:6px 0;color:var(--dim);font-size:14px">legibility {r.get("legibility")} · composition {r.get("composition")} · '
+                     f'motion {r.get("motion")} · <b style="color:var(--ink)">overall {r.get("overall")}</b></p>') if r else ""
+            defects = "".join(f"<li>{html.escape(str(d))}</li>" for d in (r.get("defects") or [])[:3])
+            video = (f'<video src="{name}.mp4" controls loop muted playsinline preload="metadata" style="width:100%;border-radius:6px;background:#000"></video>'
+                     if (dest / f"{name}.mp4").exists() else "<p>not rendered</p>")
+            body.append(f'<div><h3 style="margin:0 0 6px">{m} · {source_link("eval/index.html", f"eval/{name}.ps", text="view source")}</h3>{video}{score}'
+                        f'<ul style="margin:0;padding-left:18px;color:var(--dim);font-size:13.5px">{defects}</ul></div>')
+        body.append("</div>")
+    write("eval/index.html", shell("eval/index.html", "Model comparison", "\n".join(body), wide=True))
+
 def copy_assets():
     shutil.copy(ROOT / "scripts/site/site.css", SITE / "site.css")
+    shutil.copy(ROOT / "scripts/site/source-viewer.js", SITE / "source-viewer.js")
     for f in ["psanim.js", "player.js"]:
         shutil.copy(ROOT / "web" / f, SITE / f)
     wasm = ROOT / "web/psanim.wasm"
@@ -418,6 +548,7 @@ def main():
     pieces = build_gallery()
     build_home(pieces)
     build_playground()
+    build_eval()
     pages = len(list(SITE.rglob("*.html")))
     print(f"site: {pages} pages in {SITE.relative_to(ROOT)}/ (serve with: python3 -m http.server -d site 8000)")
 

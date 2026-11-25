@@ -4,7 +4,8 @@
 //! working fails here, not in front of a reader.
 //!
 //! A fence that starts with `%!PS` is a whole program. Any other fence is
-//! the body of a scene on a 640x360 canvas, 4 seconds long. A fence marked
+//! the body of a scene on a 640x360 canvas, 4 seconds long, with every
+//! psanim library loaded. A fence marked
 //! `postscript partial` is not run.
 
 use std::path::{Path, PathBuf};
@@ -100,8 +101,13 @@ fn every_postscript_fence_in_the_docs_runs() {
             let source = if body.trim_start().starts_with("%!PS") {
                 body
             } else {
+                // A scene body may use any library: the chapters say which.
+                let libs: String = psanim::LIBRARIES
+                    .iter()
+                    .map(|l| format!("/{} use ", l.0))
+                    .collect();
                 format!(
-                    "<< /Size [640 360] /Duration 4 /FPS 30 /Background [0.05 0.06 0.09] >> animation\n/scene {{\n{body}\n}} def\n"
+                    "<< /Size [640 360] /Duration 4 /FPS 30 /Background [0.05 0.06 0.09] >> animation\n{libs}\n/scene {{\n{body}\n}} def\n"
                 )
             };
             let what = format!("{}:{line}", path.strip_prefix(&root).unwrap().display());

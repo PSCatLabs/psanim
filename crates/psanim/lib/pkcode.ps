@@ -1,0 +1,183 @@
+%!PS
+% pkcode: source code on screen.
+%
+% Tokenize once, in setup:   /src (fn main() {\n ...) /rust codetokens def
+% then draw it each frame:   src box << /Reveal u /Focus [2 3] >> codeblock
+/pkstage use /pkmotion use /pktype use
+
+% kind -> the theme role it is drawn in. Change an entry to restyle.
+/codecolors <<
+  /plain /fg /name /fg /punct /muted /keyword /accent3 /string /good
+  /number /accent /comment /muted /type /accent2 /call /accent
+>> def
+
+% tokens box opts .codelayout     (inside a caller's dictionary) measures:
+%   cb-size cb-L cb-cw cb-x0 (text left) cb-top (first baseline) cb-gut
+/.codelayout {
+  /cb-o exch def /cb-b exch def /cb-t exch def
+  cb-b aload pop /cb-h exch def /cb-w exch def /cb-y exch def /cb-x exch def
+  /cb-pad cb-w cb-h min 0.06 mul def
+  /cb-lead cb-o /Leading 1.4 .opt def
+  /cb-title cb-o /Title () .opt def
+  /cb-num cb-o /Numbers false .opt def
+  /cb-cols 1 cb-t { 0 exch { dup type /stringtype eq { length add } { pop } ifelse } forall max } forall def
+  /cb-gutc cb-num { 4 } { 0 } ifelse def
+  /cb-size
+    cb-o /Size known { cb-o /Size get } {
+      cb-w cb-pad 2 mul sub cb-cols cb-gutc add 0.6 mul div
+      cb-h cb-pad 2 mul sub cb-t length cb-title length 0 gt { 1.6 add } if cb-lead mul div
+      min 3.6 vmin min
+    } ifelse def
+  /cb-L cb-size cb-lead mul def
+  /cb-cw cb-size 0.6 mul def
+  /cb-bar cb-title length 0 gt { cb-L 1.6 mul } { 0 } ifelse def
+  /cb-x0 cb-x cb-pad add cb-gutc cb-cw mul add def
+  /cb-scroll cb-o /Scroll 0 .opt def
+  /cb-top cb-y cb-h add cb-pad sub cb-bar sub cb-size 0.78 mul sub cb-scroll cb-L mul add def
+} bind def
+% line-tokens x y alpha limit .codeline -> shown    draw one line's runs,
+%   at most `limit` characters of it; returns how many it drew
+/.codeline {
+  8 dict begin
+    /cl-lim exch def /cl-a exch def /cl-y exch def /cl-x exch def /cl-toks exch def
+    /cl-n 0 def
+    cl-x cl-y moveto
+    0 2 cl-toks length 2 sub { /cl-i exch def
+      cl-n cl-lim lt {
+        /cl-s cl-toks cl-i get def
+        cl-s length cl-lim cl-n sub gt { /cl-s cl-s 0 cl-lim cl-n sub cvi getinterval def } if
+        codecolors cl-toks cl-i 1 add get 2 copy known { get } { pop pop /fg } ifelse ink
+        cl-a setalpha cl-s show
+        /cl-n cl-n cl-s length add def
+      } if
+    } for
+    cl-n
+  end
+} bind def
+/.codeplate {            % (inside the layout's dictionary) the panel and its title bar
+  gsave /surface ink newpath cb-b theme /corner get roundpath fill grestore
+  cb-bar 0 gt {
+    gsave
+      /line ink 0.5 setalpha
+      newpath cb-x cb-y cb-h add cb-bar sub moveto cb-w 0 rlineto theme /stroke get 0.5 mul setlinewidth stroke
+      1 setalpha
+      0 1 2 { /cb-k exch def
+        [/bad /accent /good] cb-k get ink
+        cb-x cb-pad add cb-k cb-bar 0.42 mul mul add  cb-y cb-h add cb-bar 2 div sub  cb-bar 0.13 mul disc
+      } for
+      /muted ink /body cb-size 0.85 mul face
+      cb-title [ cb-x cb-y cb-h add cb-bar sub cb-w cb-bar ] /c showin
+    grestore
+  } if
+} bind def
+% tokens box opts codeblock -
+%   << /Reveal u       how much is typed, 0..1 by characters (default 1)
+%      /Focus [i ...]  lines to keep bright; the others dim
+%      /FocusAmount a  how far the others dim, 0..1 (animate it)
+%      /Scroll n       lines scrolled off the top (fractions scroll smoothly)
+%      /Numbers bool   line numbers      /Title (file.rs)  a title bar
+%      /Size s /Leading 1.4 /Plate true >>
+/codeblock {
+  40 dict begin
+    .codelayout
+    /cb-base currentalpha def
+    gsave
+      cb-o /Plate true .opt { .codeplate } if
+      newpath cb-x cb-y cb-w cb-h cb-bar sub rectclip
+      /mono cb-size face
+      /cb-total 0 cb-t { { dup type /stringtype eq { length add } { pop } ifelse } forall } forall def
+      /cb-left cb-o /Reveal 1 .opt 0 1 clamp cb-total mul round def
+      /cb-typing cb-o /Reveal 1 .opt dup 0 gt exch 1 lt and def
+      /cb-focus cb-o /Focus [] .opt def
+      /cb-fa cb-focus length 0 gt { cb-o /FocusAmount 1 .opt } { 0 } ifelse def
+      0 1 cb-t length 1 sub { /cb-i exch def
+        /cb-ly cb-top cb-i cb-L mul sub def
+        /cb-in false cb-focus { cb-i eq or } forall def
+        /cb-a cb-in { 1 } { 1 cb-fa 0.72 mul sub } ifelse cb-base mul def
+        cb-ly cb-y cb-L sub gt cb-ly cb-y cb-h add lt and {
+          cb-in cb-fa 0 gt and {
+            gsave /accent ink cb-fa 0.13 mul cb-base mul setalpha
+              cb-x cb-ly cb-L 0.3 mul sub cb-w cb-L rectfill
+              cb-fa cb-base mul setalpha cb-x cb-ly cb-L 0.3 mul sub cb-size 0.22 mul cb-L rectfill
+            grestore
+          } if
+          cb-num {
+            /muted ink cb-a 0.7 mul setalpha
+            cb-x0 cb-cw sub cb-ly moveto cb-i 1 add 4 string cvs showright
+          } if
+          cb-left 0 gt {
+            cb-t cb-i get cb-x0 cb-ly cb-a cb-left .codeline
+            /cb-left exch cb-left exch sub def
+            cb-typing cb-left 0 le and {
+              /fg ink cb-base setalpha currentpoint cb-size 0.2 mul sub cb-cw cb-size rectfill
+            } if
+          } if
+        } if
+      } for
+    grestore
+    cb-base setalpha
+  end
+} bind def
+% tokens box opts n codelinebox -> box     where line n is drawn, for
+%                                          notes, arrows and marks
+/codelinebox {
+  40 dict begin
+    /cb-n exch def .codelayout
+    /cb-len 0 cb-t cb-n get { dup type /stringtype eq { length add } { pop } ifelse } forall def
+    /cb-lead0 0 def
+    cb-t cb-n get dup length 0 gt { 0 get { 32 eq { /cb-lead0 cb-lead0 1 add def } { exit } ifelse } forall } { pop } ifelse
+    [ cb-x0 cb-lead0 cb-cw mul add
+      cb-top cb-n cb-L mul sub cb-size 0.25 mul sub
+      cb-len cb-lead0 sub cb-cw mul
+      cb-size 1.05 mul ]
+  end
+} bind def
+
+% (old) (new) /lang diffrows -> rows     a line diff, each line tokenized:
+%                                        [ [ /same|/del|/add tokens ] ... ]. Call in setup.
+/diffrows {
+  4 dict begin
+    /dr-lang exch def
+    [ 3 1 roll difflines {
+      aload pop pop pop exch         % (text) /kind
+      [ exch 3 -1 roll dr-lang codetokens dup length 0 gt { 0 get } { pop [] } ifelse ]
+    } forall ]
+  end
+} bind def
+% rows box opts u codediff -     the old code at u = 0 becoming the new at
+%   u = 1: removed lines redden and close up, then added lines open, green.
+%   opts as for codeblock (/Title /Size /Leading /Plate).
+/codediff {
+  40 dict begin
+    /cd-u exch 0 1 clamp def
+    /cd-rows 3 index def
+    % lay out as if every row were a line
+    3 -1 roll [ exch { 1 get } forall ] 3 1 roll
+    .codelayout
+    /cb-base currentalpha def
+    /cd-out 0 0.45 cd-u smoothstep def          % removed lines go
+    /cd-in 0.45 0.9 cd-u smoothstep def         % added lines come
+    /cd-tint 1 0.9 1 cd-u smoothstep sub def    % the green fades at the end
+    gsave
+      cb-o /Plate true .opt { .codeplate } if
+      newpath cb-x cb-y cb-w cb-h cb-bar sub rectclip
+      /mono cb-size face
+      /cd-y cb-top def
+      cd-rows {
+        aload pop /cd-toks exch def /cd-kind exch def
+        /cd-hgt cd-kind /del eq { 1 cd-out sub } { cd-kind /add eq { cd-in } { 1 } ifelse } ifelse def
+        cd-hgt 0.01 gt {
+          cd-kind /same ne {
+            gsave
+              cd-kind /del eq { /bad ink 0.22 cd-hgt mul 0 0.12 cd-u smoothstep mul } { /good ink 0.20 cd-tint mul cd-hgt mul } ifelse cb-base mul setalpha
+              cb-x cd-y cb-L 0.3 mul sub cb-L 1 cd-hgt sub mul add cb-w cb-L cd-hgt mul rectfill
+            grestore
+          } if
+          cd-toks cb-x0 cd-y cd-hgt cb-base mul 100000 .codeline pop
+        } if
+        /cd-y cd-y cb-L cd-hgt mul sub def
+      } forall
+    grestore
+    cb-base setalpha
+  end
+} bind def

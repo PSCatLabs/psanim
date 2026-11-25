@@ -46,10 +46,12 @@
 #![allow(clippy::result_large_err)] // errors are the cold path; a rich one beats a boxed one
 
 pub mod api;
+pub mod code;
 mod ctx;
 pub mod ease;
 mod engine;
 mod error;
+pub mod motion;
 mod ops;
 pub mod pathmath;
 pub mod raster;
@@ -57,11 +59,13 @@ pub mod raster;
 pub mod render;
 pub mod sheet;
 pub mod signals;
+mod vocab;
 
 pub use engine::{Budget, Frame, Meta, Mode, MotionBlur, Movie, Options, PRELUDE, Param, Scale};
 pub use error::{Error, Phase, TraceLine};
 pub use ops::TRANSITIONS;
 pub use signals::Signals;
+pub use vocab::LIBRARIES;
 
 /// The PSCat types that appear in this crate's API, re-exported so a host
 /// needs only one dependency.

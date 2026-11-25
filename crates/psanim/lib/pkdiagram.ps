@@ -1,0 +1,409 @@
+%!PS
+% pkdiagram: boxes with names on them, lines between them, things moving
+% along the lines, and the marks a presenter makes.
+%
+% A diagram is boxes (pkstage) you defined in setup. A connector is the
+% current path, so everything that works on a path works on an edge:
+% `trimpath` draws it on, `onpath` rides it, `pathpoint` finds its middle.
+/pkstage use /pkmotion use /pktype use
+
+% --- nodes ----------------------------------------------------------------------
+% (label) box opts node -
+%   opts is a fill role (/surface, /accent ...) or a dictionary:
+%   << /Fill /surface /Stroke /line /Ink /fg /Shape /box /Size 24 /Sub (smaller line) /Font /title >>
+%   /Shape: /box /pill /circle /diamond /cylinder /plain (no outline, label only)
+% cx cy rx ry a0 a1 clockwise .ellipse -    an elliptical arc appended to the path
+/.ellipse {
+  8 dict begin
+    /el-cw exch def /el-a1 exch def /el-a0 exch def /el-ry exch def /el-rx exch def /el-cy exch def /el-cx exch def
+    /el-m matrix currentmatrix def
+    el-cx el-cy translate el-rx el-ry scale
+    0 0 1 el-a0 el-a1 el-cw { arcn } { arc } ifelse
+    el-m setmatrix
+  end
+} bind def
+/.nodepath {             % box shape -
+  6 dict begin
+    /np-s exch def dup /np-b exch def
+    aload pop /np-h exch def /np-w exch def /np-y exch def /np-x exch def
+    newpath
+    np-s /pill eq { np-b np-h 2 div roundpath } {
+    np-s /circle eq {
+      np-x np-w 2 div add np-y np-h 2 div add np-w 2 div np-h 2 div 0 360 false .ellipse closepath
+    } {
+    np-s /diamond eq {
+      np-x np-w 2 div add np-y moveto np-x np-w add np-y np-h 2 div add lineto
+      np-x np-w 2 div add np-y np-h add lineto np-x np-y np-h 2 div add lineto closepath
+    } {
+    np-s /cylinder eq {
+      /np-e np-h 0.14 mul def
+      np-x np-y np-h add np-e sub moveto
+      np-x np-w 2 div add np-y np-h add np-e sub np-w 2 div np-e 180 0 true .ellipse
+      np-x np-w add np-y np-e add lineto
+      np-x np-w 2 div add np-y np-e add np-w 2 div np-e 0 180 true .ellipse
+      closepath
+      np-x np-w add np-y np-h add np-e sub moveto
+      np-x np-w 2 div add np-y np-h add np-e sub np-w 2 div np-e 0 180 true .ellipse
+    } {
+      np-b theme /corner get roundpath
+    } ifelse } ifelse } ifelse } ifelse
+  end
+} bind def
+/node {
+  16 dict begin
+    dup type /nametype eq { /nd-o 1 dict def nd-o exch /Fill exch put } { /nd-o exch def } ifelse
+    /nd-b exch def /nd-l exch def
+    /nd-shape nd-o /Shape /box .opt def
+    /nd-full nd-b def
+    nd-shape /cylinder eq { /nd-b [ nd-b aload pop 0.80 mul ] def } if   % the label sits below the rim
+    nd-b aload pop /nd-h exch def /nd-w exch def /nd-y exch def /nd-x exch def
+    gsave
+      nd-shape /plain ne {
+        nd-full nd-shape .nodepath
+        gsave nd-o /Fill /surface .opt ink fill grestore
+        nd-o /Stroke /line .opt ink theme /stroke get setlinewidth 1 setlinejoin stroke
+      } if
+      /nd-sub nd-o /Sub () .opt def
+      /nd-font nd-o /Font /title .opt def
+      nd-font 100 face
+      /nd-size
+        nd-o /Size known { nd-o /Size get } {
+          nd-h nd-sub length 0 gt { 0.24 } { 0.30 } ifelse mul
+          nd-w 0.84 mul nd-l stringwidth pop 0.001 max div 100 mul min
+          5 vmin min
+        } ifelse def
+      nd-font nd-size face nd-o /Ink /fg .opt ink
+      nd-sub length 0 gt {
+        nd-l [ nd-x nd-y nd-h 0.48 mul add nd-w nd-h 0.40 mul ] /c showin
+        /body nd-size 0.62 mul face
+        nd-w 0.86 mul nd-sub stringwidth pop 0.001 max div 1 lt {
+          /body nd-size 0.62 mul nd-w 0.86 mul nd-sub stringwidth pop div mul face
+        } if
+        nd-o /SubInk /muted .opt ink
+        nd-sub [ nd-x nd-y nd-h 0.14 mul add nd-w nd-h 0.30 mul ] /c showin
+      } {
+        nd-l nd-b /c showin
+      } ifelse
+    grestore
+  end
+} bind def
+% (label) box opts group -      a container: a dashed outline with its name
+%                               on the top edge. opts: a role for the line, or
+%                               << /Stroke /muted /Ink /muted /Size 16 >>
+/group {
+  12 dict begin
+    dup type /nametype eq { /gp-o 1 dict def gp-o exch /Stroke exch put } { /gp-o exch def } ifelse
+    /gp-b exch def /gp-l exch def
+    /gp-size gp-o /Size 2.3 vmin .opt def
+    gsave
+      gp-o /Stroke /muted .opt ink theme /stroke get 0.7 mul setlinewidth
+      [ gp-size 0.5 mul gp-size 0.4 mul ] 0 setdash
+      newpath gp-b theme /corner get 1.6 mul roundpath stroke
+      [] 0 setdash
+      /body gp-size face
+      gp-b /nw boxpoint gp-size 0.36 mul sub exch gp-size 1.2 mul add exch moveto
+      gsave /bg ink gp-l textbox gp-size 0.4 mul neg inset boxpath fill grestore
+      gp-o /Ink gp-o /Stroke /muted .opt .opt ink gp-l show
+    grestore
+  end
+} bind def
+
+% --- connectors -------------------------------------------------------------------
+% boxA boxB /route connect -    the current path becomes a connector from
+%   the edge of A to the edge of B. Routes: /straight, /elbow (right
+%   angles, leaving A sideways or vertically, whichever the boxes' places
+%   call for), /arc (a curve that bulges left of the direction of travel;
+%   /arc-right bulges the other way), /hv and /vh (one corner: across then
+%   up, or up then across), or [/sideA /sideB] to say which side of each
+%   box it leaves and arrives by: [/s /n] goes down, across and down; or
+%   [ x y x y ... ], points to pass through on the way (to go round a node).
+/.edgeclip {             % cx cy hw hh dx dy -> x y    where the ray from the centre leaves the box
+  6 dict begin
+    /ec-dy exch def /ec-dx exch def /ec-hh exch def /ec-hw exch def /ec-cy exch def /ec-cx exch def
+    /ec-t ec-dx abs 1e-6 lt { 1e9 } { ec-hw ec-dx abs div } ifelse
+          ec-dy abs 1e-6 lt { 1e9 } { ec-hh ec-dy abs div } ifelse min def
+    ec-cx ec-dx ec-t mul add  ec-cy ec-dy ec-t mul add
+  end
+} bind def
+/connectgap 6 def        % space left between a box and a connector's end
+/connect {
+  24 dict begin
+    /cn-r exch def
+    connectgap neg inset aload pop /cn-bh exch 2 div def /cn-bw exch 2 div def /cn-by exch cn-bh add def /cn-bx exch cn-bw add def
+    connectgap neg inset aload pop /cn-ah exch 2 div def /cn-aw exch 2 div def /cn-ay exch cn-ah add def /cn-ax exch cn-aw add def
+    /cn-dx cn-bx cn-ax sub def /cn-dy cn-by cn-ay sub def
+    /cn-rad theme /corner get 1.4 mul 4 max def
+    newpath
+    cn-r type /arraytype eq { cn-r 0 get type /nametype ne } { false } ifelse {
+      % [ x y x y ... ]: through these points, corners rounded
+      /cn-n cn-r length 2 idiv def
+      cn-ax cn-ay cn-aw cn-ah cn-r 0 get cn-ax sub cn-r 1 get cn-ay sub .edgeclip moveto
+      0 1 cn-n 1 sub { /cn-i exch def
+        cn-r cn-i 2 mul get cn-r cn-i 2 mul 1 add get
+        cn-i cn-n 1 sub lt
+          { cn-r cn-i 2 mul 2 add get cn-r cn-i 2 mul 3 add get }
+          { cn-bx cn-by cn-bw cn-bh cn-r cn-i 2 mul get cn-bx sub cn-r cn-i 2 mul 1 add get cn-by sub .edgeclip }
+          ifelse
+        cn-rad arct
+      } for
+      cn-bx cn-by cn-bw cn-bh cn-r cn-n 1 sub 2 mul get cn-bx sub cn-r cn-n 2 mul 1 sub get cn-by sub .edgeclip lineto
+    } {
+    cn-r type /arraytype eq {
+      % [/sideA /sideB]: leave A by one side, arrive at B by another
+      /cn-sa cn-r 0 get def /cn-sb cn-r 1 get def
+      /cn-px cn-ax cn-sa /e eq { cn-aw add } if cn-sa /w eq { cn-aw sub } if def
+      /cn-py cn-ay cn-sa /n eq { cn-ah add } if cn-sa /s eq { cn-ah sub } if def
+      /cn-qx cn-bx cn-sb /e eq { cn-bw add } if cn-sb /w eq { cn-bw sub } if def
+      /cn-qy cn-by cn-sb /n eq { cn-bh add } if cn-sb /s eq { cn-bh sub } if def
+      /cn-va cn-sa /n eq cn-sa /s eq or def /cn-vb cn-sb /n eq cn-sb /s eq or def
+      /cn-out 4 vmin def
+      cn-px cn-py moveto
+      cn-va cn-vb and {
+        /cn-my cn-sa cn-sb eq
+          { cn-sa /n eq { cn-py cn-qy max cn-out add } { cn-py cn-qy min cn-out sub } ifelse }
+          { cn-py cn-qy add 2 div } ifelse def
+        cn-px cn-qx sub abs 1 lt { cn-qx cn-qy lineto } {
+          /cn-rr cn-rad cn-px cn-qx sub abs 2 div min cn-my cn-py sub abs min cn-my cn-qy sub abs min def
+          cn-px cn-my cn-qx cn-my cn-rr arct
+          cn-qx cn-my cn-qx cn-qy cn-rr arct
+          cn-qx cn-qy lineto
+        } ifelse
+      } {
+      cn-va not cn-vb not and {
+        /cn-mx cn-sa cn-sb eq
+          { cn-sa /e eq { cn-px cn-qx max cn-out add } { cn-px cn-qx min cn-out sub } ifelse }
+          { cn-px cn-qx add 2 div } ifelse def
+        cn-py cn-qy sub abs 1 lt { cn-qx cn-qy lineto } {
+          /cn-rr cn-rad cn-py cn-qy sub abs 2 div min cn-mx cn-px sub abs min cn-mx cn-qx sub abs min def
+          cn-mx cn-py cn-mx cn-qy cn-rr arct
+          cn-mx cn-qy cn-qx cn-qy cn-rr arct
+          cn-qx cn-qy lineto
+        } ifelse
+      } {
+        cn-va
+          { cn-px cn-qy cn-qx cn-qy cn-rad arct }
+          { cn-qx cn-py cn-qx cn-qy cn-rad arct } ifelse
+        cn-qx cn-qy lineto
+      } ifelse } ifelse
+    } {
+    cn-r /elbow eq cn-r /hv eq or cn-r /vh eq or {
+      % horizontal-first when the boxes are side by side
+      cn-r /hv eq { true } { cn-r /vh eq { false } {
+        cn-dx abs cn-aw sub cn-bw sub  cn-dy abs cn-ah sub cn-bh sub  ge } ifelse } ifelse
+      {
+        /cn-sx cn-ax cn-dx 0 ge { cn-aw add } { cn-aw sub } ifelse def
+        cn-r /hv eq {
+          /cn-ey cn-by cn-dy 0 ge { cn-bh sub } { cn-bh add } ifelse def
+          cn-sx cn-ay moveto cn-bx cn-ay cn-bx cn-ey cn-rad arct cn-bx cn-ey lineto
+        } {
+          /cn-ex cn-bx cn-dx 0 ge { cn-bw sub } { cn-bw add } ifelse def
+          /cn-mx cn-sx cn-ex add 2 div def
+          cn-sx cn-ay moveto
+          cn-ay cn-by sub abs 1 lt { cn-ex cn-by lineto } {
+            /cn-rr cn-rad cn-ay cn-by sub abs 2 div min cn-ex cn-sx sub abs 2 div min def
+            cn-mx cn-ay cn-mx cn-by cn-rr arct
+            cn-mx cn-by cn-ex cn-by cn-rr arct
+            cn-ex cn-by lineto
+          } ifelse
+        } ifelse
+      } {
+        /cn-sy cn-ay cn-dy 0 ge { cn-ah add } { cn-ah sub } ifelse def
+        cn-r /vh eq {
+          /cn-ex cn-bx cn-dx 0 ge { cn-bw sub } { cn-bw add } ifelse def
+          cn-ax cn-sy moveto cn-ax cn-by cn-ex cn-by cn-rad arct cn-ex cn-by lineto
+        } {
+          /cn-ey cn-by cn-dy 0 ge { cn-bh sub } { cn-bh add } ifelse def
+          /cn-my cn-sy cn-ey add 2 div def
+          cn-ax cn-sy moveto
+          cn-ax cn-bx sub abs 1 lt { cn-bx cn-ey lineto } {
+            /cn-rr cn-rad cn-ax cn-bx sub abs 2 div min cn-ey cn-sy sub abs 2 div min def
+            cn-ax cn-my cn-bx cn-my cn-rr arct
+            cn-bx cn-my cn-bx cn-ey cn-rr arct
+            cn-bx cn-ey lineto
+          } ifelse
+        } ifelse
+      } ifelse
+    } {
+      cn-ax cn-ay cn-aw cn-ah cn-dx cn-dy .edgeclip /cn-sy exch def /cn-sx exch def
+      cn-bx cn-by cn-bw cn-bh cn-dx neg cn-dy neg .edgeclip /cn-ey exch def /cn-ex exch def
+      cn-sx cn-sy moveto
+      cn-r /arc eq cn-r /arc-right eq or {
+        /cn-k cn-r /arc eq { 0.22 } { -0.22 } ifelse def
+        /cn-ox cn-ey cn-sy sub neg cn-k mul def /cn-oy cn-ex cn-sx sub cn-k mul def
+        cn-sx cn-ex cn-sx sub 0.3 mul add cn-ox add  cn-sy cn-ey cn-sy sub 0.3 mul add cn-oy add
+        cn-sx cn-ex cn-sx sub 0.7 mul add cn-ox add  cn-sy cn-ey cn-sy sub 0.7 mul add cn-oy add
+        cn-ex cn-ey curveto
+      } { cn-ex cn-ey lineto } ifelse
+    } ifelse
+    } ifelse
+    } ifelse
+  end
+} bind def
+% u arrow -        stroke the first u of the current path, with an arrowhead
+%                  riding its tip, in the current colour and line width
+/arrow {
+  8 dict begin
+    /ar-u exch 0 1 clamp def
+    /ar-len pathlength def
+    /ar-hd currentlinewidth 4.2 mul 6 max def
+    ar-u 0.001 gt ar-len 0 gt and {
+      ar-u pathpoint /ar-a exch def /ar-y exch def /ar-x exch def
+      gsave 0 ar-u ar-hd 0.7 mul ar-len div sub 0 max trimpath 1 setlinecap stroke grestore
+      gsave
+        ar-x ar-y translate ar-a rotate
+        ar-u ar-len mul ar-hd div 1 min dup scale     % the head grows out of the start
+        newpath 0 0 moveto ar-hd neg ar-hd 0.45 mul lineto ar-hd -0.72 mul 0 lineto ar-hd neg ar-hd -0.45 mul lineto closepath fill
+      grestore
+    } if
+    newpath
+  end
+} bind def
+% u len pulse -    a comet at u (0..1) along the current path, len of the
+%                  path long, in the current colour: a message in flight.
+%                  Nothing is drawn for u outside 0..1. The path is kept.
+/pulse {
+  8 dict begin
+    /pu-len exch def /pu-u exch def
+    pu-u 0 gt pu-u 1 lt and {
+      /pu-w currentlinewidth def
+      gsave pu-u pu-len sub 0 max pu-u trimpath [ 0 pu-w 1.8 mul ] taperpath fill grestore
+      gsave pu-u pathpoint pop newpath pu-w 1.5 mul 0 360 arc fill grestore
+    } if
+  end
+} bind def
+% period n pulsetrain -> [u ...]     n evenly spaced positions that travel
+%                                    0 to 1 every period seconds, for /Pulse
+/pulsetrain {
+  4 dict begin
+    /pt-n exch def /pt-p exch def
+    [ 0 1 pt-n 1 sub { pt-n div now pt-p div add 1 fmod } for ]
+  end
+} bind def
+% boxA boxB opts edge -     a connector, drawn. opts is a route name or
+%   << /Route /elbow /Draw u /Role /line /Head true /Width w /Dash false
+%      /Label (text) /LabelRole /muted /LabelSize s /Pulse u-or-[u ...] /PulseRole /accent /PulseLen 0.18 >>
+%   /Draw is how much of it is drawn (animate it with a tween); the label
+%   fades in over the second half; pulses are comets at the given places.
+/edge {
+  24 dict begin
+    dup type /dicttype ne { /ed-o 1 dict def ed-o exch /Route exch put } { /ed-o exch def } ifelse
+    /ed-b exch def /ed-a exch def
+    /ed-u ed-o /Draw 1 .opt 0 1 clamp def
+    /ed-w ed-o /Width theme /stroke get .opt def
+    ed-u 0 gt {
+      gsave
+        ed-o /Role /line .opt ink ed-w setlinewidth 1 setlinejoin
+        ed-a ed-b ed-o /Route /straight .opt connect
+        ed-o /Dash false .opt { [ ed-w 3 mul ed-w 2.5 mul ] 0 setdash } if
+        ed-o /Head true .opt { ed-u arrow } { 0 ed-u trimpath 1 setlinecap stroke } ifelse
+        ed-o /Label known ed-u 0.5 gt and {
+          ed-a ed-b ed-o /Route /straight .opt connect
+          0.5 pathpoint pop /ed-ly exch def /ed-lx exch def newpath
+          /body ed-o /LabelSize 2.1 vmin .opt face
+          ed-u 0.5 sub 2 mul {
+            ed-lx ed-ly moveto
+            /ed-t ed-o /Label get def
+            ed-t stringwidth pop -2 div fontsize 0.45 mul rmoveto
+            gsave /bg ink ed-t textbox 0.5 vmin neg inset theme /corner get 0.5 mul roundpath fill grestore
+            ed-o /LabelRole /muted .opt ink ed-t show
+          } faded
+        } if
+        ed-o /Pulse known ed-u 1 ge and {
+          ed-a ed-b ed-o /Route /straight .opt connect
+          ed-o /PulseRole /accent .opt ink ed-w 1.4 mul setlinewidth
+          ed-o /Pulse get dup type /arraytype ne { 1 array astore } if
+          { ed-o /PulseLen 0.18 .opt pulse } forall
+          newpath
+        } if
+      grestore
+    } if
+  end
+} bind def
+
+% --- a presenter's marks --------------------------------------------------------------
+% Each makes the current path; draw it on with `0 u trimpath stroke`.
+% box circled -        a loose hand-drawn ring around the box
+/circled {
+  aload pop
+  8 dict begin
+    /ci-h exch def /ci-w exch def /ci-y exch def /ci-x exch def
+    /ci-cx ci-x ci-w 2 div add def /ci-cy ci-y ci-h 2 div add def
+    /ci-rx ci-w 0.5 mul 1.2 mul 1.2 vmin add def /ci-ry ci-h 0.5 mul 1.28 mul 1.2 vmin add def
+    newpath
+    0 1 42 { /ci-i exch def
+      /ci-a ci-i 9.2 mul 100 add def
+      /ci-k 1 ci-i 42 div 0.07 mul add  [ ci-x ci-y ci-i ] hash01 0.03 mul add def
+      ci-cx ci-a cos ci-rx mul ci-k mul add  ci-cy ci-a sin ci-ry mul ci-k mul add
+      ci-i 0 eq { moveto } { lineto } ifelse
+    } for
+  end
+} bind def
+% box struck -         a line through the box (a strike-out)
+/struck {
+  aload pop
+  6 dict begin
+    /ci-h exch def /ci-w exch def /ci-y exch def /ci-x exch def
+    newpath ci-x ci-w 0.04 mul sub ci-y ci-h 0.42 mul add moveto
+    ci-x ci-w 1.04 mul add ci-y ci-h 0.52 mul add lineto
+  end
+} bind def
+% box /side bracepath -     a curly brace along that side of the box (/n /s /e /w)
+/bracepath {
+  12 dict begin
+    /br-s exch def
+    aload pop /br-h exch def /br-w exch def /br-y exch def /br-x exch def
+    % a brace along the x axis from 0 to L, pointing up, depth d
+    /br-L br-s /n eq br-s /s eq or { br-w } { br-h } ifelse def
+    /br-d br-L 0.06 mul 1.2 vmin max 2.4 vmin min def
+    /br-m matrix currentmatrix def
+    br-s /n eq { br-x br-y br-h add br-d 0.6 mul add translate } {
+    br-s /s eq { br-x br-w add br-y br-d 0.6 mul sub translate 180 rotate } {
+    br-s /e eq { br-x br-w add br-d 0.6 mul add br-y br-h add translate -90 rotate } {
+                 br-x br-d 0.6 mul sub br-y translate 90 rotate } ifelse } ifelse } ifelse
+    newpath 0 0 moveto
+    0 br-d  br-L 0.5 mul br-d sub 0  br-L 0.5 mul br-d 2 mul curveto
+    br-L 0.5 mul br-d add 0  br-L br-d  br-L 0 curveto
+    br-m setmatrix
+  end
+} bind def
+% box /side bracepoint -> x y     the tip of that brace: where its label goes
+/bracepoint {
+  8 dict begin
+    /br-s exch def
+    aload pop /br-h exch def /br-w exch def /br-y exch def /br-x exch def
+    /br-L br-s /n eq br-s /s eq or { br-w } { br-h } ifelse def
+    /br-d br-L 0.06 mul 1.2 vmin max 2.4 vmin min 2.6 mul def
+    br-s /n eq { br-x br-w 2 div add br-y br-h add br-d add } {
+    br-s /s eq { br-x br-w 2 div add br-y br-d sub } {
+    br-s /e eq { br-x br-w add br-d add br-y br-h 2 div add } {
+                 br-x br-d sub br-y br-h 2 div add } ifelse } ifelse } ifelse
+  end
+} bind def
+% (text) box /side u note -     a label beside the box with a leader line
+%   to it, the line drawn on and the text faded in as u goes 0 to 1.
+%   /side is where the label sits: /n /s /e /w /ne /nw /se /sw. Uses the
+%   current font and colour.
+/note {
+  16 dict begin
+    /nt-u exch 0 1 clamp def /nt-side exch def /nt-b exch def /nt-t exch def
+    nt-u 0 gt {
+      nt-side .anchorfrac /nt-fy exch def /nt-fx exch def
+      /nt-d 6 vmin def
+      nt-b nt-side boxpoint /nt-y0 exch def /nt-x0 exch def
+      /nt-x1 nt-x0 nt-fx 0.5 sub 2 mul nt-d mul add def
+      /nt-y1 nt-y0 nt-fy 0.5 sub 2 mul nt-d mul add def
+      gsave
+        currentlinewidth 0 eq { theme /stroke get 0.7 mul setlinewidth } if
+        newpath nt-x1 nt-y1 moveto nt-x0 nt-y0 lineto
+        0 nt-u 2 mul 1 min trimpath 1 setlinecap stroke
+        nt-x0 nt-y0 nt-u 2 mul 1 min fontsize 0.14 mul mul disc
+      grestore
+      nt-u 2 mul 1 sub 0 max {
+        /nt-w nt-t stringwidth pop def
+        nt-x1 nt-w nt-fx 1 exch sub mul sub  nt-fx 0.5 sub 2 mul fontsize 0.3 mul mul add
+        nt-y1 fontsize 0.72 mul nt-fy 1 exch sub mul sub  nt-fy 0.5 sub 2 mul fontsize 0.45 mul mul add
+        moveto nt-t show
+      } faded
+    } if
+  end
+} bind def

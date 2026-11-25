@@ -17,7 +17,9 @@ scripts/build_wasm.sh && node scripts/wasm_smoke.mjs     # the browser build
 |---|---|---|
 | Easing, path math, raster ops, signals, hashing | unit tests beside the code | endpoints, monotonicity, symmetry; arc length; trim proportions; compositing keeps pixels premultiplied; cropped blur equals full blur |
 | The engine | `crates/psanim/tests/engine.rs` | frames are time-addressable (any order, fresh movie, same bytes); every time scope; tweens and keyframes; paths; layers; every transition starts on A and ends on B; stateful replay and frame-rate independence; persistent seek; motion blur; errors, hints and backtraces; budgets; file access; interrupt |
-| The vocabulary | `tests/vocabulary.rs` | every documented word exists; every public prelude name is documented; no PSCat library redefines a psanim word |
+| The vocabulary | `tests/vocabulary.rs` | every documented word exists; every public prelude and library name is documented, under its own library and no other; a library loads once and an unloaded library's word says which library it is in; no PSCat library redefines a psanim word |
+| The libraries | `tests/libraries.rs` | every entrance is absent before, moving during, and **pixel-identical to the plain drawing** after; every emphasis rests at both ends; a motion scales about the drawing's measured centre; exits are entrances backward; scripts, storyboards and cascades give the clocks they promise; boxes cut up cover their parent and interpolate; `within` re-bases and clips; themes; text is measured, wrapped and fitted, and kinetic text ends as plain text; equations set term by term match the line set whole; connectors run edge to edge; charts map data and grow in proportion; code types, focuses and diffs; a frame using every library still depends on its time alone and its viewport |
+| Motions, code, formatting | unit tests in `src/motion.rs`, `src/code.rs`, `src/vocab.rs` | poses at the ends of every built-in motion; tokenized lines round-trip; the diff; number formats; ticks; smooth keys; straightening keeps length |
 | Documentation | `tests/docs.rs` | every `postscript` fence in the skill and docs runs as a movie; every example and gallery piece loads and renders |
 | Parallel rendering | `src/render.rs` tests | parallel equals serial, in order; errors and sink failures stop the render |
 | Contact sheets | `src/sheet.rs` tests | every thumbnail is on the sheet |
@@ -44,7 +46,7 @@ Results and their conditions are in [benchmarks.md](benchmarks.md).
    user procedure).
 2. Add its entry to `api.rs`. The vocabulary tests fail until it is there,
    and fail if a PSCat library already uses the name.
-3. Test it in `tests/engine.rs`.
+3. Test it in `tests/engine.rs` (core) or `tests/libraries.rs` (a library word).
 4. `scripts/gen_reference.sh` regenerates the skill's `vocabulary.md`.
 
 ## Adding a gallery piece

@@ -1,0 +1,295 @@
+%!PS
+% Poster: 3.4
+% FRESH: a kinetic typography short about stateless animation.
+% Nothing in the film is remembered from one frame to the next; every
+% word lands on a 120 bpm beat computed from the clock alone. Composed
+% in boxes and vmin, so it reflows for 1080x1920, 1080x1080 or 1280x720:
+%   psanim render fresh.ps --param w=1280 --param h=720 -o wide.mp4
+
+% ---- the beat: defined once, everything is timed in beats ---------------
+/bpm 120 def
+/B 60 bpm div def                 % one beat, in seconds
+/b { B mul } def                  % beats -> seconds
+
+[ /thesis 8 b  /nothing 8 b  /no 8 b  /fresh 8 b  /count 8 b
+  /where 12 b  /you 6 b  /moves 6 b  /tag 4 b ] storyboard
+
+<< /Size [ /w 1080 param  /h 1920 param ]
+   /Duration storylength /FPS 30
+   /Title (Fresh)
+   /Description (Kinetic type on a 120 bpm grid: a frame is a function of time, nothing is remembered, and the motion lives in whoever is watching.)
+>> animation
+
+/pkdiagram use                    % loads pkstage, pkmotion, pktype
+
+<< /bg [0.045 0.045 0.055] /surface [0.12 0.12 0.14] /fg [0.955 0.94 0.90]
+   /muted [0.50 0.50 0.53] /line [0.26 0.26 0.29] /accent [1.0 0.29 0.14]
+   /display /Helvetica-Bold /mono /Courier-Bold >> usetheme
+
+% ---- the page: one margin, a thin hud top and bottom, a stage between ----
+/tall height width gt def
+/M 7 vmin def
+/CAP 0.72 def                                   % cap height of the display face, in ems
+/page canvasbox M inset def
+/hud-h 2.4 vmin def
+/gut 4 vmin def
+/vtrim { % box top bottom -> box   (take units off the top and the bottom)
+  3 dict begin /bo exch def /to exch def aload pop
+  to sub bo sub 4 1 roll exch bo add exch 4 -1 roll 4 array astore end } def
+/hud-top [ page 0 get  page 1 get page 3 get add hud-h sub  page 2 get  hud-h ] def
+/hud-bot [ page aload pop pop hud-h ] def
+/stage page hud-h gut add dup vtrim def
+/sx stage 0 get def /sy stage 1 get def /sw stage 2 get def /sh stage 3 get def
+/frac { % box fx fy fw fh -> box   (a part of a box, by fractions)
+  5 dict begin /fh exch def /fw exch def /fy exch def /fx exch def aload pop
+  /h0 exch def /w0 exch def /y0 exch def /x0 exch def
+  [ x0 w0 fx mul add  y0 h0 fy mul add  w0 fw mul  h0 fh mul ] end } def
+
+% ---- type helpers --------------------------------------------------------
+% (text) box ax ay capset (text): pick the display size at which the text
+% fills the box (by width, or by cap height) and move to where it sits;
+% ax, ay in 0..1 place it left..right, bottom..top.
+/capset {
+  12 dict begin /ay exch def /ax exch def aload pop
+  /bh exch def /bw exch def /by exch def /bx exch def /s exch def
+  /display 100 face /w1 s stringwidth pop 100 div def
+  /sz bw w1 div  bh CAP div  2 copy gt { exch } if pop def
+  /display sz face
+  bx bw w1 sz mul sub ax mul add   by bh CAP sz mul sub ay mul add  moveto
+  s end } def
+% (text) track box ax ay tracked: a letterspaced line in the current font
+/tracked {
+  12 dict begin /ay exch def /ax exch def aload pop
+  /bh exch def /bw exch def /by exch def /bx exch def /tr exch def /s exch def
+  bx bw s tr spacedwidth sub ax mul add  by bh fontsize CAP mul sub ay mul add moveto
+  s tr { pop show } eachspaced end } def
+/label { /display 3.3 vmin face } def
+/pad2 { dup 10 lt { 2 string cvs (0) exch strcat } { 2 string cvs } ifelse } def
+% box proc sideways: run proc turned a quarter turn, reading upward; inside,
+% /lbox is the same box in the turned coordinates.
+/sideways {
+  exch aload pop 6 dict begin /bh exch def /bw exch def /by exch def /bx exch def
+  gsave bx bw add by translate 90 rotate /lbox [ 0 0 bh bw ] def exec grestore end } def
+
+% ---- the beat, read from the film's clock ---------------------------------
+/beatpos { { now B div } globally } def
+/kick { beatpos dup floor sub 1 exch sub dup mul dup mul } def        % 1 on the beat, then decays
+/barkick { beatpos 4 div dup floor sub 1 exch sub dup mul dup mul dup mul } def
+
+% ---- the flood of accent colour that carries IN YOU -----------------------
+/floodbox { {
+  /you beat dup 0.6 b add /expo-out tween height mul            % its top edge
+  /moves beat dup 0.8 b add /expo-inout tween height mul        % its bottom edge
+  2 copy le { pop pop [ 0 0 0 0 ] } { exch 1 index sub [ 0 4 2 roll width exch ] } ifelse
+} globally } def
+
+/hud { % role-dim role-hot
+  6 dict begin /hot exch def /dim exch def
+  /mono hud-h 1.25 mul face
+  dim ink
+  hud-top /sw boxpoint moveto (f\(t\)) show
+  hud-top /se boxpoint moveto (t = ) globaltime 2 fmtfixed strcat showright
+  hud-bot /sw boxpoint moveto (bar ) beatpos 4 div floor cvi 1 add pad2 strcat show
+  0 1 3 { /i exch def
+    /q hud-bot /se boxpoint pop 3 i sub hud-h 1.6 mul mul sub hud-h sub def
+    beatpos cvi 4 mod i eq
+      { hot ink q hud-bot 1 get hud-h kick mul 0.35 mul sub  hud-h dup kick 0.7 mul 1 add mul rectfill }
+      { dim ink q hud-bot 1 get hud-h 0.38 mul add hud-h hud-h 0.24 mul rectfill } ifelse
+  } for
+  end } def
+
+% ---- shot 1: A FRAME is a function of TIME --------------------------------
+tall {
+  /time-w sh 2.39 div CAP mul sw 0.56 mul 2 copy gt { exch } if pop def
+  /time-box [ sx sw add time-w sub  sy  time-w  sh ] def
+  /lead-box [ sx sy sw time-w sub gut sub sh ] def
+} {
+  /time-box stage 0.4 0 0.6 1 frac def
+  /lead-box stage 0 0 0.36 1 frac def
+} ifelse
+/shot-thesis {
+  (FRAME) lead-box 0 1 capset pop
+  /lead-s [ lead-box 0 get  lead-box /nw boxpoint exch pop fontsize CAP 0.92 add mul sub 7 vmin sub  lead-box 2 get 0 ] def
+  /fg ink
+  0 { (FRAME) lead-box 0 1 capset pop (A) /whole 0 [/mask-up 0.35] kinetic } after
+  1 b { (FRAME) lead-box 0 1 capset pop 0 fontsize -0.92 mul rmoveto
+        (FRAME) /whole 0 [/mask-up 0.35] kinetic } after
+  /accent ink
+  2 b [/unroll 0.3] { lead-s /nw boxpoint 0.5 vmin sub 12 vmin 0.5 vmin rectfill } enters
+  /muted ink
+  [ (IS A) (FUNCTION) (OF) ] 0.5 b {
+    /i exch def /wd exch def
+    2 b { [/rise 0.3] { label wd 0.5 vmin lead-s 0 i -5 vmin mul -3 vmin add shifted 0 1 tracked } entering } after
+  } cascade
+  4 b {
+    /accent ink
+    tall { time-box { (TIME) lbox 0 0 capset /glyphs 0.5 b 4 div [/mask-up 0.3] kinetic } sideways }
+         { (TIME) time-box 1 0 capset /glyphs 0.5 b 4 div [/mask-up 0.3] kinetic } ifelse
+  } after
+} def
+
+% ---- shot 2: NOTHING is remembered ----------------------------------------
+/noth-box stage 0 0.44 1 0.2 frac def
+/shot-nothing {
+  /u-out 7 b 8 b /cubic-in tween def
+  % the outline is always there; the fill drains out of it
+  0 [/mask-up 0.4] {
+    /fg ink 0.35 vmin setlinewidth
+    (NOTHING) noth-box 0 0 capset false charpath u-out 1 trimpath stroke
+    1 4 b 6 b /cubic-inout tween sub { /fg ink (NOTHING) noth-box 0 0 capset show } faded
+  } enters
+  (NOTHING) noth-box 0 0 capset stringwidth pop currentpoint pop add /rx exch def
+  /display 5.2 vmin face /fg ink  /ry noth-box 1 get 8 vmin sub def
+  2 b [/rise 0.3] { rx (IS REMEMBERED.) stringwidth pop sub ry moveto (IS ) show } enters
+  2 b 4 b { [/fade 0.01] { [/rise 0.3] { rx (REMEMBERED.) stringwidth pop sub ry moveto (REMEMBERED.) show } entering } leaving } during
+  4 b {
+    rx (REMEMBERED.) stringwidth pop sub ry moveto
+    (REMEMBERED.) { /i exch def /c exch def currentpoint /py exch def /px exch def
+      i 11 /random rank 0.12 b mul [/focus 0.45] { /fg ink px py moveto c show } leaves
+    } eachglyph
+  } after
+} def
+
+% ---- shot 3: NO yesterday, NO momentum, NO drift --------------------------
+tall { /no-box stage 0 0.56 1 0.44 frac def  /nouns stage 0 0.08 1 0.36 frac def }
+     { /no-box stage 0 0 0.42 1 frac def     /nouns stage 0.47 0.18 0.53 0.64 frac def } ifelse
+/noun-rows nouns 3 2.5 vmin rows def
+/noun { % (text) row -> (text), font and point set: all three at one size
+  (YESTERDAY.) 1 index 0 0.5 capset pop  fontsize exch
+  aload pop pop pop exch pop exch CAP mul 2 div sub nouns 0 get exch moveto } def
+/shot-no {
+  0 6 b { 2 b { [/pop 0.22 /back-out] { /accent ink (NO) no-box tall { 0 1 } { 0 0.5 } ifelse capset show } entering } looped } during
+  6 b { /accent ink (NO) no-box tall { 0 1 } { 0 0.5 } ifelse capset show } after
+  % yesterday: arrives from the left, already fading into the past
+  1 b { [/slide-right 0.4 /cubic-out] {
+      /fg /muted 0.4 2.5 b /quad-inout tween mixink ink (YESTERDAY.) noun-rows 0 get noun show } entering } after
+  % momentum: comes in fast, overshoots, stops dead
+  3 b { [/slide-left 0.45 /back-out] { /fg ink (MOMENTUM.) noun-rows 1 get noun show } entering } after
+  % drift: never quite sits still
+  5 b { gsave
+      noun-rows 2 get aload pop pop pop translate
+      now 0.9 vmin mul  now dup mul -0.35 vmin mul translate  now -1.1 mul rotate
+      [/fade 0.3] { /fg ink (DRIFT.) [ 0 0 noun-rows 2 get 2 get noun-rows 2 get 3 get ] noun pop
+                    0 currentpoint exch pop moveto (DRIFT.) show } entering
+    grestore } after
+} def
+
+% ---- shot 4: every moment is (stored) computed, fresh ---------------------
+/fr-slot  stage 0 0.50 1 0.14 frac def
+/fr-fresh [ sx  fr-slot 1 get 3.5 vmin sub sh 0.22 mul sub  sw  sh 0.22 mul ] def
+/shot-fresh {
+  (STORED) fr-slot 0 0 capset pop
+  /fr-top [ sx  fr-slot 1 get fontsize CAP mul add 3.5 vmin add  sw 0 ] def
+  /muted ink
+  [ (EVERY) (MOMENT) (IS) ] 0.5 b { /i exch def /wd exch def
+    [/rise 0.3] { label fr-top /sw boxpoint moveto
+      (EVERY MOMENT IS) 0.5 vmin { /k exch def /c exch def
+        k [ 0 0 0 0 0 0 1 1 1 1 1 1 1 2 2 ] exch get i eq { c show } { c stringwidth rmoveto } ifelse } eachspaced } entering
+  } cascade
+  4 b [/mask-up 0.3]
+    { 2 b [/mask-up 0.3] { /fg ink (STORED) fr-slot 0 0 capset show } enters
+      /accent ink 1.6 vmin setlinewidth
+      (STORED) fr-slot 0 0 capset textbox struck 0 3 b 3.4 b /expo-out tween trimpath stroke }
+    { /accent ink (COMPUTED,) fr-slot 0 0 capset show }
+  swapped
+  5 b 8 b { 1 b { [/pop 0.2 /back-out] { /fg ink (FRESH.) fr-fresh 0 1 capset show } entering } looped } during
+} def
+
+% ---- shot 5: thirty times a second ----------------------------------------
+/ct-top    stage 0 0.86 1 0.06 frac def
+/ct-digits stage 0 0.44 1 0.38 frac def
+/ct-ticks  stage 0 0.36 1 0.03 frac def
+/ct-ask    stage 0 0.20 1 0.08 frac def
+/ct-ans    stage 0 0.10 1 0.08 frac def
+/shot-count {
+  /fnum globaltime fps mul round cvi 30 mod def
+  0 [/rise 0.3] { /muted ink label (THIRTY TIMES A SECOND,) 0 1 b /cubic-out tween 0.2 0.6 between vmin ct-top 0 0 tracked } enters
+  0 [/wipe-up 0.3] { /fg ink fnum pad2 ct-digits 0 0 capset show } enters
+  ct-ticks 30 0.5 vmin cols 0.02 { /j exch def /tb exch def
+    j fnum le { /accent ink } { /line ink } ifelse
+    [/unfold 0.2] { tb boxpath fill } entering
+  } cascade
+  /mono 4.6 vmin face /fg ink
+  3 b { ct-ask /sw boxpoint moveto (> what time is it?) 0 2 b ramp typewrite } after
+  5.5 b [/pop 0.2] { /mono 4.6 vmin face /accent ink ct-ans /sw boxpoint moveto
+    (  t = ) globaltime 3 fmtfixed strcat ( s) strcat show } enters
+} def
+
+% ---- shot 6: so where does the motion live? --------------------------------
+/ring-r sw sh 2 copy gt { exch } if pop 0.5 mul 1.24 div def
+/ring-c { stage /c boxpoint } def
+/ring-text (SO WHERE DOES THE MOTION LIVE?   ) def
+/shot-where {
+  gsave ring-c translate
+    gsave
+      now -9 mul 0 6 b /cubic-out tween 60 mul sub rotate
+      /display 100 face /display 6.2832 ring-r mul ring-text stringwidth pop 100 div div face
+      /fg ink newpath 0 0 ring-r 450 90 arcn
+      ring-text 0 { /i exch def /c exch def
+        i 0.11 b mul dup 0.25 add /cubic-out tween setalpha c show } eachonpath
+      newpath 1 setalpha
+    grestore
+    /qbox [ ring-r -0.5 mul dup ring-r dup ] def
+    8 b [/flip 0.3]
+      { 4 b [/pop 0.3 /back-out] { /accent ink
+          gsave 1 kick 0.08 mul add dup scale (?) qbox 0.5 0.5 capset show grestore } enters }
+      { /fg ink (NOT) qbox 0 0.56 1 0.4 frac 0.5 0 capset pop (HERE.) qbox 0 0.56 1 0.4 frac 0.5 0 capset pop
+        /display fontsize face
+        qbox 0 0.56 1 0.4 frac /s boxpoint moveto (NOT) showcenter
+        1 b [/mask-up 0.25] { qbox 0 0.56 1 0.4 frac /s boxpoint fontsize CAP mul 1.35 mul sub moveto (HERE.) showcenter } enters }
+    swapped
+  grestore
+} def
+
+% ---- shot 7: IN YOU, on a flood of the accent ------------------------------
+/you-box stage 0 0.10 1 0.34 frac def
+/shot-you {
+  /bg ink
+  2 b [/zoom 0.25 /expo-out] { /bg ink (YOU.) you-box 0 0 capset show } enters
+  1 b [/mask-up 0.3] { /bg ink (YOU.) you-box 0 0 capset pop
+    you-box /sw boxpoint fontsize CAP mul 1.28 mul add moveto (IN) show } enters
+} def
+
+% ---- shot 8: you remember, so it moves -------------------------------------
+/mv-top  stage 0 0.70 1 0.10 frac def
+/mv-word stage 0 0.30 0.74 0.22 frac def
+/shot-moves {
+  [/fade 0.4] {
+    1 b [/mask-up 0.3] { /fg ink (YOU REMEMBER.) mv-top 0 0 capset show } enters
+    2 b [/mask-up 0.3] { /muted ink (YOU REMEMBER.) mv-top 0 0 capset pop mv-top /sw boxpoint fontsize 1.12 mul sub moveto (SO IT) show } enters
+    3 b { 4 0.045 {
+        now 0 ge {
+          gsave 0 0.5 /expo-out tween 0 1 between dup setalpha pop
+            sw 0.26 mul 0.5 now 0.5 b sub 2 b div 360 mul cos 0.5 mul sub mul 0 translate
+            /accent ink (MOVES.) mv-word 0 0 capset show
+          grestore } if
+      } echoed } after
+  } leaving
+} def
+
+% ---- the tag: the thesis again, small, tracking out ------------------------
+/shot-tag {
+  0 span /linear tween /u exch def
+  0 0.6 /cubic-out tween  1 span 1 b sub span /cubic-in tween sub mul {
+    label /fg ink (A FRAME IS A FUNCTION OF TIME) u 0.15 1.0 between vmin stage 0 0.47 1 0.06 frac 0.5 0.5 tracked
+    /accent ink stage /c boxpoint exch u 2 14 between vmin 2 div sub exch 5 vmin sub u 2 14 between vmin 0.4 vmin rectfill
+    0 [/pop 0.25 /back-out] { /accent ink /display 15 vmin face stage /c boxpoint 6 vmin add moveto (f\(t\)) showcenter } enters
+  } faded
+} def
+
+/scene {
+  ground
+  /surface ink barkick 0.55 mul setalpha canvasbox boxpath fill 1 setalpha
+  /accent ink floodbox boxpath fill
+  /thesis  { shot-thesis }  inbeat
+  /nothing { shot-nothing } inbeat
+  /no      { shot-no }      inbeat
+  /fresh   { shot-fresh }   inbeat
+  /count   { shot-count }   inbeat
+  /where   { shot-where }   inbeat
+  /you     { shot-you }     inbeat
+  /moves   { shot-moves }   inbeat
+  /tag     { shot-tag }     inbeat
+  /muted /accent hud
+  gsave floodbox boxpath clip newpath /bg /bg hud grestore
+} def

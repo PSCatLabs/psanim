@@ -1,0 +1,81 @@
+%!PS
+% Poster: 7.5
+% Canon
+%
+% One short scene, written once, that contains itself. Each copy sits in
+% the golden rectangle left over beside the one before, a quarter turn
+% round, in the next theme, and three quarters of a second late: a round
+% for seven voices, spiralling inward.
+%
+% Techniques
+%   - A scene is a function of three things psanim lets a caller re-base:
+%     its clock (`delayed`), its canvas (`within`: `width`, `height` and
+%     `vmin` are the box's) and its look (`usetheme`). `voice` is written
+%     against all three and never knows how deep it is.
+%   - Every motion is a whole number of turns of the loop, so the film
+%     closes, and so does every late copy of it.
+%   - `around` repeats the petals; they and the runner's wake are tapered
+%     strokes (`brushstroke`).
+<< /Size [1294 800] /Duration 12 /FPS 30 /Loop true
+   /Title (Canon)
+   /Description (A scene that contains itself: seven voices, each a quarter turn round, in another theme, three quarters of a second behind the last.)
+>> animation
+/pkmotion use /pktype use /pkink use
+
+/voices [ /midnight /dusk /paper /blueprint /poster /terminal /midnight ] def
+/lag 0.75 def
+/level 0 def
+% k whole turns over the film, whatever the delay: `turns` measures against
+% the current window, which `delayed` shortens, so a late voice would drift.
+/laps { 360 mul now duration div mul } def
+
+% The figure, in a square of side `height` at the left of the canvas.
+/figure {
+  gsave
+    height 2 div dup translate
+    /R height 0.36 mul def
+    % the ring the runner travels
+    /line ink 0.5 vmin setlinewidth newpath 0 0 R 0 360 arc stroke
+    % twelve petals; a wave of length runs round them once per loop, and
+    % each swells as the runner passes
+    12 { /i exch def
+      /near 4 laps neg i 30 mul sub 360 fmod 180 sub abs 180 div 6 exp def   % 1 as the runner passes
+      /len 0.42 0.16 2 laps i 60 mul add sin mul add 0.2 near mul add R mul def
+      [ /accent2 /accent3 /good ] i 3 mod get /fg near mixink ink
+      newpath R 0.16 mul 0 moveto
+      len 0.4 mul len 0.2 mul  len 0.8 mul len -0.12 mul  len 0 curveto
+      [ 0 3.2 vmin near 1.5 vmin mul add 0 ] brushstroke
+    } around
+    % the runner, and a tapering wake behind it
+    gsave
+      4 laps neg rotate
+      /accent ink
+      newpath 0 0 R 0 70 arc [ 4.4 vmin 0 ] brushstroke
+      R 0 2.6 vmin disc
+      /fg ink R 0 1 vmin disc
+    grestore
+  grestore
+  % which voice this is
+  /muted ink /mono 3.2 vmin face
+  3.5 vmin 3 vmin moveto (voice ) show level 1 add 2 string cvs show
+  level 0 gt { (   +) show level lag mul 2 fmtfixed show ( s) show } if
+} def
+
+% One voice: the figure, and in the rectangle beside it, the next voice.
+/voice {
+  voices level get usetheme
+  ground
+  figure
+  level voices length 1 sub lt {
+    /level level 1 add def
+    gsave
+      width 0 translate 90 rotate
+      lag { [ 0 0 height width height sub ] { voice } within } delayed
+    grestore
+    /level level 1 sub def
+  } if
+  % a hairline between a voice and the one it holds
+  /line ink 0.25 vmin setlinewidth newpath height 0 moveto 0 height rlineto stroke
+} def
+
+/scene { voice } def

@@ -15,3 +15,16 @@ out=skills/psanim/references/vocabulary.md
   $P api --markdown
 } > "$out"
 echo "wrote $out ($(grep -c '^### ' "$out") words)"
+
+libs=skills/psanim/references/vocabulary-libraries.md
+{
+  printf '# psanim library vocabulary\n\n'
+  printf 'Generated from `crates/psanim/src/api.rs` by `scripts/gen_reference.sh`. Do not edit by hand.\n\n'
+  printf 'The words of the libraries loaded with `use`. The chapters (stage.md, type.md, explain.md, ink.md) show them at work; this is the list. `psanim api NAME` prints one entry.\n\n'
+  printf 'Motions (for `enters`, `leaves`, `onstage`, `kinetic` ...): %s\n\n' "$($P api pkmotion | sed -n 's/^Entrances: //p')"
+  printf 'Emphases (for `emphasized`): %s\n\n' "$($P api pkmotion | sed -n 's/^Emphases: //p')"
+  for lib in $($P api --libs | sed -n 's|^  /\([a-z]*\) use.*|\1|p'); do
+    $P api "$lib" --markdown
+  done
+} > "$libs"
+echo "wrote $libs ($(grep -c '^### ' "$libs") words)"

@@ -33,6 +33,7 @@ pub struct Common {
 
 /// Flags that take no value.
 const SWITCHES: &[&str] = &[
+    "libs",
     "json",
     "quiet",
     "untrusted",

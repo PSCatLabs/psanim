@@ -51,26 +51,95 @@ What psanim does not do today, stated plainly, and what would come next.
   operator can overrun them. Not an OS sandbox. See
   [security](security.md).
 
-## Next
+**Vocabulary** (the pk libraries)
+
+- A thing in motion is rasterized: `enters` and its relatives draw the
+  body on a layer and place that, so a large scale-up is soft while it
+  moves, and each concurrent motion costs a canvas-sized layer (measured:
+  about 1 to 1.5 ms per moving thing at 1280x720; 24 at once, 23 ms a
+  frame).
+- A motion measures what was painted. Applied to something that covers
+  the frame (a ground) it moves the frame. Motions move in screen
+  directions whatever the transformation.
+- Text is ASCII in the text fonts. `sym` and run lists reach the Symbol
+  font; there is no Unicode fallback and a missing glyph is silent.
+- `showin` and `node` labels do not wrap or shrink a long string by
+  themselves; `kinetic` has no tracking option.
+- pkchart has no stacked or grouped bars, no log scales, no unit charts,
+  and ticks re-pick abruptly while a range animates.
+- pkdiagram has no automatic layout: boxes are placed by the author.
+- Storyboard beats cut; there is no transition between beats as there is
+  between a reel's clips.
+- The code tokenizer is a highlighter, not a parser: one keyword list
+  per language, no nested or multi-line strings.
+
+## Next: the vocabulary
+
+What the second gallery's authors built by hand, in the order of how
+much it cost them. Each is self-contained and can be given to another
+agent with the report it came from (summarised in
+[the evaluation](vocabulary-evaluation.md)).
+
+1. **A stroke scheduler for painting over time** (`paintplan`): a list of
+   strokes with a start, a duration, a seed and a kind (along a path, a
+   sweep, a soak), played onto a persistent canvas, with the active
+   stroke's tip available to `overlay` for a brush cursor. Chalk Proof
+   and Heron each wrote this from scratch (about 60 lines each).
+   `revealband` is its first brick.
+2. **Equations as objects.** Run lists set a line and bring it in term
+   by term. Missing: matching terms between two lines so one equation
+   *becomes* the next (terms slide, cancel, appear), and mathkit's TeX
+   layout exposed per term so it can be used the same way.
+3. **Soft and ragged reveals**: a feathered or noisy edge for `spotlight`,
+   wipes and wash fronts, which now cut hard.
+4. **Transitions between storyboard beats**, reusing the reel's.
+5. **Typography**: tracking as an option of `kinetic` and as a motion
+   ("tracks out"); text fitted by cap height with the box it ends up in
+   returned; a flow layout (stack lines top-down with gaps) so fitted
+   lines place their neighbours; vertical and rotated text in a box;
+   outline type as a state.
+6. **Charts**: labels on a series (a name at the end of its line, kept
+   clear of its neighbours; the model comparison's authors placed these
+   by hand with `plotpoint`); a tracer (a point riding a series with its readout), unit
+   charts (a waffle of cells), cross-fading ticks, stacked and grouped
+   bars, a ruler outside a plot frame.
+7. **Diagrams**: a layered layout for graphs given as data; a section
+   header / lower-third word; labels along curved edges.
+8. **Motion**: vector motions when a pivot is given (no rasterization);
+   motion along the text's own axis under rotation; per-contour
+   `morphpath`.
+9. **Diagnostics**: `check` warning on non-ASCII bytes shown in a text
+   font, on text drawn outside the canvas, and on type below a legible
+   size; marking intended cuts so `check --all` can be fully clean;
+   naming the procedure that left operands on the stack.
+10. **A review loop.** Blind review found what authors did not (holds
+   that are not holds, dead time, faint text) and authors score
+   themselves 7 to 8 whatever the film. `check` could measure some of it
+   (frames changing during a stated hold, a second with nothing
+   changing mid-film, an ending in motion); the rest wants a second
+   agent reviewing a sheet and one revision pass.
+
+## Next: the engine
 
 Roughly in order of value:
 
-1. **Merge the PSCat branch** and depend on a released PSCat.
+1. **Merge the PSCat branch** and depend on a released PSCat. (The
+   vocabulary work needed no further PSCat changes.)
 2. **A Worker-based browser player** with a time budget, and export from
    the page through WebCodecs.
 3. **An MCP server** (`psanim-mcp`): `check`, `frame`, `sheet` and
    `render` as tools returning images and structured diagnostics, so an
    agent without a shell can author movies. The CLI's `--json` output is
    already the shape those tools would return.
-4. **Audio**: read a WAV into level and onset signals natively; mux an
-   audio file into the render.
+4. **Audio**: read a WAV into level and onset signals natively (the
+   `tempo` words then follow a real track); mux an audio file into the
+   render.
 5. **Linear-light compositing** and 16-bit intermediates for layers.
 6. **Incremental rendering**: cache frames by a hash of program,
    options and time so an edit that changes one clip re-renders only its
-   frames; cache static layers within a render.
-7. **Group opacity in PSCat itself**, so layered frames can export as
-   vector.
-8. **More vocabulary, led by the gallery**: tapered strokes along a
-   path, radial repetition, a gradient shorthand, per-contour morphing.
-9. **Source positions in PSCat procedures**, for line numbers in
+   frames; cache static layers within a render; checkpoints on disk for
+   persistent paintings.
+7. **Group opacity and placed layers in PSCat itself**, so layered and
+   moving frames can export as vector.
+8. **Source positions in PSCat procedures**, for line numbers in
    backtraces.
