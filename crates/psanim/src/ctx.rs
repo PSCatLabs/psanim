@@ -91,6 +91,9 @@ pub(crate) struct Comp {
     pub seed: i64,
     /// The values its `param` lookups get; a name not here gets the default.
     pub params: Vec<(String, Value)>,
+    /// How many of the movie's units one of its units is where it is
+    /// drawn: blur and glow radii, given in its units, are scaled by this.
+    pub scale: f64,
 }
 
 pub(crate) const MAX_COMPS: usize = 16;
@@ -144,6 +147,12 @@ impl Ctx {
     /// movie's.
     pub fn seed(&self) -> i64 {
         self.comps.last().map_or(self.seed, |c| c.seed)
+    }
+
+    /// The size of the running program's unit in the movie's units: 1,
+    /// or inside a component, its placed scale.
+    pub fn unit_scale(&self) -> f64 {
+        self.comps.last().map_or(1.0, |c| c.scale)
     }
 
     /// Movie time and length as the running program sees them: inside a
