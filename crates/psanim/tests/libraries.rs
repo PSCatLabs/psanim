@@ -1204,3 +1204,105 @@ fn squashed_keeps_the_feet_on_the_ground_and_leaves_no_dictionary_open() {
     assert_eq!(v[2], 7.0, "{out}");
     assert_eq!((v[0], v[1]), (v[3], v[4]), "{out}");
 }
+
+// --- emoji -----------------------------------------------------------------
+
+#[test]
+fn emoji_text_measures_the_emoji_as_one_letter_wide() {
+    let font = "/Helvetica findfont 20 scalefont setfont";
+    let out = eval_at(
+        "",
+        &format!(
+            "{font} (a:heart:b) emojitextwidth (a) stringwidth pop emojiwidth add (b) stringwidth pop add sub abs ="
+        ),
+        0.0,
+    );
+    assert!(out.parse::<f64>().unwrap() < 1e-6, "{out}");
+    // A clock time and an unknown name are plain text.
+    let out = eval_at(
+        "",
+        &format!(
+            "{font} (9:41 :nope: x:) emojitextwidth (9:41 :nope: x:) stringwidth pop sub abs ="
+        ),
+        0.0,
+    );
+    assert!(out.parse::<f64>().unwrap() < 1e-6, "{out}");
+    // An emoji is 1.2 times the font's size.
+    let out = eval_at("", &format!("{font} emojiwidth ="), 0.0);
+    assert!((out.parse::<f64>().unwrap() - 24.0).abs() < 1e-6, "{out}");
+}
+
+#[test]
+fn emojilines_wrap_with_emoji_counted_at_their_width() {
+    // Plain text wraps as wraplines does; a token counts as the emoji, not as its seven letters.
+    let out = eval_at(
+        "",
+        "/Helvetica findfont 20 scalefont setfont
+         (one two three four five) 120 emojilines length =
+         (one two three four five) 120 wraplines length =
+         (:laugh::laugh::laugh::laugh:) 100 emojilines length =
+         (:laugh::laugh::laugh::laugh:) 100 wraplines length =",
+        0.0,
+    );
+    let n: Vec<&str> = out.lines().collect();
+    assert_eq!(n[0], n[1], "{out}");
+    // 4 emoji of 24 units fit a 100-unit width as one unbroken word
+    assert_eq!(n[2], "1", "{out}");
+    assert_eq!(n[3], "1", "{out}");
+}
+
+const EMOJI_NAMES: [&str; 12] = [
+    "smile", "laugh", "wink", "sad", "cool", "heart", "thumbsup", "party", "fire", "check",
+    "rocket", "eyes",
+];
+
+#[test]
+fn every_emoji_is_drawn_inside_its_square() {
+    // emojinames lists what is drawn, in this order.
+    let listed = eval_at("", "emojinames { == } forall", 0.0);
+    assert_eq!(
+        listed.split_whitespace().collect::<Vec<_>>(),
+        EMOJI_NAMES
+            .iter()
+            .map(|n| format!("/{n}"))
+            .collect::<Vec<_>>()
+    );
+    for name in EMOJI_NAMES {
+        let mut m = load(&format!("/scene {{ /{name} 100 60 40 emojiat }} def"));
+        let (x0, y0, x1, y1, n) =
+            ink_at(&mut m, 0.0).unwrap_or_else(|| panic!("/{name} drew nothing"));
+        // 40 across, centred on 100,60 (pixel rows count from the top of a 120 high canvas)
+        assert!(
+            x0 >= 79 && x1 <= 121 && y0 >= 39 && y1 <= 81,
+            "/{name} left its square: {x0},{y0}..{x1},{y1}"
+        );
+        assert!(n > 150, "/{name} is nearly empty ({n} pixels)");
+    }
+}
+
+#[test]
+fn an_inline_emoji_sits_on_the_baseline_and_moves_the_point_on() {
+    // 40 point font, baseline at y = 40: the emoji spans from just under it to the cap line
+    let mut m = load(
+        "/scene { /Helvetica findfont 40 scalefont setfont 20 40 moveto /heart emoji
+                 currentpoint 40 sub exch 20 sub emojiwidth sub abs exch abs add = }
+         def",
+    );
+    let out = {
+        m.take_output();
+        m.render_at(0.0).unwrap();
+        m.take_output()
+    };
+    assert!(out.trim().parse::<f64>().unwrap() < 1e-6, "{out}");
+    let (x0, y0, x1, y1, _) = ink_at(&mut m, 0.0).expect("it drew");
+    // pixel rows from the top of the 120 high canvas: y = 40 is row 80
+    assert!(x0 >= 20 && x1 <= 20 + 48, "x {x0}..{x1}");
+    assert!(y1 <= 80 + 10 && y0 >= 80 - 40 - 6, "y {y0}..{y1}");
+}
+
+#[test]
+fn an_unknown_emoji_is_a_range_error_not_a_blank() {
+    let mut m = load("/scene { /nosuch 10 10 20 emojiat } def");
+    let e = m.render_at(0.0).expect_err("an error").to_string();
+    assert!(e.contains("rangecheck") || e.contains("emojiat"), "{e}");
+}
