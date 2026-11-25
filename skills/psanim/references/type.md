@@ -339,9 +339,11 @@ skipped if the transformation is rotated. The speed is constant to within
 half a pixel, and steps of 3 and 4 pixels a frame alternate if it is not a
 whole number of pixels a frame; to avoid that, give `/Speed` as pixels a
 frame times the frame rate divided by the render scale (4 px a frame at
-30 fps and scale 1 is 120). In the `/Settle` tail, where the roll slows
-below a pixel a frame, the snap makes it hold and hop a pixel rather than
-glide. `/Snap false` turns it off.
+30 fps and scale 1 is 120). Where the roll slows below a pixel a frame
+(the end of a `/Settle` tail) it stops snapping and glides by fractions of
+a pixel, since snapping there would make it hold and hop. `creditsat`
+does not know the speed (you own the clock) and always snaps. `/Snap
+false` turns it off.
 
 ## Mathematics
 

@@ -649,6 +649,35 @@ fn credits_roll_whole_pixels_so_type_does_not_shimmer() {
 }
 
 #[test]
+fn credits_glide_in_the_settle_tail_instead_of_hopping_a_pixel() {
+    // 73 units a second slowing over 300 units: the last second or so is below a
+    // pixel a frame, where snapping to whole pixels made the roll hold and hop.
+    let names: String = (0..30).map(|i| format!("[/name (Person {i})] ")).collect();
+    let opts = |snap: &str| {
+        format!(
+            "<< /Size 9 /Fade 0 /Speed 73 /Settle 300 /Snap {snap} /Final [ [/heading (END)] ] >>"
+        )
+    };
+    let src = format!(
+        "{}\n/scene {{ [ {names} ] {} credits }} def",
+        HEAD.replace("/Duration 4", "/Duration 20"),
+        opts("true")
+    );
+    let mut m = Movie::load(&src, &Options::default()).unwrap();
+    let end = nums(&eval_at(
+        "",
+        &format!("[ {names} ] {} creditsduration ==", opts("true")),
+        0.0,
+    ))[0];
+    // The tail's last stretch, where it moves less than a pixel a frame, up to the rest.
+    let frames: Vec<Vec<u8>> = (0..8)
+        .map(|k| pixels(&mut m, end - 0.8 + f64::from(k) / 10.0))
+        .collect();
+    let held = frames.windows(2).filter(|w| w[0] == w[1]).count();
+    assert_eq!(held, 0, "the roll held still for {held} frames in its tail");
+}
+
+#[test]
 fn a_credits_procedure_runs_at_its_slot_with_no_dictionary_left_open() {
     let mut m = load(
         "/scene { countdictstack ==

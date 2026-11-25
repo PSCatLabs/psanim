@@ -291,7 +291,18 @@ the particle and the caller's stack; `particleage`, `particleu`,
 way `now` reads the clock. No dictionary is opened around the procedure,
 and no per-particle dictionary is allocated. `particletrail` hands back
 the particle's own recent track as the current path, from the same
-closed form, so streaks and comet tails need no history either.
+closed form, so streaks and comet tails need no history either. The
+prelude records the matrix the procedure starts with (the caller's, moved
+to the particle), and the trail is carried from there into whatever space
+the procedure has made by the time it asks, so a `rotate` or `scale`
+inside the procedure does not bend it.
+
+With `/Period`, a periodic emitter's keys are its slots', the same every
+lap, which is what makes the loop close. A particle whose `/Life` is
+longer than the period is therefore the same particle as the one a period
+older and has its key and its flight; it cannot be both distinct and
+periodic. (Snow that crosses the screen in a short loop is the usual
+case; it is documented, not fixed.)
 
 Rejected: a dictionary per particle passed to the procedure (allocation
 for every particle on every frame, and an invitation to `begin` it);

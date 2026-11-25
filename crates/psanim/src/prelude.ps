@@ -282,6 +282,10 @@
   exch .particlepick      % procs x y emitter
   gsave 3 1 roll translate get exec grestore
 } bind def
+% seconds n particletrail -   the particle's own track over the last seconds as the current
+%                             path, n segments, ending at the origin of the particle's
+%                             procedure: in whatever rotation and scale the procedure has now
+/particletrail { matrix currentmatrix .particletrail } bind def
 /particles {              % spec proc
   2 dict begin
     /.ptproc exch def
@@ -289,6 +293,7 @@
     mark exch { /Draw /.ptproc load .dget } forall counttomark array astore exch pop
   end                     % spec procs
   exch .particlesbegin    % procs n
+  matrix currentmatrix .particlebase       % the caller's space, for `particletrail`
   1 sub 0 exch 1 exch 4 -1 roll
   /.particlestep cvx 2 array astore cvx for
   .particlesend
