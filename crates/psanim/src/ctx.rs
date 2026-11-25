@@ -73,6 +73,8 @@ pub(crate) struct Ctx {
     /// movie-level facts (`globaltime`, `duration`, `movieseed`, `param`)
     /// are the component's own.
     pub comps: Vec<Comp>,
+    /// The particles of each open `particles` call, innermost last.
+    pub particles: Vec<crate::particles::ParticleSet>,
     /// The directory relative component paths are read from: the movie
     /// file's own, when the host knows it.
     pub base_dir: Option<std::path::PathBuf>,
@@ -135,6 +137,7 @@ impl Ctx {
             signals: Signals::default(),
             params_seen: BTreeMap::new(),
             comps: Vec::new(),
+            particles: Vec::new(),
             base_dir: None,
             hint: None,
         }
@@ -181,6 +184,7 @@ impl Ctx {
         self.poses.clear();
         self.views.clear();
         self.comps.clear();
+        self.particles.clear();
         self.hint = None;
     }
 }

@@ -222,3 +222,41 @@ Rejected: running each instance in its own interpreter (cost, and the
 drawing must land in the host's page); a `/Params` key in the declaration
 (the movie's own `param` defaults already say it, and keep a component
 file runnable on its own).
+
+## Particles (added for 0.2)
+
+`spec proc particles` is in the core, not a library. It is a time
+primitive of the same kind as `wiggle` and `keyframes`: it reads the
+clock of the current scope and the seed of the current component, and
+needs nothing from a theme or a box. Its names all begin `particle`, so
+it adds no likely collision to a movie's namespace.
+
+Purity is kept the way the rest of the engine keeps it, by computing
+instead of remembering. A particle's birth time, place, velocity and
+life come from its emitter and `hash01` of its key; its state at time t
+is the closed form for gravity, linear drag and a steady wind, or, when
+a gust varies over time, a walk through cells of a grid anchored at time
+0 (the gust is constant over each cell, and each cell is integrated
+exactly). Either way the answer depends on the birth and t alone, so
+frames still render in any order. Only particles that can be alive are
+visited, so cost follows what is on screen, not how long the film has
+run. `/Period` makes continuous emission and the noise forces repeat, for
+loops.
+
+The split follows the time scopes: the native half computes every live
+particle and keeps them on a stack in `Ctx`; the prelude's loop calls the
+author's procedure once per particle inside `gsave`, with the origin at
+the particle and the caller's stack; `particleage`, `particleu`,
+`particlevel`, `particlekey` and the rest read the current particle the
+way `now` reads the clock. No dictionary is opened around the procedure,
+and no per-particle dictionary is allocated. `particletrail` hands back
+the particle's own recent track as the current path, from the same
+closed form, so streaks and comet tails need no history either.
+
+Rejected: a dictionary per particle passed to the procedure (allocation
+for every particle on every frame, and an invitation to `begin` it);
+simulating in `step` (stateful movies render on one thread and cannot
+seek); noise forces evaluated at every step of every particle (done that
+way, the gust alone doubled the frame time of 10,000 particles; it is
+now worked out once per cell per frame, and `/Sway` gives each particle
+its own wandering as an offset, in closed form).

@@ -109,6 +109,31 @@ Chromium, one thread, `scripts/wasm_smoke.mjs` and the playground:
 | the playground's pointer example (300 strokes) | 640x360 | 2.5 ms |
 | gallery/epicycles | 640x360 | 14 ms |
 
+## Particles
+
+`particles` at 1280x720 on one core, `psanim bench` (median ms a frame,
+best of three runs), measured on 2026-11-25 on the same M4 while other
+jobs were running (load average about 15), so treat these as upper
+bounds. A continuous emitter keeps about n particles alive (`/Rate n/4
+/Life 4 /From -4`) with gravity and drag; "gust" adds a `/Gust`, which
+integrates each particle through 1/60 s cells from its birth.
+
+| Particles | Procedure | Median ms/frame | All-core fps |
+|---|---|---|---|
+| 1,000 | empty `{ }` (the physics and the loop) | 0.4 | 1466 |
+| 1,000 | fade and a 2-unit disc (`setalpha`, `arc fill`) | 2.0 | 1247 |
+| 1,000 | the same, with `/Gust` | 2.7 | 1196 |
+| 10,000 | empty `{ }` | 2.3 | 1498 |
+| 10,000 | fade and a 2-unit disc | 17.1 | 271 |
+| 10,000 | the same, with `/Gust` | 19.8 | 243 |
+
+Reading it: the native half (birth, flight, the gust cells) and the
+loop together cost about 0.2 microseconds a particle; what costs is the PostScript procedure run
+for each one, about 1.5 to 2 microseconds for a fade and a disc. Ten
+thousand particles a frame render faster than real time on one core.
+A `glowing` around the whole call adds one layer (a few ms), not one per
+particle.
+
 ## What these numbers are not
 
 - Not a comparison with other animation systems: none was run.

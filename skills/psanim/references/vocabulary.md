@@ -274,6 +274,68 @@ The rank of each value, 0 for the largest. Interpolating two rank arrays with `b
 
 About n round numbers covering lo..hi (steps of 1, 2, 2.5 or 5 times a power of ten): tick positions for an axis.
 
+## Particles: emitters whose particles are functions of time
+
+### `particles`
+
+`spec proc  particles  -`
+
+Draw proc once for every particle alive now, with the origin moved to the particle (inside gsave) and the caller's stack; `particleage`, `particleu`, `particlevel`, `particlekey` and the rest read the particle. spec is an emitter dictionary or an array of them, all keys optional: /At [x y] or keyframes [t [x y] /ease t [x y] ...] (a moving emitter; the view's centre), /Area [w h] (scatter births over a box centred on /At), /Rate per second with /From and /To (continuous), /Bursts [t ...] each emitting /Count (50) at once, /Life seconds or [lo hi] (2), /Speed or [lo hi] (100), /Angle degrees (90, up) and /Spread degrees (360), /Shape /random /even (evenly round) /sphere (a 3-D burst seen from the side), /Gravity (downward units/s/s, or [gx gy]), /Drag (per second: speeds settle to (gravity+wind)/drag), /Wind [ax ay] (a steady force), /Gust [ax ay] with /GustFreq (a force that wanders over time, the same for every particle), /Sway [dx dy] with /SwayFreq (each particle's own wandering offset: snow, leaves, confetti), /Inherit (share of a moving emitter's velocity), /Period seconds (continuous emission and noise repeat: give the loop's length in a /Loop movie), /Seed (this emitter's randomness), /Draw proc (draws this emitter's particles instead of proc). A particle's state is computed from its birth and the time alone, so frames render in any order.
+
+### `particleage`
+
+`-  particleage  seconds`
+
+Inside a particles procedure: seconds since this particle was born.
+
+### `particleu`
+
+`-  particleu  u`
+
+Inside a particles procedure: how far through its life the particle is, 0 at birth to 1 at death. `1 particleu sub setalpha` fades it out.
+
+### `particlelife`
+
+`-  particlelife  seconds`
+
+Inside a particles procedure: how long this particle lives in all.
+
+### `particlepos`
+
+`-  particlepos  x y`
+
+Inside a particles procedure: where the particle is, in the coordinates `particles` was called in (the origin is already there).
+
+### `particlevel`
+
+`-  particlevel  vx vy`
+
+Inside a particles procedure: the particle's velocity, units a second. `particlevel exch atan rotate` turns to its heading.
+
+### `particlekey`
+
+`-  particlekey  n`
+
+Inside a particles procedure: a whole number standing for this particle, the same on every frame: `[particlekey 1] hash01` is its own constant (a size, a colour, a spin).
+
+### `particleemitter`
+
+`-  particleemitter  i`
+
+Inside a particles procedure: the index of the emitter it came from, in the spec array (0 for a single dictionary).
+
+### `particleburst`
+
+`-  particleburst  i`
+
+Inside a particles procedure: the index in /Bursts of the burst it came from, or -1 for continuous emission.
+
+### `particletrail`
+
+`seconds n  particletrail  -`
+
+Inside a particles procedure: replace the current path with the particle's own track over the last seconds (from its birth at most), n segments, oldest first, ending at the origin: `0.2 6 particletrail stroke` is a streak. Call it before rotating or scaling.
+
 ## Paths: measuring, following, drawing on, morphing
 
 ### `pathlength`
@@ -555,6 +617,12 @@ The value of the host's signal name at the current movie time; 0 if there is non
 `/name  sinceevent  seconds`
 
 Seconds since the most recent event on track name; a million if there has been none.
+
+### `sincelast`
+
+`[t ...]  sincelast  seconds`
+
+Seconds since the most recent of the times that has passed, in the current scope; a million if none has. An array of times is an event track you own: `bursts sincelast 6 mul neg exp 0.1 mul 1 add` is a scale that kicks on each one and settles.
 
 ### `eventcount`
 

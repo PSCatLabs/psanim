@@ -148,6 +148,31 @@
   for
 } bind def
 
+% --- particles: emitters whose particles are functions of time -------------------------
+% spec proc particles      draw proc once for every particle alive now. spec
+%                          is an emitter dictionary or an array of them; an
+%                          emitter's own /Draw replaces proc for its particles.
+%                          proc runs with the origin moved to the particle and
+%                          the caller's stack; `particleage`, `particleu`,
+%                          `particlevel`, `particlekey` ... read the particle.
+%                          The positions come from the native half; nothing
+%                          is kept from one frame to the next.
+/.particlestep {          % i procs
+  exch .particlepick      % procs x y emitter
+  gsave 3 1 roll translate get exec grestore
+} bind def
+/particles {              % spec proc
+  2 dict begin
+    /.ptproc exch def
+    dup dup type /arraytype ne { 1 array astore } if
+    mark exch { /Draw /.ptproc load .dget } forall counttomark array astore exch pop
+  end                     % spec procs
+  exch .particlesbegin    % procs n
+  1 sub 0 exch 1 exch 4 -1 roll
+  /.particlestep cvx 2 array astore cvx for
+  .particlesend
+} bind def
+
 % --- reels: clips joined by transitions ---------------------------------------------
 % A transition is a procedure `procA procB u name`: draw the frame that is
 % u (0..1) of the way from clip A to clip B. A and B are ready to run: each
