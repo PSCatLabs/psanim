@@ -1,0 +1,111 @@
+%!PS
+% Huzzah: a release pipeline, and a celebration that grows with it.
+% Build passes: one small shell. Tests pass: a burst of confetti. Deploy
+% passes: a finale with the message, confetti cannons fired on the
+% finale's own burst track, and the pipeline kicking in time.
+% Built from the catalog: /fireworks, /confetti and /spinner, placed as
+% components; the reactions read the bursts with `sincelast`.
+% Poster: 6.9
+<< /Size [1280 720] /Duration 11 /FPS 30 /Background [0.03 0.035 0.07]
+   /Title (Huzzah)
+   /Description (A release pipeline turns green stage by stage, and each pass gets a bigger celebration: a single shell, a burst of confetti, then a fireworks finale with confetti cannons fired on its bursts.)
+>> animation
+
+/pkdiagram use
+
+% ---- what can be edited -----------------------------------------------------------------
+/stages [ (build) (test) (deploy) ] def
+/start 0.4 def                                  % the first stage starts running
+/runs  [ 1.0 1.6 1.7 ] def                      % how long each stage runs
+/firstburst 0.7 def                             % the finale's first burst, after the deploy passes
+
+% when each stage passes: start + the runs so far
+/passes [ start runs { 1 index add } forall ] 1 3 getinterval def
+/passed { passes exch get } def                 % i -> time stage i passes
+/runfrom { dup 0 eq { pop start } { 1 sub passed } ifelse } def   % i -> time it starts running
+
+% ---- places -------------------------------------------------------------------------------
+/page canvasbox 6 vmin inset def
+/row  page 0.04 0.40 0.92 0.19 subbox def      % the pipeline, where it starts
+/slots row 3 10 vmin cols def
+/W width def /H height def
+
+% ---- the parts, from the catalog ------------------------------------------------------------
+/busy /spinner << /Params << /Style /ring /Weight 12 >> >> instance
+/pop1 /fireworks << /Seed 4 /Params << /Style /single /Message () /Detail () /Sky false /Weight 1.8 >> >> instance
+/burst2 /confetti << /Seed 2 /Params << /Style /burst /Message () /Detail () /Backdrop /none >> >> instance
+% The finale, and its bursts on the movie's clock: the event track.
+/fbursts [0.6 1.1 1.5 1.85 2.15 2.4 2.6 2.8 2.95 3.1 3.25 3.4 3.5] def
+/finale /fireworks << /Seed 11 /Params << /Style /finale /Bursts fbursts
+   /Message (Huzzah!) /Detail (The builds passed) >> >> instance
+/fstart 2 passed firstburst add fbursts 0 get sub def      % when the finale starts, on the movie's clock
+/hostbursts [ fbursts { fstart add } forall ] def
+% Confetti cannons fire on two of the finale's bursts: its first and its
+% ninth, as the crescendo starts.
+/cannons /confetti << /Seed 5 /Params << /Style /cannons /Message () /Detail ()
+   /Backdrop /none /Bursts [ fbursts 0 get fbursts 8 get ] >> >> instance
+
+% ---- a stage, at rest -------------------------------------------------------------------------
+/tick {                                          % box tick: a check mark at its right end
+  gsave
+    /e boxpoint translate 4.5 vmin neg 0 translate 2.2 vmin dup scale
+    newpath -0.55 0.05 moveto -0.15 -0.38 lineto 0.6 0.45 lineto
+    0.22 setlinewidth 1 setlinecap 1 setlinejoin stroke
+  grestore
+} def
+% box dx dy w h boxat -> [x y w h]    a box of w by h whose corner is dx, dy from box's centre
+/boxat { 4 2 roll 4 index /c boxpoint 3 -1 roll add 3 1 roll add exch 4 2 roll 4 array astore exch pop } def
+/stage {                                         % i -> draws stage i as it is now
+  /i exch def /b slots i get def
+  now i passed ge {
+    stages i get b << /Fill [0.10 0.30 0.20] /Stroke /good /Ink /fg /Size 5 vmin >> node
+    /good ink b tick
+  } {
+    now i runfrom ge {
+      stages i get b << /Fill /surface /Stroke /accent2 /Size 5 vmin >> node
+      /busy << /Box b b 2 get 2 div 10.5 vmin sub 4 vmin neg 8 vmin 8 vmin boxat >> place
+    } {
+      stages i get b << /Fill /surface /Stroke /line /Ink /muted /Size 5 vmin >> node
+    } ifelse
+  } ifelse
+} def
+/links {
+  0 1 1 { /i exch def
+    slots i get slots i 1 add get
+    << /Draw i passed i passed 0.4 add /cubic-out tween /Role /good >> edge
+  } for
+} def
+
+% ---- the film ---------------------------------------------------------------------------------
+/scene {
+  ground
+  % the finale's night sky arrives as the deploy finishes
+  fstart fstart 0.8 add /quad-inout tween { /finale << /At fstart /After /hold >> place } faded
+
+  % build: one small shell, rising from behind it
+  0 passed 0.9 sub /t1 exch def
+  /pop1 << /At t1 /Box slots 0 get 50 vmin neg slots 0 get 3 get 2 div neg 100 vmin 56 vmin boxat >> place
+  % tests: a burst of confetti from behind it
+  1 passed 0.35 sub /t2 exch def
+  /burst2 << /At t2 /Box slots 1 get 64 vmin neg 72 vmin 0.45 mul neg 128 vmin 72 vmin boxat >> place
+  % the pipeline: centre stage, then down and smaller for the finale,
+  % with a kick on every burst
+  /u 2 passed 0.05 add 2 passed firstburst add /cubic-inout tween def
+  /kick hostbursts sincelast -9 mul 2.718281828 exch exp 0.05 mul def
+  gsave
+    row /c boxpoint translate
+    0 u 0 H -0.33 mul between translate
+    u 1 0.62 between kick 1 add mul dup scale
+    row /c boxpoint neg exch neg exch translate
+    links
+    0 1 2 { stage } for
+    % caption over the row, until the finale
+    1 u 3 mul sub 0 max {
+      /mono 3.4 vmin face /muted ink
+      (main  #1410  release 0.2) row 0 1.25 1 0.3 subbox /c showin
+    } faded
+  grestore
+
+  % deploy: cannons from the corners, on the finale's track
+  /cannons << /At fstart >> place
+} def
