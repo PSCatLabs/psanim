@@ -63,6 +63,68 @@ Inline, as a dictionary with the declaration's keys plus /Setup and
 } def
 ```
 
+## A catalog entry with parameters: fire
+
+`/fire` is the catalog's flame, in two looks (`/Style /realistic`, with
+glow, embers and smoke; `/Style /stylized`, flat tongues like a sticker).
+One entry gives a candle, a campfire and a torch by parameters alone: the
+height and width of the flame, its intensity (flicker, glow, embers), the
+wind, the amount of smoke and embers, and a palette. Each instance has its
+own /Seed, so two flames never flicker together. It declares /Loop true
+and a 4 second period, so a film whose length is a whole number of fours
+joins without a seam. A flame stands at the bottom centre of its box;
+leave room above it for the embers and smoke, which are drawn inside the
+box and clipped to it (the glow, being light, may leave a faint tail past
+its edge).
+
+```postscript
+%!PS
+<< /Size [1280 940] /Duration 4 /Loop true /Background [0.03 0.035 0.06] >> animation
+
+% One entry, six instances: three flames in each look. The parameters, not the code,
+% take it from a candle to a campfire to a torch.
+/c0 /fire << /Seed 3 /Params << /Style /realistic /Height 0.26 /Width 0.07 /Intensity 0.45 /Embers 0 /Smoke 0.08 >> >> instance
+/k0 /fire << /Seed 11 /Params << /Style /realistic /Height 0.5 /Width 0.8 /Intensity 1.3 /Embers 1.6 /Smoke 0.5 >> >> instance
+/t0 /fire << /Seed 5 /Params << /Style /realistic /Height 0.6 /Width 0.28 /Wind 0.5 /Embers 0.8 /Smoke 0.2 >> >> instance
+/c1 /fire << /Seed 3 /Params << /Style /stylized /Height 0.26 /Width 0.07 /Intensity 0.45 /Embers 0 >> >> instance
+/k1 /fire << /Seed 11 /Params << /Style /stylized /Height 0.5 /Width 0.8 /Intensity 1.3 /Embers 1.6 >> >> instance
+/t1 /fire << /Seed 5 /Params << /Style /stylized /Height 0.6 /Width 0.28 /Wind 0.5 /Embers 0.8 >> >> instance
+
+% Each flame stands 40 units above the bottom of its 400 x 400 box, at its middle.
+/stage { % y: a strip of ground
+  gsave 0.07 0.06 0.075 setrgbcolor 0 exch 40 sub 1280 45 rectfill grestore
+} def
+/candleprops { gsave translate
+    0.93 0.88 0.76 setrgbcolor -22 -92 44 92 rectfill
+    0.80 0.74 0.62 setrgbcolor 8 -92 14 92 rectfill
+    0.15 0.12 0.1 setrgbcolor 1.5 setlinewidth 0 -2 moveto 0.5 9 lineto stroke
+  grestore } def
+/campprops { gsave translate
+    0.34 0.20 0.11 setrgbcolor gsave 14 rotate -110 -10 220 20 rectfill grestore
+    0.27 0.15 0.08 setrgbcolor gsave -14 rotate -110 -10 220 20 rectfill grestore
+  grestore } def
+/torchprops { gsave translate
+    0.24 0.15 0.09 setrgbcolor -9 -120 18 120 rectfill
+    0.10 0.08 0.07 setrgbcolor -22 -20 44 30 rectfill
+  grestore } def
+
+/row { % y c k t: draw one row of three
+  4 dict begin /t exch def /k exch def /c exch def /y exch def
+  y 40 add stage
+  c << /Box [ 20 y 400 400 ] >> place
+  k << /Box [ 440 y 400 400 ] >> place
+  t << /Box [ 860 y 400 400 ] >> place
+  220 y 40 add candleprops
+  640 y 40 add campprops
+  1060 y 40 add torchprops
+  end } def
+
+/scene {
+  540 /c0 /k0 /t0 row
+  140 /c1 /k1 /t1 row
+} def
+```
+
 ## Placing
 
 `/name opts place`, in the scene. All options are optional:
