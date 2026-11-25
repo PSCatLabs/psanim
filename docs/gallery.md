@@ -39,3 +39,4 @@ reproducible from the sources).
 
 Each piece's directory has a README describing its techniques.
 | ![Huzzah](img/gallery/huzzah.jpg) | [Huzzah](../gallery/huzzah/huzzah.ps) | A release pipeline turns green stage by stage, and each pass gets a bigger celebration: a single shell, a burst of confetti, then a fireworks finale with confetti cannons fired on its bursts. | 12 s, 1280x720, pure | `psanim render gallery/huzzah/huzzah.ps -o huzzah.mp4` |
+| ![The Builds Passed](img/gallery/builds-passed.jpg) | [The Builds Passed](../gallery/builds-passed/builds-passed.ps) | A terminal types cargo test, test dots fill in, a pipeline lights up stage by stage, and the screen clears for fireworks and confetti. Each part is a catalog component placed by a short host; --param result=fail ends it quietly instead. | 16.9 s, 1280x720, pure | `psanim render gallery/builds-passed/builds-passed.ps -o builds-passed.mp4` |
