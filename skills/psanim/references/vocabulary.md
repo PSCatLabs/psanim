@@ -782,7 +782,7 @@ Run proc, which draws for a canvas w by h, scaled to fit inside the box and cent
 
 `/library  use  -`
 
-Load one of psanim's libraries, once: /pkstage /pkmotion /pktype /pkdiagram /pkcode /pkchart /pkink /pkfigure. Call it in setup, after `animation`. A library loads the ones it needs. `psanim api --libs` lists them; `psanim api --lib pkmotion` lists one's words.
+Load one of psanim's libraries, once: /pkstage /pkmotion /pktype /pkdiagram /pkcode /pkchart /pkink /pkfigure /pkpixel. Call it in setup, after `animation`. A library loads the ones it needs. `psanim api --libs` lists them; `psanim api --lib pkmotion` lists one's words.
 
 ## Components: movies placed inside movies
 

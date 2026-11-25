@@ -850,3 +850,31 @@ A pose standing still with the eyes softly shut: asleep, with the same keys as `
 
 The pose u of the way from a to b: numbers in between, anything else (the eyes) a's until halfway and b's after. For settling from a dance into rest, or waking.
 
+## pkpixel: a pixel font for signs and printers
+
+Load with `/pkpixel use`.
+
+### `pixelfont`
+
+`rows  pixelfont  font`
+
+A pixel font of 5, 7 or 9 rows, as a dictionary from character code to the character's columns (see `pixelcols`). The 7-row font has capitals, digits, lower case with descenders held to the last row and punctuation; the 5-row font has capitals, digits and punctuation; the 9-row font is the 7-row one with the descenders of g j p q y hanging below the baseline. Build it once, in setup.
+
+### `pixelcols`
+
+`font code  pixelcols  cols`
+
+The columns of one character, left to right, each a bit mask: bit r (value 2^r) is the dot in row r, row 0 at the top. `cols length` is the width. A lower case letter the font lacks is set as its capital, any other character it lacks as a question mark.
+
+### `pixeltext`
+
+`font string  pixeltext  cols`
+
+The columns of a line: each character's columns side by side with one blank column between, none after the last. Light the dots yourself: `cols i get 1 r bitshift and 0 ne`.
+
+### `pixelpicture`
+
+`[ (.#.) (###) ... ]  pixelpicture  cols`
+
+The columns of a picture drawn as an array of row strings, # for a lit dot and anything else dark, top row first. Rows may differ in length; the width is the first row's.
+

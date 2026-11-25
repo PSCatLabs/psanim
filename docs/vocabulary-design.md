@@ -135,6 +135,7 @@ for the common case.
 | `pkchart` | `plotframe`, `plotaxes`, `bars`, `hbars`, `plotline`, `plotmark`, `plotrule`, `dots`, `donut`; for dashboards `stattile`, `dial`, `horizon`, `sparkline`, `heatmap`, `statuslight`, `panel`, `thresholdrole` | pktype |
 | `pkink` | `revealalong`, `revealband`, `around`, `brushstroke`, `boxgradient` | pkstage |
 | `pkfigure` | `squashed`, `limb`, `eye`, `mouth`, `spring`, `dancepose`, `restpose`, `blendpose` | pkstage |
+| `pkpixel` | `pixelfont`, `pixelcols`, `pixeltext`, `pixelpicture` | none |
 
 Libraries are PostScript source compiled into the binary and loaded with
 `/pkmotion use`. They are opt-in so that a movie's namespace holds only
@@ -159,6 +160,16 @@ loudness, so an entry can read the beat from a tempo, an event track or
 a signal. A pose is a plain dictionary of numbers, not an object. The
 lag of an antenna, an ear or a tail is `spring`, a closed form in the
 time since the jolt, so the frames stay pure.
+
+### Why the pixel font is a library
+
+Three catalog entries (the LED matrix, the LED sign clock and the
+dot-matrix printer) each carried a copy of the same 5 by 7 font (#71).
+`pkpixel` is the one place it lives. Like the rest it computes and does
+not draw: `pixelcols` and `pixeltext` return dot columns as bit masks and
+the entry lights them, because what a dot looks like (a glowing LED, an
+ink dot on paper) is the entry's business. The font is a dictionary the
+entry builds once in setup, so the frames stay pure.
 
 ### What is in Rust and what is in PostScript
 

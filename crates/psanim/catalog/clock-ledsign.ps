@@ -2,8 +2,7 @@
 % Catalog entry: clock-ledsign. The time on a scrolling LED sign.
 % In a movie:  /c /clock-ledsign component   then   /c << /Box [x y w h] >> place
 %
-% A self-contained 5 by 7 dot-matrix sign: the digits and the colon are the
-% whole font, which is all a clock needs. The time comes from the host,
+% A 5 by 7 dot-matrix sign, set in psanim's pixel font (pkpixel). The time comes from the host,
 % never the wall clock: a start time plus the movie's own time, or a live
 % signal (see /Signal). The scroll is a function of movie time and steps
 % one dot column at a time, as a real sign does.
@@ -29,29 +28,15 @@
 >> theme get /pal exch def
 /role { pal exch get aload pop setrgbcolor } def
 
-% ---- the font: each digit is seven rows of five bits (leftmost bit 16) -----
-/rows [
-  [ 14 17 19 21 25 17 14 ]  [  4 12  4  4  4  4 14 ]  [ 14 17  1  2  4  8 31 ]
-  [ 31  2  4  2  1 17 14 ]  [  2  6 10 18 31  2  2 ]  [ 31 16 30  1  1 17 14 ]
-  [  6  8 16 30 17 17 14 ]  [ 31  1  2  4  8  8  8 ]  [ 14 17 17 14 17 17 14 ]
-  [ 14 17 17 15  1  2 12 ]
-] def
-% The same, as columns: bit r of a column is the dot in row r (0 at the top).
-/cols 10 array def
-0 1 9 { /d exch def
-  [ 0 1 4 { /x exch def
-      0 0 1 6 { /r exch def
-        rows d get r get 1 4 x sub bitshift and 0 ne { 1 r bitshift add } if
-      } for
-    } for ] cols d 3 -1 roll put
-} for
-
+% ---- the font: the digits and the colon of psanim's 7-row pixel font (pkpixel) -------
+/pkpixel use
+/fnt 7 pixelfont def
 /line 200 array def                         % the dot columns of one showing of the time
 /n 0 def
 /put1 { /pm exch def line n pm put /n n 1 add def } def     % mask : append a column
 /text { % string : the columns of the time, a blank column after each character
-  { dup 58 eq { pop 0 put1 20 put1 0 put1 }
-      { 48 sub cols exch get { put1 } forall 0 put1 } ifelse } forall
+  { dup 58 eq { pop 0 put1 fnt 58 pixelcols 0 get put1 0 put1 }       % the colon, with a blank each side
+      { fnt exch pixelcols { put1 } forall 0 put1 } ifelse } forall
 } def
 
 /rrect { % x y w h r
