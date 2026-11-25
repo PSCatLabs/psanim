@@ -1,22 +1,34 @@
 %!PS
-% Catalog entry: spinner. A loading indicator that loops.
+% Catalog entry: spinner. A loading indicator that loops, and can come to an answer.
 % In a movie:  /busy /spinner component   then   /busy << /Box [x y w h] >> place
-<< /Size [120 120] /Duration 1.2 /Loop true /Background /transparent
+% To end in a result (place it with /After /hold to keep it on screen):  /Result /ok /Resolve 2 : at 2 s the spinner closes into a green check.
+%   /build /spinner << /Params << /Resolve 2 /Result /fail >> >> instance
+
+/Resolve -1 param /resolve exch def             % seconds at which it stops spinning and shows its Result; -1 never (it loops)
+/Result /ok param /result exch def              % /ok (a check) or /fail (a cross), shown from /Resolve on
+
+<< /Size [120 120] /Duration resolve 0 ge { resolve 1.2 add } { 1.2 } ifelse
+   /Loop resolve 0 lt /Background /transparent
    /Title (Spinner)
-   /Description (A loading indicator that loops: a ring with a sweeping arc, a circle of fading dots, or three bouncing bars.)
+   /Description (A loading indicator that loops: a ring with a sweeping arc, a circle of fading dots, or three bouncing bars. Given a /Resolve time it stops and closes into a green check or a red cross.)
 >> animation
 
 /Style /ring param /style exch def              % /ring /dots /bars
 /Color [0.36 0.78 0.98] param /col exch def     % the moving part
 /Track [1 1 1] param /trk exch def              % the ring's faint track
 /Weight 10 param /wt exch def                   % stroke width, in its 120-unit square
+/OkColor [0.3 0.85 0.5] param /okc exch def     % the check
+/FailColor [1 0.36 0.36] param /failc exch def  % the cross
+
+% the spinner's phase, 0..1 every 1.2 s
+/ph { now 1.2 div 1 fmod } def
 
 /ring {
   trk aload pop setrgbcolor wt setlinewidth
   gsave 0.15 setalpha 0 0 44 0 360 arc stroke grestore
   col aload pop setrgbcolor 1 setlinecap
-  progress 360 mul sin 0.5 mul 0.5 add 240 mul 30 add   % sweep, 30..270 degrees
-  1 turns neg 90 add                                     % head angle
+  ph 360 mul sin 0.5 mul 0.5 add 240 mul 30 add   % sweep, 30..270 degrees
+  ph 360 mul neg 90 add                                    % head angle
   dup 3 -1 roll sub exch 0 0 44 5 3 roll exch arc stroke
 } def
 
@@ -24,7 +36,7 @@
   0 1 7 { /i exch def
     gsave
       i 45 mul neg 90 add rotate
-      i 8 div progress sub 1 add 1 fmod                    % 0 at the head, then fading
+      i 8 div ph sub 1 add 1 fmod                    % 0 at the head, then fading
       dup 1 exch sub 0.85 mul 0.15 add setalpha
       1 exch 0.5 mul sub wt 0.7 mul mul
       col aload pop setrgbcolor 44 0 3 -1 roll 0 360 arc fill
@@ -35,13 +47,43 @@
 /bars {
   col aload pop setrgbcolor
   0 1 2 { /i exch def
-    progress i 0.18 mul sub 360 mul sin 0 max 50 mul 20 add   % height
+    ph i 0.18 mul sub 360 mul sin 0 max 50 mul 20 add   % height
     i 1 sub 30 mul wt 1.2 mul 2 div sub                       % x
     1 index 2 div neg wt 1.2 mul 4 -1 roll rectfill
   } for
 } def
 
+% t0 t1 ease01 -> u    eased 0..1 progress of now between t0 and t1
+/ease01 { /cubic-out tween } def
+
+% the answer: the ring closes in the result's colour and the mark draws itself on
+/answer {
+  result /ok eq { okc } { failc } ifelse aload pop setrgbcolor
+  wt setlinewidth 1 setlinecap 1 setlinejoin
+  resolve resolve 0.4 add ease01 /closing exch def
+  newpath 0 0 44 90 90 360 closing mul sub arcn                    % clockwise from the top
+  stroke
+  gsave
+    resolve 0.25 add resolve 0.25 add 0.2 add /back-out tween /pop exch def
+    pop 0.2 mul 0.8 add dup scale
+    newpath
+    result /ok eq {
+      -20 -2 moveto -7 -15 lineto 21 15 lineto
+    } {
+      -15 -15 moveto 15 15 lineto  -15 15 moveto 15 -15 lineto
+    } ifelse
+    0 resolve 0.25 add resolve 0.55 add /cubic-out tween trimpath stroke
+  grestore
+} def
+
 /scene {
   width 2 div height 2 div translate
-  style load exec
+  resolve 0 ge {
+    1 resolve resolve 0.25 add /quad-in tween sub dup 0 gt {
+      gsave setalpha style load exec grestore                       % the spinner fades as the answer arrives
+    } { pop } ifelse
+    now resolve ge { answer } if
+  } {
+    style load exec
+  } ifelse
 } def

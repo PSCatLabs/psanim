@@ -1,0 +1,191 @@
+%!PS
+% Poster: 34.6
+% Ship It
+% A night shift, hacker-movie style: someone types at an old green terminal,
+% builds a release, watches a test go red, fixes it with one line and ships it.
+% A pipeline, a progress bar and a grid of test dots keep score beside the
+% screen. The terminal, the typing and the scoreboard are catalog entries; this
+% file only says what happens, and when.
+
+% ---- what is typed, and what comes back -----------------------------------------------
+% one line of a progress bar, and all the frames of one
+/barline { % (label) pct
+  /bp exch def /bl exch def
+  bl ( [) strcat
+  (####################) 0 bp 5 idiv getinterval strcat
+  (                    ) 0 20 bp 5 idiv sub getinterval strcat
+  (] ) strcat bp 3 string cvs strcat (%) strcat
+} def
+/barframes { % (label) -> 21 lines, 0% to 100%
+  /fl exch def /acc () def
+  0 5 100 { /pp exch def /acc acc fl pp barline strcat (\n) strcat def } for
+  acc
+} def
+
+/tests1 (ok  core::alloc\n\
+ok  core::free\n\
+ok  core::arena\n\
+ok  core::hash\n\
+ok  core::resize\n\
+ok  core::intern\n\
+ok  net::socket\n\
+ok  net::close\n\
+ok  net::tls\n\
+ok  net::hello\n\
+ok  net::keepalive\n\
+ok  net::backoff\n\
+ok  net::pool\n\
+FAIL net::retry_limit\n\
+ok  io::read\n\
+ok  io::write\n\
+ok  io::seek\n\
+ok  io::flush\n\
+ok  io::mmap\n\
+ok  fs::open\n\
+ok  fs::walk\n\
+ok  fs::watch\n\
+ok  cli::args\n\
+ok  cli::help) def
+/tests2 (ok  core::alloc\n\
+ok  core::free\n\
+ok  core::arena\n\
+ok  core::hash\n\
+ok  core::resize\n\
+ok  core::intern\n\
+ok  net::socket\n\
+ok  net::close\n\
+ok  net::tls\n\
+ok  net::hello\n\
+ok  net::keepalive\n\
+ok  net::backoff\n\
+ok  net::pool\n\
+ok  net::retry_limit\n\
+ok  io::read\n\
+ok  io::write\n\
+ok  io::seek\n\
+ok  io::flush\n\
+ok  io::mmap\n\
+ok  fs::open\n\
+ok  fs::walk\n\
+ok  fs::watch\n\
+ok  cli::args\n\
+ok  cli::help) def
+
+/banner (\n\
+   #### #   # ##### ####  ####  ##### #### \n\
+  #     #   #   #   #   # #   # #     #   #\n\
+   ###  #####   #   ####  ####  ####  #   #\n\
+      # #   #   #   #     #     #     #   #\n\
+  ####  #   # ##### #     #     ##### #### ) def
+
+/session [
+  [/wait 1.1]
+  [/lines (PSCAT/OS 4.2   secure shell\nlast login Tue Nov 25 02:14 from 10.0.0.7\n--- authorised access only ---\n) 0.22]
+  [/type (cd vault)]
+  [/type (./build.sh --release) << /Slips [4] /Think 0.7 >>]
+  [/mark /build]
+  [/lines (  cc  core/alloc.c\n  cc  core/arena.c\n  cc  net/socket.c\n  cc  net/retry.c\n  ar  libvault.a) 0.28]
+  [/mark /bar]
+  [/progress (build) barframes 0.09]
+  [/mark /barend]
+  [/out (build ok  14.2s)]
+  [/type (./run-tests) << /Think 0.9 >>]
+  [/mark /tests]
+  [/lines tests1 0.11]
+  [/mark /failed]
+  [/out (1 failed, 23 passed\n  net::retry_limit: expected 3, got 4)]
+  [/wait 1.2]
+  [/type (sed -i 's/< 3/<= 3/' net/retry.c) << /Speed 1.5 /Slips [1] >>]
+  [/type (./run-tests) << /Think 0.4 >>]
+  [/mark /tests2]
+  [/lines tests2 0.09]
+  [/mark /passed]
+  [/out (24 passed, 0 failed)]
+  [/type (./deploy --prod) << /Think 0.6 /Slips [4] >>]
+  [/mark /deploy]
+  [/lines (  pushing image 3f9c1d2\n  rolling out to 12 nodes) 0.3]
+  [/mark /dbar]
+  [/progress (deploy) barframes 0.12]
+  [/mark /shipped]
+  [/lines banner 0.17]
+  [/out (\n  all systems green.)]
+] 5 << /Prompt (vault# ) /Speed 1.25 /Typos 0.015 >> sessionplan def
+
+/hold 4.5 def
+/tb      session /build   planmark def
+/tbar    session /bar     planmark def
+/tbarend session /barend  planmark def
+/tt      session /tests   planmark def
+/tf      session /failed  planmark def
+/tt2     session /tests2  planmark def
+/tp      session /passed  planmark def
+/td      session /deploy  planmark def
+/tdbar   session /dbar    planmark def
+/ts      session /shipped planmark def
+
+<< /Size [1280 720] /Duration session planlength hold add /FPS 30 /Seed 5
+   /Title (Ship It)
+   /Description (A hacker-movie night shift at an old green terminal: a release is built, one test goes red, a one-line fix, a green run, and a deploy, while a pipeline, a progress bar and a grid of test dots keep score.)
+>> animation
+
+% ---- the parts: all catalog entries ----------------------------------------------------
+/tty /terminal << /Params << /Plan session /Hold hold /Persistence 0.45 /PowerOn 0.8 >> >> instance
+/pipe1 /pipeline << /Params << /Stages [(build) (test) (ship)] /Fail 1
+          /Times [ tb tt tf tf 0.9 add ] >> >> instance
+/pipe2 /pipeline << /Params << /Stages [(build) (test) (ship)]
+          /Times [ -1 0 tp 0.3 add tt2 sub ts tt2 sub ] >> >> instance
+/dots1 /testdots << /Params << /Count 24 /Cols 8 /Fails [13] /Seconds tf tt sub >> >> instance
+/dots2 /testdots << /Params << /Count 24 /Cols 8 /Fails [] /Seconds tp tt2 sub >> >> instance
+/bar1 /progress << /Params << /Seconds tbarend tbar sub /Ease /linear >> >> instance
+/bar2 /progress << /Params << /Seconds ts tdbar sub /Ease /linear /Color [0.55 0.9 0.4] >> >> instance
+/runner /spinner << /Params << /Resolve ts tb sub /Color [0.4 0.85 0.55] >> >> instance
+
+% ---- the picture ------------------------------------------------------------------------
+/colx 830 def  /colw 425 def
+/caption { % (TEXT) y
+  /cy exch def /ct exch def
+  /Helvetica-Bold findfont 15 scalefont setfont
+  0.42 0.85 0.55 setrgbcolor 0.75 setalpha
+  colx cy moveto ct show
+  0.42 0.85 0.55 setrgbcolor 0.25 setalpha 1.5 setlinewidth
+  colx cy 8 sub moveto colw 0 rlineto stroke
+  1 setalpha
+} def
+
+/wall {                                             % the room, lit by the screen
+  << /ShadingType 3 /ColorSpace /DeviceRGB /Coords [415 360 0 415 360 800]
+     /Function << /FunctionType 2 /Domain [0 1] /C0 [0.04 0.1 0.06] /C1 [0.006 0.01 0.012] /N 0.7 >>
+     /Extend [true true] >> shfill
+} def
+% the monitor's glow leaving the room when the release goes out
+/pulse {
+  0 1 2 { /k exch def
+    now ts sub k 0.3 mul sub 1.8 div 0 1 clamp /u exch def
+    u 0 gt u 1 lt and {
+      gsave 415 360 translate 1 0.8 scale 0.42 0.95 0.55 setrgbcolor
+      1 u sub 0.3 mul setalpha 7 u 5 mul sub setlinewidth
+      newpath 0 0 u /quad-out ease 570 mul 330 add 0 360 arc stroke grestore
+    } if
+  } for
+} def
+
+/scene {
+  wall
+  pulse
+  /tty << /Box [25 60 780 585] /After /hold >> place
+
+  (PIPELINE) 690 caption
+  0 tt2 { /pipe1 << /Box [colx 590 colw 85] /Before /hold /After /hold >> place } during
+  tt2 1000 { /pipe2 << /Box [colx 590 colw 85] /After /hold >> place } during
+
+  now td lt { (BUILD) } { (DEPLOY) } ifelse 560 caption
+  0 td { /bar1 << /At tbar 0.3 sub /Box [colx 480 colw 65] /Before /hold /After /hold >> place } during
+  td 1000 { /bar2 << /At tdbar td sub 0.3 sub /Box [colx 480 colw 65] /Before /hold /After /hold >> place } during
+
+  (TESTS) 448 caption
+  0 tt2 { /dots1 << /At tt 0.3 sub /Box [colx 215 colw 226] /Before /hold /After /hold >> place } during
+  tt2 1000 { /dots2 << /At -0.3 /Box [colx 215 colw 226] /Before /hold /After /hold >> place } during
+
+  (RELEASE) 188 caption
+  /runner << /At tb /Box [colx 137 add 30 150 150] /After /hold >> place
+} def

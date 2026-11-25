@@ -19,7 +19,11 @@ pub const CATALOG: &[(&str, &str)] = &[
     ("clock-morph", include_str!("../catalog/clock-morph.ps")),
     ("credits", include_str!("../catalog/credits.ps")),
     ("fire", include_str!("../catalog/fire.ps")),
+    ("pipeline", include_str!("../catalog/pipeline.ps")),
+    ("progress", include_str!("../catalog/progress.ps")),
     ("spinner", include_str!("../catalog/spinner.ps")),
+    ("terminal", include_str!("../catalog/terminal.ps")),
+    ("testdots", include_str!("../catalog/testdots.ps")),
 ];
 
 /// The source of a catalog entry, by name.
