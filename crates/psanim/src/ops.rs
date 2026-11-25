@@ -37,6 +37,17 @@ where
         .expect("psanim's operator names are valid and few");
 }
 
+/// An array of numbers as PostScript writes it, for `info`.
+fn v_numbers(v: &Value) -> String {
+    v.as_numbers().map_or_else(
+        || "[...]".to_string(),
+        |n| {
+            let parts: Vec<String> = n.iter().map(|x| x.to_string()).collect();
+            format!("[{}]", parts.join(" "))
+        },
+    )
+}
+
 /// Pop a procedure, kept opaque so it can be pushed back for the prelude
 /// to `exec`.
 fn pop_proc(i: &mut Interp, ctx: &Shared, who: &str) -> Result<Value, PsError> {
@@ -296,6 +307,7 @@ fn end_layer(i: &mut Interp, ctx: &Shared, opacity: f64, blend: Blend) -> OpResu
 
 pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     crate::vocab::install(interp, ctx);
+    crate::catalog::install(interp, ctx);
     // --- declaration ----------------------------------------------------
     reg(interp, ctx, ".animation", |i, ctx| {
         let decl = i.pop_value()?;
@@ -1076,6 +1088,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let shown = match &default {
             Value::String(s) => format!("({})", String::from_utf8_lossy(s)),
             Value::Name(n) => format!("/{n}"),
+            Value::Array(_) => v_numbers(&default),
             v => v
                 .as_f64()
                 .map_or_else(|| "?".to_string(), |x| x.to_string()),

@@ -20,7 +20,17 @@ Each instance has its own:
 - **theme and plot**: `usetheme` and `plotframe` inside it change its own
   copy, not the movie's.
 
-## Two ways to write one
+## Three ways to get one
+
+From the catalog of ready-made elements: give an entry's name.
+[catalog.md](catalog.md) lists them with their parameters, and
+`psanim catalog NAME` prints one's source to read or adapt.
+
+```postscript partial
+/busy /spinner component
+/dots /spinner << /Params << /Style /dots /Color [1 0.7 0.3] >> >> instance
+```
+
 
 From a file: any movie is a component. The file keeps its declaration,
 setup and `scene`; read it with a name relative to the movie's own file.

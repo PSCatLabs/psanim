@@ -46,6 +46,7 @@
 #![allow(clippy::result_large_err)] // errors are the cold path; a rich one beats a boxed one
 
 pub mod api;
+pub mod catalog;
 pub mod code;
 mod ctx;
 pub mod ease;
@@ -61,6 +62,7 @@ pub mod sheet;
 pub mod signals;
 mod vocab;
 
+pub use catalog::CATALOG;
 pub use engine::{Budget, Frame, Meta, Mode, MotionBlur, Movie, Options, PRELUDE, Param, Scale};
 pub use error::{Error, Phase, TraceLine};
 pub use ops::TRANSITIONS;

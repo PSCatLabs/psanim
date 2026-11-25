@@ -28,3 +28,12 @@ libs=skills/psanim/references/vocabulary-libraries.md
   done
 } > "$libs"
 echo "wrote $libs ($(grep -c '^### ' "$libs") words)"
+
+cat=skills/psanim/references/catalog.md
+{
+  printf '# psanim catalog\n\n'
+  printf 'Generated from `crates/psanim/catalog/` by `scripts/gen_reference.sh`. Do not edit by hand.\n\n'
+  printf 'Ready-made elements, each a movie of its own. Place one as a component (see components.md): `/x /entry component` in setup, then `/x << /Box [x y w h] /At t >> place` in the scene; `/y /entry << /Params << ... >> >> instance` makes another with other parameters. `psanim catalog NAME` prints an entry'"'"'s source, which is also the way to learn from or adapt it.\n\n'
+  $P catalog --markdown
+} > "$cat"
+echo "wrote $cat ($(grep -c '^## ' "$cat") entries)"

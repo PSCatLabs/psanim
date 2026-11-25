@@ -521,14 +521,14 @@ pub const API: &[ApiEntry] = &[
     e(
         "component",
         "component",
-        "/name dict-or-(file.ps)  component  -",
-        "Define a component and set up its first instance under the same name. A component is written like a movie: from a file, the file's own `animation` declaration, setup and `scene`; inline, a dictionary with the declaration's keys (/Size, /Duration, /Loop, /Seed, /Background) and /Setup { } and /Scene { }. Its setup runs once, in a dictionary of its own, so its names do not reach the movie or another instance; inside it `width`, `height`, `duration`, `globaltime`, `movieseed` and `param` are the component's. A file name is read from the movie's own directory. Call it in setup.",
+        "/name dict-or-(file.ps)-or-/entry  component  -",
+        "Define a component and set up its first instance under the same name. A name is an entry of the catalog of ready-made elements (`psanim catalog` lists them: /busy /spinner component). A component is written like a movie: from a file, the file's own `animation` declaration, setup and `scene`; inline, a dictionary with the declaration's keys (/Size, /Duration, /Loop, /Seed, /Background) and /Setup { } and /Scene { }. Its setup runs once, in a dictionary of its own, so its names do not reach the movie or another instance; inside it `width`, `height`, `duration`, `globaltime`, `movieseed` and `param` are the component's. A file name is read from the movie's own directory. Call it in setup.",
     ),
     e(
         "component",
         "instance",
         "/new /name << /Seed s /Params << ... >> >>  instance  -",
-        "Another instance of a component, set up again: /Seed for its randomness, /Params for its `param` lookups (a name not given gets the default the component wrote). Inside a component, `param` reads only these, never the host's --param values. Call it in setup.",
+        "Another instance of a component or a catalog entry, set up again: /Seed for its randomness, /Params for its `param` lookups (a name not given gets the default the component wrote). Inside a component, `param` reads only these, never the host's --param values. Call it in setup.",
     ),
     e(
         "component",

@@ -13,6 +13,7 @@ psanim <command> <program.ps> [options]
 | `render` | Renders the movie to `.mp4`, `.webm`, `.gif`, or a directory of PNGs. |
 | `bench` | Times loading and rendering, serial and on all cores. |
 | `api` | Prints the vocabulary; `psanim api tween` explains one word; `--markdown`, `--json`. |
+| `catalog` | Lists the ready-made elements a movie places as components, with their parameters; `psanim catalog spinner` prints one's source; `--sheet -o a.png` draws every entry on one sheet; `--markdown`, `--json`. |
 
 Every command takes `--json` for a machine-readable result on stdout.
 Errors are JSON too in that mode, with `"ok": false`.

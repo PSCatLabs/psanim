@@ -4,7 +4,7 @@ mod args;
 mod encode;
 
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
@@ -12,7 +12,7 @@ use args::{Common, number_list};
 use encode::{Encoder, Format};
 use psanim::render::{Rendered, effective_threads, render_frames};
 use psanim::sheet::{self, Still};
-use psanim::{Error, Meta, Movie, Scale, raster};
+use psanim::{Error, Meta, Movie, Options, Scale, raster};
 use serde_json::json;
 
 // Counts heap bytes so `--max-memory-mb` and `--untrusted` can cap them.
@@ -35,6 +35,9 @@ COMMANDS
   render   Render the movie to .mp4, .webm, .gif, or a directory of PNGs.
   bench    Time loading and rendering, per frame and on all cores.
   api      Print the animation vocabulary. `psanim api tween` shows one word.
+  catalog  List the ready-made elements a movie can place as components.
+           `psanim catalog spinner` prints one's source; --sheet -o a.png
+           draws them all on one contact sheet.
   help     This text.
 
 SELECTING FRAMES
@@ -125,6 +128,7 @@ fn main() -> ExitCode {
         "render" => cmd_render(rest),
         "bench" => cmd_bench(rest),
         "api" => cmd_api(rest),
+        "catalog" => cmd_catalog(rest),
         other => Err(usage(format!(
             "unknown command '{other}' (see `psanim help`)"
         ))),
@@ -823,6 +827,136 @@ fn cmd_bench(rest: &[String]) -> Result<(), Fail> {
             );
         }
     }
+    Ok(())
+}
+
+/// One catalog entry, loaded on its own to read what it declares.
+fn catalog_meta(name: &str, source: &str) -> Result<psanim::Meta, Fail> {
+    let m = Movie::load(source, &Options::default())
+        .map_err(|e| Fail::Output(format!("catalog entry /{name} does not load: {e}")))?;
+    Ok(m.meta().clone())
+}
+
+fn cmd_catalog(rest: &[String]) -> Result<(), Fail> {
+    let c = parse(rest, &["markdown", "sheet", "thumb", "cols"])?;
+    let named = c
+        .file
+        .as_ref()
+        .map(|w| w.to_string_lossy().trim_start_matches('/').to_string());
+    if let Some(name) = named {
+        let src = psanim::catalog::source(&name).ok_or_else(|| {
+            usage(format!(
+                "the catalog has no entry '{name}' (`psanim catalog` lists them)"
+            ))
+        })?;
+        print!("{src}");
+        return Ok(());
+    }
+    let mut entries = Vec::new();
+    for (name, src) in psanim::CATALOG {
+        entries.push((*name, *src, catalog_meta(name, src)?));
+    }
+    if c.has("sheet") {
+        let thumb: u32 = c.extra_num("thumb").map_err(usage)?.unwrap_or(240);
+        let cols: usize = c.extra_num("cols").map_err(usage)?.unwrap_or(4);
+        let out = c
+            .output
+            .clone()
+            .unwrap_or_else(|| PathBuf::from("catalog_sheet.png"));
+        let opts = Options {
+            scale: Scale::Width(thumb),
+            ..Options::default()
+        };
+        let mut stills = Vec::new();
+        let mut captions = Vec::new();
+        for (name, src, meta) in &entries {
+            let mut m = Movie::load(src, &opts)?;
+            let t = meta.duration * 0.5;
+            let f = m.render_at(t)?;
+            stills.push(Still {
+                index: 0,
+                time: t,
+                width: f.width,
+                height: f.height,
+                premultiplied: f.premultiplied.to_vec(),
+            });
+            captions.push(format!("/{name}"));
+        }
+        let page = sheet::compose_captioned(
+            &stills,
+            &captions,
+            cols,
+            thumb,
+            Some("psanim catalog"),
+            [40, 42, 48],
+        )
+        .map_err(Fail::Output)?;
+        let png = page.to_png().map_err(|e| Fail::Output(e.to_string()))?;
+        write_file(&out, &png)?;
+        if !c.quiet {
+            eprintln!("wrote {} ({} entries)", out.display(), stills.len());
+        }
+        return Ok(());
+    }
+    let params = |m: &psanim::Meta| {
+        m.params
+            .iter()
+            .map(|(k, v)| format!("/{k} {v}"))
+            .collect::<Vec<_>>()
+    };
+    if c.json {
+        let list: Vec<_> = entries
+            .iter()
+            .map(|(name, _, m)| {
+                json!({"name": name, "title": m.title, "description": m.description,
+                       "size": [m.width, m.height], "duration": m.duration, "loop": m.looping,
+                       "params": m.params})
+            })
+            .collect();
+        println!("{}", json!(list));
+        return Ok(());
+    }
+    if c.has("markdown") {
+        for (name, src, m) in &entries {
+            let notes = psanim::catalog::param_notes(src);
+            println!("## `/{name}`: {}\n", m.title.as_deref().unwrap_or(name));
+            if let Some(d) = &m.description {
+                println!("{d}\n");
+            }
+            println!(
+                "{}x{}, {} s{}. `/x /{name} component`, then `/x << /Box [..] >> place`.\n",
+                m.width,
+                m.height,
+                m.duration,
+                if m.looping { ", loops" } else { "" }
+            );
+            if !m.params.is_empty() {
+                println!("| Param | Default | Meaning |\n|---|---|---|");
+                for (k, v) in &m.params {
+                    let note = notes.get(k).map_or("", String::as_str);
+                    println!("| /{k} | `{v}` | {note} |");
+                }
+                println!();
+            }
+        }
+        return Ok(());
+    }
+    println!("Catalog (place with  /x /name component  then  /x << /Box [x y w h] >> place):\n");
+    for (name, _, m) in &entries {
+        println!(
+            "  /{name:<12} {}x{} {}s{}  {}",
+            m.width,
+            m.height,
+            m.duration,
+            if m.looping { " loop" } else { "" },
+            m.description.as_deref().unwrap_or("")
+        );
+        let p = params(m);
+        if !p.is_empty() {
+            println!("  {:<13} params: {}", "", p.join("  "));
+        }
+    }
+    println!("\n`psanim catalog NAME` prints an entry's source.");
     Ok(())
 }
 
