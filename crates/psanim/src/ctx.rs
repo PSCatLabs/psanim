@@ -73,6 +73,9 @@ pub(crate) struct Ctx {
     /// movie-level facts (`globaltime`, `duration`, `movieseed`, `param`)
     /// are the component's own.
     pub comps: Vec<Comp>,
+    /// Planes opened by `onplane`, innermost last: where the plane is, and
+    /// the CTM (as `currentmatrix` gives it) the plane's coordinates are in.
+    pub planes: Vec<(crate::plane::Plane, [f64; 6])>,
     /// The directory relative component paths are read from: the movie
     /// file's own, when the host knows it.
     pub base_dir: Option<std::path::PathBuf>,
@@ -135,6 +138,7 @@ impl Ctx {
             signals: Signals::default(),
             params_seen: BTreeMap::new(),
             comps: Vec::new(),
+            planes: Vec::new(),
             base_dir: None,
             hint: None,
         }
@@ -181,6 +185,7 @@ impl Ctx {
         self.poses.clear();
         self.views.clear();
         self.comps.clear();
+        self.planes.clear();
         self.hint = None;
     }
 }

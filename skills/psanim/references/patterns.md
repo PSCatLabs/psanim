@@ -16,6 +16,7 @@ starts with `%!PS` is a whole movie; any other block is the body of a
 - [Follow a path](#follow-a-path)
 - [Morph one shape into another](#morph-one-shape-into-another)
 - [A camera](#a-camera)
+- [Perspective: drawing on a plane](#perspective-drawing-on-a-plane)
 - [Glow, blur, depth](#glow-blur-depth)
 - [Particles without state](#particles-without-state)
 - [A seamless loop](#a-seamless-loop)
@@ -219,6 +220,61 @@ gsave
     [i 2] hash01 1800 mul  [i 3] hash01 800 mul  8 [i 4] hash01 22 mul add 0 360 arc fill } for
 grestore
 ```
+
+## Perspective: drawing on a plane
+
+The CTM is affine: it can slant and squash, but it cannot make the far
+end of a thing smaller than the near end. `proc plane onplane` can: it
+runs proc and lays what it paints (fills, strokes, `show`, clips)
+on a plane in 3D, seen through a camera. The plane's coordinates are the
+user space onplane was called in, so draw as you would flat and let
+`translate` inside proc move things along the plane.
+
+```postscript
+% a floor hinged on the bottom edge, leaning back 65 degrees
+320 0 translate
+{
+  0.3 0.8 1 setrgbcolor 2 setlinewidth
+  -300 0 600 900 rectstroke                               % its edges
+  -300 60 300 { 0 moveto 0 900 rlineto } for stroke       % lines running away
+  0 now 60 mul translate                                  % slide along it
+  1 0.85 0.4 setrgbcolor
+  /Helvetica-Bold findfont 64 scalefont setfont
+  0 1 6 { /i exch def -190 i 130 mul moveto (ON A PLANE) show } for
+} << /Tilt 65 /Distance 700 /Fade [500 1600] >> onplane
+```
+
+The plane dictionary: `/Tilt` (degrees about the x axis through the
+origin; 90 is a floor seen edge-on), `/Turn` (degrees about the vertical
+axis, after the tilt), `/Depth` (push the whole plane back), `/Eye [x y]`
+(the point the eye looks straight at, default the origin), `/Distance`
+(eye to screen; smaller is a wider lens and stronger perspective,
+default the view's width), `/Fade [z0 z1]` (depth behind the screen over
+which ink fades out). With the eye level with the hinge, as here, the
+plane runs up to a horizon at `Distance` times the cotangent of `Tilt`.
+
+What to know:
+
+- **Each painted path takes one opacity** from `/Fade`, from the depth of
+  its middle. A line of text on a tilted plane is all at one depth, so
+  paint a line at a time (several `charpath`s, one `fill`), not a whole
+  paragraph as one path.
+- **Strokes are outlined first** (`strokepath`), so a line's width lies on
+  the plane and narrows with distance, as paint on a floor would.
+- **Only what proc paints directly is projected.** Words that were
+  `bind`-ed before onplane ran (the prelude's, the pk libraries', and
+  yours if you `bind` them) hold the built-in painting operators and draw
+  flat. `image`, `shfill`, `kshow`, `xshow` and `glyphshow` are not
+  projected.
+- **Behind the eye is cut away**, and nothing comes closer than a
+  twentieth of `Distance`, so a plane can run under the camera.
+- `x y plane planepoint` gives where a point of the plane lands (and its
+  fade), to place a flat thing on it; `plane projectpath` projects the
+  current path without painting.
+
+For an opening crawl, text receding over stars, place the catalog's
+`/crawl` entry (`psanim catalog crawl`) with your own words: see
+[type.md](type.md#an-opening-crawl).
 
 ## Glow, blur, depth
 

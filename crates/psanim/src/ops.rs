@@ -16,6 +16,7 @@ use pscat::{Interp, Page, PsError};
 use crate::ctx::{Ctx, LayerEnd, MAX_LAYERS, MAX_SCOPES, Running, TimeScope, hash01, wiggle};
 use crate::ease;
 use crate::pathmath;
+use crate::plane::{self, Plane};
 use crate::raster::{self, Blend};
 
 pub(crate) type Shared = Rc<RefCell<Ctx>>;
@@ -208,6 +209,72 @@ pub(crate) fn flat_path(i: &Interp, ctx: &Shared) -> Result<Vec<pathmath::Poly>,
     let path = i.current_path()?;
     let px = ctx.borrow().px_scale.max(1e-6);
     Ok(pathmath::flatten(&path, 1.5 / px))
+}
+
+/// A plane's dictionary as `onplane`, `projectpath` and `planepoint` take
+/// it.
+fn parse_plane(ctx: &Shared, v: &Value, who: &str) -> Result<Plane, PsError> {
+    if !matches!(v, Value::Dict(_)) {
+        return fail(
+            ctx,
+            PsError::Typecheck,
+            format!(
+                "{who} takes a plane dictionary, << /Tilt 60 >> for one; << >> is the flat plane"
+            ),
+        );
+    }
+    let view_w = {
+        let c = ctx.borrow();
+        c.views.last().map_or(c.width, |v| v.0)
+    };
+    let num = |key: &str, default: f64| -> Result<f64, PsError> {
+        match v.get(key) {
+            None => Ok(default),
+            Some(x) => match x.as_f64() {
+                Some(n) if n.is_finite() => Ok(n),
+                _ => fail(
+                    ctx,
+                    PsError::Typecheck,
+                    format!("{who}: /{key} must be a number"),
+                ),
+            },
+        }
+    };
+    let pair = |key: &str| -> Result<Option<(f64, f64)>, PsError> {
+        match v.get(key) {
+            None => Ok(None),
+            Some(x) => match x.as_numbers().as_deref() {
+                Some([a, b]) if a.is_finite() && b.is_finite() => Ok(Some((*a, *b))),
+                _ => fail(
+                    ctx,
+                    PsError::Typecheck,
+                    format!("{who}: /{key} must be [a b], two numbers"),
+                ),
+            },
+        }
+    };
+    let distance = num("Distance", view_w)?;
+    if distance <= 0.0 {
+        return fail(
+            ctx,
+            PsError::Rangecheck,
+            format!("{who}: /Distance (how far the eye is from the screen) must be more than 0"),
+        );
+    }
+    Ok(Plane {
+        tilt: num("Tilt", 0.0)?,
+        turn: num("Turn", 0.0)?,
+        depth: num("Depth", 0.0)?,
+        eye: pair("Eye")?.unwrap_or((0.0, 0.0)),
+        distance,
+        fade: pair("Fade")?,
+    })
+}
+
+/// Device pixels per unit of a matrix's user space: the square root of its
+/// determinant's size.
+fn matrix_scale(m: &[f64; 6]) -> f64 {
+    (m[0] * m[3] - m[1] * m[2]).abs().sqrt().max(1e-9)
 }
 
 /// Take the canvas out of the interpreter, run `f` on its pixels, put it
@@ -912,6 +979,82 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         }
         path.push(PathSegment::Close);
         i.set_current_path(&path)
+    });
+
+    // --- perspective ------------------------------------------------------
+    reg(interp, ctx, ".planebegin", |i, ctx| {
+        let m = i.pop_numbers()?;
+        let v = i.pop_value()?;
+        let p = parse_plane(ctx, &v, "onplane")?;
+        let Ok(m) = <[f64; 6]>::try_from(m.as_slice()) else {
+            return Err(PsError::Rangecheck);
+        };
+        let mut c = ctx.borrow_mut();
+        if c.planes.len() >= MAX_SCOPES {
+            drop(c);
+            return fail(
+                ctx,
+                PsError::Limitcheck,
+                "onplane: too many planes open at once",
+            );
+        }
+        c.planes.push((p, m));
+        Ok(())
+    });
+    reg(interp, ctx, ".planeend", |_i, ctx| {
+        ctx.borrow_mut().planes.pop();
+        Ok(())
+    });
+    reg(interp, ctx, ".planedepth", |i, ctx| {
+        i.push_int(ctx.borrow().planes.len() as i64);
+        Ok(())
+    });
+    reg(interp, ctx, ".planectm", |i, ctx| {
+        let m = ctx.borrow().planes.last().map(|p| p.1);
+        i.push_numbers(&m.unwrap_or([1.0, 0.0, 0.0, 1.0, 0.0, 0.0]));
+        Ok(())
+    });
+    // The innermost plane, with the path in its coordinates (the prelude has
+    // set its matrix): replace the path by its projection, every subpath
+    // closed as fill sees it, and leave the opacity the fade gives it.
+    reg(interp, ctx, ".planeproject", |i, ctx| {
+        let Some((p, m)) = ctx.borrow().planes.last().copied() else {
+            i.push_real(1.0);
+            return Ok(());
+        };
+        let path = i.current_path()?;
+        let out = plane::project_path(&p, &path, 1.0 / matrix_scale(&m), true);
+        i.set_current_path(&out.path)?;
+        i.push_real(out.opacity(&p));
+        Ok(())
+    });
+    reg(interp, ctx, ".projectpath", |i, ctx| {
+        let m = i.pop_numbers()?;
+        let v = i.pop_value()?;
+        let p = parse_plane(ctx, &v, "projectpath")?;
+        let Ok(m) = <[f64; 6]>::try_from(m.as_slice()) else {
+            return Err(PsError::Rangecheck);
+        };
+        let path = i.current_path()?;
+        let out = plane::project_path(&p, &path, 1.0 / matrix_scale(&m), false);
+        i.set_current_path(&out.path)
+    });
+    reg(interp, ctx, "planepoint", |i, ctx| {
+        let v = i.pop_value()?;
+        let y = i.pop_f64()?;
+        let x = i.pop_f64()?;
+        let p = parse_plane(ctx, &v, "planepoint")?;
+        let Some((sx, sy)) = p.project(x, y) else {
+            return fail(
+                ctx,
+                PsError::UndefinedResult,
+                "planepoint: the point is behind the eye (or too close to it) and has no place on the screen",
+            );
+        };
+        i.push_real(sx);
+        i.push_real(sy);
+        i.push_real(p.opacity(p.place(x, y)[2]));
+        Ok(())
     });
 
     reg(interp, ctx, "polypath", |i, ctx| {

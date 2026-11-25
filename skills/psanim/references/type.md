@@ -19,6 +19,7 @@ Scene bodies below run on a 640x360 canvas, 4 seconds, libraries loaded.
 - [Captions](#captions)
 - [Mathematics](#mathematics)
 - [Hierarchy](#hierarchy)
+- [An opening crawl](#an-opening-crawl)
 
 ## Text in a box
 
@@ -221,3 +222,33 @@ smaller than 22. In `vmin` these are 10 to 15, 5.5 to 7.5, 4 to 5 and 3.
 - Moving type should be legible while it moves: short distances
   (`/rise`, `/mask-up`), 0.4 to 0.8 s, gaps of 0.03 to 0.08 s per glyph
   and 0.1 to 0.2 s per word.
+
+## An opening crawl
+
+Text that recedes on a tilted plane towards a vanishing point, fading as
+it goes, is the catalog's `/crawl` entry: give it title lines and
+paragraphs, and it justifies them once in setup and draws each line on
+the plane with `onplane` (see
+[patterns.md](patterns.md#perspective-drawing-on-a-plane)). Its clock
+runs 40 seconds and fits the text into them; `/Speed` in `place` makes
+the whole crawl slower or faster.
+
+```postscript
+%!PS
+<< /Size [1280 720] /Duration 12 /Background [0 0 0] >> animation
+/intro /crawl << /Params <<
+  /Title [ (PART ONE) (A LONG WAY ROUND) ]
+  /Text [ (The ferry was late, the map was wrong, and the only road north had been closed for a hundred years.)
+          (Nobody told the cartographer, who set out anyway.) ]
+  /Font /Palatino-Bold /Size 52 /Width 900
+  /Color [0.9 0.95 1] /Stars 300
+>> >> instance
+/scene { /intro << /Speed 3 >> place } def
+```
+
+At 720p, keep `/Size` at 40 or more where the plane meets the bottom
+edge. Letters shrink with distance in width and, faster, in height (with
+the square of it): a third of the way up to the vanishing point they are
+two thirds as wide and under half as tall, and half way up a quarter as
+tall, a texture rather than words. That is where `/Fade` (fractions of
+the way up) should take them away.
