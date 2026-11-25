@@ -175,12 +175,14 @@ otherwise it is transparent and draws over the movie.
   the first.
 - Its setup runs when `component` or `instance` is called, so call them in
   setup, not in the scene (where they would run every frame).
-- `vignette` and `filmgrain` act on the whole canvas, not the component's
-  box: they would grade the movie around it. Inside a component wrap the
-  drawing in a layer (`1 { ... 0.3 filmgrain } faded`), which confines them,
-  and draw a vignette by hand: the catalog's `/terminal` does both.
+- `vignette` and `filmgrain` inside a component act only on its box, and
+  blur and glow stay inside it too.
 - A component's /Size and /Duration may depend on its parameters: read them
   with `param` before `animation` (the instance's /Seed is already in force
   there). `/terminal` and `/pipeline` size and time themselves that way.
+- The movie's own definitions are visible inside a component, below its own
+  names: a movie that defines `/scale` or `/between` for itself changes what
+  every component it places means by those words. Give the movie's helpers
+  names of their own.
 - A file component is read from the movie's own directory and must be
   inside the read roots (`--read-root`).

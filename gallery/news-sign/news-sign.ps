@@ -1,0 +1,60 @@
+%!PS
+% Poster: 13.9
+% News Sign
+%
+% A scrolling LED news sign on a brick wall at night, after the signs of the
+% 1980s that carried headlines, scores, the time and the temperature: red LEDs
+% behind smoked glass, each message arriving its own way (scrolling in, dropping
+% in, wiped on by a bright bar, sparkling on, flashing), with the time and
+% temperature between items. Below it a smaller green sign runs a scores
+% ticker round and round.
+%
+% Both signs are the catalog's /ledmatrix with /Look /sign. The film writes only
+% what they say; their glow spills red light on the wall behind. The headlines
+% are invented.
+
+/headlines [
+  [ /time /drop 2.2 /amber ]
+  [ (TRAM LINE 4 REOPENS MONDAY) /scroll 0 /red ]
+  [ (MARSH FC 3  ROVERS 1) /wipe 2.4 /green ]
+  [ /temp /sparkle 2.2 /amber ]
+  [ (LIGHT RAIN EXPECTED AFTER MIDNIGHT) /scroll 0 /red ]
+  [ (WEATHER ALERT) /flash 2.6 /amber ]
+  [ /time /drop 2.2 /amber ]
+] def
+/scores (FINAL   MARSH FC 3  ROVERS 1   *   HARBOUR 0  KESTREL 2   *   ASHFORD 4  NORTHGATE 4   *   SALT MERE 1  OLD TOWN 0   *   TABLE: KESTREL 41  MARSH 39  HARBOUR 36   *      ) def
+
+/main /ledmatrix << /Params << /Items headlines /Grid [96 7] /Look /sign /Pitch 12 /Speed 30 /Repeat false
+                              /Between 0.5 /Clock [21 41] /ClockRate 5 /Temp 54 >> >> instance
+/ticker /ledmatrix << /Params << /Text scores /Effect /marquee /Grid [65 5] /Look /sign /Pitch 12 /Speed 30 /Colour /green >> >> instance
+
+<< /Size [1280 720] /FPS 30 /Duration 39.9 /Background [0.05 0.035 0.035]
+   /Title (News Sign)
+   /Description (A scrolling LED news sign on a brick wall at night: headlines, scores, the time and the temperature, each arriving its own way, with a scores ticker below.)
+>> animation
+
+% ---- the wall: bricks, each a little different, lit from the sign ----------------
+/brickw 64 def /brickh 28 def
+/wall {
+  0 1 26 { /row exch def
+    0 1 21 { /col exch def
+      row 2 mod 0 eq { 0 } { brickw 2 div } ifelse col brickw mul sub brickw sub /xo exch def  % row offset
+      [ row col ] hash01 /h exch def
+      0.075 h 0.035 mul add 0.050 h 0.02 mul add 0.050 h 0.02 mul add setrgbcolor
+      col brickw mul row 2 mod 0 eq { 0 } { brickw 2 div neg } ifelse add 1 add row brickh mul 1 add brickw 2 sub brickh 2 sub rectfill
+    } for
+  } for
+} def
+
+/scene {
+  wall
+  % red light on the wall round the big sign, and a little green round the ticker
+  gsave 1 0.12 0.06 setrgbcolor 0.16 setalpha 60 { 130 400 1080 200 rectfill } blurred grestore
+  gsave 0.2 1 0.3 setrgbcolor 0.07 setalpha 60 { 260 230 760 100 rectfill } blurred grestore
+  % the signs, with a soft shadow of each on the wall
+  gsave 0 setgray 0.5 setalpha 14 { 44 392 1196 142 rectfill } blurred grestore
+  /main << /Box [ 38 410 1204 137 ] /After /hold >> place
+  gsave 0 setgray 0.5 setalpha 14 { 216 222 856 112 rectfill } blurred grestore
+  /ticker << /Box [ 223 240 833 113 ] >> place
+  0.55 vignette
+} def

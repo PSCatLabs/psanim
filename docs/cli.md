@@ -63,6 +63,30 @@ WebM (VP9, yuv420p), GIF, PNG sequence. PNG frames keep transparency;
 video is flattened onto the background colour (black when the background
 is transparent).
 
+### LED grids at true size
+
+The catalog's `/ledmatrix` has a raw mode for driving real LEDs: with `Raw`
+the movie's canvas *is* the grid, one canvas unit an LED, plain colour, no
+glow or housing. A catalog entry is a movie, so print it, set the grid and
+the message with `--param`, and render at scale 1 to a directory (a PNG
+sequence) or a GIF:
+
+```sh
+psanim catalog ledmatrix > strip.ps
+psanim render strip.ps -o frames/ --scale 1 \
+    --param Raw=1 --param Cols=65 --param Rows=5 --param Text="HELLO LED STRIP"
+# wrote frames/ (png sequence, 81 frames, 65x5 ...): frames/frame_00000.png ...
+psanim render strip.ps -o strip.gif --scale 1 --param Raw=1 --param Cols=65 --param Rows=5
+```
+
+Each frame is exactly 65x5 pixels holding only black and the LED colour
+(`--param Colour=white`, or edit the file's default), the scroll speed is
+`--param Speed=` LEDs a second (a divisor of the frame rate, `--fps`, keeps
+it even), and everything the entry can show (`/Items`, `/Cell`) works the
+same, set in the copy of the file. Frames are pure functions of time, so a
+single one is `psanim frame strip.ps --at 1.5 --scale 1 -o f.png --param ...`.
+The files were checked for size and pixel values, not against hardware.
+
 ## Safety
 
 `--untrusted` bounds steps, time and memory and confines reads to the
