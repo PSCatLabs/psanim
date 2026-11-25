@@ -1288,7 +1288,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let amount = i.pop_f64()?.clamp(0.0, 1.0);
         let (seed, frame) = {
             let c = ctx.borrow();
-            (c.seed, c.frame)
+            (c.seed(), c.frame)
         };
         let (cw, ch) = i.canvas_size();
         let r = ctx.borrow().effect_rect(cw as usize, ch as usize);

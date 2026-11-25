@@ -301,3 +301,26 @@ fn a_library_a_component_loads_itself_is_safe_from_the_movies_later_names() {
     .unwrap();
     assert_eq!(printed(&mut m, 0.0), "1.0");
 }
+
+#[test]
+fn a_component_loading_a_library_leaves_the_movies_own_words_alone() {
+    let mut m = load(
+        "/face { (host) == } def
+         /c << /Size [10 10] /Setup { /pkstage use } /Scene { /title 12 face (ok) == } >> component
+         /scene { face /c << >> place } def",
+    );
+    assert_eq!(printed(&mut m, 0.0), "(host)\n(ok)");
+}
+
+#[test]
+fn film_grain_follows_the_instance_seed() {
+    let grain = |seed: u32| {
+        let mut m = load(&format!(
+            "/g << /Size [40 40] /Seed {seed} /Scene {{ 0.5 setgray 0 0 40 40 rectfill 0.6 filmgrain }} >> component
+             /scene {{ /g << /Box [0 0 40 40] >> place }} def"
+        ));
+        m.render_at(0.0).unwrap().premultiplied.to_vec()
+    };
+    assert_eq!(grain(3), grain(3));
+    assert_ne!(grain(3), grain(4));
+}

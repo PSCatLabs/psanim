@@ -291,10 +291,30 @@ impl Emitter {
         if !first.is_finite() || first > t {
             return Ok(()); // nothing emitted yet, so no particle needs a gust
         }
+        // Nothing alive: every particle was born more than a life ago.
+        let last_burst = self
+            .bursts
+            .iter()
+            .copied()
+            .fold(f64::NEG_INFINITY, f64::max);
+        let last_stream = if self.rate > 0.0 {
+            self.to
+        } else {
+            f64::NEG_INFINITY
+        };
+        if t - last_burst.max(last_stream) > self.max_life() {
+            return Ok(());
+        }
         let start = (t - self.max_life()).max(first);
         let j0 = (start / GUST_CELL).floor() - 1.0;
         let j1 = (t / GUST_CELL).floor() + 1.0;
-        if !(j1 - j0).is_finite() || j1 - j0 > MAX_GUST_CELLS as f64 {
+        // Cells are counted from j0 in floating point: past 2^53 adding one
+        // no longer moves, so such times are refused, not looped over.
+        if !(j0.is_finite() && j1.is_finite())
+            || j0.abs() > 9.0e15
+            || j1.abs() > 9.0e15
+            || j1 - j0 > MAX_GUST_CELLS as f64
+        {
             return Err(format!(
                 "particles: a /Gust over {:.0} s of particle life is too long to follow (at most {:.0} s): shorten /Life, or start emitting later",
                 t - start,
@@ -303,11 +323,11 @@ impl Emitter {
         }
         self.gust_j0 = j0;
         self.gust_cells = Vec::new();
-        let mut j = j0;
-        while j <= j1 {
-            let g = self.gust_in(seed, j);
+        let count = (j1 - j0).max(0.0) as usize + 1;
+        self.gust_cells.reserve(count);
+        for k in 0..count {
+            let g = self.gust_in(seed, j0 + k as f64);
             self.gust_cells.push(g);
-            j += 1.0;
         }
         Ok(())
     }

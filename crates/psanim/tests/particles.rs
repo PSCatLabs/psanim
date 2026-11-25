@@ -252,3 +252,23 @@ fn an_enormous_time_never_hangs_a_stream() {
     let e = m.render_at(0.5).unwrap_err().to_string();
     assert!(e.contains("too large"), "{e}");
 }
+
+#[test]
+fn a_gust_at_an_enormous_time_is_refused_not_looped() {
+    let mut m = psanim::Movie::load(
+        "<< /Size [64 48] /Duration 2 /FPS 10 >> animation
+         /scene { 1e18 { << /Bursts [0] /Gust [1 1] >> { } particles } attime } def",
+        &psanim::Options::default(),
+    )
+    .unwrap();
+    // The burst at 0 is long dead at 1e18: nothing to follow.
+    m.render_at(0.5).unwrap();
+    // A stream still running at 1e18: refused, not looped over.
+    let mut m = psanim::Movie::load(
+        "<< /Size [64 48] /Duration 2 /FPS 10 >> animation
+         /scene { 1e18 { << /Rate 1 /Life 2 /Gust [1 1] >> { } particles } attime } def",
+        &psanim::Options::default(),
+    )
+    .unwrap();
+    assert!(m.render_at(0.5).is_err());
+}
