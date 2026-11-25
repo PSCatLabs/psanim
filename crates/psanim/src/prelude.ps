@@ -546,6 +546,7 @@ end
     systemdict { .compword { 2 index 3 1 roll put } { pop pop } ifelse } forall
     .base { .compword { 2 index 3 1 roll put } { pop pop } ifelse } forall
     dup /.isinst true put
+    dup /.comps 8 dict put            % the components it defines are its own
     dup /.pk << /used .pk /used get /cur 32 array /depth 0 /beats 1 dict /storylen 0 /bpm 120 >>
     dup /cur get 0 0 put put
   pop
@@ -577,12 +578,18 @@ end
   } if
   1 index exch /scene exch put
 } bind def
+% /name .compfind -> record true | false    the nearest definition: this
+%                                           instance's own, then the movie's
+/.compfind {
+  .comps 1 index known { .comps exch get true } {
+    userdict /.comps get 1 index known { userdict /.comps get exch get true } { pop false } ifelse
+  } ifelse
+} bind def
 /.compget {
-  .comps 1 index known not {
+  dup .compfind { exch pop } {
     (no component named /) exch 64 string cvs strcat
     (: define it in setup with /name (file.ps) component or /name << ... >> component) strcat .comperror
-  } if
-  .comps exch get
+  } ifelse
 } bind def
 % /name dict-or-(file.ps)-or-/entry component
 %                                       define a component and set up its
@@ -600,7 +607,7 @@ end
 % /name .compsrc -> src     what an instance of name is set up from: a
 %                          component's source, or a catalog entry's name.
 /.compsrc {
-  .comps 1 index known not 1 index .catknown and { } { .compget /src get } ifelse
+  dup .compfind { exch pop /src get } { dup .catknown not { .compget } if } ifelse
 } bind def
 /componentduration { .compget /dur get } bind def      % /name -> seconds
 /componentsize { .compget /size get aload pop } bind def % /name -> w h

@@ -224,3 +224,13 @@ fn a_movie_redefining_a_word_does_not_change_it_inside_a_component() {
     assert_eq!(l[1], "1.0", "{out}");
     assert!(!out.contains("movie"), "{out}");
 }
+
+#[test]
+fn components_defined_inside_two_components_do_not_collide() {
+    let mut m = load(
+        "/a << /Setup { /child << /Scene { (A) == } >> component } /Scene { /child << >> place } >> component
+         /b << /Setup { /child << /Scene { (B) == } >> component } /Scene { /child << >> place } >> component
+         /scene { /a << >> place /b << >> place } def",
+    );
+    assert_eq!(printed(&mut m, 0.0), "(A)\n(B)");
+}
