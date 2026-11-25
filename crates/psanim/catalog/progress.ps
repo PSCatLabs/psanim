@@ -24,15 +24,15 @@
 /FailColor [1 0.36 0.36] param /failc exch def  % when it fails
 
 /lead 0.3 def  /rest 1.1 def
-/dur mode /time eq { lead secs add rest add } { mode /indeterminate eq { 1.6 } { 1 } ifelse } ifelse def
+/timed signame length 0 eq mode /time eq and def                  % driven by its own clock: a signal or a value is not
+/dur timed { lead secs add rest add } { mode /indeterminate eq { 1.6 } { 1 } ifelse } ifelse def
 
-<< /Size style /ring eq { [160 160] } { [520 80] } ifelse /Duration dur /Loop mode /time ne /Background /transparent
+<< /Size style /ring eq { [160 160] } { [520 80] } ifelse /Duration dur /Loop timed not /Background /transparent
    /Title (Progress)
    /Description (A progress bar, ring or row of blocks. Determinate, driven by time, a value or a signal, with a failure look that stops and turns it red and a finished look that turns it green; or indeterminate, sweeping.)
 >> animation
 
 % ---- what it shows, as a function of time --------------------------------------------
-/timed signame length 0 eq mode /time eq and def
 /vraw {
   signame length 0 gt { signame cvn signal } {
     timed { lead lead secs add easing tween } { value } ifelse

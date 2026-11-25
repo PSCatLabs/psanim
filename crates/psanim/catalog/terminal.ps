@@ -178,9 +178,7 @@ fontname findfont 1 scalefont setfont (M) stringwidth pop /adv exch def
         sw 0 rlineto 0 sh warmup 3 exp 0.995 mul 0.005 add mul rlineto sw neg 0 rlineto closepath clip newpath
       } if
       glassfill
-      glow 0 gt {
-        1 { sw 0.012 mul glow 1.1 mul { drawtext } glowing } faded      % in a layer of its own: a halo would otherwise leak past the clip
-      } { drawtext } ifelse
+      glow 0 gt { sw 0.012 mul glow 1.1 mul { drawtext } glowing } { drawtext } ifelse
       scan 0 gt { scanlines rollbar } if
       vignette-glass
       warmup 1 lt { pc aload pop setrgbcolor 1 warmup sub 0.6 mul setalpha sx sy sh 2 div add 4 sub sw 8 rectfill } if

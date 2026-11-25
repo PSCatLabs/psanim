@@ -36,7 +36,7 @@
 
 % ---- where each stage is, as a function of time -------------------------------------------
 % stage progress 0..1 and how long ago it ended (large if it is a still)
-/T driven { signame length 0 gt { signame cvn signal } { value } ifelse } { 0 } ifelse def
+/T { driven { signame length 0 gt { signame cvn signal } { value } ifelse } { 0 } ifelse } def    % read each frame: a signal moves
 /stp { /si exch def                                % -> progress
   driven { T si sub 0 1 clamp } { bounds si get bounds si 1 add get ramp } ifelse
 } def

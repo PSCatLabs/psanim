@@ -23,9 +23,10 @@
 /lead 0.3 def  /rest 1.2 def
 /rows count cols 1 sub add cols idiv def
 /cell 40 def
-/dur mode /time eq { lead secs add rest add } { 1 } ifelse def
+/timed signame length 0 eq mode /time eq and def                  % on its own clock: a signal or a value is not
+/dur timed { lead secs add rest add } { 1 } ifelse def
 
-<< /Size [ cols cell mul rows cell mul label { 52 } { 0 } ifelse add ] /Duration dur /Loop mode /time ne /Background /transparent
+<< /Size [ cols cell mul rows cell mul label { 52 } { 0 } ifelse add ] /Duration dur /Loop timed not /Background /transparent
    /Title (Test dots)
    /Description (A grid of test results arriving: dots fill in green or red, each at its own pace, with a failure ringing out and a tally underneath.)
 >> animation

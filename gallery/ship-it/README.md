@@ -53,9 +53,11 @@ the screen agree on every time.
   bar's caption from BUILD to DEPLOY.
 - `/After /hold` on every placed entry, so each keeps its last picture.
 
-About 45 ms a frame at full size on a loaded machine (load average near
-30): the terminal's glow layer is most of it. `/Glow 0` roughly halves a
-terminal frame.
+Cost, measured with `psanim bench` while the machine was busy (load
+average 18 to 31, so these are upper bounds): about 42 ms a frame for the
+whole piece at 1280x720; the terminal alone about 28 ms at 960x720, of
+which the glow is a quarter or so (`/Glow 0` measured 20 ms); each of the
+pipeline, progress bar, test dots and spinner under 1 ms.
 
 ## Render
 

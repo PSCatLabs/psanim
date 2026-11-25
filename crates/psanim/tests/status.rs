@@ -128,22 +128,42 @@ fn a_spinner_can_come_to_a_result() {
 }
 
 #[test]
-fn a_progress_bar_follows_a_host_signal() {
-    let src = "<< /Size [400 300] /Duration 2 /FPS 10 /Background [0 0 0] >> animation
-         /x /progress << /Params << /Signal (build) /Label false >> >> instance
-         /scene { /x << /Box [0 0 400 300] >> place } def";
-    let opts = Options {
-        signals: psanim::Signals::from_csv("t,build\n0,0\n2,1\n").unwrap(),
-        ..Options::default()
+fn signal_driven_entries_follow_the_signal_and_stay_on_screen_past_their_own_clock() {
+    // No /After: a signal-driven entry is never "finished", so it must not hide at 4 s or so.
+    let src = |entry: &str, params: &str| {
+        format!(
+            "<< /Size [400 300] /Duration 8 /FPS 10 /Background [0 0 0] >> animation
+             /x /{entry} << /Params << /Signal (level) {params} >> >> instance
+             /scene {{ /x << /Box [0 0 400 300] >> place }} def"
+        )
     };
-    let mut m = Movie::load(src, &opts).unwrap();
-    let mut bar = |t: f64| {
+    let count = |entry: &str, params: &str, t: f64, pred: fn(u8, u8, u8) -> bool| {
+        // A pipeline's signal counts stages (0 to 3); the others run 0 to 1.
+        let top = if entry == "pipeline" { 3 } else { 1 };
+        let opts = Options {
+            signals: psanim::Signals::from_csv(&format!("t,level\n0,0\n8,{top}\n")).unwrap(),
+            ..Options::default()
+        };
+        let mut m = Movie::load(&src(entry, params), &opts).unwrap();
         let f = m.render_at(t).unwrap();
         f.premultiplied
             .chunks_exact(4)
-            .filter(|p| p[2] > 150 && p[2] > p[0] + 60)
+            .filter(|p| pred(p[0], p[1], p[2]))
             .count()
     };
-    let (a, b) = (bar(0.5), bar(1.5));
-    assert!(a > 50 && b > a * 2, "{a} {b}");
+    let blue: fn(u8, u8, u8) -> bool = |r, _, b| b > 150 && b > r + 60;
+    let green: fn(u8, u8, u8) -> bool = |r, g, b| g > 180 && r < 120 && b < 160;
+    let (a, b) = (
+        count("progress", "/Label false", 1.5, blue),
+        count("progress", "/Label false", 6.0, blue),
+    );
+    assert!(a > 50 && b > a * 2, "bar {a} {b}");
+    let (a, b) = (
+        count("testdots", "/Label false /Fails []", 1.5, green),
+        count("testdots", "/Label false /Fails []", 6.0, green),
+    );
+    assert!(b > a * 2 && b > 500, "dots {a} {b}");
+    // And a pipeline, whose signal counts stages.
+    let p = count("pipeline", "", 6.0, green);
+    assert!(p > 100, "pipeline {p}");
 }

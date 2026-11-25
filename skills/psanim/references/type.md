@@ -176,7 +176,6 @@ the fifth character slip for certain.
   /mono 28 face /good ink
   40 200 moveto (> ) show
   line now typedat show
-  line planlength 0.4 add now lt { 0.3 setgray } if
 } def
 ```
 
@@ -197,7 +196,7 @@ planmark` (see [catalog.md](catalog.md)).
 /session [
   [/type (make test)] [/lines (cc a.c\ncc b.c\nlink) 0.25]
   [/mark /ran] [/out (all 12 tests passed)]
-] 3 << /Prompt (\$ ) >> sessionplan def
+] 3 << /Prompt ($ ) >> sessionplan def
 /scene {
   /mono 24 face /good ink
   session now 9 50 screenat pop pop
