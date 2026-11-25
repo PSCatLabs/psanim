@@ -11,7 +11,7 @@ PSCat to grow, and how the two repositories are built together.
 | PSCat repository | https://github.com/PSCatLabs/pscat |
 | Upstream base | `feature/0.7.1` at `72a2c4e` (the active development branch; `main` was 64 commits behind it on 2026-11-23) |
 | Feature branch | `feature/psanim-library-api` (pushed; draft PR [#1410](https://github.com/PSCatLabs/pscat/pull/1410), issue [#1403](https://github.com/PSCatLabs/pscat/issues/1403); not merged) |
-| Tested revision | `f6ed4e7` |
+| Tested revision | `7a9e024` |
 | PSCat version | 0.7.0-rc.5 |
 | Local checkout | a git worktree at `../pscat-psanim-api`, beside this repository |
 
