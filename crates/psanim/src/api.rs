@@ -83,7 +83,7 @@ pub const API: &[ApiEntry] = &[
         "declaration",
         "animation",
         "dict  animation  -",
-        "Declare the movie. Put it before anything that takes time or draws (definitions it needs, such as a reel array for `reelduration`, may come first). Keys, all optional: /Size [w h] (canvas units, default [1280 720]), /Duration seconds (5), /FPS (30), /Seed (1), /Background [r g b] or /transparent (black), /Title, /Description, /Loop bool, /Scene /name (scene), /Step /name (step), /StepRate ticks per second (FPS), /Persist bool, /MotionBlur samples, /Shutter 0..1 (0.5).",
+        "Declare the movie. Put it before anything that takes time or draws (definitions it needs, such as a reel array for `reelduration`, may come first). Keys, all optional: /Size [w h] (canvas units, default [1280 720]), /Duration seconds (5), /FPS (30), /Seed (1), /Background [r g b] or /transparent (black), /Title, /Description, /Loop bool, /Cuts [t ...] (seconds where the movie cuts on purpose: `psanim check` does not report an abrupt change there), /Scene /name (scene), /Step /name (step), /StepRate ticks per second (FPS), /Persist bool, /MotionBlur samples, /Shutter 0..1 (0.5).",
     ),
     e(
         "clock",

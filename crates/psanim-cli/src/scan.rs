@@ -15,6 +15,25 @@ use crate::Fail;
 
 /// Consecutive frames rendered for one chunk of the sweep.
 const CHUNK: u64 = 24;
+/// Frames rendered for one chunk of the sweep: the stretch, and a few past
+/// it so its last pairs have neighbours.
+pub const CHUNK_FRAMES: u64 = CHUNK + 5;
+/// The most chunks a sweep scans (about 230 frames).
+pub const MAX_CHUNKS: u64 = 8;
+/// How long the sweep is meant to take, whatever the frames cost.
+const SWEEP_BUDGET: Duration = Duration::from_millis(3000);
+/// The longest the sweep may take: a safety for a cost that grows after
+/// it was estimated, not the usual limit.
+pub const SWEEP_CEILING: Duration = Duration::from_secs(4);
+
+/// How many chunks the sweep scans when a frame costs `frame_ms`: as many
+/// as fit its budget, up to [`MAX_CHUNKS`]. None at all for frames so slow
+/// that one chunk would not fit: `--all` is how to scan those.
+pub fn sweep_chunks(frame_ms: f64) -> u64 {
+    let chunk_ms = frame_ms.max(0.01) * CHUNK_FRAMES as f64;
+    ((SWEEP_BUDGET.as_secs_f64() * 1e3 / chunk_ms) as u64).min(MAX_CHUNKS)
+}
+
 /// Frames kept: a sample's six-frame window overlaps its neighbour's.
 const KEEP: usize = 8;
 /// The most tiles a change can cover and still be a small element (a
@@ -68,6 +87,8 @@ pub struct Scanner {
     last: u64,
     frames: VecDeque<Cached>,
     pairs: BTreeMap<u64, Pair>,
+    /// The whole-frame change of every pair measured, kept for good.
+    motions: BTreeMap<u64, f64>,
     judged: BTreeSet<u64>,
     spikes: BTreeMap<u64, Pop>,
 }
@@ -105,6 +126,7 @@ impl Scanner {
             last,
             frames: VecDeque::new(),
             pairs: BTreeMap::new(),
+            motions: BTreeMap::new(),
             judged: BTreeSet::new(),
             spikes: BTreeMap::new(),
         }
@@ -118,6 +140,11 @@ impl Scanner {
     /// been rendered.
     pub fn motion(&self, index: u64) -> Option<f64> {
         self.pairs.get(&index).map(|p| p.motion)
+    }
+
+    /// The whole-frame change of every pair of frames measured so far.
+    pub fn pair_motions(&self) -> Vec<f64> {
+        self.motions.values().copied().collect()
     }
 
     /// Render frame `index` unless it is already kept, and measure the pair
@@ -146,6 +173,7 @@ impl Scanner {
                 motion: raster::difference(&prev.flat, &flat),
                 tiles: raster::tile_differences(&prev.flat, &flat, self.w, self.h, self.tile),
             };
+            self.motions.insert(index - 1, pair.motion);
             self.pairs.insert(index - 1, pair);
         }
         // Keep the pairs near this stretch; a jump to another one drops
@@ -370,7 +398,7 @@ impl Scanner {
             }
             let s = first + k * CHUNK;
             // A few frames past the stretch, so its last pairs have neighbours.
-            self.window(movie, s, s + CHUNK + 4, Some(deadline))?;
+            self.window(movie, s, s + CHUNK_FRAMES - 1, Some(deadline))?;
             done += 1;
         }
         Ok(Instant::now() >= deadline)

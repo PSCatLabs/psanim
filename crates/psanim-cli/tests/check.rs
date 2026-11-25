@@ -55,20 +55,34 @@ const BUSY: &str = "
 } def
 ";
 
+/// The entries of `key` that mention an abrupt change.
+fn abrupt(json: &serde_json::Value, key: &str) -> Vec<String> {
+    strings(json, key)
+        .into_iter()
+        .filter(|w| w.contains("abrupt change"))
+        .collect()
+}
+
 #[test]
-fn a_small_pop_in_a_busy_frame_is_flagged() {
+fn a_small_pop_in_a_busy_frame_is_a_note_and_under_all_a_warning() {
     let source = format!(
         "{BUSY}/scene {{ bars  now 1 ge {{ 1 1 1 setrgbcolor 300 172 12 12 rectfill }} if }} def"
     );
-    let warnings = check("pop", &source, &[]);
-    let abrupt: Vec<_> = warnings
-        .iter()
-        .filter(|w| w.contains("abrupt change"))
-        .collect();
-    assert_eq!(abrupt.len(), 1, "{warnings:?}");
+    // By default: a note, since films change things on purpose.
+    let json = run("pop", &source, &[]);
+    assert!(abrupt(&json, "warnings").is_empty(), "{json}");
+    let notes = abrupt(&json, "notes");
+    assert_eq!(notes.len(), 1, "{notes:?}");
     // The square appears between frames 29 and 30, near (300, 300).
-    assert!(abrupt[0].contains("after frame 29"), "{}", abrupt[0]);
-    assert!(abrupt[0].contains("x 288..320"), "{}", abrupt[0]);
+    assert!(notes[0].contains("after frame 29"), "{}", notes[0]);
+    assert!(notes[0].contains("x 288..320"), "{}", notes[0]);
+    assert!(notes[0].contains("`check --all`"), "{}", notes[0]);
+    // Under --all: a warning.
+    let json = run("pop_all", &source, &["--all"]);
+    let warnings = abrupt(&json, "warnings");
+    assert_eq!(warnings.len(), 1, "{json}");
+    assert!(warnings[0].contains("after frame 29"), "{}", warnings[0]);
+    assert!(abrupt(&json, "notes").is_empty(), "{json}");
 }
 
 #[test]
@@ -80,17 +94,78 @@ fn a_pop_is_found_where_no_sampled_frame_is() {
         BUSY.replace("/Duration 2", "/Duration 10")
     );
     let json = run("pop_late", &source, &[]);
-    let warnings = strings(&json, "warnings");
+    let notes = abrupt(&json, "notes");
     assert!(
-        warnings.iter().any(|w| w.contains("after frame 209")),
-        "{warnings:?}"
+        notes.iter().any(|w| w.contains("after frame 209")),
+        "{notes:?}"
     );
     // ... and it is reported once: no sample saw it.
-    assert_eq!(
-        warnings.iter().filter(|w| w.contains("abrupt")).count(),
-        1,
+    assert_eq!(notes.len(), 1, "{notes:?}");
+    assert!(abrupt(&json, "warnings").is_empty(), "{json}");
+}
+
+#[test]
+fn a_cut_over_half_the_frame_is_a_warning_by_default() {
+    let source = "
+<< /Size [640 360] /Duration 2 /FPS 30 /Background [0.05 0.05 0.1] >> animation
+/scene { now 1 ge { 0.9 0.8 0.2 setrgbcolor 0 0 640 360 rectfill } if
+         1 1 1 setrgbcolor now 100 mul 20 add 100 30 30 rectfill } def";
+    let warnings = check("cut", source, &[]);
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.contains("abrupt change after frame 29")),
         "{warnings:?}"
     );
+}
+
+#[test]
+fn a_declared_cut_is_not_reported() {
+    let cut = "
+<< /Size [640 360] /Duration 2 /FPS 30 /Background [0.05 0.05 0.1] CUTS >> animation
+/scene { now 1 ge { 0.9 0.8 0.2 setrgbcolor 0 0 640 360 rectfill } if
+         1 1 1 setrgbcolor now 100 mul 20 add 100 30 30 rectfill
+         now 1 ge { 0 0 0 setrgbcolor 300 172 12 12 rectfill } if } def";
+    // Unmarked, under --all, the cut is a warning ...
+    let json = run("nocut", &cut.replace("CUTS", ""), &["--all"]);
+    assert!(!abrupt(&json, "warnings").is_empty(), "{json}");
+    // ... and marked at the second where it happens it is not, whatever
+    // the options; a note says so.
+    for extra in [&[][..], &["--all"][..]] {
+        let json = run("cut_marked", &cut.replace("CUTS", "/Cuts [1.0]"), extra);
+        assert!(abrupt(&json, "warnings").is_empty(), "{json}");
+        let notes = strings(&json, "notes");
+        assert!(
+            notes.iter().any(|n| n.contains("declared /Cuts")),
+            "{notes:?}"
+        );
+    }
+    // A cut declared somewhere else does not excuse this one.
+    let json = run(
+        "cut_elsewhere",
+        &cut.replace("CUTS", "/Cuts [0.5]"),
+        &["--all"],
+    );
+    assert!(!abrupt(&json, "warnings").is_empty(), "{json}");
+}
+
+#[test]
+fn bad_cuts_are_an_error() {
+    let dir = std::env::temp_dir().join(format!("psanim-check-test-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("badcuts.ps");
+    std::fs::write(
+        &path,
+        "<< /Size [64 64] /Duration 1 /Cuts (soon) >> animation /scene { } def",
+    )
+    .unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_psanim"))
+        .arg("check")
+        .arg(&path)
+        .output()
+        .expect("psanim runs");
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("/Cuts"));
 }
 
 #[test]
@@ -235,6 +310,50 @@ fn a_stateful_movie_may_keep_state_in_a_string() {
     let warnings = check("stateful", source, &[]);
     assert!(
         !warnings.iter().any(|w| w.contains("string")),
+        "{warnings:?}"
+    );
+}
+
+/// A looping movie whose picture steps (a beat) every 0.25 s while a
+/// disc goes round: every step is as big as the join.
+const BEAT_LOOP: &str = "
+<< /Size [320 180] /Duration 8 /FPS 30 /Loop true /Background [0.05 0.05 0.1] >> animation
+/scene {
+  1 1 1 setrgbcolor
+  now 4 mul floor cvi 2 mod 0 eq { 40 40 100 100 rectfill } { 180 40 100 100 rectfill } ifelse
+  0.3 0.6 1 setrgbcolor 160 90 translate now 45 mul rotate 60 0 6 0 360 arc fill
+} def";
+
+#[test]
+fn a_join_like_the_beats_elsewhere_is_not_a_seam() {
+    let json = run("beat_loop", BEAT_LOOP, &[]);
+    let warnings = strings(&json, "warnings");
+    assert!(!warnings.iter().any(|w| w.contains("loop")), "{warnings:?}");
+    // Eight seconds of 0.25 s steps: the join is one of them, and a note
+    // says it was weighed against them.
+    let notes = strings(&json, "notes");
+    assert!(
+        notes.iter().any(|n| n.contains("not taken as a seam")),
+        "{notes:?}"
+    );
+}
+
+#[test]
+fn a_join_unlike_anything_else_is_a_seam() {
+    // A disc going steadily round, 45 degrees a second over eight
+    // seconds: it ends 360 degrees on, a whole turn. Change that to 50 and
+    // it does not close, and nothing else in the film steps.
+    let closing = "
+<< /Size [320 180] /Duration 8 /FPS 30 /Loop true /Background [0.05 0.05 0.1] >> animation
+/scene { 0.3 0.6 1 setrgbcolor 160 90 translate now RATE mul rotate 60 0 20 0 360 arc fill
+         1 1 1 setrgbcolor 90 0 12 0 360 arc fill } def";
+    let warnings = check("seam_ok", &closing.replace("RATE", "45"), &[]);
+    assert!(!warnings.iter().any(|w| w.contains("loop")), "{warnings:?}");
+    let warnings = check("seam_bad", &closing.replace("RATE", "50"), &[]);
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.contains("the loop does not close")),
         "{warnings:?}"
     );
 }

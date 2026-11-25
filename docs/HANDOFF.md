@@ -180,12 +180,14 @@ built; `docs/roadmap.md` ranks it.
   `/name deftransition` was not needed.
 - `check`'s pop detector (per tile, against the same tile in the pairs
   either side; docs/cli.md) is tuned on the gallery and test movies, not
-  proven. It flags intended discrete changes too (cuts between clips, a
-  stepped value) and there is no way to mark a cut as intended. It scans
-  a fixed set of about 230 frames of a pure movie, so a pop elsewhere in a
-  long movie is found only by `check --all`; a movie with state is scanned
-  only around its sampled frames. Rendering a pure movie's frames is cheap
-  enough that `--all` costs seconds; for the slowest pieces it is minutes.
+  proven. Local pops are notes by default and warnings under `--all`
+  (a change over half the frame is always a warning); a movie declares
+  intended cuts with `/Cuts [t ...]`. The default scan takes about 3 s
+  however slow the frames are, so it covers fewer runs of 24 frames
+  (none over about 100 ms a frame): a pop elsewhere in a long movie is
+  found only by `check --all`; a movie with state is scanned only around
+  its sampled frames. Rendering a pure movie's frames is cheap enough
+  that `--all` costs seconds; for the slowest pieces it is minutes.
 - Code before `animation` still runs twice (see decision 5); `check`
   warns when it prints or takes over 50 ms, but nothing prevents it.
 - `MAX_OUTPUT` truncates printed text at 64 KB per collection. The text
