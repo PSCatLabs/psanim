@@ -129,7 +129,7 @@ for the common case.
 | core additions | `within`, `fitted`, `script`/`then`, `storyboard`, `tempo`/`counts`, `cascade`, `onpath`, `taperpath`, `straightenpath`, `smoothkeys`, `valueat`, `fmtnum`, `codetokens` ... | Rust + prelude |
 | `pkstage` | boxes, themes, `lookat`, `spotlight` | PostScript |
 | `pkmotion` | `enters`, `leaves`, `onstage`, `emphasized`, `motion`, `echoed`, `rank` | native layer placement |
-| `pktype` | `showin`, `placetext`, `fitface`, `paragraph`, `kinetic`, `marker`, `typewrite`, `captions`, `sym`, run lists (`showruns`) | pkstage, pkmotion |
+| `pktype` | `showin`, `placetext`, `fitface`, `paragraph`, `kinetic`, `marker`, `typewrite`, `captions`, `credits`, `sym`, run lists (`showruns`) | pkstage, pkmotion |
 | `pkdiagram` | `node`, `edge`, `connect`, `arrow`, `pulse`, `group`, `note`, `circled` | pktype |
 | `pkcode` | `codeblock`, `codelinebox`, `codediff` | native tokenizer and diff |
 | `pkchart` | `plotframe`, `plotaxes`, `bars`, `hbars`, `plotline`, `plotmark`, `plotrule`, `dots`, `donut` | pktype |
@@ -163,6 +163,15 @@ libraries are about 1,750 lines of PostScript.
   open around it; private names carry a dot or a prefix.
 - Names are checked by a test against every PSCat library and against
   each other.
+- `credits` lives in pktype because it is set type measured with the
+  theme's faces; it reads `now` as `captions` and `kinetic` do, and
+  `creditsat` is the same drawing from a distance the caller computes.
+  It lays the whole roll out in a settings dictionary, turns it into
+  finished records (place, alpha, text) and only then draws, so the
+  caller's `/proc` entries run with no dictionary open. It snaps the
+  roll's offset to a whole device pixel through the current
+  transformation: the one place a library word looks at device space,
+  because shimmer is a property of pixels.
 
 ## What was deliberately not built
 

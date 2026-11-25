@@ -29,7 +29,11 @@ fn every_entry_runs_on_its_own_and_says_what_it_is() {
             let f = m
                 .render_frame(k)
                 .unwrap_or_else(|e| panic!("/{name} frame {k}: {e}"));
-            assert!(has_ink(f.premultiplied), "/{name} frame {k} is empty");
+            // A film may open from nothing: only the later frames must show something.
+            assert!(
+                k == 0 || has_ink(f.premultiplied),
+                "/{name} frame {k} is empty"
+            );
         }
     }
 }
