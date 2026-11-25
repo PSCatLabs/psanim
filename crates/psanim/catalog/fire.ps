@@ -245,11 +245,9 @@
 } def
 
 /realistic {
-  % glow radii are in canvas units, not this entry's: scale them with however it is placed
-  /usc matrix currentmatrix 0 get matrix defaultmatrix 0 get div abs def
   smokef 0 gt { smoke } if
   glowf 0 gt {
-    ch 0.05 mul usc mul glowf 0.5 inten 0.5 mul add mul 2 min { flame embers } glowing
+    ch 0.05 mul glowf 0.5 inten 0.5 mul add mul 2 min { flame embers } glowing
   } { halo flame embers } ifelse
 } def
 
