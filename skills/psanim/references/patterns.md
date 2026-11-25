@@ -198,6 +198,17 @@ gsave 320 180 translate
 grestore
 ```
 
+`morphpath` carries point *i* of one outline to point *i* of the other, so
+where the two start decides whether the shape melts or twists. For a pair
+you will morph, `alignpath` turns the second array to start where it moves
+least (and walks it the same way round); do it once in setup. A shape with
+a hole is two contours, which `morphpath` cannot match; draw it as one
+outline instead: a thick pen stroke turned into an outline with
+`strokepath` is a single contour even for a 0 or an 8 (the pen path of a
+0 starts and ends at one point, so the outline is cut by a slit of zero
+width and fills as a ring). The `/clock-morph` catalog entry does exactly
+this for its ten digits.
+
 Both arrays are plain `[x y x y ...]` in the user space that was current
 when they were sampled (y up, like everything). `morphpath` and `polypath`
 place points in the user space current when *they* run, so an array made

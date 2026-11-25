@@ -1,0 +1,151 @@
+%!PS
+% Catalog entry: clock-morph. A clock whose digits melt from one into the next.
+% In a movie:  /c /clock-morph component   then   /c << /Box [x y w h] >> place
+%
+% After the classic X Windows morphing-digit clock. Each digit is ONE closed
+% outline, the outline of a thick pen stroke (strokepath), so `morphpath`
+% can carry it into any other digit: every point of the old outline slides
+% to a point of the new one (`alignpath` picks the start and direction that
+% move them least). The time comes from the host, never the wall clock: a
+% start time plus the movie's own time, or a live signal (see /Signal).
+% The default start is 12 hours before the time the catalog sheet should show
+% (its middle frame is 12 hours in): the sheet reads 12:34:56.
+<< /Size [960 320] /Duration 86400 /Background /transparent
+   /Title (Morphing clock)
+   /Description (A clock whose digits melt from one into the next, after the classic X Windows morphing-digit clock. Time of day from a start time and the movie's own time, or from a host signal. Not a loop: the movie time is the clock.)
+>> animation
+
+/Start (00:34:56) param /start exch def          % time of day at movie time 0: seconds since midnight, or (HH:MM:SS) text
+/Signal null param /sig exch def            % name of a host signal that carries seconds since midnight (a live page); Start is then ignored
+/Theme /midnight param /theme exch def      % /midnight /amber /paper /phosphor
+/Seconds 1 param /showsec exch def          % 1 shows HH:MM:SS, 0 shows HH:MM
+/Melt 0.6 param /melt exch def              % seconds (at most 1) a digit takes to melt into the next, finishing on the stroke of the second
+/Blink 0 param /blink exch def              % 1 dims the colons for the second half of each second
+/Panel 1 param /panel exch def              % 1 paints a rounded panel behind the digits, 0 leaves them on whatever is there
+
+<< /midnight << /bg [0.05 0.07 0.12] /ink [0.42 0.86 1.0]  /dim [0.16 0.24 0.34] /hot [1.0 0.45 0.40] >>
+   /amber    << /bg [0.07 0.04 0.02] /ink [1.0 0.62 0.10] /dim [0.28 0.17 0.06] /hot [1.0 0.85 0.40] >>
+   /paper    << /bg [0.96 0.94 0.89] /ink [0.13 0.13 0.16] /dim [0.78 0.75 0.68] /hot [0.84 0.24 0.14] >>
+   /phosphor << /bg [0.02 0.06 0.04] /ink [0.35 1.00 0.55] /dim [0.08 0.22 0.13] /hot [0.90 1.00 0.50] >>
+>> theme get /pal exch def
+/role { pal exch get aload pop setrgbcolor } def
+
+% ---- the digits: pen centrelines in a cell 100 wide, 200 tall ---------------
+% Elliptical arc appended to the path: cx cy rx ry a0 a1 ccw?
+/earc {
+  /ec exch def /ea1 exch def /ea0 exch def /ery exch def /erx exch def /ecy exch def /ecx exch def
+  matrix currentmatrix /em exch def
+  ecx ecy translate erx ery scale 0 0 1 ea0 ea1 ec { arc } { arcn } ifelse
+  em setmatrix
+} def
+/D 12 dict def
+D 0 { 50 185 moveto 50 150 35 90 180 arc 50 50 35 180 360 arc 50 150 35 0 90 arc } put
+D 1 { 22 140 moveto 60 185 lineto 60 15 lineto } put
+D 2 { 15 148 moveto 50 148 35 180 0 arcn 85 148 lineto 85 105 15 95 15 15 curveto 85 15 lineto } put
+D 3 { 18 160 moveto 45 142.5 38 42.5 150 -90 false earc 45 57.5 40 42.5 90 -150 false earc } put
+D 4 { 65 15 moveto 65 185 lineto 15 65 lineto 90 65 lineto } put
+D 5 { 85 185 moveto 25 185 lineto 23.6 100.5 lineto 46 62 39 47 125 -140 false earc } put
+D 6 { 78 168 moveto 62 185 22 185 15 110 curveto 15 57 lineto 50 57 35 42 180 540 true earc } put
+D 7 { 15 185 moveto 85 185 lineto 40 15 lineto } put
+D 8 { 50 100 moveto 50 142.5 33 42.5 -90 270 true earc 50 57.5 35 42.5 90 -270 false earc } put
+D 9 { matrix currentmatrix 50 100 translate 180 rotate -50 -100 translate D 6 get exec setmatrix } put
+% 0 and 8 start and end at one point, heading the same way: flat ends meet
+% without a seam. The rest have round ends.
+/caps [ 0 1 1 1 1 1 1 1 0 1 ] def
+/centreline { newpath D exch get exec } def                 % d  -  the pen path
+/pen { dup centreline caps exch get setlinecap 1 setlinejoin } def % d  -  set the pen up
+
+% One outline per digit, N points, and for every pair (a, b) the outline of b
+% turned to lie closest to a's, so that a melts into b without twisting.
+/N 192 def
+/outline { pen 30 setlinewidth strokepath N resamplepath } def
+/O 10 array def
+0 1 9 { dup outline O 3 1 roll put } for
+/A 100 dict def
+0 1 9 { /a exch def
+  0 1 9 { /b exch def
+    a b ne { A a 10 mul b add O a get O b get alignpath put } if
+  } for
+} for
+
+% ---- time ------------------------------------------------------------------
+% The six digits of second s (any whole number of seconds): [h h m m s s].
+/digits {
+  clockparts pop /ds exch def /dm exch def /dh exch def
+  [ dh 10 idiv dh 10 mod dm 10 idiv dm 10 mod ds 10 idiv ds 10 mod ]
+} def
+
+% ---- drawing -----------------------------------------------------------------
+/GLOW [ 34 0.05 18 0.10 ] def                       % extra width and opacity of the two halo passes
+/still { % d : the digit at rest, a pen stroke
+  /st-d exch def
+  /ink role
+  st-d pen
+  0 2 2 { /i exch def
+    gsave 1 setlinejoin
+      GLOW i 1 add get setalpha
+      GLOW i get 30 add setlinewidth
+      st-d centreline stroke
+    grestore
+  } for
+  30 setlinewidth st-d centreline stroke
+} def
+/melting { % a b u : the outline u of the way from a's to b's
+  /ml-u exch def /ml-b exch def /ml-a exch def
+  /ink role
+  0 2 2 { /i exch def
+    gsave 1 setlinejoin
+      GLOW i 1 add get setalpha
+      GLOW i get setlinewidth
+      O ml-a get A ml-a 10 mul ml-b add get ml-u morphpath stroke
+    grestore
+  } for
+  O ml-a get A ml-a 10 mul ml-b add get ml-u morphpath fill
+} def
+/colon { % x : two dots in the gap at x, blinking if asked to
+  /co-x exch def
+  /hot role
+  /co-a blink 1 eq { frac 0.5 lt { 1 } { 0.3 } ifelse } { 1 } ifelse def
+  [ 65 135 ] { /co-y exch def
+    gsave 1 setlinejoin
+      co-a 0.05 mul setalpha co-x co-y 32 0 360 arc fill
+      co-a 0.10 mul setalpha co-x co-y 24 0 360 arc fill
+      co-a setalpha co-x co-y 15 0 360 arc fill
+    grestore
+  } forall
+} def
+
+/rrect { % x y w h r
+  /rr-r exch def /rr-h exch def /rr-w exch def /rr-y exch def /rr-x exch def
+  rr-x rr-r add rr-y moveto
+  rr-x rr-w add rr-y rr-x rr-w add rr-y rr-h add rr-r arcto 4 { pop } repeat
+  rr-x rr-w add rr-y rr-h add rr-x rr-y rr-h add rr-r arcto 4 { pop } repeat
+  rr-x rr-y rr-h add rr-x rr-y rr-r arcto 4 { pop } repeat
+  rr-x rr-y rr-x rr-w add rr-y rr-r arcto 4 { pop } repeat
+  closepath
+} def
+
+/scene {
+  panel 1 eq { /bg role 0 0 width height 28 rrect fill } if
+  /T start sig daytime def
+  /t0 T floor def
+  /frac T t0 sub def
+  /now6 t0 digits def
+  /next6 t0 1 add digits def
+  % The melt ends on the stroke of the second, so the new digit is whole
+  % exactly when the time changes, and movie time 0 shows Start itself.
+  /u frac 1 melt 1 min 0.01 max sub sub melt 1 min 0.01 max div 0 max 1 min /smooth ease def
+  % Lay the row out in 870 x 200 units (570 without the seconds), centred.
+  /cw showsec 1 eq { 870 } { 550 } ifelse def
+  /xs showsec 1 eq { [ 0 130 320 450 640 770 ] } { [ 0 130 320 450 ] } ifelse def
+  /s width 56 sub cw div height 56 sub 200 div min def
+  width cw s mul sub 2 div height 200 s mul sub 2 div translate s s scale
+  0 1 xs length 1 sub { /k exch def
+    gsave xs k get 0 translate
+      now6 k get next6 k get ne u 0 gt and
+        { now6 k get next6 k get u melting } { now6 k get still } ifelse
+    grestore
+  } for
+  275 colon
+  showsec 1 eq { 595 colon } if
+} def

@@ -22,6 +22,7 @@ pub struct ApiEntry {
 pub const CATEGORIES: &[(&str, &str)] = &[
     ("declaration", "Declaring the movie"),
     ("clock", "The clock"),
+    ("timeofday", "Time of day, for clocks that show it"),
     ("scope", "Time scopes: re-basing the clock for a procedure"),
     ("value", "Values over time"),
     ("path", "Paths: measuring, following, drawing on, morphing"),
@@ -342,6 +343,12 @@ pub const API: &[ApiEntry] = &[
         "morphpath",
         "arrayA arrayB u  morphpath  -",
         "Replace the current path by the closed polygon u of the way from A to B, two arrays from resamplepath with the same n. The points are placed in the current user space, so the transformation in force applies to them as to any path.",
+    ),
+    e(
+        "path",
+        "alignpath",
+        "arrayA arrayB  alignpath  arrayB2",
+        "B's points (from resamplepath, a closed outline) started from the place that lies closest to A's, as a new array; if B runs the other way round it is also reversed, since a morph between opposite senses collapses on the way. Morph A into the result with `morphpath` and every point travels the least, so a shape melts into the next rather than twisting. Do it once in setup for each pair you will morph, not per frame (it costs n squared).",
     ),
     e(
         "layer",
@@ -721,6 +728,30 @@ pub const API: &[ApiEntry] = &[
         "zeropad",
         "int width  zeropad  string",
         "The integer as text, padded with zeros on the left to that width: 7 2 zeropad is (07).",
+    ),
+    e(
+        "timeofday",
+        "parseclock",
+        "(HH:MM:SS) | seconds  parseclock  seconds",
+        "A time of day as seconds since midnight. Text is (H:MM), (H:MM:SS) or (H:MM:SS.fff), the form `--param Start=12:34:56` gives; a number is passed through, so a parameter can be either. A malformed time is an error that says what is accepted.",
+    ),
+    e(
+        "timeofday",
+        "daytime",
+        "start /signal|null  daytime  seconds",
+        "The time of day to show, in seconds since midnight (fractions kept, wrapped into one day). A movie is a pure function of its own time and never reads the wall clock, so the host supplies the time one of two ways. With null: `start` (seconds, or text as for `parseclock`) plus the movie time, so a render shows the clock running from the start time. With a signal name (a name, or text from `--param`): that signal's value, which a live page sets to the viewer's local seconds since midnight before each frame (`engine.setSignal(\"clock\", s)`); `start` is then ignored.",
+    ),
+    e(
+        "timeofday",
+        "clockparts",
+        "seconds  clockparts  h m s frac",
+        "Split a time of day, wrapped into one day: hours 0..23, minutes and seconds 0..59 (integers) and the fraction of the second, 0 up to 1. 45296.25 gives 12 34 56 0.25.",
+    ),
+    e(
+        "timeofday",
+        "fmtday",
+        "seconds  fmtday  string",
+        "A time of day on the 24 hour clock as text: (07:05:09). Build other forms from `clockparts` and `zeropad`.",
     ),
     e(
         "text",

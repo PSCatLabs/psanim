@@ -45,6 +45,18 @@ The player sets three signals from the pointer before every frame:
 reads them is interactive in the page and still renders offline (with the
 signals from a file, or zero).
 
+A live clock is the same mechanism: the catalog's clocks take a `Signal`
+parameter naming a signal that carries seconds since midnight, and a page
+that embeds the engine sets it before each frame, fractions included
+(`const d = new Date(); engine.setSignal("clock", d.getHours() * 3600 +
+d.getMinutes() * 60 + d.getSeconds() + d.getMilliseconds() / 1000)`),
+and a wrapper movie places the clock with
+`/c /clock-digital << /Params << /Signal /clock >> >> instance` (`open`
+takes no `--param` values today). The shipped `<psanim-player>` does not set
+a clock signal yet. Offline the same
+movie takes a start time instead, so a render is still a pure function of
+its own time.
+
 ## Measured
 
 On an Apple M-series laptop, Chromium, single thread:

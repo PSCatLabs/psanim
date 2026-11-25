@@ -748,6 +748,47 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         i.push_string(format!("{v:0width$}").as_bytes());
         Ok(())
     });
+    // seconds | (H:MM[:SS[.fff]]) parseclock -> seconds
+    reg(interp, ctx, "parseclock", |i, ctx| {
+        match i.pop_value()? {
+            Value::String(s) => match parse_clock(&String::from_utf8_lossy(&s)) {
+                Some(secs) => i.push_real(secs),
+                None => {
+                    return fail(
+                        ctx,
+                        PsError::Rangecheck,
+                        format!(
+                            "parseclock: ({}) is not a time of day. Write (HH:MM), (HH:MM:SS) or (HH:MM:SS.fff), or give seconds since midnight",
+                            String::from_utf8_lossy(&s)
+                        ),
+                    );
+                }
+            },
+            v => match v.as_f64() {
+                Some(x) => i.push_real(x),
+                None => return Err(PsError::Typecheck),
+            },
+        }
+        Ok(())
+    });
+    // seconds clockparts -> hours minutes seconds fraction
+    reg(interp, ctx, "clockparts", |i, _| {
+        let t = i.pop_f64()?.rem_euclid(86400.0);
+        let whole = t.floor();
+        let n = whole as i64;
+        i.push_int(n / 3600);
+        i.push_int(n / 60 % 60);
+        i.push_int(n % 60);
+        i.push_real(t - whole);
+        Ok(())
+    });
+    // seconds fmtday -> (HH:MM:SS), the time of day on the 24 hour clock
+    reg(interp, ctx, "fmtday", |i, _| {
+        let n = i.pop_f64()?.rem_euclid(86400.0).floor() as i64;
+        let text = format!("{:02}:{:02}:{:02}", n / 3600, n / 60 % 60, n % 60);
+        i.push_string(text.as_bytes());
+        Ok(())
+    });
     reg(interp, ctx, "fmtclock", |i, _| {
         let secs = i.pop_f64()?.max(0.0).floor() as i64;
         let text = if secs >= 3600 {
@@ -791,9 +832,37 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     });
 }
 
+/// A time of day as seconds since midnight: `H:MM`, `H:MM:SS` or
+/// `H:MM:SS.fff`. Hours 0..=24 (24:00:00 is allowed), minutes and seconds
+/// below 60.
+fn parse_clock(text: &str) -> Option<f64> {
+    let mut parts = text.trim().split(':');
+    let h: u32 = parts.next()?.trim().parse().ok()?;
+    let m: u32 = parts.next()?.trim().parse().ok()?;
+    let s: f64 = match parts.next() {
+        Some(s) => s.trim().parse().ok()?,
+        None => 0.0,
+    };
+    if parts.next().is_some() || h > 24 || m > 59 || !(0.0..60.0).contains(&s) {
+        return None;
+    }
+    Some(f64::from(h) * 3600.0 + f64::from(m) * 60.0 + s)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn times_of_day_parse() {
+        assert_eq!(parse_clock("12:34:56"), Some(45296.0));
+        assert_eq!(parse_clock("7:05"), Some(25500.0));
+        assert_eq!(parse_clock("23:59:59.5"), Some(86399.5));
+        assert_eq!(parse_clock("25:00"), None);
+        assert_eq!(parse_clock("12:60"), None);
+        assert_eq!(parse_clock("noon"), None);
+        assert_eq!(parse_clock("1:2:3:4"), None);
+    }
 
     #[test]
     fn straightening_keeps_length_and_the_anchor() {

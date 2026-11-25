@@ -1,0 +1,99 @@
+%!PS
+% Catalog entry: clock-ledsign. The time on a scrolling LED sign.
+% In a movie:  /c /clock-ledsign component   then   /c << /Box [x y w h] >> place
+%
+% A self-contained 5 by 7 dot-matrix sign: the digits and the colon are the
+% whole font, which is all a clock needs. The time comes from the host,
+% never the wall clock: a start time plus the movie's own time, or a live
+% signal (see /Signal). The scroll is a function of movie time and steps
+% one dot column at a time, as a real sign does.
+% The default start is 12 hours before the time the catalog sheet should show
+% (its middle frame is 12 hours in): the sheet reads 12:34:56.
+<< /Size [960 160] /Duration 86400 /Background /transparent
+   /Title (LED sign clock)
+   /Description (The time on a scrolling LED sign: a 5 by 7 dot matrix with unlit dots faintly visible, glowing lit dots, and the time scrolling by a column at a time. Time of day from a start time and the movie's own time, or from a host signal.)
+>> animation
+
+/Start (00:34:56) param /start exch def          % time of day at movie time 0: seconds since midnight, or (HH:MM:SS) text
+/Signal null param /sig exch def            % name of a host signal that carries seconds since midnight (a live page); Start is then ignored
+/Theme /amber param /theme exch def         % /amber /midnight /paper /phosphor
+/Seconds 1 param /showsec exch def          % 1 shows HH:MM:SS, 0 shows HH:MM
+/Scroll 14 param /scroll exch def           % dot columns per second the text moves left (0 holds it still)
+/Gap 12 param /gap exch def                 % blank dot columns between one showing of the time and the next
+/Panel 1 param /panel exch def              % 1 paints the sign's dark housing, 0 leaves the dots on whatever is there
+
+<< /midnight << /bg [0.05 0.07 0.12] /ink [0.42 0.86 1.0]  /dim [0.12 0.17 0.25] /hot [1.0 0.45 0.40] >>
+   /amber    << /bg [0.07 0.04 0.02] /ink [1.0 0.62 0.10] /dim [0.18 0.11 0.05] /hot [1.0 0.85 0.40] >>
+   /paper    << /bg [0.96 0.94 0.89] /ink [0.13 0.13 0.16] /dim [0.85 0.82 0.75] /hot [0.84 0.24 0.14] >>
+   /phosphor << /bg [0.02 0.06 0.04] /ink [0.35 1.00 0.55] /dim [0.05 0.15 0.09] /hot [0.90 1.00 0.50] >>
+>> theme get /pal exch def
+/role { pal exch get aload pop setrgbcolor } def
+
+% ---- the font: each digit is seven rows of five bits (leftmost bit 16) -----
+/rows [
+  [ 14 17 19 21 25 17 14 ]  [  4 12  4  4  4  4 14 ]  [ 14 17  1  2  4  8 31 ]
+  [ 31  2  4  2  1 17 14 ]  [  2  6 10 18 31  2  2 ]  [ 31 16 30  1  1 17 14 ]
+  [  6  8 16 30 17 17 14 ]  [ 31  1  2  4  8  8  8 ]  [ 14 17 17 14 17 17 14 ]
+  [ 14 17 17 15  1  2 12 ]
+] def
+% The same, as columns: bit r of a column is the dot in row r (0 at the top).
+/cols 10 array def
+0 1 9 { /d exch def
+  [ 0 1 4 { /x exch def
+      0 0 1 6 { /r exch def
+        rows d get r get 1 4 x sub bitshift and 0 ne { 1 r bitshift add } if
+      } for
+    } for ] cols d 3 -1 roll put
+} for
+
+/line 200 array def                         % the dot columns of one showing of the time
+/n 0 def
+/put1 { /pm exch def line n pm put /n n 1 add def } def     % mask : append a column
+/text { % string : the columns of the time, a blank column after each character
+  { dup 58 eq { pop 0 put1 20 put1 0 put1 }
+      { 48 sub cols exch get { put1 } forall 0 put1 } ifelse } forall
+} def
+
+/rrect { % x y w h r
+  /rr-r exch def /rr-h exch def /rr-w exch def /rr-y exch def /rr-x exch def
+  rr-x rr-r add rr-y moveto
+  rr-x rr-w add rr-y rr-x rr-w add rr-y rr-h add rr-r arcto 4 { pop } repeat
+  rr-x rr-w add rr-y rr-h add rr-x rr-y rr-h add rr-r arcto 4 { pop } repeat
+  rr-x rr-y rr-h add rr-x rr-y rr-r arcto 4 { pop } repeat
+  rr-x rr-y rr-x rr-w add rr-y rr-r arcto 4 { pop } repeat
+  closepath
+} def
+
+/dots { % radius lit? : append a circle for every dot that is lit (or, for false, unlit)
+  /dw exch def /dr exch def
+  0 1 nc 1 sub { /c exch def
+    /cc c off add period mod def
+    /m cc n lt { line cc get } { 0 } ifelse def
+    0 1 6 { /r exch def
+      m 1 r bitshift and 0 ne dw eq {
+        /cx x0 c 0.5 add p mul add def  /cy y0 6 r sub 0.5 add p mul add def
+        cx dr add cy moveto cx cy dr 0 360 arc closepath
+      } if
+    } for
+  } for
+} def
+
+/scene {
+  panel 1 eq { /bg role 0 0 width height height 7 div rrect fill } if
+  /tod start sig daytime def
+  /txt tod fmtday showsec 1 eq { } { 0 5 getinterval } ifelse def
+  /n 0 def txt text
+  /period n gap cvi add def
+  % The dot grid: 7 rows with room for a dot and a half above and below,
+  % and as many columns as fit.
+  /p height 10 div def
+  /nc width p div floor cvi 1 sub def
+  /x0 width nc p mul sub 2 div def
+  /y0 p 1.5 mul def
+  /off scroll 0 gt { globaltime scroll mul floor cvi period mod } { 0 } ifelse def
+  /dim role newpath p 0.34 mul false dots fill
+  /ink role
+  0.05 setalpha newpath p 0.80 mul true dots fill
+  0.12 setalpha newpath p 0.55 mul true dots fill
+  1 setalpha   newpath p 0.34 mul true dots fill
+} def

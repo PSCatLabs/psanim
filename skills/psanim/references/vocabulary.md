@@ -90,6 +90,32 @@ The movie's seed.
 
 k whole turns spread over the current window: k * 360 * (now / span). The angle for anything that must come home when a loop closes; k must be a whole number (or a whole number divided by the part's rotational symmetry).
 
+## Time of day, for clocks that show it
+
+### `parseclock`
+
+`(HH:MM:SS) | seconds  parseclock  seconds`
+
+A time of day as seconds since midnight. Text is (H:MM), (H:MM:SS) or (H:MM:SS.fff), the form `--param Start=12:34:56` gives; a number is passed through, so a parameter can be either. A malformed time is an error that says what is accepted.
+
+### `daytime`
+
+`start /signal|null  daytime  seconds`
+
+The time of day to show, in seconds since midnight (fractions kept, wrapped into one day). A movie is a pure function of its own time and never reads the wall clock, so the host supplies the time one of two ways. With null: `start` (seconds, or text as for `parseclock`) plus the movie time, so a render shows the clock running from the start time. With a signal name (a name, or text from `--param`): that signal's value, which a live page sets to the viewer's local seconds since midnight before each frame (`engine.setSignal("clock", s)`); `start` is then ignored.
+
+### `clockparts`
+
+`seconds  clockparts  h m s frac`
+
+Split a time of day, wrapped into one day: hours 0..23, minutes and seconds 0..59 (integers) and the fraction of the second, 0 up to 1. 45296.25 gives 12 34 56 0.25.
+
+### `fmtday`
+
+`seconds  fmtday  string`
+
+A time of day on the 24 hour clock as text: (07:05:09). Build other forms from `clockparts` and `zeropad`.
+
 ## Time scopes: re-basing the clock for a procedure
 
 ### `during`
@@ -317,6 +343,12 @@ Replace the current path by the open polyline through [x0 y0 x1 y1 ...], in the 
 `arrayA arrayB u  morphpath  -`
 
 Replace the current path by the closed polygon u of the way from A to B, two arrays from resamplepath with the same n. The points are placed in the current user space, so the transformation in force applies to them as to any path.
+
+### `alignpath`
+
+`arrayA arrayB  alignpath  arrayB2`
+
+B's points (from resamplepath, a closed outline) started from the place that lies closest to A's, as a new array; if B runs the other way round it is also reversed, since a morph between opposite senses collapses on the way. Morph A into the result with `morphpath` and every point travels the least, so a shape melts into the next rather than twisting. Do it once in setup for each pair you will morph, not per frame (it costs n squared).
 
 ### `onpath`
 

@@ -545,6 +545,21 @@ fn path_operators() {
 }
 
 #[test]
+fn alignpath_turns_an_outline_to_its_best_start_and_sense() {
+    // The same square, started at another corner and walked the other way:
+    // aligned, the morph does not move a point at all.
+    let a = "newpath 0 0 moveto 20 0 lineto 20 20 lineto 0 20 lineto closepath 8 resamplepath";
+    let b = "newpath 20 20 moveto 20 0 lineto 0 0 lineto 0 20 lineto closepath 8 resamplepath";
+    let still = format!(
+        "{a} dup {b} alignpath 0.5 morphpath pathlength {a} {a} 0.5 morphpath pathlength sub"
+    );
+    assert_eq!(eval_at("", &still, 0), 0.0);
+    // Unaligned, the halfway shape is smaller (the points cross the middle).
+    let raw = format!("{a} {b} 0.5 morphpath pathlength");
+    assert!(eval_at("", &raw, 0) < 79.0);
+}
+
+#[test]
 fn trimpath_draws_on() {
     let mut m = load(
         "/scene { 0 24 moveto 64 24 lineto 0 progress 2 mul trimpath 1 setgray 8 setlinewidth stroke } def",
