@@ -305,6 +305,26 @@ fn clear_outside(px: &mut [u8], w: usize, h: usize, r: [usize; 4]) {
     }
 }
 
+/// Put back the pixels outside `r` from `orig`: a blur or glow applied in
+/// place to a canvas that also holds other drawing (blurlayer, glowlayer
+/// inside a component) must leave that drawing as it was.
+fn keep_outside(px: &mut [u8], orig: &[u8], w: usize, h: usize, r: [usize; 4]) {
+    if r == [0, 0, w, h] {
+        return;
+    }
+    for y in 0..h {
+        let row = y * w * 4..(y + 1) * w * 4;
+        if y < r[1] || y >= r[3] {
+            px[row.clone()].copy_from_slice(&orig[row]);
+        } else {
+            let (a, b) = (y * w * 4, r[0].min(w) * 4);
+            px[a..a + b].copy_from_slice(&orig[a..a + b]);
+            let (c, d) = (y * w * 4 + r[2].min(w) * 4, (y + 1) * w * 4);
+            px[c..d].copy_from_slice(&orig[c..d]);
+        }
+    }
+}
+
 pub(crate) fn with_canvas_pixels(
     i: &mut Interp,
     ctx: &Shared,
@@ -1208,8 +1228,11 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let (cw, ch) = i.canvas_size();
         let rect = ctx.borrow().effect_rect(cw as usize, ch as usize);
         with_canvas_pixels(i, ctx, |px, w, h, scratch| {
+            let orig = (rect != [0, 0, w, h]).then(|| px.to_vec());
             raster::blur(px, w, h, sigma, scratch);
-            clear_outside(px, w, h, rect);
+            if let Some(orig) = orig {
+                keep_outside(px, &orig, w, h, rect);
+            }
         })
     });
     reg(interp, ctx, "glowlayer", |i, ctx| {
@@ -1218,8 +1241,11 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let (cw, ch) = i.canvas_size();
         let rect = ctx.borrow().effect_rect(cw as usize, ch as usize);
         with_canvas_pixels(i, ctx, |px, w, h, scratch| {
+            let orig = (rect != [0, 0, w, h]).then(|| px.to_vec());
             raster::glow(px, w, h, sigma, strength.clamp(0.0, 2.0), scratch);
-            clear_outside(px, w, h, rect);
+            if let Some(orig) = orig {
+                keep_outside(px, &orig, w, h, rect);
+            }
         })
     });
     reg(interp, ctx, "vignette", |i, ctx| {

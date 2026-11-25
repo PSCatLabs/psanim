@@ -273,3 +273,31 @@ fn playlists_defined_inside_two_components_do_not_collide() {
     );
     assert_eq!(printed(&mut m, 0.2), "(A)\n(B)");
 }
+
+#[test]
+fn blurlayer_inside_a_component_keeps_the_movie_drawing_around_it() {
+    let mut m = load(
+        "/c << /Size [20 20] /Scene { 0 blurlayer 2 1 glowlayer } >> component
+         /scene { 0 1 0 setrgbcolor 0 0 200 100 rectfill /c << /Box [0 0 20 20] >> place } def",
+    );
+    let f = m.render_at(0.0).unwrap();
+    let green = f
+        .premultiplied
+        .chunks_exact(4)
+        .filter(|p| p[1] > 200)
+        .count();
+    assert!(green > 200 * 100 * 9 / 10, "{green} green pixels left");
+}
+
+#[test]
+fn a_library_a_component_loads_itself_is_safe_from_the_movies_later_names() {
+    let mut m = Movie::load(
+        "<< /Size [200 100] /Duration 4 /FPS 10 >> animation
+         /c << /Size [10 10] /Setup { /pkstage use } /Scene { /accent rgbof pop pop == } >> component
+         /rgbof { pop 1 2 3 } def
+         /scene { /c << >> place } def",
+        &Options::default(),
+    )
+    .unwrap();
+    assert_eq!(printed(&mut m, 0.0), "1.0");
+}

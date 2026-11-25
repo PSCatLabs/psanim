@@ -374,12 +374,22 @@ end
     dup .pk /used get exch true put
     % Into userdict, whoever asks: a component's setup loading a library
     % must not keep it to itself, since every later `use` skips it. What it
-    % defines is also kept in .base, for components (see .mkinst).
+    % defines is also kept in .base, for components (see .mkinst), and put
+    % in the namespace of the component loading it.
     userdict dup length dict copy exch
     userdict begin .libsource cvx exec end
     userdict {                                    % before /k v
       2 index 2 index known { 2 index 2 index get 1 index ne } { true } ifelse
-      { .base 3 1 roll put } { pop pop } ifelse
+      {
+        2 copy .base 3 1 roll put
+        % Loaded from a component's setup: that instance's namespace was
+        % made before the library existed, so give it the new words too
+        % (not over any of its own).
+        /.isinst where {
+          3 1 roll .compword
+          { 2 index 2 index known { pop pop pop } { put } ifelse } { pop pop pop } ifelse
+        } { pop pop } ifelse
+      } { pop pop } ifelse
     } forall pop
   } ifelse
 } bind def
