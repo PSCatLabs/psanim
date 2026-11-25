@@ -215,8 +215,20 @@ export class PsAnimWidget extends HTMLElement {
   event(name) {
     if (!this.meta) return;
     this.eventNames.add(name);
-    this.engine.event(name, this.#movieTime(this.#elapsed()));
+    // Wrap first, so clearing the last time round cannot take this event.
+    const t = this.#movieTime(this.#elapsed());
+    this.#rollover(t);
+    this.engine.event(name, t);
     this.dirty = true;
+  }
+
+  /** The loop wrapped since the clock was last read: events from the last
+   * time round are in its future, so forget them. Call before adding one. */
+  #rollover(t) {
+    if (t < this.lastT) {
+      for (const name of this.eventNames) this.engine.clearEvents(name);
+    }
+    this.lastT = t;
   }
 
   #elapsed() {
@@ -316,14 +328,10 @@ export class PsAnimWidget extends HTMLElement {
     const fps = Math.min(Number(this.getAttribute("fps")) || meta.fps, meta.fps);
     const elapsed = this.#elapsed();
     const t = this.#movieTime(elapsed);
-    if (t < this.lastT) {
-      // The loop wrapped: events from the last time round are in its future.
-      for (const name of this.eventNames) this.engine.clearEvents(name);
-    }
+    this.#rollover(t);
     // The frame number on the movie's clock: it stops changing when a held
     // movie reaches its end, and then only an input wakes it.
     const index = Math.floor(t * fps + 1e-9);
-    this.lastT = t;
     if (index === this.lastFrame && !this.dirty) {
       this.frameSkips++;
       return true;
