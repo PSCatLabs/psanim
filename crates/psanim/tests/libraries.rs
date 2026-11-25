@@ -531,6 +531,146 @@ fn captions_show_in_their_time_only() {
     assert!(ink_at(&mut m, 2.5).is_none());
 }
 
+// --- credits ---------------------------------------------------------------------
+
+/// The columns (x) that hold ink in a frame.
+fn ink_columns(f: &Frame) -> Vec<u32> {
+    (0..f.width)
+        .filter(|&x| {
+            (0..f.height).any(|y| {
+                let o = ((y * f.width + x) * 4) as usize;
+                f.premultiplied[o..o + 3].iter().any(|c| *c > 8)
+            })
+        })
+        .collect()
+}
+
+#[test]
+fn credits_set_roles_and_names_on_either_side_of_a_gutter() {
+    let mut m = load(
+        "/scene { [ [/pair (Role) (Name)] ] << /Size 12 /Gutter 40 /Fade 0 >> 73 creditsat } def",
+    );
+    let cols = ink_columns(&m.render_at(0.0).unwrap());
+    let left: Vec<u32> = cols.iter().copied().filter(|x| *x < 100).collect();
+    let right: Vec<u32> = cols.iter().copied().filter(|x| *x >= 100).collect();
+    assert!(!left.is_empty() && !right.is_empty(), "{cols:?}");
+    assert!(
+        *left.last().unwrap() <= 80,
+        "role ends at the gutter: {left:?}"
+    );
+    assert!(
+        *left.last().unwrap() >= 76,
+        "role is right-aligned: {left:?}"
+    );
+    assert!(
+        *right.first().unwrap() >= 119,
+        "name starts after it: {right:?}"
+    );
+    assert!(
+        *right.first().unwrap() <= 123,
+        "name is left-aligned: {right:?}"
+    );
+}
+
+#[test]
+fn credits_timing_comes_from_the_duration_or_the_speed_and_ends_on_the_final_card() {
+    let setup = "/body [ [/heading (Cast)] [/pair (Role) (Name)] [/space 2] [/name (Someone)] ] def
+        /opts << /Duration 6 /Cards [ [[/name (Hello)]] ] /CardTime 2
+                 /Final [ [/heading (END)] ] >> def";
+    // cards, then the roll's own duration
+    assert_eq!(
+        nums(&eval_at(setup, "body opts creditsduration ==", 0.0)),
+        [8.0]
+    );
+    // the speed follows: the distance covered in the roll's time
+    let v = nums(&eval_at(setup, "body opts creditsspeed ==", 0.0))[0];
+    let h = nums(&eval_at(setup, "body opts creditsheight ==", 0.0))[0];
+    assert!(v > 0.0 && v * 6.0 > h / 2.0, "{v} {h}");
+    // a given speed gives its own duration
+    let d = nums(&eval_at(
+        setup,
+        "body << /Speed 20 /Box [0 0 200 120] /Final [ [/heading (END)] ] >> creditsduration ==",
+        0.0,
+    ))[0];
+    assert!(
+        (d * 20.0 - v * 6.0).abs() < 1e-6,
+        "{d} at 20 covers what {v} does in 6 s"
+    );
+    let mut m = load(&format!("{setup} /scene {{ body opts credits }} def"));
+    assert!(ink_at(&mut m, 0.0).is_none(), "the card fades in");
+    assert!(ink_at(&mut m, 1.0).is_some(), "a card holds");
+    assert!(
+        ink_at(&mut m, 2.0).is_none(),
+        "the roll starts below the box"
+    );
+    assert!(ink_at(&mut m, 5.0).is_some());
+    // the final card stops where it is centred, and stays
+    let end = pixels(&mut m, 8.0);
+    assert_eq!(end, pixels(&mut m, 8.5));
+    assert_ne!(end, pixels(&mut m, 7.0));
+    let b = ink_at(&mut m, 8.0).unwrap();
+    let cy = f64::from(b.1 + b.3) / 2.0;
+    assert!((cy - 60.0).abs() < 3.0, "centred in the box: {b:?}");
+}
+
+#[test]
+fn credits_roll_whole_pixels_so_type_does_not_shimmer() {
+    // 73 units a second at 10 frames a second is 7.3 pixels a frame.
+    let scene = |snap: &str| {
+        load(&format!(
+            "/scene {{ [ [/heading (Cast)] [/pair (Role) (Name)] [/pair (Other) (Person)] [/pair (More) (Folk)] [/name (Someone)] ]
+               << /Size 9 /Fade 0 /Speed 73 /Snap {snap} >> credits }} def"
+        ))
+    };
+    let shifted = |a: &[u8], b: &[u8], dy: usize| {
+        // frame b is frame a moved up by dy rows, everywhere but the edges
+        let row = 200 * 4;
+        (50..88).all(|y| a[(y + dy) * row..(y + dy + 1) * row] == b[y * row..(y + 1) * row])
+    };
+    let mut snapped = scene("true");
+    let mut loose = scene("false");
+    let mut loose_exact = 0;
+    for k in 10..14 {
+        let t = f64::from(k) / 10.0;
+        let (a, b) = (pixels(&mut snapped, t), pixels(&mut snapped, t + 0.1));
+        assert!(
+            (5..=9).any(|dy| shifted(&a, &b, dy)),
+            "frame {k} is not the one before moved a whole number of pixels"
+        );
+        let (a, b) = (pixels(&mut loose, t), pixels(&mut loose, t + 0.1));
+        if (5..=9).any(|dy| shifted(&a, &b, dy)) {
+            loose_exact += 1;
+        }
+    }
+    assert!(
+        loose_exact < 4,
+        "without snapping the type changes shape: {loose_exact}"
+    );
+}
+
+#[test]
+fn a_credits_procedure_runs_at_its_slot_with_no_dictionary_left_open() {
+    let mut m = load(
+        "/scene { countdictstack ==
+           [ [/proc { countdictstack == 1 1 1 setrgbcolor -5 -5 10 10 rectfill } 20] ] << /Fade 0 >> 70 creditsat } def",
+    );
+    m.take_output();
+    let b = ink_at(&mut m, 0.0).unwrap();
+    let out = nums(&m.take_output());
+    assert_eq!(out[0], out[1], "dictionaries open: {out:?}");
+    assert_eq!(
+        (b.0 + b.2, b.1 + b.3),
+        (200, 120),
+        "the origin is the slot's centre, over the column's: {b:?}"
+    );
+}
+
+#[test]
+fn an_unknown_credits_entry_is_an_error() {
+    let mut m = load("/scene { [ [/bogus (x)] ] << >> 0 creditsat } def");
+    assert!(m.render_at(0.0).is_err());
+}
+
 // --- diagrams -------------------------------------------------------------------
 
 #[test]

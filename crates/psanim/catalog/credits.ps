@@ -1,0 +1,59 @@
+%!PS
+% Catalog entry: credits. End credits that roll upward at a steady speed.
+% In a movie:  /roll /credits component   then   /roll << /Box [x y w h] >> place
+% Sections are a param (an array); see `credits` in pktype for what an entry can be.
+/pktype use
+
+/demo [
+  [/heading (Cast)]
+  [/pair (Mara Quillfeather) (Odette Brandvold)]
+  [/pair (The Lighthouse Keeper) (Tobias Renwick)]
+  [/pair (Captain Hale) (Imre Lindqvist)]
+  [/pair (The Cartographer) (Wilhelmina Frost) (and Biscuit the dog)]
+  [/space 1]
+  [/heading (Crew)]
+  [/pair (Written and directed by) (Fenwick Alder)]
+  [/pair (Produced by) (Juno Castellane)]
+  [/pair (Cinematography) (Pip Okonkwo-Reyes)]
+  [/pair (Edited by) (Saskia Thorne)]
+  [/pair (Music by) (Lucian Marsh)]
+  [/space 1]
+  [/heading (Thanks)]
+  [/name (The people of Saltmarsh Quay) (Everyone who held a lamp)]
+  [/text (No gulls were harmed in the making of this film.)]
+] def
+/demofinal [ [/heading (The End) 2.2] ] def
+
+/Canvas [1280 720] param /cv exch def           % canvas size in units, [width height]
+/Sections demo param /sections exch def         % the roll: entries [/heading (..)] [/pair (role) (name) ..] [/name (..) ..] [/text (..)] [/space n] [/proc { draw } h]
+/Cards [ ] param /cards exch def                % cards held one after another before the roll: an array of section lists
+/Final demofinal param /final exch def          % the card the roll stops on, centred (a section list; [] for none)
+/Duration 24 param /dur exch def                % seconds the roll takes, after any cards: the speed follows
+/CardTime 4 param /ctime exch def               % seconds each card is held
+/Settle 0.12 param /settle exch def             % fraction of the box's height over which the roll slows to its stop (0 for none)
+/Fade 0.12 param /fade exch def                   % fraction of the box's height over which lines fade at its top and bottom (0 for none)
+/NameSize 0 param /nsize exch def               % size of the names in units (0 chooses one from the canvas)
+/HeadingFace /title param /hface exch def       % theme role or font name for headings
+/RoleFace /body param /rface exch def           % theme role or font name for the roles in a pair
+/NameFace /body param /nface exch def           % theme role or font name for names and notes
+/Theme /inherit param /themename exch def           % a theme name (/paper /dusk ..), or /inherit for the movie's
+/Ground false param /ground? exch def           % true paints the theme's background behind the roll
+
+/opts <<
+  /Box [ 0 0 cv 0 get cv 1 get ]
+  /Duration dur  /Cards cards  /CardTime ctime  /Final final
+  /Settle settle cv 1 get mul  /Fade fade
+  /HeadingFace hface  /RoleFace rface  /NameFace nface
+>> def
+nsize 0 gt { opts /Size nsize put } if
+
+<< /Size cv /Duration sections opts creditsduration /Loop false /Background /transparent
+   /Title (Credits)
+   /Description (End credits rolling upward at a steady speed: headings, roles beside names, centred names, then a final card that stops in the centre.)
+>> animation
+
+/scene {
+  themename /inherit ne { themename usetheme } if
+  ground? { ground } if
+  sections opts credits
+} def

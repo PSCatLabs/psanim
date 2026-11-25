@@ -1,0 +1,172 @@
+%!PS
+% Poster: 60
+% END CREDITS: the closing credits of an imaginary film, THE LAMPLIGHTERS.
+%
+% Two cards hold, then the credits roll upward at a constant sixty units a
+% second (two whole pixels a frame at 1280x720) over a night coast with a
+% lighthouse sweeping slowly across the stars, slow down, and stop on the
+% film's mark, centred, which holds. Every name in it is invented.
+%
+% Techniques
+%   - `credits` sets the roll: headings, roles right-aligned and names
+%     left-aligned on a gutter, centred names, notes, a spacer and a
+%     procedure entry (the studio's lamp, drawn by `lamp`). It takes its
+%     faces, inks and sizes from the theme, here a custom one.
+%   - `creditsduration` gives the movie its length before `animation`; the
+%     roll never needs a clock of its own.
+%   - /Cards hold before the roll; /Final is carried by the same roll and
+%     stops centred; /Settle slows it to the stop.
+%   - the roll moves whole device pixels, so type that moves does not shimmer.
+%   - the background is a function of `globaltime`: drifting stars, a
+%     beam from the lighthouse, the glow at the horizon fading as the
+%     film goes on.
+/pktype use
+
+% ---- the film's look: one theme, so faces and colours change in one place ----
+/lamplight <<
+  /bg [0.028 0.034 0.070] /surface [0.10 0.11 0.18] /line [0.30 0.30 0.40]
+  /fg [0.95 0.91 0.84] /muted [0.62 0.60 0.66]
+  /accent [1.0 0.72 0.30] /accent2 [0.36 0.78 0.98] /accent3 [0.96 0.45 0.62]
+  /good [0.45 0.85 0.55] /bad [0.98 0.42 0.40]
+  /title /AvantGarde-Demi /body /AvantGarde-Book /mono /Courier /display /AvantGarde-Demi /serif /Palatino-Italic
+  /corner 6 /stroke 2.5
+>> def
+lamplight usetheme
+
+% ---- the studio's mark: a lamp with a flame, drawn at the origin ----
+/lamp {
+  gsave
+    % the glow: nested discs, cheap
+    1 0.72 0.30 setrgbcolor
+    0 1 12 { /k exch def gsave 0.035 setalpha 0 34 k 4 mul 14 add 0 360 arc fill grestore } for
+    0.95 0.91 0.84 setrgbcolor 2.2 setlinewidth 1 setlinejoin 1 setlinecap
+    newpath -17 -30 moveto 17 -30 lineto 17 -22 lineto -17 -22 lineto closepath stroke         % the foot
+    newpath -9 -22 moveto -9 -8 lineto 9 -8 lineto 9 -22 lineto stroke                         % the font
+    newpath -6 -8 moveto -19 6 -13 21 -6 30 curveto 6 30 lineto 13 21 19 6 6 -8 curveto stroke  % the glass
+    newpath -8 30 moveto 8 30 lineto stroke
+    /accent ink                                                                         % the flame
+    newpath 0 -6 moveto 7 4 6 14 0 24 curveto -6 14 -7 4 0 -6 curveto closepath fill
+  grestore
+} def
+
+% ---- the film's mark for the last card: lamp, title, tagline ----
+/finale [
+  [/proc { 1.6 1.6 scale lamp } 190]
+  [/heading (THE LAMPLIGHTERS) 1.9]
+  [/text (a film by Fenwick Alder)]
+] def
+
+% ---- the roll ----
+/roll [
+  [/heading (Cast)]
+  [/pair (Ilse Marrow) (Wren Calloway)]
+  [/pair (Captain Dunmore) (Tobias Renwick)]
+  [/pair (The Cartographer) (Odette Brandvold)]
+  [/pair (Mrs Pell) (Rosalind Achterberg)]
+  [/pair (The Visitor) (Joaquim Seabrook)]
+  [/pair (Lamplighters) (Annika Voss) (Bertrand Okafor) (Marit Sundqvist)]
+  [/pair (The Gull) (Biscuit)]
+  [/space 0.5]
+  [/heading (Crew)]
+  [/pair (Written and directed by) (Fenwick Alder)]
+  [/pair (Produced by) (Juno Castellane) (Pelham Strand)]
+  [/pair (Director of photography) (Pip Okonkwo-Reyes)]
+  [/pair (Edited by) (Saskia Thorne)]
+  [/pair (Sound design) (Dov Ketteridge)]
+  [/space 0.5]
+  [/heading (Music)]
+  [/pair (Composed by) (Lucian Marsh)]
+  [/pair (Performed by) (The Low Tide Ensemble)]
+  [/space 0.5]
+  [/heading (Special Thanks)]
+  [/name (The people of Saltmarsh Quay) (The Harbour Trust) (Everyone who ever held a lamp for someone else)]
+  [/space 1]
+  [/proc { 0.62 0.62 scale lamp } 110]
+  [/text (Lamp Oil Films)]
+  [/space 0.5]
+  [/text (Filmed on the coast, in the dark, with the patient help of the tide.)]
+  [/text (No gulls were harmed in the making of this film.)]
+] def
+
+/cards [
+  [ [/text (Lamp Oil Films and the Saltmarsh Quay Trust)] [/text (present)] ]
+  [ [/heading (THE LAMPLIGHTERS) 1.9] [/text (thank you for watching)] ]
+] def
+
+/opts <<
+  /Box [0 0 1280 720]
+  /Speed 60 /Settle 150
+  /Cards cards /CardTime 3.5
+  /Final finale /FinalGap 380
+>> def
+
+<< /Size [1280 720] /FPS 30 /Seed 7
+   /Duration roll opts creditsduration 6 add            % the cards, the roll to its stop, and a held card
+   /Background [0.028 0.034 0.070]
+   /Title (End Credits)
+   /Description (The closing credits of an imaginary film: two cards, then names rolling upward at a steady rate over a night coast, stopping on the film's mark.)
+>> animation
+
+% ---- the world behind the type ----
+/HY 118 def                                % the horizon
+/LX 168 def                                % the lighthouse's x
+/glowk { 1 globaltime 70 div sub 0 1 clamp } def     % the warmth at the horizon, fading
+
+/sky {
+  0 1 47 { /i exch def
+    /u i 47 div def
+    [0.016 0.020 0.052] [0.074 0.058 0.110] u 1.3 exp mixink
+    [0.30 0.15 0.10] 1 u sub 4 exp glowk mul 0.5 mul mixink
+    aload pop setrgbcolor
+    -2 HY u 640 mul add 1284 14 rectfill
+  } for
+  0.012 0.014 0.030 setrgbcolor -2 -2 1284 HY 2 add rectfill
+}  def
+/stars {
+  0 1 119 { /i exch def
+    i 11 add hash01 /bx exch def
+    i 311 add hash01 /by exch def
+    i 611 add hash01 /bf exch def
+    bx 1300 mul  globaltime 1.4 bf 0.5 add mul mul  add 1300 fmod 10 sub    % drifts slowly to the right
+    HY 40 add  by 0.8 exp 600 mul add
+    i 911 add hash01 /tw exch def
+    1 1 0.92 setrgbcolor
+    globaltime tw 6 mul add 360 mul 3 div sin 0.5 mul 0.5 add 0.55 mul 0.2 add bf 0.4 mul 0.4 add mul setalpha
+    0.7 bf 1.3 mul add 0 360 arc fill
+    1 setalpha
+  } for
+} def
+/lighthouse {
+  % the beam: three nested wedges, sweeping over the sky and back
+  /ang globaltime 360 mul 26 div sin 14 mul 12 add def
+  gsave
+    LX HY 76 add translate ang rotate
+    1 0.80 0.45 setrgbcolor
+    0 1 3 { /w exch def
+      0.020 setalpha
+      newpath 0 0 moveto 1700 w 1 add 26 mul neg lineto 1700 w 1 add 26 mul lineto closepath fill
+    } for
+  grestore
+  1 setalpha
+  % the tower and its lamp
+  0.04 0.045 0.08 setrgbcolor
+  newpath LX 9 sub HY moveto LX 5 sub HY 70 add lineto LX 5 add HY 70 add lineto LX 9 add HY lineto closepath fill
+  LX 8 sub HY 70 add 12 6 rectfill
+  1 0.76 0.35 setrgbcolor
+  LX 8 sub HY 78 add 16 7 rectfill
+  0 1 11 { /k exch def gsave 0.03 setalpha LX HY 81 add k 5 mul 8 add 0 360 arc fill grestore } for
+  % its reflection in the water, breaking up
+  0 1 6 { /i exch def
+    0.14 i 0.016 mul sub setalpha 1 0.76 0.35 setrgbcolor
+    LX 4 i 3 mul sub sub HY 10 sub i 9 mul sub 8 i 6 mul add 1.6 rectfill
+  } for
+  1 setalpha
+} def
+
+/scene {
+  /bg ink -2 -2 1284 724 rectfill
+  sky stars lighthouse
+  roll opts credits
+  0.8 vignette
+  0.05 filmgrain
+} def

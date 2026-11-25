@@ -141,7 +141,7 @@ is too low: an entrance is three tweens, a diagram is arithmetic. The
 | `pkmotion` | `2 /pop { ... } enters`: entrances, exits and emphasis for any drawing, by name | [stage.md](references/stage.md) |
 | (core) | `script` / `then` (one thing after another), `storyboard` (named beats), `cascade`, `within` | [stage.md](references/stage.md) |
 | (core) | `component`, `instance`, `place`: a movie written on its own, placed in another in a box at a time | [components.md](references/components.md) |
-| `pktype` | text in boxes, wrapping, `kinetic` type, counters, captions | [type.md](references/type.md) |
+| `pktype` | text in boxes, wrapping, `kinetic` type, counters, captions, end credits | [type.md](references/type.md) |
 | `pkdiagram` | `node`, `edge` (with flowing pulses), `group`, `note`, `circled` | [explain.md](references/explain.md) |
 | `pkcode` | `codeblock` (typing, focus), `codediff` | [explain.md](references/explain.md) |
 | `pkchart` | `plotframe`, `plotaxes`, `bars`, `hbars`, `plotline`, `donut` | [explain.md](references/explain.md) |
@@ -279,7 +279,7 @@ detail) is in [storytelling.md](references/storytelling.md).
 | You want | Read |
 |---|---|
 | Boxes, themes, motions, scripts, storyboards, camera by box | [references/stage.md](references/stage.md) |
-| Text: fitting, wrapping, kinetic type, counters, captions | [references/type.md](references/type.md) |
+| Text: fitting, wrapping, kinetic type, counters, captions, end credits | [references/type.md](references/type.md) |
 | Diagrams, code, charts | [references/explain.md](references/explain.md) |
 | Brush marks, self-drawing textured strokes, PSCat media in motion | [references/ink.md](references/ink.md) |
 | How to structure an explanation or a story | [references/storytelling.md](references/storytelling.md) |

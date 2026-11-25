@@ -12,7 +12,10 @@ use pscat::host::Value;
 use crate::ops::{Shared, fail, reg};
 
 /// Every catalog entry: its name and its source.
-pub const CATALOG: &[(&str, &str)] = &[("spinner", include_str!("../catalog/spinner.ps"))];
+pub const CATALOG: &[(&str, &str)] = &[
+    ("credits", include_str!("../catalog/credits.ps")),
+    ("spinner", include_str!("../catalog/spinner.ps")),
+];
 
 /// The source of a catalog entry, by name.
 pub fn source(name: &str) -> Option<&'static str> {

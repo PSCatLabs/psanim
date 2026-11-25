@@ -17,6 +17,7 @@ Scene bodies below run on a 640x360 canvas, 4 seconds, libraries loaded.
 - [Numbers that count](#numbers-that-count)
 - [Typing](#typing)
 - [Captions](#captions)
+- [End credits](#end-credits)
 - [Mathematics](#mathematics)
 - [Hierarchy](#hierarchy)
 
@@ -169,6 +170,88 @@ ground
   [2.1 3.9 (and can light up word by word)] ]
 canvasbox 5 vmin inset << /Karaoke true /Size 20 >> captions
 ```
+
+## End credits
+
+`sections opts credits` rolls credits upward at a constant rate, as at
+the end of a film. `sections` is an array of entries, each an array that
+starts with a name:
+
+| Entry | Sets |
+|---|---|
+| `[/heading (Cast)]` | a heading, centred, in the title face and the accent colour; a third element scales it: `[/heading (THE END) 2.5]` |
+| `[/pair (Director) (Name) (Name2)]` | the role right-aligned on the left of a gutter, its names left-aligned on the right |
+| `[/name (Name) (Name2)]` | centred names, one to a line |
+| `[/text (a note)]` | a centred note, smaller and muted |
+| `[/space n]` | n lines of space |
+| `[/proc { ... } h]` | a slot h high: the procedure runs with the origin at its centre, over the column's centre (a logo) |
+
+`opts` is a dictionary, every key optional. The roll moves through
+`/Box` (the canvas) and everything is sized from the box: `/Size` is the
+size of the names (4% of the box's shorter side), `/HeadingSize`,
+`/RoleSize`, `/TextSize`, `/Leading`, `/Gutter` and `/HeadingGap` follow it
+unless given. `/HeadingFace /RoleFace /NameFace /TextFace` and
+`/HeadingInk /RoleInk /NameInk /TextInk` are theme roles (or font names
+and colours), so a theme change restyles the whole roll. Lines fade over
+`/Fade` of the box's height at its top and bottom (0.12).
+
+Timing comes from either end. `/Speed` is units a second; `/Duration` is
+the seconds the roll takes, and the speed follows. The clock is the
+current scope's, so `after` places it like anything else; the roll starts
+with the first card or, with none, with the first line entering at the
+bottom edge. `/Cards [ sections ... ]` shows each section list centred
+for `/CardTime` seconds (4) before the roll. `/Final sections` is a card
+at the end of the same roll that stops centred in the box; `/Settle`
+units before it the roll slows to the stop (0 keeps the rate constant
+all the way), and `/FinalGap` is the space before it (half the box's
+height, so the last credits have gone when it arrives).
+
+```postscript
+%!PS
+/pktype use
+/film [
+  [/heading (Cast)]
+  [/pair (The Keeper) (Odette Brandvold)]
+  [/pair (The Visitor) (Imre Lindqvist)]
+  [/space 1]
+  [/heading (Crew)]
+  [/pair (Directed by) (Fenwick Alder)]
+  [/pair (Music by) (Lucian Marsh)]
+  [/space 1]
+  [/name (Thanks to everyone who held a lamp)]
+] def
+/opts << /Box [0 0 640 360] /Speed 44 /Settle 50
+         /Cards [ [[/text (Lamp Oil Films presents)]] ] /CardTime 2
+         /Final [ [/heading (The End) 2] ] >> def
+<< /Size [640 360] /Duration film opts creditsduration 1 add /FPS 30 >> animation
+/scene { ground film opts credits } def
+```
+
+`creditsduration` (the cards, then the roll to its stop) works before
+`animation` when `opts` has a `/Box`, so the movie can be as long as its
+credits. The other way round, leave out `/Speed` and give `/Duration`
+(the movie's length minus the cards and a hold at the end). `creditsspeed`
+and `creditsheight` report the speed and the content's height;
+`creditsat` takes the distance rolled instead of using the clock, for a
+roll that is eased or scrubbed by the caller. The catalog's `/credits`
+(`psanim catalog credits`) wraps all of this with the sections as a
+parameter, to place as a component.
+
+**No shimmer.** Type that moves a fraction of a pixel a frame is
+re-rasterised at a new subpixel position each frame and its edges
+flicker. `credits` moves its whole content by a distance that puts it on
+a whole device pixel, measured through the current transformation, so it
+holds at any render scale, inside a placed component and under a camera
+(checked on pixels at scales 1, 1.5 and 2, placed, and under `lookat`),
+and the lines never move relative to one another. A frame is then the one
+before it shifted by whole rows, give or take colour rounding. The snap is
+skipped if the transformation is rotated. The speed is constant to within
+half a pixel, and steps of 3 and 4 pixels a frame alternate if it is not a
+whole number of pixels a frame; to avoid that, give `/Speed` as pixels a
+frame times the frame rate divided by the render scale (4 px a frame at
+30 fps and scale 1 is 120). In the `/Settle` tail, where the roll slows
+below a pixel a frame, the snap makes it hold and hop a pixel rather than
+glide. `/Snap false` turns it off.
 
 ## Mathematics
 

@@ -1161,6 +1161,36 @@ pub const API: &[ApiEntry] = &[
         "Subtitles: show the caption whose time has come, centred at the bottom of the box on a plate, fading in and out. opts: << /Size s /Role /body /Plate true /Karaoke false >>; with /Karaoke the words light up across the caption's time. Times are on the current scope's clock.",
     ),
     e(
+        "pktype",
+        "credits",
+        "sections opts  credits  -",
+        "End credits, rolling upward at a constant rate, on the current scope's clock. sections is an array of entries, each an array that starts with a name: [/heading (Cast)] (or [/heading (THE END) 2.5], larger), [/pair (Director) (Name) (Name2)] (the role right-aligned left of a gutter, its names left-aligned right of it), [/name (Name) ...] (centred, one a line), [/text (a note)], [/space n] (n lines), [/proc { ... } h] (a slot h high: the procedure runs with the origin at its centre, over the column's centre: a logo). opts is a dictionary, all keys optional: /Box [x y w h] it rolls through (the canvas); /Size /HeadingSize /RoleSize /TextSize /Leading /Gutter /HeadingGap (units; sizes follow the box); /HeadingFace /RoleFace /NameFace /TextFace and /HeadingInk /RoleInk /NameInk /TextInk (theme roles or font names and colours); /Speed units a second, or /Duration seconds the roll takes (the speed follows); /Cards [ sections ... ] each held /CardTime seconds (4) before the roll; /Final sections, which the roll stops on, centred, after /FinalGap (half the box's height); /Settle units over which it slows to the stop; /Fade the fraction of the box's height over which lines fade at its top and bottom (0.12); /Snap (true) moves it whole device pixels a frame, so type does not shimmer. The roll starts when the scope's clock does: wrap it in `after` or a scope to place it. Keep the movie /Duration at least `creditsduration`.",
+    ),
+    e(
+        "pktype",
+        "creditsat",
+        "sections opts offset  creditsat  -",
+        "The roll after it has moved offset units, for a caller who owns the clock (an eased or scrubbed roll). opts as for `credits`; cards and /Settle are not applied.",
+    ),
+    e(
+        "pktype",
+        "creditsheight",
+        "sections opts  creditsheight  h",
+        "The height of the roll's content in units, final card included: what the roll has to travel, besides the box's own height.",
+    ),
+    e(
+        "pktype",
+        "creditsspeed",
+        "sections opts  creditsspeed  units-a-second",
+        "How fast the roll goes: /Speed if opts gives one, else the speed that makes it take /Duration seconds, else 8% of the box's height a second. To move whole pixels a frame at a render scale, give /Speed as pixels-a-frame times fps divided by the scale.",
+    ),
+    e(
+        "pktype",
+        "creditsduration",
+        "sections opts  creditsduration  seconds",
+        "How long the credits take: the cards, then the roll to its stop. Use it for the movie's /Duration (it works before `animation`, when opts has a /Box, since sizes follow the box): `<< /Duration secs opts creditsduration ... >> animation`.",
+    ),
+    e(
         "pkdiagram",
         "node",
         "(label) box opts  node  -",
