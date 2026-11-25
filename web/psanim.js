@@ -127,6 +127,13 @@ export class PsAnim {
     return this.#string(this.x.pa_out_ptr(), this.x.pa_out_len()).split("\n");
   }
 
+  /** Add a reading of a signal taken at movie time `t`, keeping the earlier
+   *  ones, so the program can read its recent past (`signalago`,
+   *  `signalseries`) and draw smoothly between readings. */
+  recordSignal(name, t, value) {
+    this.#withString(name, (p, n) => this.x.pa_record_signal(p, n, t, value));
+  }
+
   /** Interpreter steps the last frame took. */
   get lastSteps() {
     return this.x.pa_last_steps();

@@ -843,6 +843,15 @@ impl Movie {
         self.ctx.borrow_mut().signals.clear_events(name);
     }
 
+    /// Add a reading of signal `name` taken at movie time `t`, keeping the
+    /// earlier ones: what a live dashboard host calls with each new value,
+    /// so `signalago` and `signalseries` can read the recent past and the
+    /// movie can draw smoothly between readings (`/name 1 signalago` is the
+    /// value a second ago, interpolated).
+    pub fn record_signal(&mut self, name: &str, t: f64, value: f64) {
+        self.ctx.borrow_mut().signals.record(name, t, value);
+    }
+
     /// Render frame `index` (time `index / fps`).
     pub fn render_frame(&mut self, index: u64) -> Result<Frame<'_>, Error> {
         let time = self.meta.time_of(index);

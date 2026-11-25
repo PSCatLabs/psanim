@@ -1,0 +1,155 @@
+%!PS
+% Catalog entry: horizon. A fleet on one screen: a horizon chart per metric,
+% one row each, with a shared time cursor and a readout at it.
+% In a movie:  /fleet /horizon << /Params << /Signals [/web1 /web2 /db1] /Mode /replay /To 60 >> >> instance
+%              then  /fleet << /Box [x y w h] >> place
+% Two ways to read time:
+%   /scroll   the last /Window seconds, newest at the right, as a live wall
+%             display would; the readout is the current value.
+%   /replay   a fixed stretch /From../To of a recording; the data draws in
+%             behind a cursor that sweeps across it, the readout at the cursor.
+/Width 900 param /cw0 exch def                   % its width in units: give it the shape of the box it is placed in
+/Height 520 param /ch0 exch def                  % its height in units
+<< /Size [cw0 ch0] /Duration 12 /Loop true /Background /transparent
+   /Title (Horizon chart)
+   /Description (Many metrics, one row each, folded into bands of colour so a whole fleet fits on a screen; a time cursor and a readout of every row at it. From host signals or arrays.)
+>> animation
+/pkchart use
+
+/Title () param /ttl exch def                    % the panel's title; () for none
+/Signals null param /sigs exch def               % the host signals, one row each, e.g. [/web1 /web2]; null plays /Values
+/Values null param /vals exch def                % without signals: one array per row, a recording that loops over the duration (null: a demo)
+/Labels null param /labels exch def              % a name per row; null: the signal names
+/Mode null param /mode exch def                  % /scroll or /replay; null: /replay for signals, /scroll for /Values
+/Window 4 param /window exch def                 % /scroll: seconds shown
+/From 0 param /t0 exch def                       % /replay: the time at the left edge
+/To null param /t1 exch def                      % /replay: the time at the right edge; null: the duration
+/Points 240 param /npts exch def                 % readings per row
+/Extent null param /extent exch def              % the value that fills every band (100 for percentages); null: each row's largest in view (set it when scrolling, or rows rescale as peaks pass)
+/Bands 4 param /nbands exch def                  % bands of colour per row
+/Thresholds null param /ths exch def             % [ /good 70 /warn 90 /bad ]: a lamp per row from its value at the cursor
+/Clock null param /clock exch def                % [c0 rate]: label times as a clock, c0 seconds (since midnight) at time 0, rate clock seconds per second
+/Tick 10800 param /tick exch def                 % with /Clock: clock seconds between the time labels
+/Unit () param /unit exch def                    % after each readout
+/Decimals 0 param /dec exch def                  % decimal places of the readout
+/Role /accent2 param /role exch def              % the colour above zero
+/NegRole /accent3 param /negrole exch def        % the colour below zero
+/Card true param /card exch def                  % draw the panel's card behind it
+/Theme null param /thm exch def                  % a theme name, or null for the movie's own
+
+thm null ne { thm usetheme } if
+sigs null eq vals null eq and {
+  % the demo: twelve hosts with a daily rhythm and their own noise, looping
+  /vals [ 0 1 11 { /r exch def
+    [ 0 1 120 { 120 div 360 mul /a exch def
+      a r 30 mul add sin 30 mul  a 3 mul r 50 mul add sin 14 mul add
+      a 7 mul r 17 mul add cos 9 mul add  r 4 mul 16 add add 0 max 100 min
+    } for ]
+  } for ] def
+  extent null eq { /extent 100 def } if
+  ths null eq { /ths [ /good 75 /warn 90 /bad ] def } if
+  /unit (%) def
+} if
+/nrows sigs null ne { sigs length } { vals length } ifelse def
+mode null eq { /mode sigs null ne { /replay } { /scroll } ifelse def } if
+t1 null eq { /t1 duration def } if
+labels null eq {
+  /labels [ 0 1 nrows 1 sub { sigs null ne { sigs exch get 32 string cvs } { (host ) exch 1 add 2 zeropad strcat } ifelse } for ] def
+} if
+
+% the time readings are taken at: the movie's clock for signals, our own for arrays
+/tnow { sigs null ne { signaltime } { globaltime } ifelse } def
+% row t value-at -> v       one row's value at time t
+/value-at {
+  sigs null ne { exch sigs exch get exch tnow sub neg signalago }
+  { exch vals exch get exch duration div 1 fmod 1 add 1 fmod 1 index length 1 sub mul valueat } ifelse
+} def
+% row ta tb n readings -> [v ...]
+/readings {
+  sigs null ne { 4 -1 roll sigs exch get 4 1 roll signalbetween } {
+    4 dict begin /rn exch def /rb exch def /ra exch def /rr exch def
+      [ 0 1 rn 1 sub { rn 1 sub div rb ra sub mul ra add rr exch value-at } for ]
+    end
+  } ifelse
+} def
+% t clocktext -> (HH:MM)
+/clocktext {
+  clock aload pop 3 -1 roll mul add 86400 fmod 60 div floor cvi
+  dup 60 idiv 2 zeropad (:) strcat exch 60 mod 2 zeropad strcat
+} def
+
+/scene {
+  canvasbox 3 inset
+  card { << /Size height 0.036 mul ttl () ne { /Title ttl } if >> panel } if
+  aload pop /bh exch def /bw exch def /by exch def /bx exch def
+  /fs bh nrows div 0.6 mul bh 0.05 mul min 9 max def            % text size
+  /axh clock null ne { fs 1.8 mul } { 0 } ifelse def              % the time axis above the rows
+  /lw fs 6.2 mul def                                               % the names on the left
+  /mono fs face /rw (000.0) unit strcat stringwidth pop fs 0.8 mul add def   % the readouts on the right
+  /cx bx lw add def /cw bw lw sub rw sub def                      % the chart's columns
+  /rh bh axh sub nrows div def
+  /gap rh 0.12 mul 0.6 max def
+  % where time is: the cursor's x and the time at it
+  mode /replay eq {
+    /tc tnow t0 max t1 min def
+    /ux tc t0 sub t1 t0 sub div def
+    /curx cx cw ux mul add def
+  } {
+    /tc tnow def /curx cx cw add def
+    % a grid fixed in time, so samples do not slide under the rows
+    /dt window npts 1 sub div def
+    /tq tc dt div ceiling dt mul def
+    /sx cx tq window sub dt sub tc window sub sub window div cw mul add def
+    /sw cw window dt add window div mul def
+  } ifelse
+  % the rows
+  0 1 nrows 1 sub { /r exch def
+    /ry by bh axh sub add r 1 add rh mul sub def
+    mode /replay eq {
+      r t0 t1 npts readings [ cx ry gap 2 div add cw rh gap sub ]
+      << /Bands nbands /Draw ux /Role role /NegRole negrole extent null ne { /Extent extent } if >> horizon
+    } {
+      gsave newpath cx ry cw rh rectclip
+        r tq window sub dt sub tq npts 1 add readings [ sx ry gap 2 div add sw rh gap sub ]
+        << /Bands nbands /Role role /NegRole negrole extent null ne { /Extent extent } if >> horizon
+      grestore
+    } ifelse
+    /v r tc value-at def
+    % the name, with a lamp
+    /fg ink /body fs face
+    ths null ne {
+      bx fs 0.55 mul add ry rh 2 div add fs 0.32 mul v ths thresholdrole statuslight
+      bx fs 1.5 mul add
+    } { bx } ifelse
+    ry rh 2 div add fs 0.36 mul sub moveto labels r get show
+    % the readout
+    ths null ne { v ths thresholdrole } { /fg } ifelse ink /mono fs face
+    bx bw add ry rh 2 div add fs 0.36 mul sub moveto
+    v dec fmtnum unit strcat showright
+  } for
+  % the time axis and the cursor
+  clock null ne {
+    /muted ink /body fs 0.85 mul face
+    /ta mode /replay eq { t0 } { tc window sub } ifelse def
+    /tb mode /replay eq { t1 } { tc } ifelse def
+    % ticks at whole multiples of tick, in clock seconds
+    /c0 ta clock 1 get mul clock 0 get add def /c1 tb clock 1 get mul clock 0 get add def
+    c0 tick div ceiling tick mul tick c1 {
+      /ct exch def
+      /tx cx ct clock 0 get sub clock 1 get div ta sub tb ta sub div cw mul add def
+      gsave /line ink 0.5 setalpha 0.6 setlinewidth
+        newpath tx by bh axh sub add moveto tx by lineto stroke grestore
+      curx tx sub abs fs 3.2 mul gt {
+        tx by bh add fs 0.9 mul sub moveto ct clock 1 get div clock 0 get clock 1 get div sub clocktext showcenter
+      } if
+    } for
+  } if
+  % the cursor
+  /fg ink 1.2 setlinewidth
+  newpath curx by moveto curx by bh axh sub add lineto stroke
+  clock null ne {
+    /title fs 0.95 mul face
+    curx by bh add fs 0.9 mul sub moveto
+    mode /replay eq ux 0.96 gt and { tc clocktext showright } { tc clocktext showcenter } ifelse
+  } if
+} def

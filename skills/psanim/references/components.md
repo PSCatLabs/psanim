@@ -187,6 +187,10 @@ pkmotion or a camera like any other drawing. It respects the time scope it
 is called in, so `2 { /flame << >> place } delayed` starts the flame two
 seconds later. Use `componentduration` to time the movie around one.
 
+`place` keeps the component's shape, so a box of another shape leaves
+bars on two sides. The catalog's panels take /Width and /Height
+parameters so an instance can be made the shape of its box.
+
 A component paints its /Background into its box only if it declares one;
 otherwise it is transparent and draws over the movie.
 

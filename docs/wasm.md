@@ -40,7 +40,14 @@ engine.event("click", 1.25);                 // an event at movie time 1.25: /cl
 // A catalog entry by name, with parameters at open (as --param gives them):
 engine.open(engine.catalog("clock-digital"), { params: { Signal: "clock", Theme: "amber" } });
 engine.catalogNames();                       // ["clock-analog", "clock-digital", ...]
+engine.recordSignal("cpu", 12.5, 73.0);      // a reading at movie time 12.5, keeping the earlier ones
 ```
+
+`setSignal` replaces a signal with a constant; `recordSignal` adds a
+reading and keeps the earlier ones, so a live dashboard can draw the
+signal's recent past (`signalseries`) and read it a little late to glide
+between readings (`signalago`). `scripts/wasm_smoke.mjs` exercises it in
+Node; it has not yet been run in a browser page.
 
 For a movie that keeps running in a page, with live inputs and no
 controls, use `<psanim-widget>` (`web/widget.js`); `docs/widgets.md` says

@@ -269,6 +269,23 @@ pub unsafe extern "C" fn pa_clear_events(name: *const u8, len: usize) {
     });
 }
 
+/// Add a reading of signal `name` taken at movie time `t`, keeping the
+/// earlier ones, so the movie can read its recent past (`signalago`,
+/// `signalseries`): what a live dashboard calls with each new value.
+///
+/// # Safety
+/// `name` must point to `len` readable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pa_record_signal(name: *const u8, len: usize, t: f64, value: f64) {
+    // SAFETY: the caller's contract.
+    let name = unsafe { text(name, len) };
+    with(|s| {
+        if let Some(m) = s.movie.as_mut() {
+            m.record_signal(name, t, value);
+        }
+    });
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn pa_pixels_ptr() -> *const u8 {
     with(|s| s.pixels.as_ptr())
@@ -369,6 +386,23 @@ mod tests {
             &[0, 0, 0, 255]
         );
         assert!(pa_last_steps() > 0.0);
+
+        // A recorded signal keeps its past: 0 at t=0, 1 at t=1, read half a
+        // second late at t=1 is 0.5, a half-red bar.
+        let rec = "<< /Size [32 16] /Duration 2 /FPS 10 >> animation
+                   /scene { /cpu 0.5 signalago 0 0 setrgbcolor 0 0 32 16 rectfill } def";
+        // SAFETY: `rec` is a live string.
+        assert_eq!(unsafe { pa_load(rec.as_ptr(), rec.len(), 1.0, 1e6) }, 0);
+        let cpu = "cpu";
+        // SAFETY: `cpu` is a live string.
+        unsafe {
+            pa_record_signal(cpu.as_ptr(), cpu.len(), 0.0, 0.0);
+            pa_record_signal(cpu.as_ptr(), cpu.len(), 1.0, 1.0);
+        }
+        assert_eq!(pa_render(1.0), 0);
+        // SAFETY: the pixel buffer is width*height*4 bytes.
+        let px = unsafe { std::slice::from_raw_parts(pa_pixels_ptr(), 32 * 16 * 4) };
+        assert!((126..=129).contains(&px[0]), "{}", px[0]);
 
         let bad = "<< /Size [32 16] >> animation /scene { nosuchword } def";
         // SAFETY: `bad` is a live string.

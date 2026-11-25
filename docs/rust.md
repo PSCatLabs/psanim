@@ -79,6 +79,20 @@ A live event track keeps its last 256 events (older ones still count in
 starts over. The same program renders
 offline with those signals loaded from a file.
 
+`set_signal` replaces the signal with a constant. A dashboard wants the
+signal's past as well (a sparkline, a horizon row) and values that glide
+between readings, so record each reading at the movie time it arrives
+instead; the track keeps the most recent 100,000:
+
+```rust
+movie.record_signal("cpu", clock.seconds(), sample.cpu);
+```
+
+The program then reads `/cpu signal`, `/cpu 0.5 signalago` (half a
+second late, interpolated between readings) or `/cpu 60 120
+signalseries` (the last minute), exactly as it reads a recording passed
+with `--signals`. In the browser the same call is `engine.recordSignal(name, t, value)` (see wasm.md).
+
 ## Errors
 
 `psanim::Error` is data: `phase` (load, setup, frame *k*, step *n*),

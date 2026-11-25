@@ -13,6 +13,7 @@ a block starting `%!PS` is a whole movie. `psanim api pkdiagram` (and
 - [Diagrams](#diagrams): nodes, edges, flow, groups, marks, notes
 - [Code](#code): panels, typing, focus, diffs
 - [Charts](#charts): frames, axes, bars, lines, rankings, donuts
+- [Dashboards](#dashboards): stat tiles, gauges, horizon charts, live and recorded data
 - [Putting them in a film](#putting-them-in-a-film)
 
 ## Diagrams
@@ -225,6 +226,87 @@ you want to put on a chart.
 A chart tells a story when one thing in it is singled out: `/Dim` the
 other bars, put the `/accent` on one, add a `note`, and say the finding
 in a headline above (`"Thursday doubled"`, not `"Sales by day"`).
+
+## Dashboards
+
+Telemetry panels in the manner of Grafana: a number with its trend, a
+gauge, a fleet of horizon rows, lamps that go amber and red. The words
+take numbers and a box, like every chart word; the colour of a value
+comes from thresholds, `v [ /good 70 /warn 90 /bad ] thresholdrole`
+(the first role below 70, `/warn` from 70, `/bad` from 90; every theme
+has the three).
+
+```postscript
+ground
+/u 0 3.5 /cubic-inout tween def
+/hist [ 0 1 47 { 47 div 360 mul /a exch def a 2 mul sin 20 mul a 5 mul sin 8 mul add 50 add } for ] def
+% a stat tile: title, number in its threshold's colour, unit, change, sparkline
+u 40 92 between [16 196 300 148] << /Title (CPU) /Unit (%) /Decimals 1 /Delta 4.2
+  /Thresholds [ /good 70 /warn 90 /bad ] /Spark hist >> stattile
+% a gauge
+u 20 78 between [332 196 292 148] << /Unit (%) /Label (disk) >> dial
+% a horizon chart per host, and a lamp each
+0 1 3 { /i exch def
+  [ 0 1 47 { 47 div 360 mul i 40 mul add sin 45 mul 45 add } for ] [ 60 140 i 34 mul sub 560 28 ]
+    << /Extent 100 /Bands 4 /Draw u >> horizon
+  30 154 i 34 mul sub 6 i 2 mod 0 eq { /good } { /warn } ifelse statuslight
+} for
+```
+
+`sparkline`, `heatmap`, `statuslight` and `panel` (a titled card that
+returns the box inside it) are the rest. `fmtshort` writes 12.4k and
+3.2M; `fmtnum` writes 12,431.
+
+**Ready-made panels.** The catalog has them as components that read the
+host's data themselves: `/stat`, `/gauge`, `/horizon` (many rows, a time
+cursor, a readout), `/timeseries` (scrolling, with ticks that cross-fade
+as the range moves), `/status` (lamps) and `/counter` (a vanity number
+that counts up). Give each its box's shape with /Width and /Height, so
+`place` fits it without bars:
+
+```postscript
+%!PS
+<< /Size [960 540] /Duration 6 >> animation
+/pkchart use
+/boxes canvasbox 16 inset 3 2 12 cells def
+% /new /entry box params sized -> /new /entry opts     an instance the shape of the box
+/sized { dup /Width 3 index 2 get put dup /Height 3 index 3 get put exch pop << /Params 3 -1 roll >> } def
+/a /stat boxes 0 get << /Title (Requests / s) /Short true /Decimals 1 >> sized instance
+/b /gauge boxes 1 get << /Title (Disk) >> sized instance
+/c /counter boxes 2 get << /To 48213 /Label (commits) /Icon /commit >> sized instance
+/d /status boxes 3 get << >> sized instance
+/e /timeseries boxes 4 get << >> sized instance
+/f /horizon boxes 5 get << >> sized instance
+/scene { ground 0 1 5 { /i exch def [ /a /b /c /d /e /f ] i get << /Box boxes i get /After /hold >> place } for } def
+```
+
+**Where the data comes from.** Never from a file the movie opens: from
+the host, as signals (`--signals day.csv`, a CSV whose first column is
+movie time; or a live host calling `Movie::record_signal` with each
+reading). The panels take `/Signal /cpu` (or `/Signals [ ... ]`) and
+read the history themselves; without one they play a `/Values` array
+across their duration. By hand:
+
+```postscript partial
+/cpu signal                           % now
+/cpu 0.5 signalago                    % half a second ago: live values glide between updates
+/cpu 3 60 signalseries                % the last 3 seconds, 60 readings, for a sparkline
+/cpu 0 60 360 signalbetween           % a fixed stretch: a recorded day behind a sweeping cursor
+signaltime                            % the clock signals are read on, also inside a component
+/cpu hassignal not { (no data) show } if
+```
+
+A recording replayed is the same as a live feed: the CSV's time column
+is movie seconds (a day in a minute is 1 s = 24 min), and the movie
+labels its clock from that (the panels' `/Clock [c0 rate]`).
+
+Two rules keep a dashboard from flickering. Read a window on a grid
+fixed in time (`signalbetween` from multiples of the step) rather than
+`signalseries` at moving instants, or thin peaks shimmer as the samples
+slide; the `/horizon` and `/timeseries` entries do this. And let a
+moving axis cross-fade its ticks, `<< /Fade true >> plotaxes`
+(`fadeticks` underneath), so a growing range never makes the labels
+jump.
 
 ## Putting them in a film
 

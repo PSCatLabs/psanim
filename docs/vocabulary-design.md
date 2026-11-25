@@ -132,7 +132,7 @@ for the common case.
 | `pktype` | `showin`, `placetext`, `fitface`, `paragraph`, `kinetic`, `marker`, `typewrite`, `captions`, `credits`, `sym`, run lists (`showruns`) | pkstage, pkmotion |
 | `pkdiagram` | `node`, `edge`, `connect`, `arrow`, `pulse`, `group`, `note`, `circled` | pktype |
 | `pkcode` | `codeblock`, `codelinebox`, `codediff` | native tokenizer and diff |
-| `pkchart` | `plotframe`, `plotaxes`, `bars`, `hbars`, `plotline`, `plotmark`, `plotrule`, `dots`, `donut` | pktype |
+| `pkchart` | `plotframe`, `plotaxes`, `bars`, `hbars`, `plotline`, `plotmark`, `plotrule`, `dots`, `donut`; for dashboards `stattile`, `dial`, `horizon`, `sparkline`, `heatmap`, `statuslight`, `panel`, `thresholdrole` | pktype |
 | `pkink` | `revealalong`, `revealband`, `around`, `brushstroke`, `boxgradient` | pkstage |
 | `pkfigure` | `squashed`, `limb`, `eye`, `mouth`, `spring`, `dancepose`, `restpose`, `blendpose` | pkstage |
 
@@ -323,3 +323,28 @@ time.
   the same read roots. A line-oriented format would have needed its own quoting.
 - **No library word owns a clock**: `weektime` is read, not driven; a scene
   that shows a clock owns none.
+
+## Dashboards (added for 0.2)
+
+Telemetry panels follow the same rules. The pkchart words (`stattile`,
+`dial`, `horizon`, `sparkline`, `heatmap`) take numbers and a box; none
+reads a signal or a clock. Data reaches a movie only from the host:
+signals, which now have a past (`signalago`, `signalseries`,
+`signalbetween`) so a pure frame can draw a window of history, and which
+a live host feeds with `Movie::record_signal` so the same movie works on
+a wall display. The ready-made panels are catalog entries that read
+their signal by name. A recorded day and a live feed are the same thing
+to the movie; a gallery piece names its recording with a
+`% Signals: day.csv` line that the gallery scripts and the docs test pass
+as `--signals`.
+
+Two choices keep a dashboard steady. A window of history is read on a
+grid fixed in time, not at instants that slide with `now`, so peaks do
+not shimmer. And a moving axis cross-fades between the round tick sets
+either side of its ideal step (`fadeticks`, `plotaxes /Fade`), instead of
+re-picking ticks and jumping.
+
+Rejected: a declaration key naming the movie's data file (the host
+should decide where data comes from, and a browser host has no files);
+an accumulating history inside the movie (state between frames; a host
+recording is the explicit place for it).

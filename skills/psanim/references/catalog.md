@@ -105,6 +105,32 @@ Confetti that tumbles, sways and flutters down around a message, which arrives w
 | /Palette | `/festive` | /festive, a theme name (its accents and fonts), or [[r g b] ...] |
 | /Style | `/cannons` | /cannons (from both bottom corners), /burst (from behind the message), /rain (a steady fall) |
 
+## `/counter`: Counter
+
+A vanity metric that counts up: stars, commits, requests served, days without an incident. Grouped or short numbers, an icon, a settle at the end; or follows a host signal.
+
+420x200, 5.0 s. `/x /counter component`, then `/x << /Box [..] >> place`.
+
+| Param | Default | Meaning |
+|---|---|---|
+| /Card | `true` | draw the panel's card behind it |
+| /Count | `0.75` | the part of the duration spent counting; then it settles and holds |
+| /Decimals | `0` | decimal places |
+| /Ease | `/expo-out` | how the count runs: fast and slowing is the convention |
+| /From | `0` | where the count starts |
+| /Height | `200` | its height in units |
+| /Icon | `/star` | /star /commit /check /bolt /flame, or /none |
+| /Label | `(stars on GitHub)` | the words under the number |
+| /Lag | `0` | with /Signal: read it this many seconds late, so it glides between updates |
+| /Prefix | `()` | before the number, e.g. ($) |
+| /Role | `/accent` | the number's colour (and the icon's) |
+| /Short | `false` | true: 12.4k instead of 12,431 |
+| /Signal | `null` | follow this host signal instead of counting from /From to /To |
+| /Suffix | `()` | after it, e.g. (+) |
+| /Theme | `null` | a theme name, or null for the movie's own |
+| /To | `12431` | where it ends |
+| /Width | `420` | its width in units: give it the shape of the box it is placed in |
+
 ## `/crawl`: Crawl
 
 Text receding on a tilted plane towards a vanishing point, justified and fading with distance, over an optional starfield: an opening crawl.
@@ -122,9 +148,9 @@ Text receding on a tilted plane towards a vanishing point, justified and fading 
 | /Sky | `[0.008 0.01 0.03]` | the colour behind the stars, or /none for a transparent ground |
 | /Speed | `0` | units a second along the plane; 0 fits the whole text into the entry's 40 s |
 | /Stars | `350` | stars behind the text; 0 for none |
-| /Text | `[...]` | paragraphs, justified |
+| /Text | `[(Across the outer reaches, the beacons have gone dark one by one. Nobody on the inner worlds noticed until the grain ships stopped coming.) (The Council of Ports has sent letters, then inspectors, then warships. None of them have come back, and the letters have stopped being answered.) (Now a single surveyor, her ship held together with wire and stubbornness, follows the last signal into the drift, where the old maps end.) (She carries a crate of spare lamps, a chart drawn by her grandmother, and a passenger who has not yet said why he wanted to come.) (What she finds there will either light the beacons again or explain why somebody wanted them out....)]` | paragraphs, justified |
 | /Tilt | `58` | degrees the plane leans back: 0 faces you, 90 is a floor |
-| /Title | `[...]` | title lines, centred; [] for none |
+| /Title | `[(EPISODE ZERO) (THE QUIET ENGINE)]` | title lines, centred; [] for none |
 | /TitleColor | `[1 0.93 0.72]` | title colour |
 | /TitleSize | `0` | title size; 0 means 1.3 times /Size |
 | /Width | `900` | column width where the plane meets the bottom edge |
@@ -185,6 +211,59 @@ Shells rise on trails and burst into glowing stars that fall and fade behind a m
 | /Sky | `true` | paint a night sky; false to burst over your own picture |
 | /Style | `/show` | /show (six shells), /single (one, for a small success), /finale (a crescendo) |
 | /Weight | `1` | line weight of the stars and trails: more for a small placement |
+
+## `/gauge`: Gauge
+
+A dashboard gauge: an arc filled to the value in its threshold's colour, the thresholds as a band round it, the number in the middle; from a host signal or an array.
+
+300x260, 12.0 s, loops. `/x /gauge component`, then `/x << /Box [..] >> place`.
+
+| Param | Default | Meaning |
+|---|---|---|
+| /Card | `true` | draw the panel's card behind it |
+| /Decimals | `0` | decimal places |
+| /Height | `260` | its height in units |
+| /Label | `()` | a word under the number |
+| /Lag | `0` | read the signal this many seconds late, so live values glide between updates |
+| /Range | `[0 100]` | the values at the two ends of the arc |
+| /Signal | `null` | the host signal to show, e.g. /cpu; null plays /Values |
+| /Theme | `null` | a theme name, or null for the movie's own |
+| /Thresholds | `[/good 70 /warn 90 /bad]` | the colours by value |
+| /Title | `(CPU)` | the panel's title; () for none |
+| /Unit | `(%)` | written small after the number |
+| /Values | `null` | without a signal: values played evenly across the duration (null: a demo) |
+| /Width | `300` | its width in units: give it the shape of the box it is placed in |
+
+## `/horizon`: Horizon chart
+
+Many metrics, one row each, folded into bands of colour so a whole fleet fits on a screen; a time cursor and a readout of every row at it. From host signals or arrays.
+
+900x520, 12.0 s, loops. `/x /horizon component`, then `/x << /Box [..] >> place`.
+
+| Param | Default | Meaning |
+|---|---|---|
+| /Bands | `4` | bands of colour per row |
+| /Card | `true` | draw the panel's card behind it |
+| /Clock | `null` | [c0 rate]: label times as a clock, c0 seconds (since midnight) at time 0, rate clock seconds per second |
+| /Decimals | `0` | decimal places of the readout |
+| /Extent | `null` | the value that fills every band (100 for percentages); null: each row's largest in view (set it when scrolling, or rows rescale as peaks pass) |
+| /From | `0` | /replay: the time at the left edge |
+| /Height | `520` | its height in units |
+| /Labels | `null` | a name per row; null: the signal names |
+| /Mode | `null` | /scroll or /replay; null: /replay for signals, /scroll for /Values |
+| /NegRole | `/accent3` | the colour below zero |
+| /Points | `240` | readings per row |
+| /Role | `/accent2` | the colour above zero |
+| /Signals | `null` | the host signals, one row each, e.g. [/web1 /web2]; null plays /Values |
+| /Theme | `null` | a theme name, or null for the movie's own |
+| /Thresholds | `null` | [ /good 70 /warn 90 /bad ]: a lamp per row from its value at the cursor |
+| /Tick | `10800` | with /Clock: clock seconds between the time labels |
+| /Title | `()` | the panel's title; () for none |
+| /To | `null` | /replay: the time at the right edge; null: the duration |
+| /Unit | `()` | after each readout |
+| /Values | `null` | without signals: one array per row, a recording that loops over the duration (null: a demo) |
+| /Width | `900` | its width in units: give it the shape of the box it is placed in |
+| /Window | `4` | /scroll: seconds shown |
 
 ## `/ledmatrix`: LED matrix
 
@@ -256,7 +335,7 @@ A pipeline of stages lighting up in turn: each runs with a sweeping ring, then p
 | /OkColor | `[0.3 0.85 0.5]` | a stage that passed |
 | /Seconds | `5` | how long the whole run takes when Times is empty |
 | /Signal | `()` | the name of a movie signal, 0 to the number of stages, instead of time |
-| /Stages | `[...]` | the names, left to right |
+| /Stages | `[(build) (test) (deploy)]` | the names, left to right |
 | /Times | `[]` | N+1 times: stage i runs from Times[i] to Times[i+1]; empty for equal stages over /Seconds |
 | /Value | `-1` | 0 to the number of stages: a still, instead of time (1.5 is build done, test half way) |
 
@@ -320,6 +399,51 @@ An arrivals board of split-flap cells: rows of text that change on a schedule, e
 | /States | `[...]` | [ [time [row row ...]] ... ]: the board from that time on |
 | /Tail | `1.5` | seconds to hold after the last flap lands |
 
+## `/stat`: Stat panel
+
+A dashboard tile: a big number coloured by thresholds, its unit, its change and a sparkline of its recent past, from a host signal or an array.
+
+360x200, 12.0 s, loops. `/x /stat component`, then `/x << /Box [..] >> place`.
+
+| Param | Default | Meaning |
+|---|---|---|
+| /Decimals | `0` | decimal places |
+| /Delta | `2` | show the change in % over this many seconds (0: none) |
+| /DownIsGood | `false` | true when a fall is good news (latency, errors) |
+| /Fill | `/surface` | /surface, or /threshold to colour the card instead of the number |
+| /Height | `200` | its height in units |
+| /Lag | `0` | read the signal this many seconds late, so live values glide between updates |
+| /Short | `false` | true: 12.4k and 3.2M instead of 12,431 and 3,200,000 |
+| /Signal | `null` | the host signal to show, e.g. /cpu; null plays /Values |
+| /Spark | `4` | seconds of history in the sparkline (0: none) |
+| /Theme | `null` | a theme name, or null for the movie's own |
+| /Thresholds | `null` | [ /good 70 /warn 90 /bad ]: the number's colour by value; null: /fg |
+| /Title | `(Requests / s)` | the panel's title |
+| /Unit | `()` | written small after the number |
+| /Values | `null` | without a signal: values played evenly across the duration (null: a demo) |
+| /Width | `360` | its width in units: give it the shape of the box it is placed in |
+
+## `/status`: Status lights
+
+One lamp per service, green, amber or red by thresholds, with its name and value; the worst ones pulse. From host signals or arrays.
+
+300x260, 12.0 s, loops. `/x /status component`, then `/x << /Box [..] >> place`.
+
+| Param | Default | Meaning |
+|---|---|---|
+| /Card | `true` | draw the panel's card behind it |
+| /Decimals | `0` | decimal places |
+| /Height | `260` | its height in units |
+| /Labels | `null` | a name per lamp; null: the signal names |
+| /Lag | `0` | read the signals this many seconds late, so live values glide between updates |
+| /Signals | `null` | the host signals, one lamp each; null plays /Values |
+| /Theme | `null` | a theme name, or null for the movie's own |
+| /Thresholds | `[/good 70 /warn 90 /bad]` | the lamp's colour by value |
+| /Title | `(Services)` | the panel's title; () for none |
+| /Unit | `()` | after each value |
+| /Values | `null` | without signals: one array per lamp, played across the duration (null: a demo) |
+| /Width | `300` | its width in units: give it the shape of the box it is placed in |
+
 ## `/terminal`: Terminal
 
 An old video terminal: phosphor text with glow, scanlines, a bowed screen, persistence and grain, and a session typed as a person types it, slips and backspaces included, with output scrolling up the screen.
@@ -366,6 +490,33 @@ A grid of test results arriving: dots fill in green or red, each at its own pace
 | /Seconds | `3` | how long the run takes in /time mode |
 | /Signal | `()` | the name of a movie signal (0 to 1) to show instead |
 | /Value | `0.5` | 0 to 1, how many are in, in /value mode |
+
+## `/timeseries`: Time series
+
+A scrolling line chart of up to four series with a legend; the y range follows the data and its ticks cross-fade as it moves. From host signals or arrays.
+
+640x300, 12.0 s, loops. `/x /timeseries component`, then `/x << /Box [..] >> place`.
+
+| Param | Default | Meaning |
+|---|---|---|
+| /Card | `true` | draw the panel's card behind it |
+| /Clock | `null` | [c0 rate]: label times as a clock (see the horizon entry) |
+| /Decimals | `0` | decimal places of the y labels |
+| /Fill | `true` | shade under the first line |
+| /Height | `300` | its height in units |
+| /Labels | `null` | a legend entry per line; null: the signal names |
+| /Least | `1` | with no /Range: the lowest the top of the range goes, so a quiet signal is not magnified |
+| /Points | `120` | readings per line |
+| /Range | `null` | [lo hi] fixed; null: 0 to just above the largest value shown |
+| /Roles | `[/accent2 /accent /accent3 /good]` | the lines' colours |
+| /Signals | `null` | the host signals, one line each; null plays /Values |
+| /Theme | `null` | a theme name, or null for the movie's own |
+| /Tick | `3600` | with /Clock: clock seconds between time labels |
+| /Title | `(Requests / s)` | the panel's title; () for none |
+| /Unit | `()` | after the y labels |
+| /Values | `null` | without signals: one array per line, a recording that loops over the duration (null: a demo) |
+| /Width | `640` | its width in units: give it the shape of the box it is placed in |
+| /Window | `4` | seconds shown |
 
 ## `/twiddle`: Twiddle
 

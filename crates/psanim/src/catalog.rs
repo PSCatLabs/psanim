@@ -19,18 +19,24 @@ pub const CATALOG: &[(&str, &str)] = &[
     ("clock-ledsign", include_str!("../catalog/clock-ledsign.ps")),
     ("clock-morph", include_str!("../catalog/clock-morph.ps")),
     ("confetti", include_str!("../catalog/confetti.ps")),
+    ("counter", include_str!("../catalog/counter.ps")),
     ("crawl", include_str!("../catalog/crawl.ps")),
     ("credits", include_str!("../catalog/credits.ps")),
     ("fire", include_str!("../catalog/fire.ps")),
     ("fireworks", include_str!("../catalog/fireworks.ps")),
+    ("gauge", include_str!("../catalog/gauge.ps")),
+    ("horizon", include_str!("../catalog/horizon.ps")),
     ("ledmatrix", include_str!("../catalog/ledmatrix.ps")),
     ("odometer", include_str!("../catalog/odometer.ps")),
     ("pipeline", include_str!("../catalog/pipeline.ps")),
     ("progress", include_str!("../catalog/progress.ps")),
     ("spinner", include_str!("../catalog/spinner.ps")),
     ("splitflap", include_str!("../catalog/splitflap.ps")),
+    ("stat", include_str!("../catalog/stat.ps")),
+    ("status", include_str!("../catalog/status.ps")),
     ("terminal", include_str!("../catalog/terminal.ps")),
     ("testdots", include_str!("../catalog/testdots.ps")),
+    ("timeseries", include_str!("../catalog/timeseries.ps")),
     ("twiddle", include_str!("../catalog/twiddle.ps")),
 ];
 
@@ -45,9 +51,20 @@ pub fn param_notes(source: &str) -> std::collections::BTreeMap<String, String> {
     let mut notes = std::collections::BTreeMap::new();
     for line in source.lines() {
         let line = line.trim_start();
-        let Some((code, note)) = line.split_once('%') else {
+        // The comment starts at the first % outside a (string), so `(%)` is code.
+        let mut depth = 0i32;
+        let Some(at) = line.char_indices().find_map(|(k, c)| {
+            match c {
+                '(' => depth += 1,
+                ')' => depth -= 1,
+                '%' if depth <= 0 => return Some(k),
+                _ => {}
+            }
+            None
+        }) else {
             continue;
         };
+        let (code, note) = (&line[..at], &line[at + 1..]);
         if !code.split_whitespace().any(|w| w == "param") {
             continue;
         }

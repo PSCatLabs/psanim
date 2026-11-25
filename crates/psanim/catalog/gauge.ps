@@ -1,0 +1,44 @@
+%!PS
+% Catalog entry: gauge. A dashboard gauge: an arc filled to the value.
+% In a movie:  /disk /gauge << /Params << /Signal /disk /Title (Disk) >> >> instance
+%              then  /disk << /Box [x y w h] >> place
+/Width 300 param /cw0 exch def                           % its width in units: give it the shape of the box it is placed in
+/Height 260 param /ch0 exch def                          % its height in units
+<< /Size [cw0 ch0] /Duration 12 /Loop true /Background /transparent
+   /Title (Gauge)
+   /Description (A dashboard gauge: an arc filled to the value in its threshold's colour, the thresholds as a band round it, the number in the middle; from a host signal or an array.)
+>> animation
+/pkchart use
+
+/Title (CPU) param /ttl exch def                         % the panel's title; () for none
+/Signal null param /sig exch def                         % the host signal to show, e.g. /cpu; null plays /Values
+/Values null param /vals exch def                        % without a signal: values played evenly across the duration (null: a demo)
+/Range [0 100] param /rng exch def                       % the values at the two ends of the arc
+/Thresholds [/good 70 /warn 90 /bad] param /ths exch def % the colours by value
+/Unit (%) param /unit exch def                           % written small after the number
+/Decimals 0 param /dec exch def                          % decimal places
+/Label () param /lbl exch def                            % a word under the number
+/Lag 0 param /lag exch def                               % read the signal this many seconds late, so live values glide between updates
+/Card true param /card exch def                          % draw the panel's card behind it
+/Theme null param /thm exch def                          % a theme name, or null for the movie's own
+
+thm null ne { thm usetheme } if
+sig null eq vals null eq and {
+  /vals [ 0 1 120 { 120 div 360 mul /a exch def
+    a sin 22 mul a 2 mul sin 14 mul add a 5 mul cos 6 mul add 60 add } for ] def
+} if
+
+/now-value {
+  sig null ne { sig lag signalago } {
+    globaltime duration div 1 fmod vals length 1 sub mul vals exch valueat
+  } ifelse
+} def
+
+/scene {
+  canvasbox 3 inset
+  card { ttl () eq { << >> } { << /Title ttl >> } ifelse panel } if
+  now-value exch <<
+    /Range rng /Thresholds ths /Unit unit /Decimals dec
+    lbl () ne { /Label lbl } if
+  >> dial
+} def

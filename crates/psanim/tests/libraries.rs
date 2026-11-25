@@ -848,6 +848,103 @@ fn charts_map_data_and_grow() {
     assert!(ink_at(&mut m, 1.5).is_some());
 }
 
+#[test]
+fn dashboard_words_colour_by_threshold_fold_bands_and_format() {
+    let th = "[ /good 70 /warn 90 /bad ] thresholdrole ==";
+    assert_eq!(
+        eval_at("", &format!("10 {th} 70 {th} 95 {th}"), 0.0),
+        "/good\n/warn\n/bad"
+    );
+    assert_eq!(
+        eval_at(
+            "",
+            "12431 1 fmtshort == 999.96 1 fmtshort == 3.2e6 0 fmtshort ==",
+            0.0
+        ),
+        "(12.4k)\n(1.0k)\n(3M)"
+    );
+    // A horizon chart folds a ramp into bands: one row, every band touched,
+    // nothing outside its box; /Draw reveals it from the left.
+    let ramp = "/rp [ 0 1 50 { 2 mul } for ] def";
+    let mut m = load(&format!(
+        "{ramp} /scene {{ rp [ 20 40 160 20 ] << /Extent 100 /Bands 4 /Role [1 1 1] /Ground [0 0 0] /Draw 0 4 ramp >> horizon }} def"
+    ));
+    assert!(ink_at(&mut m, 0.0).is_none());
+    let (x0, y0, x1, y1, _) = ink_at(&mut m, 4.0).unwrap();
+    assert!(
+        x0 >= 20 && x1 <= 180 && y0 >= 60 && y1 <= 80,
+        "{x0} {y0} {x1} {y1}"
+    );
+    let half = ink_at(&mut m, 2.0).unwrap();
+    assert!(half.2 <= 101, "half drawn reaches the middle: {half:?}");
+    // The highest band is the brightest: the right end is white, the left end dark.
+    let f = m.render_at(4.0).unwrap();
+    let at = |x: u32, y: u32| f.premultiplied[((y * f.width + x) * 4) as usize];
+    assert!(
+        at(178, 70) > 240 && at(178, 70) > at(60, 79),
+        "{} {}",
+        at(178, 70),
+        at(60, 79)
+    );
+    // Negative values hang from the top in the other role.
+    let mut m = load(
+        "/scene { [ 0 -50 -100 ] [ 20 40 160 20 ] << /Extent 100 /Bands 1 /NegRole [1 0 0] /Ground [0 0 0] >> horizon } def",
+    );
+    let f = m.render_at(0.0).unwrap();
+    let px = |x: u32, y: u32| {
+        let o = ((y * f.width + x) * 4) as usize;
+        [f.premultiplied[o], f.premultiplied[o + 1]]
+    };
+    assert_eq!(px(175, 61), [255, 0], "red at the top right");
+    assert_eq!(px(30, 78), [0, 0], "nothing near zero");
+    // Every panel word draws inside its box, on any theme.
+    for theme in ["midnight", "paper"] {
+        let mut m = load(&format!(
+            "/{theme} usetheme /s [ 3 1 4 1 5 9 2 6 ] def
+             /scene {{ 0 0 0 setrgbcolor 0 0 200 120 rectfill
+               80 [ 10 10 90 50 ] << /Title (CPU) /Unit (%) /Thresholds [/good 70 /warn 90 /bad] /Delta -2 /Spark s >> stattile
+               62 [ 110 10 80 50 ] << /Unit (%) /Label (disk) >> dial
+               s [ 10 70 50 40 ] << >> sparkline
+               [ s s ] [ 70 70 50 40 ] << /Roles [ /surface /accent /bad ] >> heatmap
+               170 90 6 /good statuslight
+               [ 130 70 30 40 ] << /Title (x) /Status /bad >> panel pop }} def"
+        ));
+        assert!(ink_at(&mut m, 0.0).is_some());
+    }
+}
+
+#[test]
+fn ticks_fade_while_a_range_moves() {
+    // Half way between the steps 20 and 50 the in-between ticks are half shown.
+    let out = eval_at("", "0 31.62 5 mul 5 fadeticks ==", 0.0);
+    let v = nums(&out);
+    let pairs: Vec<(f64, f64)> = v.chunks(2).map(|p| (p[0], p[1])).collect();
+    assert!(
+        pairs.contains(&(0.0, 1.0)) && pairs.contains(&(100.0, 1.0)),
+        "{out}"
+    );
+    assert!(
+        pairs.iter().any(|p| p.0 == 40.0 && p.1 > 0.3 && p.1 < 0.7),
+        "{out}"
+    );
+    // plotaxes takes them with /Fade.
+    let mut m = load(
+        "/scene { 1 1 1 setrgbcolor [ 40 20 140 80 ] [ 0 1 ] [ 0 0 4 ramp 100 mul 60 add ] plotframe
+                  << /Fade true /YTicks 5 >> plotaxes } def",
+    );
+    for t in [0.0, 1.3, 2.7, 4.0] {
+        assert!(ink_at(&mut m, t).is_some());
+    }
+    assert_eq!(
+        nums(&eval_at(
+            "",
+            "[ 0 10 ] [ 0 0 100 50 ] [ 0 10 ] seriespoints ==",
+            0.0
+        )),
+        [0.0, 0.0, 100.0, 50.0]
+    );
+}
+
 // --- ink ------------------------------------------------------------------------
 
 #[test]

@@ -113,6 +113,102 @@ pub fn format_number(value: f64, decimals: i64, grouped: bool) -> String {
     }
 }
 
+/// `value` in a short form for a dashboard: 950, 12.4k, 3.2M, 1.1B, 4.0T,
+/// with `decimals` places once it is scaled (below a thousand, `decimals`
+/// places too, so a tween does not change width). A value that rounds up to
+/// the next unit takes it: 999.96 with one place is 1.0k.
+pub fn format_short(value: f64, decimals: i64) -> String {
+    let d = decimals.clamp(0, 9);
+    let units = ["", "k", "M", "B", "T"];
+    let mut scaled = value.abs();
+    let mut u = 0;
+    while u + 1 < units.len() {
+        let shown: f64 = format_number(scaled, d, false).parse().unwrap_or(scaled);
+        if shown < 1000.0 {
+            break;
+        }
+        scaled /= 1000.0;
+        u += 1;
+    }
+    let signed = if value < 0.0 { -scaled } else { scaled };
+    format!("{}{}", format_number(signed, d, false), units[u])
+}
+
+/// Ticks for an axis whose range is moving: about `n` round numbers over
+/// `lo..hi`, from the two nice steps either side of the ideal one, each
+/// with an opacity. A tick both steps share stays at 1; the others fade as
+/// the range moves from one step to the next, so labels cross-fade instead
+/// of jumping.
+pub fn fade_ticks(lo: f64, hi: f64, n: f64) -> Vec<(f64, f64)> {
+    let (lo, hi) = if lo <= hi { (lo, hi) } else { (hi, lo) };
+    let range = hi - lo;
+    if !(range.is_finite() && range > 0.0) {
+        return vec![(lo, 1.0)];
+    }
+    let raw = range / n.max(1.0);
+    let mag = 10f64.powf(raw.log10().floor());
+    // The nice steps 1, 2, 5 (x 10^k) below and above the ideal step.
+    let ladder = [0.5, 1.0, 2.0, 5.0, 10.0, 20.0];
+    let mut fine = mag;
+    let mut coarse = 2.0 * mag;
+    for w in ladder.windows(2) {
+        if w[0] * mag <= raw && raw < w[1] * mag {
+            fine = w[0] * mag;
+            coarse = w[1] * mag;
+            break;
+        }
+    }
+    // Where the ideal step sits between them, on a log scale, eased so each
+    // set is fully shown for most of the way.
+    let f = ((raw / fine).ln() / (coarse / fine).ln()).clamp(0.0, 1.0);
+    let s = ((f - 0.3) / 0.4).clamp(0.0, 1.0);
+    let s = s * s * (3.0 - 2.0 * s);
+    let on = |v: f64, step: f64| ((v / step).round() * step - v).abs() < step * 1e-6;
+    let mut out = Vec::new();
+    let mut k = (lo / fine - 1e-9).ceil();
+    while k * fine <= hi + fine * 1e-9 && out.len() < 400 {
+        let v = (k * fine / fine).round() * fine;
+        let a = if on(v, coarse) { 1.0 } else { 1.0 - s };
+        if a > 0.0 {
+            out.push((v, a));
+        }
+        k += 1.0;
+    }
+    // Coarse ticks that are not on the fine grid (5 when fine is 2).
+    let mut k = (lo / coarse - 1e-9).ceil();
+    while k * coarse <= hi + coarse * 1e-9 && out.len() < 800 {
+        let v = (k * coarse / coarse).round() * coarse;
+        if !on(v, fine) && s > 0.0 {
+            out.push((v, s));
+        }
+        k += 1.0;
+    }
+    out.sort_by(|a, b| a.0.total_cmp(&b.0));
+    out
+}
+
+/// The points of a series drawn evenly across a box: `values[k]` at
+/// `x + w k/(n-1)`, `lo` at the box's bottom and `hi` at its top, clamped
+/// to the box. Flat `[x0 y0 x1 y1 ...]`, for `polypath`.
+pub fn series_points(values: &[f64], bx: [f64; 4], lo: f64, hi: f64) -> Vec<f64> {
+    let [x, y, w, h] = bx;
+    let n = values.len();
+    let span = if hi == lo { 1.0 } else { hi - lo };
+    let mut out = Vec::with_capacity(n * 2);
+    for (k, v) in values.iter().enumerate() {
+        let fx = if n > 1 {
+            k as f64 / (n - 1) as f64
+        } else {
+            0.5
+        };
+        let fy = ((v - lo) / span).clamp(0.0, 1.0);
+        let fy = if fy.is_finite() { fy } else { 0.0 };
+        out.push(x + w * fx);
+        out.push(y + h * fy);
+    }
+    out
+}
+
 /// Round tick positions covering `lo..hi`, about `n` of them.
 pub fn nice_ticks(lo: f64, hi: f64, n: f64) -> Vec<f64> {
     let (lo, hi) = if lo <= hi { (lo, hi) } else { (hi, lo) };
@@ -647,6 +743,12 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         i.push_string(format_number(v, d, true).as_bytes());
         Ok(())
     });
+    reg(interp, ctx, "fmtshort", |i, _| {
+        let d = i.pop_int()?;
+        let v = i.pop_f64()?;
+        i.push_string(format_short(v, d).as_bytes());
+        Ok(())
+    });
     reg(interp, ctx, "fmtfixed", |i, _| {
         let d = i.pop_int()?;
         let v = i.pop_f64()?;
@@ -728,6 +830,32 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     reg(interp, ctx, "niceticks", |i, _| {
         let (n, hi, lo) = (i.pop_f64()?, i.pop_f64()?, i.pop_f64()?);
         i.push_numbers(&nice_ticks(lo, hi, n));
+        Ok(())
+    });
+    // lo hi n fadeticks -> [ v alpha v alpha ... ]
+    reg(interp, ctx, "fadeticks", |i, _| {
+        let (n, hi, lo) = (i.pop_f64()?, i.pop_f64()?, i.pop_f64()?);
+        let flat: Vec<f64> = fade_ticks(lo, hi, n)
+            .into_iter()
+            .flat_map(|(v, a)| [v, a])
+            .collect();
+        i.push_numbers(&flat);
+        Ok(())
+    });
+    // [v ...] box [lo hi] seriespoints -> [x0 y0 x1 y1 ...]
+    reg(interp, ctx, "seriespoints", |i, ctx| {
+        let range = i.pop_numbers()?;
+        let bx = i.pop_numbers()?;
+        let values = i.pop_numbers()?;
+        if range.len() != 2 || bx.len() != 4 || values.is_empty() {
+            return fail(
+                ctx,
+                PsError::Rangecheck,
+                "seriespoints takes values, a box and a range: [3 1 4] [0 0 200 50] [0 5] seriespoints",
+            );
+        }
+        let pts = series_points(&values, [bx[0], bx[1], bx[2], bx[3]], range[0], range[1]);
+        i.push_numbers(&pts);
         Ok(())
     });
     // [v ...] ranks -> [rank ...]   0 for the largest; ties in input order.
@@ -913,6 +1041,67 @@ mod tests {
         assert_eq!(format_number(-12.5, 1, true), "-12.5");
         assert_eq!(format_number(999.0, 0, true), "999");
         assert_eq!(format_number(1000.0, 0, true), "1,000");
+    }
+
+    #[test]
+    fn short_numbers_scale_and_carry() {
+        assert_eq!(format_short(950.0, 0), "950");
+        assert_eq!(format_short(12_400.0, 1), "12.4k");
+        assert_eq!(format_short(999.96, 1), "1.0k");
+        assert_eq!(format_short(999_960.0, 1), "1.0M");
+        assert_eq!(format_short(3_210_000.0, 2), "3.21M");
+        assert_eq!(format_short(-4_500.0, 1), "-4.5k");
+        assert_eq!(format_short(2.5e12, 1), "2.5T");
+        assert_eq!(format_short(0.42, 2), "0.42");
+    }
+
+    #[test]
+    fn fading_ticks_keep_shared_ticks_and_swap_the_rest_smoothly() {
+        // Exactly on a step: one set, fully shown.
+        let t = fade_ticks(0.0, 100.0, 5.0);
+        assert!(t.iter().all(|(_, a)| *a == 1.0), "{t:?}");
+        assert_eq!(
+            t.iter().map(|p| p.0).collect::<Vec<_>>(),
+            nice_ticks(0.0, 100.0, 5.0)
+        );
+        // Half way (on a log scale) between steps 20 and 50: 40 fades, 50 fades in, 0 and 100 stay.
+        let raw = (20.0f64 * 50.0).sqrt();
+        let t = fade_ticks(0.0, raw * 5.0, 5.0);
+        let a = |v: f64| {
+            t.iter()
+                .find(|p| (p.0 - v).abs() < 1e-9)
+                .map_or(0.0, |p| p.1)
+        };
+        assert_eq!(a(0.0), 1.0);
+        assert_eq!(a(100.0), 1.0);
+        assert!(
+            (a(40.0) - 0.5).abs() < 1e-9 && (a(50.0) - 0.5).abs() < 1e-9,
+            "{t:?}"
+        );
+        // Small moves of the range change the opacities a little (a tick
+        // entering at the edge aside), never a tick's place.
+        let mut last = fade_ticks(0.0, 60.0, 5.0);
+        for k in 1..200 {
+            let hi = 60.0 + k as f64 * 0.5;
+            let now = fade_ticks(0.0, hi, 5.0);
+            for (v, a) in now.iter().filter(|p| p.0 <= hi - 0.5) {
+                let before = last
+                    .iter()
+                    .find(|p| (p.0 - v).abs() < 1e-9)
+                    .map_or(0.0, |p| p.1);
+                assert!(
+                    (a - before).abs() < 0.2,
+                    "tick {v} jumped {before} -> {a} at hi {hi}"
+                );
+            }
+            last = now;
+        }
+    }
+
+    #[test]
+    fn series_points_span_the_box_and_clamp() {
+        let p = series_points(&[0.0, 5.0, 20.0], [10.0, 0.0, 100.0, 50.0], 0.0, 10.0);
+        assert_eq!(p, vec![10.0, 0.0, 60.0, 25.0, 110.0, 50.0]);
     }
 
     #[test]

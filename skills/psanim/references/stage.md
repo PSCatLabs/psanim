@@ -94,7 +94,7 @@ ground
 ```
 
 Roles: colours `/bg /surface /line /fg /muted /accent /accent2 /accent3
-/good /bad`; fonts `/title /body /mono /display /serif`; sizes `/corner
+/good /warn /bad`; fonts `/title /body /mono /display /serif`; sizes `/corner
 /stroke`.
 
 | theme | ground | `/title`, `/display` | `/body` | `/mono` |
