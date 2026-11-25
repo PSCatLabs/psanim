@@ -234,6 +234,18 @@
     } if
   end
 } bind def
+% box u strikethrough -     a straight line through the middle of the box,
+%                           drawn on as u goes 0 to 1, in the current
+%                           colour and line width. Keeps the current point.
+/strikethrough {
+  exch aload pop
+  6 dict begin
+    /mk-h exch def /mk-w exch def /mk-y exch def /mk-x exch def /mk-u exch 0 1 clamp def
+    mk-u 0 gt {
+      gsave newpath mk-x mk-y mk-h 0.47 mul add moveto mk-w mk-u mul 0 rlineto stroke grestore
+    } if
+  end
+} bind def
 % (str) u typewrite -  the first u of the string with a block caret after
 %                      it, blinking once the typing is done
 /typewrite {

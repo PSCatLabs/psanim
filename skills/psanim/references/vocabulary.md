@@ -680,3 +680,9 @@ The beat the film is on, as a number that grows by 1 every beat (movie clock): i
 
 Run proc once per element with `item i` on the stack, each element's clock gap seconds behind the one before: a row of things arriving one after another, written as if each were alone.
 
+### `cascadespan`
+
+`array gap  cascadespan  seconds`
+
+How long after a cascade starts its last item starts: (n - 1) x gap. Use it for the time of the step that follows a cascade, or of item k (`k gap mul`), instead of working the number out and typing it: `buckets gap cascadespan 0.6 add wait`.
+

@@ -189,3 +189,36 @@ shape underneath the pieces.
 `show` leaves a current point at the end of the text. An `arc` after it
 draws a line from there to the arc's start. Begin a new shape with
 `newpath`.
+
+## The movie became stateful, or an overlay appeared, by accident
+
+`step` and `overlay` are names the engine looks for: defining a
+procedure called `step` makes the movie a simulation and the engine
+calls it every tick (usually failing with a stack underflow in your
+procedure, "in step 0"). Rename yours.
+
+## `undefined` for a word that sounds right
+
+Words like `placetext-right` or `showcentered` are easy to imagine and do
+not exist. `psanim api NAME` answers in a moment, and lists related
+words when the name is close.
+
+## Everything after one thing is translucent
+
+`setalpha` stays set for the rest of the frame, like a colour. Wrap a
+dimmed drawing in `gsave ... grestore`, or set `1 setalpha` after it.
+
+## Text I drew is invisible
+
+Text drawn before any colour is chosen is black. `ground` sets the
+colour to the theme's `/fg`; if you paint your own background, or
+change colour for one thing, say `/fg ink` before the next text.
+`fitface` and `face` choose a font, never a colour.
+
+## A name of mine broke something far away
+
+`mark`, `count`, `index`, `copy`, `length`, `load`, `step`, `frame` and
+`width` are operators or engine words. A procedure of yours with one of
+those names changes what the libraries get when they call it, and the
+error appears inside some other procedure. Prefix your names
+(`markcell`, `nlooks`).

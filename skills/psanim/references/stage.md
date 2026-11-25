@@ -249,6 +249,9 @@ canvasbox 8 vmin inset 5 3 vmin cols 0.12 {
 } cascade
 ```
 
+`array gap cascadespan` is how long the cascade takes to start its last
+item: the wait before the step that follows it, without arithmetic.
+
 For another order use `staggered` with `rank`: `i n /center rank 0.1 { }
 staggered` starts the middle first (`/forward /reverse /center /edges
 /random`).

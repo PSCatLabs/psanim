@@ -906,6 +906,29 @@ fn cmd_api(rest: &[String]) -> Result<(), Fail> {
             }
             _ => {}
         }
+        if let Some(m) = psanim::motion::find(word) {
+            let kind = if m.kind == psanim::motion::Kind::Emphasis {
+                "an emphasis"
+            } else {
+                "an entrance"
+            };
+            println!(
+                "/{}  is a motion ({kind}), not a word: {}.\n\n  Use it where a motion goes: {}.\n  Default {} s, easing /{}. In the pkmotion library (`/pkmotion use`); `psanim api pkmotion` lists them all.\n",
+                m.name,
+                m.what,
+                if m.kind == psanim::motion::Kind::Emphasis {
+                    format!("`2 /{} {{ ... }} emphasized`", m.name)
+                } else {
+                    format!(
+                        "`2 /{0} {{ ... }} enters`, `[/{0} {1} /{2}] {{ ... }} entering`",
+                        m.name, m.dur, m.ease
+                    )
+                },
+                m.dur,
+                m.ease
+            );
+            return Ok(());
+        }
         let Some(e) = psanim::api::lookup(word) else {
             let near: Vec<&str> = psanim::api::API
                 .iter()

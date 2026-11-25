@@ -98,7 +98,9 @@ agent with the report it came from (summarised in
    returned; a flow layout (stack lines top-down with gaps) so fitted
    lines place their neighbours; vertical and rotated text in a box;
    outline type as a state.
-6. **Charts**: a tracer (a point riding a series with its readout), unit
+6. **Charts**: labels on a series (a name at the end of its line, kept
+   clear of its neighbours; the model comparison's authors placed these
+   by hand with `plotpoint`); a tracer (a point riding a series with its readout), unit
    charts (a waffle of cells), cross-fading ticks, stacked and grouped
    bars, a ruler outside a plot frame.
 7. **Diagrams**: a layered layout for graphs given as data; a section
@@ -110,6 +112,12 @@ agent with the report it came from (summarised in
    font, on text drawn outside the canvas, and on type below a legible
    size; marking intended cuts so `check --all` can be fully clean;
    naming the procedure that left operands on the stack.
+10. **A review loop.** Blind review found what authors did not (holds
+   that are not holds, dead time, faint text) and authors score
+   themselves 7 to 8 whatever the film. `check` could measure some of it
+   (frames changing during a stated hold, a second with nothing
+   changing mid-film, an ending in motion); the rest wants a second
+   agent reviewing a sheet and one revision pass.
 
 ## Next: the engine
 

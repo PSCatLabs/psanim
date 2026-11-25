@@ -56,6 +56,9 @@ b c << /Draw 1.5 2.1 /cubic-inout tween /Pulse 1.2 2 pulsetrain >> edge
 - **`(label) box opts group`**: a dashed container. `a b boxunion -3 vmin
   inset` is the box around two nodes.
 - Bring nodes on with motions (`enters`, `cascade`), not by hand.
+- Give nodes room: at least 16 vmin wide and 9 vmin tall, with gaps of 6
+  vmin or more for an edge and its label. A label is sized to fit its
+  box but never above 5 vmin; pass `/Size` to set it.
 
 An edge is built on a lower level you can use directly: `boxA boxB /route
 connect` makes the connector the **current path**, and then every path

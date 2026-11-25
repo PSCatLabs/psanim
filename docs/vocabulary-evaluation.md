@@ -188,6 +188,74 @@ films above.
   darkened toward black, which is wrong on a light theme (it now washes
   toward the theme's ground), and `cells` took one gap for both axes.
 
+## 4. Three briefs on Opus, Sonnet and Haiku
+
+Experiments 1 to 3 all ran on one model (Fable 5.2). The films this
+tool is for will mostly be written by Opus and Sonnet, so after the
+skill was revised (a template film, "write it to be changed", a table
+of the most used words) three new fixed briefs were each given to a
+fresh Opus, Sonnet and Haiku agent: a binary-search explainer (24 s), a
+compound-interest data story (22 s) and a kinetic-type square (15 s).
+The agents were told the film would be edited later by someone else.
+
+The nine films were then scored **blind by a different model** (Codex),
+which saw them as A, B and C per brief with a contact sheet, four
+full-size frames and the video to pull frames from, and scored
+legibility, composition, motion and overall out of 10 against the
+brief's numbered beats. In its scale 8 is acceptable professional work
+and 6 to 7 needs revision.
+
+| | Opus | Sonnet | Haiku |
+|---|---|---|---|
+| finished, `check --all` without errors, rendered | 3 of 3 | 3 of 3 | 3 of 3 |
+| reviewer's overall (binary search, interest, type) | 8, 8, 7 | 7, 7, 8 | 6, 7, 6 |
+| mean overall | 7.7 | 7.3 | 6.3 |
+| ranked first of three | 2 briefs | 1 brief | 0 |
+| ranked last of three | 0 | 0 | 3 briefs |
+| author's own score | 7, 8, 7 | 7, 8, 8 | 7, 7, 7 |
+| tokens | 86k, 77k, 90k | 95k, 94k, 99k | 116k, 111k, 121k |
+| wall time, minutes | 2.2, 1.7, 2.6 | 2.7, 2.1, 2.7 | 3.5, 3.5, 3.8 |
+| code lines | 127, 71, 75 | 123, 76, 87 | 96, 53, 74 |
+
+Measured from the nine sources: **none contains a literal coordinate
+box, none sets a raw colour, and every one is built on a storyboard or
+a script.** Both kinetic-type films from Opus and Sonnet use no
+absolute-time word (`enters`, `onstage`, `during`) at all; the other
+seven mix relative steps with a few absolute times. That is the change from experiments
+1 to 3, where no agent wrote a script; whether the revised skill, the
+sentence in the brief ("this film will be edited later") or the
+different models caused it, this design cannot say.
+
+What the reviewer marked down, across models: a closing entrance that
+eats into a required hold (seven of the nine films), static pauses, faint secondary
+text, oversized headings. Specific to the weakest films: a ruled-out
+cell that kept its highlight (Haiku), a word that passed through
+another on its way in (Haiku).
+
+What this shows and does not:
+
+- **All three models can make a correct, structured film from the skill
+  alone**, including Haiku, in two to four minutes. Haiku's films are
+  the ones a reviewer would send back.
+- **Quality orders as the models do**, by about one and a half points
+  from Opus to Haiku. The reviewer never preferred Haiku.
+- **Authors cannot see the difference.** Self-scores are 7 to 8 for
+  every film on every model; the blind scores range from 6 to 8. A
+  reviewer that is not the author is worth having in the loop.
+- **The smaller the model, the more it costs to run to completion** in
+  tokens and time, though not necessarily in money.
+- There is **no core-only control** on these models, so this says
+  nothing about how much the libraries helped them. One reviewer, one
+  run per cell, judged from stills and extracted frames.
+
+The runs also found one real bug (`plotmark` needed a library that
+`pkchart` did not load, hit by two agents) and led to: `ground` setting
+the text colour (three agents drew black text on a dark ground),
+`strikethrough`, a larger default for mark labels, `psanim api` answering
+for motion names, and a list in the skill of what reviewers mark down.
+The films, their sources and the review are in `out/eval4/`, and
+`scripts/build_site.py` turns them into a page (`site/eval/`).
+
 ## What the evaluation supports
 
 - The vocabulary removes the mechanical part of the work: code size
@@ -207,8 +275,12 @@ films above.
 - That films are better. Authors' self-scores did not move, and no
   independent viewer judged anything. Nobody, human or agent, watched
   a film play: every agent judged motion from stills.
-- That `script` helps. It was never chosen.
+- That `script` helps. In experiments 1 to 3 it was never chosen; in
+  experiment 4, after the skill argued for it, most films used it, but
+  no edit was then made to them to measure the benefit.
 - Any claim about reliability: each cell of each table is one run.
+- Any claim about smaller models with and without the libraries: only
+  the with-libraries arm was run on Opus, Sonnet and Haiku.
 
 ## What to run next
 

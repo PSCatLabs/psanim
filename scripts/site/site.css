@@ -152,3 +152,44 @@ pre.cmd { font-size: 12.5px; padding: 10px 13px; margin: 14px 0 8px; }
   .hero { padding-top: 36px; gap: 28px; }
 }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .tile img { transition: none; } }
+
+/* ------- "View source" window (from PSCat's site; scripts/site/source-viewer.js) ------- */
+a.view-source { font-weight: 600; }
+.source-dialog {
+  padding: 0; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--ground); color: var(--ink);
+  width: min(1040px, calc(100vw - 32px)); max-width: none;
+  height: min(88vh, 940px); max-height: none;
+  box-shadow: 0 10px 50px rgba(0, 0, 0, .55); overscroll-behavior: contain;
+}
+.source-dialog[open] { display: flex; flex-direction: column; }
+.source-dialog::backdrop { background: rgba(8, 10, 14, .72); }
+html.dialog-open { overflow: hidden; }
+.source-head {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 18px;
+  padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel);
+}
+.source-title { flex: 1 1 260px; min-width: 0; }
+.source-name { margin: 0; font: 700 16px var(--mono); color: var(--amber); overflow-wrap: anywhere; }
+.source-meta { margin: 0; color: var(--dim); font-size: 14px; }
+.source-actions { display: flex; align-items: center; gap: 14px; }
+.source-actions a { font-size: 14px; }
+.source-actions button { font: 14px var(--sans); color: var(--ink); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 4px 12px; cursor: pointer; }
+.source-libs { flex: 1 0 100%; margin: 0; max-width: none; font-size: 14px; color: var(--dim); overflow-wrap: anywhere; }
+.source-libs[hidden] { display: none; }
+.source-body {
+  flex: 1; min-height: 0; overflow: auto; display: flex; align-items: flex-start;
+  background: var(--ground); font: 13px/1.5 var(--mono); tab-size: 4; overscroll-behavior: contain;
+}
+.source-body pre {
+  margin: 0; border: 0; border-radius: 0; background: transparent; max-width: none;
+  overflow: visible; font: inherit; line-height: inherit; padding: 12px 0; flex: none;
+}
+.source-body pre code { font: inherit; background: none; padding: 0; border: 0; }
+.source-body pre.source-gutter {
+  position: sticky; left: 0; z-index: 1; text-align: right; padding: 12px 10px 12px 14px;
+  color: var(--faint); background: var(--panel); border-right: 1px solid var(--line);
+  user-select: none; -webkit-user-select: none;
+}
+.source-body pre.source-code { padding: 12px 18px 12px 14px; white-space: pre; }
+.source-note { margin: 0; padding: 16px; font: 15px/1.6 var(--sans); color: var(--dim); }

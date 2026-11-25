@@ -11,7 +11,7 @@
 %   [v ...] << /Grow u >> bars         columns        ... hbars: rows, rankable
 %   [[x y] ...] plotline               a path through data: stroke it, trim it
 %   [v ...] box << /Grow u >> donut
-/pkstage use /pkmotion use /pktype use
+/pkstage use /pkmotion use /pktype use /pkdiagram use
 
 /.plot << /x 0 /y 0 /w 100 /h 100 /x0 0 /x1 1 /y0 0 /y1 1 >> def
 /chartroles [ /accent /accent2 /accent3 /good /bad /muted ] def
@@ -304,7 +304,7 @@
   16 dict begin
     /pm-o exch def /pm-y exch def /pm-x exch def
     /pm-u pm-o /Draw 1 .opt 0 1 clamp def
-    /pm-size pm-o /Size 2.3 vmin .opt def
+    /pm-size pm-o /Size 3 vmin .opt def
     /pm-r pm-o /Radius 0.9 vmin .opt def
     pm-u 0 gt {
       gsave

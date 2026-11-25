@@ -274,8 +274,9 @@
   exch dup theme exch known { theme exch get } if
   findfont exch scalefont setfont
 } bind def
-% - ground -            fill the canvas with the theme's background
-/ground { /bg rgbof backdrop } bind def
+% - ground -            fill the canvas with the theme's background, and
+%                       make the theme's text colour the current colour
+/ground { /bg rgbof backdrop /fg ink } bind def
 
 % --- attention ------------------------------------------------------------------
 % box amount spotlight -    wash everything drawn so far, except the box,

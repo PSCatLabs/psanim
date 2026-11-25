@@ -128,7 +128,8 @@ ground /title 36 face
 /body 22 face 90 110 moveto (underlined as it is said) show
 ```
 
-`marker` and `underline` keep the current point. For a hand-drawn ring
+`marker`, `underline` and `strikethrough` (a straight line through a
+word: `box u strikethrough`) keep the current point. For a hand-drawn ring
 or a strike-through use pkdiagram's `circled` and `struck` on the same
 boxes.
 

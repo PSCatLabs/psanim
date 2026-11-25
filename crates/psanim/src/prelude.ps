@@ -337,6 +337,9 @@ end
   [ 4 1 roll /.cascadestep cvx ] cvx
   for
 } bind def
+% array gap cascadespan -> seconds    how long after a cascade starts its
+%                                     last item starts: (n - 1) * gap
+/cascadespan { exch length 1 sub 0 max mul } bind def
 % u proc onpath            run proc with the origin at the point u (0..1) of
 %                          the way along the current path and the x axis
 %                          along the direction of travel. The path is kept.

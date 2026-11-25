@@ -195,6 +195,48 @@ fn every_library_word_is_documented_under_its_library_and_nowhere_else() {
     }
 }
 
+/// Each library, loaded alone, must be able to run every word it
+/// documents: a word that quietly needs another library fails here.
+#[test]
+fn each_library_alone_can_run_its_own_words() {
+    let uses = [
+        (
+            "pkstage",
+            "ground canvasbox 2 2 1 cells 0 get 1 roundpath fill /accent ink [1 1 4 4] 0.5 spotlight",
+        ),
+        ("pkmotion", "0 /pop { 1 setgray 1 1 3 3 rectfill } enters"),
+        (
+            "pktype",
+            "/body 2 face /fg ink (a) canvasbox /c showin [ (a) /pi [/sup (2)] ] showruns",
+        ),
+        (
+            "pkdiagram",
+            "(a) [0 0 4 4] /surface node [0 0 2 2] [5 5 2 2] /elbow edge /body 1 face (n) [2 2 2 2] /n 1 note",
+        ),
+        (
+            "pkcode",
+            "(x = 1) /python codetokens canvasbox << /Title (t) >> codeblock",
+        ),
+        (
+            "pkchart",
+            "canvasbox [0 1] [0 1] plotframe << >> plotaxes [1] << >> bars 0.5 0.5 << /Label (m) >> plotmark << /Y 0.5 /Label (r) >> plotrule [1 2] canvasbox << /Center (c) >> donut",
+        ),
+        (
+            "pkink",
+            "newpath 0 0 moveto 8 8 lineto 1 2 { 1 setgray 0 0 8 8 rectfill } revealalong canvasbox /bg /accent 0 boxgradient",
+        ),
+    ];
+    assert_eq!(uses.len(), psanim::LIBRARIES.len());
+    for (lib, body) in uses {
+        let src =
+            format!("<< /Size [8 8] /Duration 1 >> animation /{lib} use /scene {{ {body} }} def");
+        let mut m = Movie::load(&src, &Options::default()).unwrap_or_else(|e| panic!("{lib}: {e}"));
+        m.render_at(0.5)
+            .map(|_| ())
+            .unwrap_or_else(|e| panic!("{lib} alone: {e}"));
+    }
+}
+
 #[test]
 fn a_library_loads_once_and_an_unknown_one_is_explained() {
     let src = "<< /Size [8 8] >> animation

@@ -184,7 +184,7 @@ Select a font by theme role at a size: /title /body /mono /display /serif. Any f
 
 `-  ground  -`
 
-Fill the canvas (or the enclosing `within` box) with the theme's background colour. The first line of most scenes.
+Fill the canvas (or the enclosing `within` box) with the theme's background colour, and set the current colour to the theme's text colour (/fg), so text drawn without choosing a colour is visible. The first line of most scenes.
 
 ### `spotlight`
 
@@ -410,6 +410,12 @@ A highlighter bar over the first u (0..1) of a box, in the current colour: draw 
 
 A rule under a box, drawn on as u goes 0 to 1, in the current colour and line width. Keeps the current point.
 
+### `strikethrough`
+
+`box u  strikethrough  -`
+
+A straight line through the middle of a box, drawn on as u goes 0 to 1, in the current colour and line width: a word struck out. Use it with `textbox` or `partbox`. Keeps the current point. pkdiagram's `struck` is the hand-drawn version.
+
 ### `typewrite`
 
 `(text) u  typewrite  -`
@@ -624,7 +630,7 @@ A reference line across the plot frame at a data value: << /Y 50 (or /X v) /Labe
 
 `x y opts  plotmark  -`
 
-Mark a data point: a dot, dashed drop lines to both axes, and a label on a leader line. opts: << /Label (23 people) /Side /ne /Draw u /Drop true /Role /accent /Radius r /Size s >>. The one-call form of the annotation every data story needs.
+Mark a data point: a dot, dashed drop lines to both axes, and a label on a leader line. opts: << /Label (23 people) /Side /ne /Draw u /Drop true /Role /accent /Radius r /Size s >> (/Side is where the label sits: /n /s /e /w /ne /nw /se /sw; /Size defaults to 3 vmin). The one-call form of the annotation every data story needs.
 
 ### `chartroles`
 

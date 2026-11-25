@@ -620,6 +620,12 @@ pub const API: &[ApiEntry] = &[
         "Run proc once per element with `item i` on the stack, each element's clock gap seconds behind the one before: a row of things arriving one after another, written as if each were alone.",
     ),
     e(
+        "story",
+        "cascadespan",
+        "array gap  cascadespan  seconds",
+        "How long after a cascade starts its last item starts: (n - 1) x gap. Use it for the time of the step that follows a cascade, or of item k (`k gap mul`), instead of working the number out and typing it: `buckets gap cascadespan 0.6 add wait`.",
+    ),
+    e(
         "value",
         "smoothkeys",
         "[ t v t v ... ]  smoothkeys  v",
@@ -887,7 +893,7 @@ pub const API: &[ApiEntry] = &[
         "pkstage",
         "ground",
         "-  ground  -",
-        "Fill the canvas (or the enclosing `within` box) with the theme's background colour. The first line of most scenes.",
+        "Fill the canvas (or the enclosing `within` box) with the theme's background colour, and set the current colour to the theme's text colour (/fg), so text drawn without choosing a colour is visible. The first line of most scenes.",
     ),
     e(
         "pkstage",
@@ -1107,6 +1113,12 @@ pub const API: &[ApiEntry] = &[
     ),
     e(
         "pktype",
+        "strikethrough",
+        "box u  strikethrough  -",
+        "A straight line through the middle of a box, drawn on as u goes 0 to 1, in the current colour and line width: a word struck out. Use it with `textbox` or `partbox`. Keeps the current point. pkdiagram's `struck` is the hand-drawn version.",
+    ),
+    e(
+        "pktype",
         "typewrite",
         "(text) u  typewrite  -",
         "Show the first u (0..1) of the string with a block caret after it; the caret blinks once the typing is done.",
@@ -1307,7 +1319,7 @@ pub const API: &[ApiEntry] = &[
         "pkchart",
         "plotmark",
         "x y opts  plotmark  -",
-        "Mark a data point: a dot, dashed drop lines to both axes, and a label on a leader line. opts: << /Label (23 people) /Side /ne /Draw u /Drop true /Role /accent /Radius r /Size s >>. The one-call form of the annotation every data story needs.",
+        "Mark a data point: a dot, dashed drop lines to both axes, and a label on a leader line. opts: << /Label (23 people) /Side /ne /Draw u /Drop true /Role /accent /Radius r /Size s >> (/Side is where the label sits: /n /s /e /w /ne /nw /se /sw; /Size defaults to 3 vmin). The one-call form of the annotation every data story needs.",
     ),
     e(
         "pkchart",
