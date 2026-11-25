@@ -541,7 +541,7 @@ pub const API: &[ApiEntry] = &[
         "component",
         "place",
         "/name opts  place  -",
-        "Draw an instance into the scene. opts (all optional): /At the movie time it starts (0), /Speed (1), /Box [x y w h] its declared size is fitted into (the whole view), /Before /hide or /hold (its first frame), /After /hide /hold (its last frame) or /loop (default /loop if it declared /Loop true, else /hide). Inside, `now` and `globaltime` run from 0 at /At. It paints its /Background only if it declares one. Place the same instance as often as you like: each placement is drawn from its own time.",
+        "Draw an instance into the scene. opts (all optional): /At the movie time it starts (0), /Speed (1), /Box [x y w h] its declared size is fitted into (the whole view), /Before /hide or /hold (its first frame), /After /hide /hold (its last frame) or /loop (default /loop if it declared /Loop true, else /hide). Inside, `now` and `globaltime` run from 0 at /At. It paints its /Background only if it declares one. Blur and glow radii inside it are in its own units, so they scale with its box. Place the same instance as often as you like: each placement is drawn from its own time.",
     ),
     e(
         "component",
