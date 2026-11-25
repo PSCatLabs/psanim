@@ -17,6 +17,10 @@ Each instance has its own:
   /Seed, so two instances of one flame flicker differently;
 - **parameters**: `param` reads the instance's /Params, never the movie's
   `--param` values. A name it is not given gets the default it wrote.
+- **words**: PostScript's operators and the prelude's and libraries' words
+  mean inside it what it was written against, even if the movie defines
+  `/scale` or `/between` for itself. The movie's other names are visible
+  to it, below its own.
 - **theme and plot**: `usetheme` and `plotframe` inside it change its own
   copy, not the movie's.
 
