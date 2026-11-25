@@ -245,3 +245,31 @@ fn onplane_projects_inside_a_component() {
     );
     assert_eq!(printed(&mut m, 0.0), "arraytype\noperatortype");
 }
+
+#[test]
+fn a_rotated_component_keeps_its_blurred_drawing() {
+    let mut m = load(
+        "/sq << /Size [20 20] /Scene { 2 { 1 0 0 setrgbcolor 4 4 12 12 rectfill } blurred } >> component
+         /scene { gsave 100 30 translate 45 rotate /sq << /Box [0 0 40 40] >> place grestore } def",
+    );
+    let f = m.render_at(0.0).unwrap();
+    let red = f
+        .premultiplied
+        .chunks_exact(4)
+        .filter(|p| p[0] > 128)
+        .count();
+    assert!(
+        red > 200,
+        "only {red} red pixels: the rotated component was erased"
+    );
+}
+
+#[test]
+fn playlists_defined_inside_two_components_do_not_collide() {
+    let mut m = load(
+        "/a << /Setup { /list [ [1 { (A) == }] ] << >> playlist } /Scene { /list << >> place } >> component
+         /b << /Setup { /list [ [1 { (B) == }] ] << >> playlist } /Scene { /list << >> place } >> component
+         /scene { /a << >> place /b << >> place } def",
+    );
+    assert_eq!(printed(&mut m, 0.2), "(A)\n(B)");
+}

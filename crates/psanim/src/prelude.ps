@@ -497,12 +497,19 @@ end
 /.comps 32 dict def
 /.compst << /n 0 /a 16 array >> def                  % instances being set up, innermost last
 % -> [x0 y0 x1 y1]   the current view, 0 0 width height, in device pixels
+%                    (the bounds of all four corners, so a rotated or
+%                    sheared view keeps its whole area)
 /.devbox {
-  0 0 transform width height transform    % ax ay bx by
-  3 -1 roll 2 copy gt { exch } if         % ax bx ymin ymax
-  4 2 roll 2 copy gt { exch } if          % ymin ymax xmin xmax
-  3 -1 roll 4 -1 roll exch 3 -1 roll exch % xmin ymin xmax ymax
-  4 array astore
+  6 dict begin
+    0 0 transform /y0 exch def /x0 exch def
+    /x1 x0 def /y1 y0 def
+    [ width 0 0 height width height ] 0 2 4 {
+      1 index exch 2 getinterval aload pop transform      % arr dx dy
+      dup y0 lt { dup /y0 exch def } if dup y1 gt { dup /y1 exch def } if pop
+      dup x0 lt { dup /x0 exch def } if dup x1 gt { dup /x1 exch def } if pop
+    } for pop
+    [ x0 y0 x1 y1 ]
+  end
 } bind def
 % /k v .compword -> /k v bool    is this a word a component should keep:
 %                               an operator or a procedure, not state
@@ -564,6 +571,7 @@ end
     .base { .compword { 2 index 3 1 roll put } { pop pop } ifelse } forall
     dup /.isinst true put
     dup /.comps 8 dict put            % the components it defines are its own
+    dup /.pls 4 dict put              % and so are its playlists
     dup /.pk << /used .pk /used get /cur 32 array /depth 0 /beats 1 dict /storylen 0 /bpm 120 >>
     dup /cur get 0 0 put put
   pop
@@ -882,7 +890,7 @@ end
             /Duration
               pf-r /scheduled get { pf-o /Duration 604800 .dget } { pf-r /cycle get } ifelse
             /Loop true
-            /Scene [ pf-n /.plscene cvx ] cvx >>
+            /Scene [ pf-r /.plscene cvx ] cvx >>
   end
   component
 } def
@@ -896,7 +904,7 @@ end
 %                                    its loop (a scheduled list's rounds can change later)
 /playlistduration {
   4 dict begin
-    .pls exch get /pd-r exch def
+    .pls 1 index known { .pls exch get } { userdict /.pls get exch get } ifelse /pd-r exch def
     pd-r /sched get pd-r /start get 0 .plsolve pop pop exch pop
     pd-r /sched get length .plbits
     0 exch { pd-r /sched get exch get 0 get add } forall
@@ -962,9 +970,8 @@ end
   .plclock exch /on exch put
   .plclock exch /t exch put
 } def
-% /name .plscene    the playlist's scene: which round is it, and play it
+% record .plscene    the playlist's scene: which round is it, and play it
 /.plscene {
-  .pls exch get
   8 dict begin
     /ps-r exch def
     /ps-t now def
