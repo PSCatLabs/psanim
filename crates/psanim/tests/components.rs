@@ -204,3 +204,23 @@ fn blur_glow_and_grain_inside_a_component_stay_in_its_box() {
         }
     }
 }
+
+#[test]
+fn a_movie_redefining_a_word_does_not_change_it_inside_a_component() {
+    // The movie defines scale, between and rgbof for itself; the component
+    // still means PostScript's scale, the prelude's between and pkstage's rgbof.
+    let mut m = load(
+        "/pkstage use
+         /scale { pop pop (movie) == } def
+         /between { pop pop pop 99 } def
+         /rgbof { pop 1 2 3 } def
+         /c << /Size [10 10] /Scene { 2 2 scale 0.5 0 10 between == /accent rgbof pop pop == } >> component
+         /scene { /c << >> place } def",
+    );
+    let out = printed(&mut m, 0.0);
+    let l: Vec<&str> = out.lines().collect();
+    assert_eq!(l[0], "5.0", "{out}");
+    // pkstage's midnight accent, not the movie's 1 2 3.
+    assert_eq!(l[1], "1.0", "{out}");
+    assert!(!out.contains("movie"), "{out}");
+}
