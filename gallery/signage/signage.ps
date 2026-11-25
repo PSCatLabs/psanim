@@ -1,0 +1,30 @@
+%!PS
+% Poster: 22
+% Lobby signage: a screen that cycles through a playlist of scenes, for ever.
+% The scenes (welcome, today's events, a clock and countdown, the weather, a status
+% board, and a lunch menu that is on the list only at lunchtime) are component files
+% beside this one; what plays, in what order and when is in lobby.playlist. This file
+% only places the playlist. Portrait: `--param Portrait=1`. A different moment of the
+% week, for the schedule and the clock: `--param Day=wed --param Time=12:15`.
+%
+% The playlist's time of day comes from here, from `param`, never the wall clock:
+% a host that shows this live passes the real time when it starts the movie.
+
+/Portrait 0 param 1 eq /tall exch def
+/Day /tue param /day exch def                      % /mon .. /sun
+/Time (10:02:00) param /time exch def              % hours, or (H:MM[:SS])
+
+/lobby (lobby.playlist) <<
+  /Size tall { [720 1280] } { [1280 720] } ifelse
+  /Safe 0.05                                       % a TV that crops: keep 5% of each edge clear
+  /Day day /Time time
+  /Background [0.035 0.05 0.085]
+>> playlist
+
+<< /Size tall { [720 1280] } { [1280 720] } ifelse
+   /Duration /lobby playlistduration  /Loop true  /FPS 30
+   /Title (Lobby Signage)
+   /Description (A lobby screen cycling through a playlist: welcome, today's events, a big clock and countdown, the weather and a status board, with a lunch menu that appears only at lunchtime. It loops for ever.)
+>> animation
+
+/scene { /lobby << >> place } def

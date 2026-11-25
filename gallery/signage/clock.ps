@@ -1,0 +1,77 @@
+%!PS
+% A signage scene: a big clock and a countdown. Both are read from `weektime`
+% every frame, so the hands and the digits are the playlist's time, not the
+% film's; the scene holds no clock of its own.
+<< /Size [1280 720] /Duration 10 /Title (Clock) >> animation
+/pkmotion use  /pktype use
+<< /bg [0.035 0.05 0.085] /surface [0.085 0.11 0.17] /line [0.17 0.21 0.3]
+   /fg [0.95 0.95 0.92] /muted [0.62 0.68 0.78]
+   /accent [1.0 0.72 0.27] /accent2 [0.35 0.82 0.86] >> usetheme
+
+/NextTitle (Lunch and learn: profiling) param /nexttitle exch def
+/NextAt 11.5 param /nextat exch def                 % hours
+/NextRoom (Atrium) param /nextroom exch def
+/Days [ (Monday) (Tuesday) (Wednesday) (Thursday) (Friday) (Saturday) (Sunday) ] def
+
+/hours { weektime 86400 fmod 3600 div } def
+/two { 2 zeropad } def
+
+% box dial   an analog face in the largest circle that fits the box
+/dial {
+  aload pop 4 2 roll /cy exch def /cx exch def
+  2 copy lt { exch } if pop 2 div /r exch def     % half the shorter side
+  cx r add cy r add translate
+  % the dial
+  /surface ink 0 0 r 0 360 arc fill
+  /line ink r 0.025 mul setlinewidth 0 0 r 0.97 mul 0 360 arc stroke
+  /muted ink
+  0 1 59 { /k exch def
+    gsave k 6 mul rotate
+      k 5 mod 0 eq { r 0.045 mul setlinewidth r 0.80 mul 0 moveto r 0.92 mul 0 lineto }
+                   { r 0.02 mul setlinewidth r 0.88 mul 0 moveto r 0.92 mul 0 lineto } ifelse
+      stroke
+    grestore
+  } for
+  1 setlinecap
+  % hands: hours, minutes, seconds; the second hand sweeps
+  hours 12 fmod 30 mul neg 90 add /ha exch def
+  hours 1 fmod 360 mul neg 90 add /ma exch def
+  weektime 60 fmod 6 mul neg 90 add /sa exch def
+  /fg ink
+  gsave ha rotate r 0.07 mul setlinewidth 0 0 moveto r 0.5 mul 0 lineto stroke grestore
+  gsave ma rotate r 0.05 mul setlinewidth 0 0 moveto r 0.76 mul 0 lineto stroke grestore
+  /accent ink
+  gsave sa rotate r 0.025 mul setlinewidth r -0.16 mul 0 moveto r 0.84 mul 0 lineto stroke
+    0 0 r 0.06 mul 0 360 arc fill grestore
+} def
+
+/hhmm { dup floor cvi two (:) strcat exch 1 fmod 60 mul 0.0001 add floor cvi two strcat } def
+/remain { nextat 3600 mul weektime 86400 fmod sub floor cvi 0 max } def   % seconds to go
+
+/scene {
+  /tall height width gt def
+  /page canvasbox 7 vmin inset def
+  page 0.5 tall { splity } { splitx } ifelse /text_box exch def /face_box exch def
+  0.2 /pop { gsave face_box dial grestore } enters
+
+  % the time, the weekday and the countdown
+  text_box tall { 0 0 1 0.96 } { 0.06 0 0.94 1 } ifelse subbox /tb exch def
+  tb 0 0.52 1 0.48 subbox /top exch def
+  tb 0 0 1 0.46 subbox /bot exch def
+  0.5 /rise {
+    /muted ink /body 5 vmin face
+    Days weektime 86400 div floor cvi 7 mod get top /nw showin
+    /fg ink /display 17 vmin face
+    hours hhmm top /w showin
+  } enters
+  0.9 /rise {
+    /surface ink bot 2 vmin roundpath fill
+    bot 3 vmin inset /in exch def
+    /muted ink /body 3.6 vmin face (NEXT UP) in /nw showin
+    /fg ink /title 5 vmin face nexttitle in 0 -5 vmin shifted /nw showin
+    /muted ink /body 3.8 vmin face nextat hhmm (  in ) strcat nextroom strcat in /sw showin
+    /accent ink /display 8.5 vmin face
+    remain 3600 idiv two (:) strcat remain 3600 mod 60 idiv two strcat (:) strcat
+    remain 60 mod two strcat in /se showin
+  } enters
+} def

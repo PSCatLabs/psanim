@@ -57,6 +57,7 @@ mod ops;
 mod particles;
 pub mod pathmath;
 pub mod plane;
+pub mod playlist;
 pub mod raster;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod render;

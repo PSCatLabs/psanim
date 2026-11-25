@@ -60,6 +60,8 @@ fn exercise(what: &str, source: &str, dir: Option<&Path>) -> Result<(), String> 
     let options = Options {
         scale: Scale::Width(160),
         read_roots: Some(dir.map(|d| vec![d.to_path_buf()]).unwrap_or_default()),
+        // A program that reads files (a component, a playlist) finds them beside itself.
+        base_dir: dir.map(Path::to_path_buf),
         ..Options::default()
     };
     let mut movie = Movie::load(source, &options).map_err(|e| format!("{what}: {e}"))?;

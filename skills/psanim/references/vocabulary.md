@@ -768,6 +768,26 @@ The /Duration an instance declared, for timing the movie around it.
 
 The /Size an instance declared, for choosing a box with its aspect.
 
+## Playlists: scenes that cycle, for signage
+
+### `playlist`
+
+`/name entries-or-(file) opts  playlist  -`
+
+Define a playlist, in setup (before `animation` too, to use `playlistduration` for /Duration). It is a component: `/name << /Box [x y w h] >> place` draws it, and it loops for ever, the last scene handing over to the first. entries is an array of [hold scene] and [seconds /transition], or the name of a file holding that array (read from the movie's directory, like a component file; it is data: write the array and nothing else). A scene is a catalog entry or component (/spinner), a component file ((events.ps)), a component dictionary, or a procedure (a name, or { }) that draws for `width` by `height`; [hold scene << options >>] adds /Params and /Seed (as for `instance`), /Fill true (the component is laid out for the whole box instead of its declared /Size), /Background (this scene's ground), /Days and /From /To (see below) and /Orientation /landscape or /portrait. hold is seconds fully on screen; the transition after a scene (any in `transitions`; [0 /cut] or none is a plain cut; none written gets /Transition) is extra, so a round takes the sum of both for every scene. Every scene is drawn over its own ground, full bleed, so transitions work as in a reel. opts, all optional: /Size [w h] (the playlist's canvas; default the movie's), /Safe 0.05 (the fraction of each edge kept clear, for a TV that crops; scenes are placed inside it, grounds and transitions are not), /Background [r g b] or a procedure (default a dark blue-black), /Transition [1 /dissolve] (the default), /Guides true (draw the safe area), /Seed. Schedule: a scene on the list only /Days (/mon .. /sun, /weekdays, /weekend, /daily, 0 Monday to 6, or an array) and between /From and /To (hours 9.5, or (9:30), crossing midnight allowed). The set is chosen when a round starts, so a scene is never cut off, and for a scheduled playlist the loop is one week (/Duration to change). The playlist knows the time of day from /Day (default /mon) and /Time (hours or (H:MM), default 0): the time at its own time 0, which the movie takes from `param`, never the wall clock. /Clock /signal makes `weektime` inside the scenes read the host's `weektime` signal instead of /Day and /Time plus the clock, for a live display whose page sets it every frame (the schedule still follows /Day and /Time).
+
+### `playlistduration`
+
+`/name  playlistduration  seconds`
+
+The length of one round of a playlist at its start time: the holds and transitions of the scenes on the list added up. For a playlist with no schedule that is the loop, and `<< /Duration /name playlistduration /Loop true >> animation` makes a movie that loops without a seam. For a scheduled one it is the round the movie opens with (0 if nothing is scheduled then); the set can change later in a longer run. A scheduled playlist's own loop is a week: `componentduration` says so.
+
+### `weektime`
+
+`-  weektime  seconds`
+
+The time the schedule is at, as seconds since Monday 00:00. Inside a scene of a playlist: its /Day and /Time plus its own clock, so a clock tile can read the time without owning one (`weektime 86400 fmod` is the time of day). Outside a playlist: the host's `weektime` signal, 0 if there is none.
+
 ## Storyboards, scripts and cascades
 
 ### `storyboard`

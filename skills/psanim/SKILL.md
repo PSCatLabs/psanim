@@ -142,6 +142,7 @@ is too low: an entrance is three tweens, a diagram is arithmetic. The
 | (core) | `script` / `then` (one thing after another), `storyboard` (named beats), `cascade`, `within` | [stage.md](references/stage.md) |
 | (core) | `component`, `instance`, `place`: a movie written on its own, placed in another in a box at a time | [components.md](references/components.md) |
 | (core) | `spec { ... } particles`: sparks, fireworks, confetti, snow; bursts and streams under gravity, drag and wind, every particle a function of time | [patterns.md](references/patterns.md#particles-without-state) |
+| (core) | `playlist`, `playlistduration`, `weektime`: a screen that cycles through scenes for ever, with transitions, a schedule and a safe area | [signage.md](references/signage.md) |
 | `pktype` | text in boxes, wrapping, `kinetic` type, counters, captions, end credits | [type.md](references/type.md) |
 | `pkdiagram` | `node`, `edge` (with flowing pulses), `group`, `note`, `circled` | [explain.md](references/explain.md) |
 | `pkcode` | `codeblock` (typing, focus), `codediff` | [explain.md](references/explain.md) |
@@ -290,6 +291,7 @@ detail) is in [storytelling.md](references/storytelling.md).
 | Every core word, stack effect and meaning | [references/vocabulary.md](references/vocabulary.md) (generated; same as `psanim api --markdown`) |
 | Every library word | [references/vocabulary-libraries.md](references/vocabulary-libraries.md) (generated) |
 | Building a movie from parts: components, instances, placing them | [references/components.md](references/components.md) |
+| Signage: a looping playlist of scenes, loaded from a file, with a schedule, live tiles, safe areas | [references/signage.md](references/signage.md) |
 | Ready-made elements to place (spinners, clocks, an opening crawl, and more) | [references/catalog.md](references/catalog.md) (generated; `psanim catalog`) |
 | Low-level recipes: write-on, cameras, perspective (`onplane`), particles, loops, reels, keyframes | [references/patterns.md](references/patterns.md) |
 | What goes wrong and why | [references/pitfalls.md](references/pitfalls.md) |

@@ -1,0 +1,82 @@
+%!PS
+% A signage scene: a weather card. The temperature is a live value: it is read
+% from the host's `outdoor` signal every frame (a sensor on the roof, a feed),
+% and shows 14 when the host sends none.
+<< /Size [1280 720] /Duration 10 /Title (Weather) >> animation
+/pkmotion use  /pktype use
+<< /bg [0.035 0.05 0.085] /surface [0.085 0.11 0.17] /line [0.17 0.21 0.3]
+   /fg [0.95 0.95 0.92] /muted [0.62 0.68 0.78]
+   /accent [1.0 0.72 0.27] /accent2 [0.35 0.82 0.86] >> usetheme
+
+/Place (Larkfield) param /place exch def
+/Forecast [ [(Wed) /rain 12 8] [(Thu) /cloud 11 7] [(Fri) /partly 13 6] [(Sat) /sun 15 7] ] param /forecast exch def
+
+% ---- icons, each drawn in a unit square around the origin -----------------------------------
+/cloudcol [0.80 0.86 0.94] def
+/cloudshape {
+  -0.20 -0.02 0.19 0 360 arc  0.02 0.07 0.25 0 360 arc  0.25 -0.03 0.17 0 360 arc
+  -0.2 -0.21 0.45 0.19 rectfill
+} def
+/cloud { cloudcol aload pop setrgbcolor -0.2 -0.02 0.19 0 360 arc fill 0.02 0.07 0.25 0 360 arc fill
+         0.25 -0.03 0.17 0 360 arc fill -0.2 -0.21 0.45 0.19 rectfill } def
+/sun {
+  /accent ink 0 0 0.2 0 360 arc fill
+  gsave now 18 mul rotate 0.055 setlinewidth 1 setlinecap
+    0 1 7 { pop 0.3 0 moveto 0.43 0 lineto stroke 45 rotate } for
+  grestore
+} def
+/partly { gsave -0.12 0.14 translate 0.7 dup scale sun grestore  gsave 0.08 -0.04 translate 0.8 dup scale cloud grestore } def
+/rain {
+  gsave 0 0.08 translate cloud grestore
+  /accent2 ink 0.04 setlinewidth 1 setlinecap
+  0 1 2 { /i exch def
+    now 0.9 mul i 0.33 mul add 1 fmod /f exch def
+    -0.18 i 0.18 mul add f 0.12 mul sub  -0.14 f 0.3 mul sub moveto
+    -0.2 i 0.18 mul add f 0.12 mul sub -0.04 sub  -0.14 f 0.3 mul sub 0.1 sub lineto stroke
+  } for
+} def
+/icons << /sun /sun load /cloud /cloud load /rain /rain load /partly /partly load >> def
+/icon { % /name size   at the origin
+  /isz exch def  icons exch get /ic exch def
+  gsave isz isz scale ic grestore } def
+
+/temp { /outdoor signal dup 0 eq { pop 14 } if } def
+
+% (digits) box  the number, big, with a degree ring after it
+/bignumber {
+  /nb exch def
+  /display 20 vmin face /fg ink
+  dup nb /nw placetext show
+  currentpoint /ny exch def /nx exch def
+  newpath 2.4 vmin setlinewidth nx 4.2 vmin add ny 20 vmin 0.72 mul add 3.4 vmin sub 3 vmin 0 360 arc stroke
+} def
+
+/scene {
+  /tall height width gt def
+  /page canvasbox 7 vmin inset def
+  page tall { 0.62 } { 0.6 } ifelse splity /low exch def /high exch def
+  high 0 0.06 1 0.94 subbox 0.5 tall { splity } { splitx } ifelse /textb exch def /iconb exch def
+
+  0.2 /pop {
+    gsave iconb /c boxpoint 0.05 iconb 3 get mul add translate
+      /rain iconb 2 get iconb 3 get min 0.8 mul icon
+    grestore
+  } enters
+  0.5 /rise {
+    /muted ink /body 4.8 vmin face place (  now) strcat textb /nw showin
+    temp round cvi 8 string cvs textb 0 -6 vmin shifted bignumber
+    /accent2 ink /title 5 vmin face (Light rain) textb /sw showin
+  } enters
+
+  low forecast length 2.4 vmin cols /tiles exch def
+  0 1 forecast length 1 sub { /i exch def
+    forecast i get aload pop /lo exch def /hi exch def /kind exch def /day exch def
+    tiles i get /b exch def
+    1.2 i 0.2 mul add /rise {
+      /surface ink b 2 vmin roundpath fill
+      /muted ink /body 3.8 vmin face day b 2.4 vmin inset /n showin
+      gsave b /c boxpoint translate kind b 2 get b 3 get min 0.36 mul icon grestore
+      /fg ink /title 4.2 vmin face hi 3 string cvs ( / ) strcat lo 3 string cvs strcat b 2.4 vmin inset /s showin
+    } enters
+  } for
+} def

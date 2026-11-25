@@ -1,0 +1,45 @@
+%!PS
+% A signage scene: a status board. One row is a catalog spinner, placed small inside
+% this scene, which is itself placed inside the playlist: a component in a component.
+<< /Size [1280 720] /Duration 10 /Title (Status) >> animation
+/pkmotion use  /pktype use
+<< /bg [0.035 0.05 0.085] /surface [0.085 0.11 0.17] /line [0.17 0.21 0.3]
+   /fg [0.95 0.95 0.92] /muted [0.62 0.68 0.78]
+   /accent [1.0 0.72 0.27] /accent2 [0.35 0.82 0.86] /good [0.4 0.85 0.55] /bad [1.0 0.42 0.36] >> usetheme
+
+/Items [ [(Front door)       (Open)               /good]
+         [(Wi-Fi)            (Online)             /good]
+         [(Meeting rooms)    (3 of 5 free)        /good]
+         [(Printer, floor 2) (Paper low)          /accent]
+         [(Release build)    (Running)            /busy]
+         [(Coffee machine)   (Out of order)       /bad] ] param /items exch def
+
+/busy /spinner << /Params << /Style /ring /Color [0.35 0.82 0.86] /Weight 13 >> >> instance
+
+/scene {
+  /tall height width gt def
+  /page canvasbox 7 vmin inset def
+  page 0 0.86 1 0.14 subbox /head exch def
+  page 0 0 1 0.81 subbox items length 1.4 vmin rows /rows exch def
+
+  /accent ink /title 4.8 vmin face (BUILDING STATUS) head /nw placetext
+  (BUILDING STATUS) /glyphs 0.04 /rise kinetic
+  0.3 /fade { /muted ink /body 4.2 vmin face (Floor 2) head /ne showin } enters
+
+  0 1 items length 1 sub { /i exch def
+    items i get aload pop /kind exch def /what exch def /name exch def
+    rows i get /b exch def
+    b 0.11 splitx /rest exch def /mk exch def
+    0.35 i 0.14 mul add /slide-left {
+      /surface ink b 1.6 vmin roundpath fill
+      kind /busy eq {
+        /busy << /Box mk 1.8 vmin inset >> place
+      } {
+        kind ink mk /c boxpoint 1.7 vmin disc
+      } ifelse
+      /fg ink /title 4.7 vmin face name rest 1 vmin inset /w showin
+      kind /busy eq { /accent2 } { kind /accent eq kind /bad eq or { kind } { /muted } ifelse } ifelse ink
+      /body 4.2 vmin face what b 3 vmin inset /e showin
+    } enters
+  } for
+} def
