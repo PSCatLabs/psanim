@@ -234,3 +234,14 @@ fn components_defined_inside_two_components_do_not_collide() {
     );
     assert_eq!(printed(&mut m, 0.0), "(A)\n(B)");
 }
+
+#[test]
+fn onplane_projects_inside_a_component() {
+    // The component's namespace has its own copies of the built-ins; the
+    // projecting operators must stand in front of those too.
+    let mut m = load(
+        "/c << /Size [10 10] /Scene { { /fill load type == } << /Tilt 60 >> onplane /fill load type == } >> component
+         /scene { /c << >> place } def",
+    );
+    assert_eq!(printed(&mut m, 0.0), "arraytype\noperatortype");
+}

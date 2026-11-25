@@ -15,8 +15,8 @@
 
 % --- perspective: painting on a plane ----------------------------------------
 % `onplane` runs a procedure whose painting lands on a plane in 3D. While a
-% plane is open, the painting operators below stand in userdict in front of
-% the built-ins: each turns what it paints into a path (strokepath,
+% plane is open, the painting operators below stand in userdict (inside a
+% component, in its own namespace) in front of the built-ins: each turns what it paints into a path (strokepath,
 % charpath), projects it (`.planeproject`, native) and fills that. They are
 % put there when the first plane opens and taken away (and whatever userdict
 % held under those names put back) when the last one closes, so outside
@@ -74,26 +74,43 @@
   /eoclip { { .syseoclip } .planeclip } bind
   /rectclip { newpath .planerect { .sysclip } .planeclip newpath } bind
 >> def
-/.planeheld 16 dict def   % what userdict held under those names
-/.planeinstall {
-  .planeops {
-    userdict 2 index known { .planeheld 2 index userdict 4 index get put } if
-    userdict 3 1 roll put
-  } forall
+% target .planeinstallin -> [target held] | null
+%   put the projecting operators in target (userdict, or inside a component
+%   its own namespace, which holds its own copies of the built-ins), keeping
+%   what target held under those names; null if they are already there
+/.planeinstallin {
+  dup /fill known { dup /fill get .planeops /fill get eq } { false } ifelse
+  { pop null } {
+    16 dict
+    .planeops {
+      3 index 2 index known { 2 index 2 index 5 index 4 index get put } if
+      3 index 3 1 roll put
+    } forall
+    2 array astore
+  } ifelse
 } bind def
+% [target held] | null .planeuninstall -   put back what target held
 /.planeuninstall {
-  .planeops { pop
-    .planeheld 1 index known
-    { dup .planeheld exch get userdict 2 index 3 -1 roll put .planeheld exch undef }
-    { userdict exch undef } ifelse
-  } forall
+  dup null eq { pop } {
+    aload pop
+    .planeops { pop
+      1 index 1 index known
+      { 2 index exch 2 index 1 index get put }
+      { 2 index exch undef } ifelse
+    } forall pop pop
+  } ifelse
 } bind def
+/.planest << /n 0 /a 64 array >> def   % what each open plane installed
 % proc plane onplane -   run proc with its painting on the plane
 /onplane {
   matrix currentmatrix .planebegin
-  .planedepth 1 eq { .planeinstall } if
+  /.isinst where { } { userdict } ifelse .planeinstallin
+  .planest /a get .planest /n get 3 -1 roll put
+  .planest /n 2 copy get 1 add put
   exec
-  .planeend .planedepth 0 eq { .planeuninstall } if
+  .planeend
+  .planest /n 2 copy get 1 sub put
+  .planest /a get .planest /n get get .planeuninstall
 } bind def
 % plane projectpath -    replace the current path by its projection
 /projectpath { matrix currentmatrix .projectpath } bind def
