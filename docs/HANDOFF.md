@@ -24,7 +24,7 @@ Working and tested on macOS (Apple silicon):
   promise and that they compose. Read `docs/vocabulary-design.md` before
   changing them and `docs/vocabulary-evaluation.md` for what agents did
   with them.
-- `gallery/`: twenty-one pieces. `skills/psanim/`: the agent skill, now
+- `gallery/`: twenty-two pieces. `skills/psanim/`: the agent skill, now
   with a chapter per kind of film (`stage`, `type`, `explain`, `ink`,
   `storytelling`). `docs/` + `scripts/build_site.py`: Markdown docs and
   the HTML site, which renders every library example as a looping film.

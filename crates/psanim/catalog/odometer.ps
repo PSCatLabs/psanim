@@ -1,0 +1,146 @@
+%!PS
+% Catalog entry: odometer. A number tweened over time on rolling digit drums: the
+% units wheel spins, and each wheel above it turns a tenth of a turn only as the
+% ones below it carry past 9 to 0.
+% In a movie:  /miles /odometer << /Params << /To 52000 >> >> instance   then   /miles << /Box [x y w h] >> place
+%
+% /From to /To over /Over seconds from /Start, eased by /Ease; or give /Track, a
+% keyframes list [ time value time value /ease ... ], for a number that stops and
+% starts again.
+% Each wheel is a cylinder seen through a window: digits above and below the one in
+% front curve away and darken. A wheel moving faster than about a digit a frame is
+% smeared over the distance it travels in a frame.
+
+/From 0 param /from exch def                                       % the number at the start
+/To 482917 param /to exch def                                      % the number it reaches
+/Start 0.4 param /start exch def                                   % seconds before it begins to move
+/Over 3.2 param /over exch def                                     % seconds it takes
+/Ease /cubic-inout param /easen exch def                           % how it speeds up and slows down (a tween easing name)
+/Track null param /track exch def                                  % instead of From and To: a keyframes list [ t v t v /ease ... ]
+/Digits 6 param cvi /ndig exch def                                     % wheels for the whole part
+/Decimals 0 param cvi /ndec exch def                                   % wheels after the point (drawn light on dark)
+/Commas true param dup type /booleantype ne { 0 ne } if /commas exch def                                % mark the thousands
+/Wheel [40 60] param aload pop /wh exch def /ww exch def           % one wheel's window, width and height
+/Tail 1.5 param /tail exch def                                     % seconds to hold at the end
+/Ink [0.96 0.94 0.86] param /ink exch def                          % the digits
+/Face [0.06 0.06 0.07] param /face exch def                        % the wheels
+/Housing [0.20 0.20 0.22] param /housing exch def                  % the case round them
+
+% ---- sizes: before the declaration, because they decide it ------------------------
+/nw ndig ndec add def
+/gap 4 def /pad 10 def /sepw ww 0.42 mul def
+% the separator before each wheel (by index from the right): 0 none, 1 comma, 2 point
+/sepof { /sk exch def sk ndec sub /sm exch def
+  sk nw 1 sub ne { ndec 0 gt sm -1 eq and { 2 } { commas sm 0 gt and sm 3 mod 2 eq and { 1 } { 0 } ifelse } ifelse } { 0 } ifelse
+} def
+% each wheel's left edge, by index from the right
+/wxs nw array def
+/cx0 pad gap add def
+nw 1 sub -1 0 { /k exch def
+  k sepof 0 gt { /cx0 cx0 sepw add def } if
+  wxs k cx0 put /cx0 cx0 ww gap add add def
+} for
+/bw cx0 pad add ceiling cvi def
+/bh wh gap 2 mul add pad 2 mul add ceiling cvi def
+
+% the number at time t, and where wheel k is turned to for the whole number w
+/tracked { track null eq not } def
+/numat { /nt exch def
+  nt {
+    tracked { track keyframes } { start start over add easen tween from to between } ifelse
+  } attime
+} def
+/scaled { 10 ndec exp mul } def
+/wpos { % w k -> p: its whole part, and the turn the carry from below has made
+  dup 0 eq { pop } {
+    10 exch exp /pw exch def
+    dup pw div floor exch pw fmod pw 1 sub sub 0 max add
+  } ifelse
+} def
+% the last key's time: keys are t v, each optionally followed by an easing name
+/lastkey { /kl 0 def /ki 0 def
+  { ki track length ge { exit } if
+    /kl track ki get def /ki ki 2 add def
+    ki track length lt { track ki get type /nametype eq { /ki ki 1 add def } if } if
+  } loop kl } def
+/endtime tracked { lastkey } { start over add } ifelse def
+<< /Size [ bw bh ] /Duration endtime tail add /FPS 30 /Loop false
+   /Title (Odometer)
+   /Description (A number counting up on rolling digit drums: the units wheel spins, each wheel above turns only as the ones below carry, and the digits curve away at the top and bottom of the window.)
+>> animation
+
+% ---- drawing ----------------------------------------------------------------------
+/digs [ 0 1 9 { 2 string cvs } for ] def
+/R wh 0.9 mul 0.628 div def                     % the drum's radius: neighbouring digits a digit-height apart
+/fsz wh 0.78 mul def
+/ir ink 0 get def /ig ink 1 get def /ib ink 2 get def
+/fr face 0 get def /fg face 1 get def /fb face 2 get def
+/digits { % p alpha: the digits of the wheel at turn p, curving away from the front
+  /da exch def /dp exch def
+  dp floor cvi /d0 exch def
+  d0 1 sub 1 d0 2 add { /dd exch def
+    dd dp sub 36 mul /th exch def
+    th abs 78 lt {
+      th sin R mul /dy exch def th cos /dc exch def
+      dc 0.55 mul 0.45 add /lum exch def
+      gsave
+        wx ww 2 div add wy wh 2 div add dy add translate 1 dc scale
+        dtenth { fr lum mul fg lum mul fb lum mul } { ir lum mul ig lum mul ib lum mul } ifelse setrgbcolor
+        da setalpha
+        digs dd 10 add 10 mod get dup stringwidth pop 2 div neg fsz 0.36 mul neg moveto show
+      grestore
+    } if
+  } for
+} def
+/shade { % darkness at the top and bottom of the window, where the drum turns away
+  0 setgray /sb wh 0.035 mul def
+  0 1 11 { /bi exch def
+    1 bi 12 div sub dup mul 0.6 mul setalpha
+    wx wy wh add bi 1 add sb mul sub ww sb 0.6 add rectfill
+    wx wy bi sb mul add ww sb 0.6 add rectfill
+  } for
+} def
+/wheelat { % k: draw wheel k, smeared if it moves faster than a digit a frame
+  /wk exch def
+  /wx wxs wk get def /wy pad gap add def
+  /dtenth wk ndec lt def
+  gsave
+    wx wy ww wh rectclip
+    dtenth { ink } { face } ifelse aload pop setrgbcolor wx wy ww wh rectfill
+    va wk wpos /pa exch def  vb wk wpos /pb exch def
+    pb pa sub abs /sp exch def
+    sp 0.8 lt { vn wk wpos 1 digits } {
+      sp 6 gt { 11 } { sp 1.2 mul ceiling cvi 2 add 11 min } ifelse /ns exch def
+      sp 6 gt { pb 1.4 } { pa pb add 2 div sp } ifelse /spn exch def /pc exch def
+      0 1 ns 1 sub { /sj exch def
+        pc spn 2 div sub spn sj mul ns 1 sub div add 1.6 ns div 0.12 max 0.9 min digits
+      } for
+    } ifelse
+    shade
+    1 setgray 0.05 setalpha wx wy wh 0.5 mul add ww wh 0.5 mul rectfill      % the glass
+  grestore
+} def
+/scene {
+  /vn now numat scaled def
+  /va now dt sub 0 max numat scaled def
+  /vb vn def
+  /cap 10 nw exp def
+  /vn vn cap fmod def
+  /va va cap fmod def /vb vb cap fmod def
+  housing aload pop setrgbcolor
+  newpath 10 0 moveto bw 0 bw bh 10 arcto 4 { pop } repeat bw bh 0 bh 10 arcto 4 { pop } repeat 0 bh 0 0 10 arcto 4 { pop } repeat 0 0 bw 0 10 arcto 4 { pop } repeat closepath fill
+  0 setgray 0.5 setalpha pad wh gap 2 mul add pad add 1 sub bw pad 2 mul sub 1 rectfill
+  1 setgray 0.1 setalpha pad pad 1 sub bw pad 2 mul sub 1 rectfill
+  1 setalpha
+  /Helvetica-Bold findfont fsz scalefont setfont
+  0 1 nw 1 sub { wheelat } for
+  % the commas and the point, on the case between the wheels
+  1 setalpha ink aload pop setrgbcolor
+  0 1 nw 1 sub { /sk exch def sk sepof /sp exch def
+    sp 0 gt {
+      wxs sk get sepw 0.5 mul sub /sx exch def
+      sx pad gap add wh 2 div add fsz 0.36 mul sub moveto sp 1 eq { (,) } { (.) } ifelse
+      dup stringwidth pop 2 div neg 0 rmoveto show
+    } if
+  } for
+} def

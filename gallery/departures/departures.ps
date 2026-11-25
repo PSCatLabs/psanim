@@ -1,0 +1,91 @@
+%!PS
+% Poster: 14
+% Departures
+%
+% A station departures board updating: it fills from blank, trains are called
+% to board, one is delayed and one cancelled, and the first leaves, which moves
+% every row up one and flips most of the board at once. The clock above it is a
+% second, smaller board; below it an odometer counts the day's passengers.
+%
+% Everything on screen is a catalog entry: three /splitflap boards (the title,
+% the clock and the services) and an /odometer. The movie only chooses what they
+% say and when. The stations are invented.
+
+% ---- the services -------------------------------------------------------------
+% (text) n -> the text cut or padded with spaces to n characters
+/pr { /pn exch def /ps exch def pn string /pp exch def
+  0 1 pn 1 sub { /pi exch def pp pi pi ps length lt { ps pi get } { 32 } ifelse put } for pp } def
+% (time) (destination) (platform) (remarks) -> one row of 32 characters
+/row { /rem exch def /plat exch def /dest exch def /tm exch def
+  tm 5 pr ( ) strcat dest 13 pr strcat ( ) strcat plat 2 pr strcat ( ) strcat rem 9 pr strcat } def
+
+/s1 { (09:15) (ALDERBURY)     ( 2) } def
+/s2 { (09:22) (KESTREL CROSS) ( 4) } def
+/s3 { (09:30) (SALTMERE)      ( 1) } def
+/s4 { (09:37) (NORTH PENNY)   ( 3) } def
+/s5 { (09:45) (OLD HARBOUR)   ( 6) } def
+/s6 { (09:52) (BRACKEN HILL)  ( 2) } def
+/s7 { (10:00) (PORTMARROW)    ( 5) } def
+/s8 { (10:08) (WYNDHAM LOCK)  ( 1) } def
+/s9 { (10:15) (CINDER WELLS)  ( 4) } def
+/s10 { (10:22) (LANTERN ROW)  ( 2) } def
+
+/ok (ON TIME) def
+
+/board1 [ s1 ok row  s2 ok row  s3 ok row  s4 ok row  s5 ok row  s6 ok row  s7 ok row  s8 ok row ] def
+/board2 [ s1 (BOARDING) row  s2 ok row  s3 (DELAYED) row  s4 ok row  s5 (CANCELLED) row  s6 ok row  s7 ok row  s8 ok row ] def
+/board3 [ s2 ok row  s3 (DELAYED) row  s4 ok row  s5 (CANCELLED) row  s6 ok row  s7 ok row  s8 ok row  s9 ok row ] def
+/board4 [ s2 (BOARDING) row  s3 (EXP 09:41) row  s4 ok row  s5 (CANCELLED) row  s6 ok row  s7 ok row  s8 ok row  s9 ok row ] def
+/board5 [ s3 (EXP 09:41) row  s4 (BOARDING) row  s5 (CANCELLED) row  s6 ok row  s7 ok row  s8 ok row  s9 ok row  s10 ok row ] def
+
+/services [ [ 0.8 board1 ] [ 7.2 board2 ] [ 11.8 board3 ] [ 16.6 board4 ] [ 20.4 board5 ] ] def
+
+% the drum under each column: digits and a colon for the time, platform numbers, letters elsewhere
+/times ( 0123456789:) def
+/letters ( ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:'-.) def
+/drums [ 5 { times } repeat ( ) 13 { letters } repeat ( ) ( 0123456789) dup ( ) 9 { letters } repeat ] def
+
+% the clock steps a minute at a time, the title is called once
+/clockstates [ [ 0.2 [ (09:12) ] ] [ 6.5 [ (09:13) ] ] [ 11.5 [ (09:14) ] ] [ 16.5 [ (09:15) ] ] [ 21.0 [ (09:16) ] ] ] def
+/titlestates [ [ 0.4 [ (DEPARTURES) ] ] ] def
+
+/board /splitflap << /Seed 3 /Params << /States services /Drum drums /Cell [32 50] /Gap 3 /Tail 3 >> >> instance
+/title /splitflap << /Seed 5 /Params << /States titlestates /Cell [36 56] /Gap 3 /Tail 3 >> >> instance
+/clock /splitflap << /Seed 9 /Params << /States clockstates /Drum [ times times times times times ] /Cell [26 40] /Gap 3 /Rate 18 >> >> instance
+/count /odometer << /Params << /From 18240 /To 19870 /Start 0.5 /Over 24 /Ease /linear /Digits 5 /Wheel [30 46] /Tail 1 >> >> instance
+
+<< /Size [1280 720] /FPS 30 /Duration 26 /Background [0.045 0.05 0.062]
+   /Title (Departures)
+   /Description (A station departures board updating: it fills from blank, trains are called, one is delayed and one cancelled, the first leaves and the whole board turns over. Split-flap and odometer catalog entries.)
+>> animation
+
+/putflap { /sc exch def /nm exch def /y exch def /x exch def
+  nm componentsize sc mul /h exch def sc mul /w exch def
+  nm << /Box [ x y w h ] /After /hold >> place } def
+
+/ceiling {
+  % two rods the board hangs from, and a soft light from above
+  gsave 0.5 0.52 0.56 setrgbcolor 150 596 6 124 rectfill 1124 596 6 124 rectfill grestore
+} def
+
+/scene {
+  % the station: darker at the edges, with light falling from the rods
+  gsave
+    0.8 0.85 1 setrgbcolor 0.045 setalpha
+    640 600 1000 0 360 arc fill
+  grestore
+  ceiling
+  % the board and its title bar
+  gsave 0.025 0.03 0.035 setrgbcolor 75 592 1143 84 rectfill grestore
+  84 604 /title 1 putflap
+  1042 614 /clock 1 putflap
+  75 148 /board 1 putflap
+  % the footer
+  /Helvetica-Narrow-Bold findfont 34 scalefont setfont
+  0.72 0.76 0.82 setrgbcolor
+  76 84 moveto (PASSENGERS TODAY) show
+  0.45 0.48 0.54 setrgbcolor /Helvetica-Narrow-Bold findfont 20 scalefont setfont
+  76 52 moveto (EVERY SERVICE ON THIS BOARD IS INVENTED) show
+  840 34 /count 1.45 putflap
+  0.1 vignette
+} def
