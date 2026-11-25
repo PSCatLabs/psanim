@@ -802,6 +802,86 @@ fn a_program_can_add_a_transition_and_bad_names_fail_early() {
     );
 }
 
+/// A reel measured by `reelduration` in the declaration, with a custom
+/// transition named `name` put in `transitions` either `before` the
+/// declaration or after it.
+fn measured_reel(name: &str, before: bool) -> Result<Movie, Box<psanim::Error>> {
+    let define = format!("transitions /{name} {{ pop exch pop exec }} put\n");
+    let (early, late) = if before {
+        (define, String::new())
+    } else {
+        (String::new(), define)
+    };
+    Movie::load(
+        &format!(
+            "/a {{ 1 0 0 backdrop }} def /b {{ 0 0 1 backdrop }} def
+             {early}/film [ [1.5 /a] [1 /{name}] [1.5 /b] ] def
+             << /Size [40 20] /Duration film reelduration /FPS 10 >> animation
+             {late}/scene {{ film reel }} def"
+        ),
+        &Options::default(),
+    )
+    .map_err(Box::new)
+}
+
+#[test]
+fn reelduration_before_a_custom_transition_is_defined_is_an_error() {
+    // `shutter` is not built in and does not start with `t-`, and it is put
+    // in `transitions` after `reelduration` measured the reel: it was
+    // counted as a clip (4 s, not 2 s). That must be loud.
+    let e = measured_reel("shutter", false).err().expect("an error");
+    assert_eq!(e.kind, "reelduration");
+    assert!(
+        e.message.contains("/shutter"),
+        "names the entry: {}",
+        e.message
+    );
+    assert!(e.message.contains("4 s"), "{}", e.message);
+    assert!(e.message.contains("2 s"), "{}", e.message);
+    assert!(e.message.contains("name it t-shutter"), "{}", e.message);
+    assert!(e.message.contains("before `reelduration`"), "{}", e.message);
+}
+
+#[test]
+fn reelduration_with_the_right_order_or_a_t_name_still_works() {
+    // Defined before the measurement, with any name.
+    let m = measured_reel("shutter", true).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(m.meta().duration, 2.0);
+    // Defined after, but named `t-...`: recognised before it exists.
+    let mut m = measured_reel("t-shutter", false).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(m.meta().duration, 2.0);
+    assert_eq!(px(&m.render_frame(2).unwrap(), 5, 5), [255, 0, 0, 255]);
+    // Built-in transitions, with clips defined after the measurement.
+    let m = Movie::load(
+        "/film [ [1.5 /a] [1 /dissolve] [1.5 /b] ] def
+         << /Size [40 20] /Duration film reelduration /FPS 10 >> animation
+         /a { 1 0 0 backdrop } def /b { 0 0 1 backdrop } def
+         /scene { film reel } def",
+        &Options::default(),
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(m.meta().duration, 2.0);
+}
+
+#[test]
+fn a_t_name_that_is_never_defined_fails_when_the_reel_plays() {
+    let mut m = Movie::load(
+        "/a { 1 0 0 backdrop } def /b { 0 0 1 backdrop } def
+         /film [ [1.5 /a] [1 /t-missing] [1.5 /b] ] def
+         << /Size [40 20] /Duration film reelduration /FPS 10 >> animation
+         /scene { film reel } def",
+        &Options::default(),
+    )
+    .unwrap();
+    let e = m.render_frame(0).unwrap_err();
+    assert!(
+        e.hint
+            .unwrap()
+            .contains("/t-missing is neither a transition"),
+        "names it"
+    );
+}
+
 #[test]
 fn directional_transitions_move_the_right_way() {
     // wipe-right: the reveal travels rightward, so B appears at the left first.

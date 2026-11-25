@@ -487,6 +487,13 @@ impl Movie {
         )?;
         run(&mut interp, &ctx, Phase::Setup, PRELUDE)?;
         run(&mut interp, &ctx, Phase::Setup, source)?;
+        // `reelduration` guessed which names were transitions; everything is
+        // defined now, so a wrong guess is an error, not a longer film.
+        crate::ops::check_measured_reels(&interp, &ctx).map_err(|msg| {
+            Error::new(Phase::Setup, "reelduration", msg).hint(
+                "reelduration runs before the reel's clips and transitions are defined, so it takes only the built-in transitions and names starting t- for transitions",
+            )
+        })?;
 
         let is_proc = |interp: &Interp, name: &str| matches!(interp.lookup(name), Some(Value::Other(o)) if o.is_procedure());
         if !is_proc(&interp, &decl.scene) {

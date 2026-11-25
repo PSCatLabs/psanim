@@ -68,6 +68,10 @@ pub(crate) struct Ctx {
     pub signals: Signals,
     /// Names `param` was asked for and the defaults given, for `info`.
     pub params_seen: BTreeMap<String, String>,
+    /// Reels `reelduration` measured while the program's top level ran, with
+    /// the length it reported. Checked once the program is fully defined: a
+    /// custom transition defined after the measurement was counted as a clip.
+    pub measured_reels: Vec<(Vec<Value>, f64)>,
 
     /// A plain-language explanation an operator leaves before it fails,
     /// picked up by the engine for the error report.
@@ -113,6 +117,7 @@ impl Ctx {
             params: BTreeMap::new(),
             signals: Signals::default(),
             params_seen: BTreeMap::new(),
+            measured_reels: Vec::new(),
             hint: None,
         }
     }

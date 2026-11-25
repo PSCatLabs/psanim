@@ -352,7 +352,9 @@ transform or fade them as you like:
 ```postscript
 %!PS
 % B appears through horizontal slats that open. The `t-` prefix tells
-% `reelduration` this entry is a transition even if it is defined later.
+% `reelduration` this entry is a transition even if it is defined later;
+% any other name must be defined before `reelduration` is called, or the
+% movie fails to load, naming the entry.
 transitions /t-shutter {
   /cubic-inout ease /u exch def /b exch def /a exch def
   a

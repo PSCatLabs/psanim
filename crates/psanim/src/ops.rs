@@ -654,7 +654,16 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         };
         match plan_reel(i, &items, false) {
             Ok(plan) => {
-                i.push_real(plan.last().map_or(0.0, |c| c.start + c.dur));
+                let total = plan.last().map_or(0.0, |c| c.start + c.dur);
+                // Remember what was reported, so the load can check it once
+                // the program has defined its clips and transitions. Only the
+                // program's top level counts: a frame may measure freely.
+                let mut c = ctx.borrow_mut();
+                if c.running == Running::Setup && c.measured_reels.len() < 64 {
+                    c.measured_reels.push((items.to_vec(), total));
+                }
+                drop(c);
+                i.push_real(total);
                 Ok(())
             }
             Err(msg) => fail(ctx, PsError::Rangecheck, msg),
@@ -1128,9 +1137,12 @@ pub(crate) struct ReelClip<'a> {
 /// transition if the prelude's `transitions` dictionary has it (so one a
 /// program adds is recognised), else it must be a procedure.
 ///
-/// `strict` also requires every clip named to be a procedure now. Playing a
-/// reel is strict; measuring one (`reelduration`, usually in the
-/// declaration, before the clips are defined) is not.
+/// `strict` is for playing, when everything is defined: every clip named
+/// must be a procedure and a transition must really be in the dictionary.
+/// Measuring a reel (`reelduration`, usually in the declaration, before the
+/// clips are defined) is not strict, and must guess: a name starting `t-` is
+/// taken for a transition even if it is not defined yet. Load checks the
+/// guess afterwards (`check_measured_reels`).
 fn plan_reel<'a>(
     i: &Interp,
     items: &'a [Value],
@@ -1142,12 +1154,67 @@ fn plan_reel<'a>(
     };
     reel_plan(
         items,
-        // A name starting with `t-` is taken for a transition even before
-        // it is defined, so a reel can be measured in the declaration with
-        // its own transitions defined further down the file.
-        &|n| known.iter().any(|k| k == n) || n.starts_with("t-"),
+        &|n| known.iter().any(|k| k == n) || (!strict && n.starts_with("t-")),
         &|n| !strict || matches!(i.lookup(n), Some(Value::Other(o)) if o.is_procedure()),
     )
+}
+
+/// Once the program's top level has run, compare each reel `reelduration`
+/// measured with the reel as it now plays. The measurement had to guess
+/// which names were transitions; a custom transition with another name than
+/// `t-...`, defined after the measurement, was counted as a clip and made
+/// the film longer. That is an error, naming the entry, rather than a film
+/// that is quietly the wrong length.
+pub(crate) fn check_measured_reels(i: &Interp, ctx: &Shared) -> Result<(), String> {
+    let measured = std::mem::take(&mut ctx.borrow_mut().measured_reels);
+    for (items, reported) in measured {
+        // A reel that does not plan now is reported when it plays, with the
+        // reason; only a reel that plans differently is the guess's fault.
+        let Ok(plan) = plan_reel(i, &items, true) else {
+            continue;
+        };
+        let now = plan.last().map_or(0.0, |c| c.start + c.dur);
+        if (now - reported).abs() < 1e-9 {
+            continue;
+        }
+        // The culprits: custom transitions that were not defined (and not
+        // named `t-...`) when the reel was measured.
+        let mut culprits: Vec<&str> = Vec::new();
+        for item in &items {
+            if let Some([_, Value::Name(n)]) = item.as_array()
+                && !n.starts_with("t-")
+                && !TRANSITIONS.contains(&n.as_str())
+                && plan
+                    .iter()
+                    .all(|c| !matches!(c.body, Value::Name(b) if b == n))
+                && !culprits.contains(&n.as_str())
+            {
+                culprits.push(n);
+            }
+        }
+        let fix = |n: &str| {
+            format!(
+                "define the transition before `reelduration` is called (`transitions /{n} {{ ... }} put`, above the declaration), or name it t-{n}"
+            )
+        };
+        return Err(match culprits.as_slice() {
+            [] => format!(
+                "reelduration measured a reel as {reported} s, but it plays for {now} s: the definitions it depends on changed after it was measured"
+            ),
+            [n, rest @ ..] => {
+                let more = if rest.is_empty() {
+                    String::new()
+                } else {
+                    format!(" (and {} more)", rest.len())
+                };
+                format!(
+                    "reelduration measured a reel as {reported} s, but it plays for {now} s: /{n}{more} was not yet a transition when the reel was measured, so it was counted as a clip. To fix it, {}",
+                    fix(n)
+                )
+            }
+        });
+    }
+    Ok(())
 }
 
 /// Lay a reel's clips out in time: each clip follows the last, pulled
