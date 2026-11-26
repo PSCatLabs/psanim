@@ -47,6 +47,7 @@ SELECTING FRAMES
   --count N           N frames spread evenly    (sheet; default 12)
   --from T --to T     a time range              (sheet, render, check)
   --seam N            the last N frames then the first N: a loop's join   (sheet)
+  --sweep N           scan exactly N runs of frames for pops, on any machine (check)
 
 SIZE AND TIMING
   --scale F           pixels per canvas unit (0.5 for a half-size preview)
@@ -541,13 +542,6 @@ fn report_printed(printed: &psanim::Printed, json: bool) {
     }
 }
 
-/// Stretches of 24 consecutive frames `check` scans for pops beyond its
-/// sampled frames, in a pure movie: about 230 frames, whatever the machine.
-const SWEEP_CHUNKS: u64 = 8;
-/// The longest that scan may take. Only a movie with very slow frames gets
-/// near it, and then its findings depend on the machine's speed.
-const SWEEP_CEILING: std::time::Duration = std::time::Duration::from_secs(8);
-
 /// One sampled moment of `check`.
 struct Sample {
     index: u64,
@@ -559,7 +553,7 @@ struct Sample {
 }
 
 fn cmd_check(rest: &[String]) -> Result<(), Fail> {
-    let c = parse(rest, &["count", "from", "to", "all"])?;
+    let c = parse(rest, &["count", "from", "to", "all", "sweep"])?;
     let (path, source) = c.source().map_err(usage)?;
     // Small frames: a check is about whether the movie works, not how it looks.
     let opts = c.options(Scale::Width(320)).map_err(usage)?;
@@ -620,8 +614,24 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
     // scanned around the samples.
     let sweep_started = Instant::now();
     let mut cut_short = false;
-    if !c.has("all") {
-        cut_short = scan.sweep(&mut movie, first, SWEEP_CHUNKS, SWEEP_CEILING)?;
+    let mut chunks = scan::MAX_CHUNKS;
+    // `--sweep N`: exactly N stretches, with no time limit, so a scan the
+    // report names can be repeated on any machine.
+    let fixed: Option<u64> = c.extra_num("sweep").map_err(usage)?;
+    if let (Some(n), false) = (fixed, c.has("all")) {
+        chunks = n;
+        if meta.mode == psanim::Mode::Pure && n > 0 {
+            scan.sweep(&mut movie, first, n, std::time::Duration::from_secs(86_400))?;
+        }
+    } else if !c.has("all") && meta.mode == psanim::Mode::Pure {
+        // As many stretches as fit the time budget at what a frame costs
+        // (the median of the sampled ones: the first is slow to warm up).
+        let mut costs: Vec<f64> = samples.iter().map(|s| s.millis).collect();
+        costs.sort_by(f64::total_cmp);
+        chunks = scan::sweep_chunks(costs.get(costs.len() / 2).copied().unwrap_or(0.0));
+        if chunks > 0 {
+            cut_short = scan.sweep(&mut movie, first, chunks, scan::SWEEP_CEILING)?;
+        }
     }
     let sweep_ms = sweep_started.elapsed().as_secs_f64() * 1e3;
     let possible = (end - first).saturating_sub(5) as usize;
@@ -683,14 +693,34 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
     let median = motions.get(motions.len() / 2).copied().unwrap_or(0.0);
     let found = scan.findings();
     if cut_short {
-        notes.push(format!("the scan for pops hit its {} s time limit with frames this slow, so which pairs it covered, and what it found, depend on the machine's speed", SWEEP_CEILING.as_secs()));
+        notes.push(format!("the scan for pops hit its {} s time limit with frames this slow, so which pairs it covered, and what it found, depend on the machine's speed", scan::SWEEP_CEILING.as_secs()));
+    } else if chunks == 0 && fixed.is_none() {
+        notes.push("frames are too slow for the default scan for pops (it takes about 3 s): only the sampled frames were looked at. `--all` scans every frame".into());
+    } else if fixed.is_none()
+        && !c.has("all")
+        && meta.mode == psanim::Mode::Pure
+        && chunks < scan::MAX_CHUNKS
+    {
+        notes.push(format!("the scan for pops covered {chunks} stretches of frames, as many as fit about 3 s on this machine; `--sweep {chunks}` repeats this scan anywhere, and `--all` scans every frame"));
     }
+    // A cut the movie declares (`/Cuts [t ...]`) is not reported: the pair
+    // whose later frame is within a frame of it.
+    let slack = 1.0 / meta.fps + 1e-6;
+    let marked = |frame: u64| {
+        let t = meta.time_of(frame + 1);
+        meta.cuts.iter().any(|c| (c - t).abs() <= slack)
+    };
+    let mut intended = 0;
     // Whole-frame cuts among the samples: the mean difference is enough for
     // a change that fills the frame.
     for s in &samples {
         if s.motion > 0.08 && s.motion > 8.0 * median.max(1e-4) {
             if s.index + 1 >= meta.frames || found.pops.iter().any(|p| p.frame == s.index) {
                 continue; // the loop's join is judged below; a pop is reported once
+            }
+            if marked(s.index) {
+                intended += 1;
+                continue;
             }
             warnings.push(format!("abrupt change after frame {} (t={:.2}s): difference {:.3} against a typical {median:.4}. A hard cut is fine if intended; otherwise something pops", s.index, s.time, s.motion));
         }
@@ -707,10 +737,13 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
             if frames.len() > 5 { "..." } else { "" }
         ));
     }
-    if meta.mode == psanim::Mode::Persistent {
-        // Marks appearing are what a painting does. Only a change that
-        // fills much of the frame (a cut) is a warning there.
-        let (cuts, marks): (Vec<_>, Vec<_>) = found.pops.iter().partition(|p| p.tiles > 8);
+    // Tile pops at a declared cut are intended; the rest are judged below.
+    let (found_pops, at_cuts): (Vec<_>, Vec<_>) = found.pops.iter().partition(|p| !marked(p.frame));
+    intended += at_cuts.len();
+    let found_pops: Vec<&scan::Pop> = if meta.mode == psanim::Mode::Persistent {
+        // Marks appearing are what a painting does: small ones are not
+        // reported one by one.
+        let (marks, rest): (Vec<_>, Vec<_>) = found_pops.into_iter().partition(|p| p.tiles <= 8);
         if !marks.is_empty() {
             notes.push(format!(
                 "{} local change{} in the scanned frames (marks appearing on the canvas, after frames {:?}): expected in a persistent movie, not reported one by one",
@@ -719,40 +752,83 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
                 marks.iter().map(|p| p.frame).take(6).collect::<Vec<_>>()
             ));
         }
-        for p in cuts {
-            warnings.push(format!(
-                "abrupt change after frame {} (t={:.2}s): {} of {} tiles change by {:.3} between this frame and the next, against {:.3} either side. A hard cut is fine if intended; otherwise something pops",
-                p.frame, meta.time_of(p.frame), p.tiles, p.total_tiles, p.change, p.around
-            ));
-        }
-    } else if found.pops.len() > 3 && found.pops.len() * 20 > covered {
-        let at: Vec<u64> = found.pops.iter().map(|p| p.frame).take(6).collect();
+        rest
+    } else {
+        found_pops
+    };
+    if found_pops.len() > 3
+        && found_pops.len() * 20 > covered
+        && meta.mode != psanim::Mode::Persistent
+    {
+        let at: Vec<u64> = found_pops.iter().map(|p| p.frame).take(6).collect();
         notes.push(format!(
             "{} of {covered} scanned frame pairs have a small element appearing or vanishing (after frames {at:?}...): taken as an effect, not reported one by one",
-            found.pops.len()
+            found_pops.len()
         ));
     } else {
-        for p in found.pops.iter().take(5) {
-            warnings.push(format!(
-                "abrupt change after frame {} (t={:.2}s): {} of {} tiles near x {:.0}..{:.0}, y {:.0}..{:.0} (canvas units) change by {:.3} between this frame and the next, against {:.3} in the pairs either side. Something appears, vanishes or jumps there. A hard cut is fine if intended; otherwise something pops (`psanim sheet --frame {},{}` to see it)",
-                p.frame, meta.time_of(p.frame), p.tiles, p.total_tiles,
-                p.area[0], p.area[2], p.area[1], p.area[3], p.change, p.around,
-                p.frame, p.frame + 1
-            ));
+        // A change over half the frame is a cut: always a warning. A local
+        // one (something appears, vanishes or jumps) is a note, because
+        // films change things on purpose; `--all` makes it a warning.
+        let (cuts, local): (Vec<_>, Vec<_>) = found_pops
+            .into_iter()
+            .partition(|p| p.tiles * 2 > p.total_tiles);
+        let strict = c.has("all");
+        let mut report = |p: &scan::Pop, is_warning: bool| {
+            let text = format!(
+                "abrupt change after frame {} (t={:.2}s): {} of {} tiles near x {:.0}..{:.0}, y {:.0}..{:.0} (canvas units) change by {:.3} between this frame and the next, against {:.3} in the pairs either side. Something appears, vanishes or jumps there. {} (`psanim sheet --frame {},{}` to see it)",
+                p.frame,
+                meta.time_of(p.frame),
+                p.tiles,
+                p.total_tiles,
+                p.area[0],
+                p.area[2],
+                p.area[1],
+                p.area[3],
+                p.change,
+                p.around,
+                if is_warning {
+                    "A hard cut is fine if intended (declare it with `/Cuts [t]`); otherwise something pops"
+                } else {
+                    "Fine if intended (`/Cuts [t]` declares it); `check --all` reports these as warnings"
+                },
+                p.frame,
+                p.frame + 1
+            );
+            if is_warning {
+                warnings.push(text);
+            } else {
+                notes.push(text);
+            }
+        };
+        for p in &cuts {
+            report(p, true);
         }
-        if found.pops.len() > 5 {
-            warnings.push(format!(
+        for p in local.iter().take(5) {
+            report(p, strict);
+        }
+        if local.len() > 5 {
+            let text = format!(
                 "and {} more abrupt changes, after frames {:?}",
-                found.pops.len() - 5,
-                found
-                    .pops
+                local.len() - 5,
+                local
                     .iter()
                     .skip(5)
                     .take(10)
                     .map(|p| p.frame)
                     .collect::<Vec<_>>()
-            ));
+            );
+            if strict {
+                warnings.push(text);
+            } else {
+                notes.push(text);
+            }
         }
+    }
+    if intended > 0 {
+        notes.push(format!(
+            "{intended} abrupt change{} at the declared /Cuts not reported",
+            if intended == 1 { "" } else { "s" }
+        ));
     }
     // A loop's join, measured directly whatever was sampled: the step from
     // the last frame to the first against the steps on either side of it.
@@ -771,7 +847,19 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
         let after = step(0, 1)?;
         let typical = (before + after) / 2.0;
         seam = Some((join, typical));
-        if join > typical * 1.25 + 2e-4 {
+        // A step like the join's elsewhere in the film (a beat, a cut)
+        // shows that this size of change is part of it, not a seam: the
+        // join is judged against the 95th percentile of the steps measured.
+        let mut steps = scan.pair_motions();
+        steps.sort_by(f64::total_cmp);
+        let ordinary = (steps.len() >= 20).then(|| steps[steps.len() * 95 / 100]);
+        let excused = ordinary.is_some_and(|o| join <= o * 1.25 + 2e-4);
+        if join > typical * 1.25 + 2e-4 && excused {
+            notes.push(format!(
+                "the step from the last frame to the first ({join:.4}) is larger than the steps beside it ({typical:.4}) but no larger than the biggest steps elsewhere in the movie ({:.4} or less in 95% of {} pairs), as at a beat or a change of scene: not taken as a seam",
+                ordinary.unwrap_or(0.0), steps.len()
+            ));
+        } else if join > typical * 1.25 + 2e-4 {
             let how = if typical < 1e-5 {
                 "while the frames beside it do not change at all".to_string()
             } else {
@@ -824,7 +912,7 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
                 "mean_frame_ms": mean_ms,
                 "slowest_frame": slowest.map(|s| json!({"frame": s.index, "ms": s.millis})),
                 "loop_seam": seam.map(|(join, typical)| json!({"step": join, "typical_step": typical})),
-                "pop_scan": {"pairs_judged": covered, "pairs_possible": possible, "ms": (sweep_ms * 10.0).round() / 10.0},
+                "pop_scan": {"pairs_judged": covered, "pairs_possible": possible, "stretches": if c.has("all") || meta.mode != psanim::Mode::Pure { serde_json::Value::Null } else { chunks.into() }, "sized_by": if c.has("all") { "all" } else if fixed.is_some() { "flag" } else { "time" }, "ms": (sweep_ms * 10.0).round() / 10.0},
                 "warnings": warnings, "notes": notes, "printed": printed.text,
                 "output_truncated": printed.truncated,
                 "samples": samples.iter().map(|s| json!({

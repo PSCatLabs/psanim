@@ -199,6 +199,9 @@ pub struct Meta {
     pub background: Option<[f64; 3]>,
     /// The last frame leads back into the first.
     pub looping: bool,
+    /// Moments (seconds) where the movie cuts on purpose: `check` does not
+    /// report the abrupt change there.
+    pub cuts: Vec<f64>,
     pub mode: Mode,
     /// Simulation ticks per second, for a stateful or persistent movie.
     pub tick_rate: f64,
@@ -263,6 +266,7 @@ impl Meta {
             "seed": self.seed,
             "background": self.background,
             "loop": self.looping,
+            "cuts": self.cuts,
             "mode": self.mode.name(),
             "tick_rate": self.tick_rate,
             "motion_blur": self.motion_blur.map(|m| serde_json::json!({"samples": m.samples, "shutter": m.shutter})),
@@ -731,6 +735,7 @@ impl Movie {
                 seed: decl.seed,
                 background: decl.background,
                 looping: decl.looping,
+                cuts: decl.cuts,
                 mode,
                 tick_rate,
                 motion_blur: decl.motion_blur,
@@ -1414,6 +1419,7 @@ struct Declaration {
     seed: i64,
     background: Option<[f64; 3]>,
     looping: bool,
+    cuts: Vec<f64>,
     scene: String,
     step: Option<String>,
     step_declared: bool,
@@ -1431,6 +1437,7 @@ const DECLARATION_KEYS: &[&str] = &[
     "Title",
     "Description",
     "Loop",
+    "Cuts",
     "Scene",
     "Step",
     "StepRate",
@@ -1459,6 +1466,7 @@ impl Declaration {
             seed: 1,
             background: Some([0.0, 0.0, 0.0]),
             looping: false,
+            cuts: Vec::new(),
             scene: "scene".into(),
             step: Some("step".into()),
             step_declared: false,
@@ -1526,6 +1534,14 @@ impl Declaration {
                     );
                 }
                 "Loop" => d.looping = v.as_bool().ok_or_else(|| bad("Loop", "true or false"))?,
+                "Cuts" => {
+                    d.cuts = v
+                        .as_numbers()
+                        .filter(|c| c.iter().all(|t| t.is_finite() && *t >= 0.0))
+                        .ok_or_else(|| {
+                            bad("Cuts", "an array of times in seconds, like [4 12.5]")
+                        })?;
+                }
                 "Persist" => {
                     d.persist = v.as_bool().ok_or_else(|| bad("Persist", "true or false"))?
                 }

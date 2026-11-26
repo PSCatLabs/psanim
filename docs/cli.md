@@ -34,6 +34,7 @@ is kept per command; past that the text ends with
 | `--from T --to T` | a time range | sheet, render, check |
 | `--seam N` | the last N frames, then the first N | sheet |
 | `--all` | every frame | check |
+| `--sweep N` | exactly N runs of 24 frames scanned for pops, the same on any machine | check |
 
 ## Size and timing
 
@@ -122,11 +123,13 @@ Epicycles: 1280x720 units, 22s at 30 fps = 660 frames, pure
   or a pop.
 
 Warnings: every frame blank; blank frames in the middle; a slow start or
-early end; nothing moves; an abrupt change; a write into a string made in
-setup; for a `/Loop true` movie, a join whose step is larger than the
-steps beside it; code before `animation` that prints or takes more than
-50 ms. Notes (not problems): opening from or closing to the background;
-frequent small changes taken as an effect.
+early end; nothing moves; a cut (a change that fills the frame); a write
+into a string made in setup; for a `/Loop true` movie, a join whose step
+is larger than the steps beside it and than the film's other big steps;
+code before `animation` that prints or takes more than 50 ms. Under
+`--all`, also every local abrupt change. Notes (not problems): opening
+from or closing to the background; local abrupt changes in the default
+scan; frequent small changes taken as an effect; a join excused as a beat.
 
 **Code before `animation` runs twice.** The declaration is found by a
 first pass that runs the program in a throwaway interpreter until
@@ -141,39 +144,72 @@ first pass's output is dropped). `info --json` and `check --json` report
 
 **Abrupt change.** Two kinds. A change that fills the frame (a cut) is a
 whole-frame difference many times the typical one, seen among the sampled
-frames. A local pop is found tile by tile: the preview is cut into tiles
-about a twentieth of its width (16 pixels at the default 320), and a pair
-of adjacent frames is flagged where one tile's change is at least 0.04 and
-more than four times the same tile's change in the pairs just before and
-after, by at least 0.04 more. (At the default size, a white dot of 4 pixels,
-about 16 canvas units, on black just reaches it.) A pop is a spike in time, so steady fast
-motion (the same change every pair) and a fade (growing) are not flagged,
-and a small element appearing in a busy frame is: its own tile was calm.
-The warning gives the frame, the number of tiles and the area they cover
-in canvas units, and the `psanim sheet` command that shows it.
+frames, or a tile pop over more than half the tiles. A cut is always a
+warning, because films rarely mean one by accident. A local pop is found
+tile by tile: the preview is cut into tiles about a twentieth of its width
+(16 pixels at the default 320), and a pair of adjacent frames is flagged
+where one tile's change is at least 0.04 and more than four times the same
+tile's change in the pairs just before and after, by at least 0.04 more.
+(At the default size, a white dot of 4 pixels, about 16 canvas units, on
+black just reaches it.) A pop is a spike in time, so steady fast motion
+(the same change every pair) and a fade (growing) are not flagged, and a
+small element appearing in a busy frame is: its own tile was calm. The
+report gives the frame, the number of tiles and the area they cover in
+canvas units, and the `psanim sheet` command that shows it.
 
-Three more rules keep intended motion out of the warnings. A spike with
+A local pop is a **note** by default and a **warning** under `--all`.
+Films change things on purpose (a terminal clears its screen, a digit
+ticks, a finale flashes), and a warning tells an author to change what is
+right; the note still gives the frame and the place, so look at it with
+`sheet --frame F,F+1` and decide. `--all` is the strict pass for before a
+long render: every local pop becomes a warning, to be fixed or declared.
+
+**Declaring a cut.** `/Cuts [t ...]` in the `animation` dictionary lists
+the times (seconds) where the movie changes abruptly on purpose. `check`
+does not report an abrupt change, of either kind, in the pair of frames
+whose later frame is within a frame of one of those times, in any mode,
+and a note counts how many it left out. That makes `check --all` clean for
+a film whose only abrupt changes are its own cuts. Nothing else reads the
+times.
+
+Three more rules keep intended motion out of the report. A spike with
 another spike within three tiles in the pair before or after is motion
 (a wipe, or a fast edge crossing the frame, changes each tile for one pair
 only, tile after tile). Small changes (at most 8 tiles) that recur within a
 tile of each other (a counter, typed letters, lights coming on one by one)
-are one note naming the area and the frames, not a warning each. And more
-than one pair in twenty popping is a style (sparkle, particles): one note.
-A persistent movie is a painting that accumulates marks, so local changes
-are its substance: one note says how many, and only cuts are warnings.
-A cut, or any change over 8 tiles, is always a warning: "fine if intended".
-There is no way yet to mark a cut as intended.
+are one note naming the area and the frames. And more than one pair in
+twenty popping is a style (sparkle, particles): one note. A persistent
+movie is a painting that accumulates marks, so small local changes are its
+substance: one note says how many.
+
+**The loop's join** is the step from the last frame to the first. A film
+that steps on a beat has a join like every bar's downbeat, bigger than the
+frames beside it and not wrong. So a join larger than the steps beside it
+is a warning only if it is also larger than 1.25 times the 95th percentile
+of the steps the scan measured (when it measured at least 20); one like
+the film's other big steps is a note. A disc that does not come back to
+its start in a film that otherwise moves evenly is still a warning.
 
 What is scanned. Judging a pair needs the pairs either side, so frames are
 rendered in runs. In a pure movie, besides the sampled frames and the one
-after each, `check` scans 8 runs of 24 consecutive frames (about 230
-frames) spread evenly over the movie, in an order that is a fixed function
-of the movie: the same movie gives the same findings on every machine. The
-summary line says how many of the frame pairs were covered; `--all` covers
-every one. If frames are so slow that the scan reaches its 8 second limit,
-a note says its coverage now depends on the machine. A movie with state
-(stateful or persistent) is scanned only in a run of six frames around each
-sampled frame, because reaching a frame costs every tick before it.
+after each, `check` scans runs of 24 consecutive frames spread evenly over
+the movie, in an order that is a fixed function of the movie. How many runs
+is set by what a frame costs: as many (up to 8, about 230 frames) as fit in
+about 3 seconds, measured on the sampled frames. So the scan adds at most
+about 3 s however slow the frames are; the cost is that a movie with slow
+frames is looked at more thinly (35 ms a frame: 2 runs, about 50 pairs;
+over about 100 ms: none beyond the sampled frames, and a note says so).
+How many runs that is depends on the machine's speed, so when it is fewer
+than 8 a note names the number: `--sweep N` scans exactly N runs, with no
+time limit, and gives the same pairs and the same findings on any machine
+(`--json` has it as `pop_scan.stretches`, with `sized_by` "time", "flag"
+or "all"). The summary line says how many of the frame pairs were
+covered. `--all` covers every one: use it before a long render. If a
+default run is still going after 4 seconds, the scan stops there and a
+note says so. A movie with
+state (stateful or persistent) is scanned only in a run of six frames
+around each sampled frame, because reaching a frame costs every tick before
+it.
 
 **A string written in a frame.** After setup, `check` fingerprints every
 string reachable from `userdict` (strings in the dictionaries and arrays
