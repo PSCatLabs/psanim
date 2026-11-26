@@ -911,6 +911,35 @@ impl Movie {
     }
 
     fn render(&mut self, index: u64, time: f64) -> Result<Frame<'_>, Error> {
+        let from_accum = match self.draw(index, time) {
+            Ok(a) => a,
+            Err(mut e) => {
+                // What the frame printed before it failed is often the
+                // clue: the error carries a copy (the movie keeps it too).
+                e.printed = Printed {
+                    text: self.output.clone(),
+                    truncated: self.output_truncated,
+                };
+                return Err(e);
+            }
+        };
+        let (width, height) = self.interp.canvas_size();
+        Ok(Frame {
+            index,
+            time,
+            width,
+            height,
+            premultiplied: if from_accum {
+                &self.blurred
+            } else {
+                self.interp.canvas_premultiplied_rgba8()
+            },
+        })
+    }
+
+    /// Draw frame `index` at `time` onto the canvas; true when the frame
+    /// is the motion-blur accumulation rather than the canvas.
+    fn draw(&mut self, index: u64, time: f64) -> Result<bool, Error> {
         let phase = Phase::Frame { index, time };
         self.last_steps = 0;
         self.last_ticks = 0;
@@ -987,18 +1016,7 @@ impl Movie {
                 }
             }
         }
-        let (width, height) = self.interp.canvas_size();
-        Ok(Frame {
-            index,
-            time,
-            width,
-            height,
-            premultiplied: if from_accum {
-                &self.blurred
-            } else {
-                self.interp.canvas_premultiplied_rgba8()
-            },
-        })
+        Ok(from_accum)
     }
 
     fn begin(&mut self, running: Running, frame: i64, t: f64, dt: f64) {

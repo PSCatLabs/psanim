@@ -99,7 +99,9 @@ with `--signals`. In the browser the same call is `engine.recordSignal(name, t, 
 `kind` (a PostScript error name, or `declaration`, `options`,
 `stackleft`, `unclosedlayer`), `command`, `line` (setup only),
 `backtrace` (the program's procedures, innermost first, with the failing
-element marked), `stack` (the operands it was looking at), `hint`.
+element marked), `stack` (the operands it was looking at), `hint`, and
+`printed` (what a failing frame printed before it failed; `printed` in
+`to_json()` when there was any).
 `Display` prints all of it; `to_json()` gives it to tools. After an
 error the movie is still usable: the next frame starts from the
 checkpoint.

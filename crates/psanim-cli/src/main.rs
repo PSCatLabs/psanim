@@ -154,7 +154,11 @@ fn main() -> ExitCode {
             } else {
                 match &fail {
                     Fail::Usage(m) => eprintln!("psanim: {m}"),
-                    Fail::Program(e) => eprintln!("psanim: {e}"),
+                    Fail::Program(e) => {
+                        // What the failing frame printed, as `frame` shows output.
+                        report_printed(&e.printed, false);
+                        eprintln!("psanim: {e}");
+                    }
                     Fail::Output(m) => eprintln!("psanim: {m}"),
                 }
             }
@@ -301,7 +305,9 @@ fn cmd_frame(rest: &[String]) -> Result<(), Fail> {
         .clone()
         .unwrap_or_else(|| format!("{}_{index:05}.png", name_of(&path)).into());
     let started = Instant::now();
-    let rendered = movie.render_frame(index).map(|f| {
+    // What a failing frame printed travels with the error, which shows it
+    // (and puts it in --json).
+    let (png, premultiplied, w, h, time) = movie.render_frame(index).map(|f| {
         (
             f.to_png(),
             f.premultiplied.to_vec(),
@@ -309,21 +315,7 @@ fn cmd_frame(rest: &[String]) -> Result<(), Fail> {
             f.height,
             f.time,
         )
-    });
-    let (png, premultiplied, w, h, time) = match rendered {
-        Ok(r) => r,
-        Err(e) => {
-            // What it printed before failing is the best clue to why.
-            let printed = movie.take_output();
-            if !c.json && !printed.is_empty() {
-                eprint!("{printed}");
-                if !printed.ends_with('\n') {
-                    eprintln!();
-                }
-            }
-            return Err(e.into());
-        }
-    };
+    })?;
     let elapsed = started.elapsed().as_secs_f64();
     let mut flat = Vec::new();
     raster::flatten_onto(&premultiplied, matte(&meta), &mut flat);

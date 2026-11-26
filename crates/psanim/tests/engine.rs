@@ -1833,3 +1833,43 @@ fn only_a_pure_movie_has_a_string_snapshot() {
     let mut m = load("/step { } def /scene { } def");
     assert!(m.string_snapshot().unwrap().is_none());
 }
+
+#[test]
+fn a_failing_frame_carries_what_it_printed() {
+    let src = "<< /Size [8 8] /Duration 1 /FPS 4 >> animation
+        /scene { (before the fall) == frame 2 eq { nosuchword } if } def";
+    // Serial and parallel: the error holds frame 2's output.
+    for threads in [1, 4] {
+        let err =
+            psanim::render::render_frames(src, &Options::default(), &[0, 1, 2, 3], threads, |_| {
+                Ok(())
+            })
+            .unwrap_err();
+        assert_eq!(err.kind, "undefined");
+        assert!(
+            err.printed.text.contains("(before the fall)"),
+            "{threads}: {:?}",
+            err.printed
+        );
+        assert_eq!(err.to_json()["printed"], "(before the fall)\n");
+    }
+}
+
+#[test]
+fn setup_output_is_no_frames_whatever_the_thread_count() {
+    let src = "<< /Size [8 8] /Duration 1 /FPS 4 >> animation
+        (from setup) ==
+        /scene { (frame) == } def";
+    let mut outs = Vec::new();
+    for threads in [1, 4] {
+        let mut seen = Vec::new();
+        psanim::render::render_frames(src, &Options::default(), &[0, 1, 2, 3], threads, |f| {
+            seen.push(f.printed.text);
+            Ok(())
+        })
+        .unwrap();
+        outs.push(seen);
+    }
+    assert_eq!(outs[0], outs[1]);
+    assert_eq!(outs[0][0], "(frame)\n");
+}

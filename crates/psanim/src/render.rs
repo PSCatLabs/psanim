@@ -65,6 +65,8 @@ where
 {
     // One movie here, on the calling thread: it reports load errors once,
     // and it is the only renderer when the movie cannot be parallel.
+    // What setup printed is dropped (see `render_frames_from`); a caller
+    // that wants it loads the movie itself.
     let first = Movie::load(source, options)?;
     render_frames_from(first, source, options, indices, threads, sink)
 }
@@ -72,9 +74,10 @@ where
 /// [`render_frames`] for a caller that has loaded the movie already (to
 /// read its metadata and choose the frames): `first` is the movie from
 /// `source` and `options`, and renders on the calling thread unless the
-/// render is parallel, so it is not loaded twice. What setup printed stays
-/// with `first` for the caller to collect (`take_printed`); a worker's own
-/// copy of it is dropped.
+/// render is parallel, so it is not loaded twice. Collect what setup
+/// printed from `first` (`take_printed`) before handing it over: anything
+/// left in it is dropped, as each worker drops its own copy, so a frame's
+/// `printed` is that frame's alone whatever the thread count.
 pub fn render_frames_from<F>(
     mut first: Movie,
     source: &str,
@@ -87,6 +90,7 @@ where
     F: FnMut(Rendered) -> Result<(), String>,
 {
     let meta = first.meta().clone();
+    let _ = first.take_printed();
     let threads = effective_threads(&meta, threads, indices.len());
     let sink_error = |msg: String| Error::new(Phase::Load, "output", msg);
     if threads <= 1 {
