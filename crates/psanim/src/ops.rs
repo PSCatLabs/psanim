@@ -565,6 +565,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     crate::terminal::install(interp, ctx);
     crate::particles::install(interp, ctx);
     crate::playlist::install(interp, ctx);
+    crate::ca::install(interp, ctx);
     // --- declaration ----------------------------------------------------
     reg(interp, ctx, ".animation", |i, ctx| {
         let decl = i.pop_value()?;

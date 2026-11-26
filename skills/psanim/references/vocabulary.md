@@ -374,6 +374,38 @@ Inside a particles procedure: the index in /Bursts of the burst it came from, or
 
 Inside a particles procedure: replace the current path with the particle's own track over the last seconds (from its birth at most), n segments, oldest first, ending at the origin: `0.2 6 particletrail stroke` is a streak. The track is where the particle was on the page, drawn in the space you are in: it stays right after a `rotate` or `scale` inside the procedure.
 
+## Cellular automata: grids of cells that run a rule
+
+### `cellgrid`
+
+`cols rows opts  cellgrid  cells`
+
+A new grid for `cellsteps`: a string of one byte per cell, row after row from the top. opts is a pattern or a dictionary: /Pattern, /Density (0.3), /Seed (the movie's). A pattern is a name (/glider /blinker /block /beacon /lwss /rpentomino /acorn /diehard /gun (Gosper's glider gun) /pulsar /single /empty, or /random: each cell alive with chance /Density, from /Seed), a picture (an array of strings, `O` or `#` alive, as LifeWiki's plaintext), RLE text ((bo$2bo$3o!)), or a list of placements [ [pattern x y] ... ] with x y the cell its centre goes on, from the top left. One pattern alone is centred. A byte is 128 and up for a live cell (128 + its age), 1 to 127 for a dead one that once lived (127 the generation it died), 0 for never alive.
+
+### `cellsteps`
+
+`cells cols opts n  cellsteps  cells'`
+
+Generation n of a grid `cols` wide: the rule applied n times, natively. opts is the rule or a dictionary of /Rule and /Edge: /dead (the default: dead cells beyond the edge, where a glider becomes a block), /wrap (a torus), or /open (an open plane as near as a grid gets: a lone glider that nears the edge is taken off, as it would fly away for ever; exact while nothing else reaches the edge). A rule is a name (/life /highlife /seeds /daynight /maze /replicator /lifewithoutdeath, or /brain for Brian's Brain) or births and survivals as text ((B3/S23)). A pure function of its operands: a film asks for `now rate mul` and gets that generation however it seeks. States already computed are remembered, so the next frame's generation costs one step, not all of them. Capped at 2048 x 2048 cells and about 500 million cell updates a frame, and charged to the budgets.
+
+### `cellrows`
+
+`row rule rows  cellrows  cells`
+
+The history of an elementary automaton: `rows` rows, the first being `row` (a grid of one row, as `cols 1 /single cellgrid` makes), each next cell bit 4l+2c+r of the rule (0 to 255: 30, 90, 110) from the three cells above it. rule may be a dictionary of /Rule and /Edge (/dead or /wrap). Live cells 255, dead 0, `cols` wide: draw it with `cellcolors` and `colorimage`.
+
+### `cellcolors`
+
+`cells palette frac  cellcolors  rgb`
+
+Three bytes a cell, for `cols rows 8 [cols 0 0 rows neg 0 rows] rgb false 3 colorimage` in a unit square (row 0 at the top, square cells). palette is a dictionary of colours [r g b] or grey levels: /Alive, /Born and /Mature (a newborn cell is /Born and takes /Mature generations to become /Alive), /Trail and /Fade (a cell that dies starts at /Trail and fades over /Fade generations to /Ghost), /Ghost (where a cell once lived: /Ground unless given), /Ground. frac (0 to 1, how far the clock is to the next generation) keeps a dying cell fading smoothly between generations.
+
+### `cellcount`
+
+`cells  cellcount  n`
+
+How many cells of a grid are alive.
+
 ## Paths: measuring, following, drawing on, morphing
 
 ### `pathlength`

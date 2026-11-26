@@ -62,6 +62,39 @@ whatever *it* changes is rolled back as usual.
   per particle per tick for a flocking rule set, and use a grid for
   neighbour search rather than all pairs.
 
+## Cellular automata: a simulation that stays pure
+
+A grid of cells under a rule (Conway's Life, Brian's Brain, Rule 30) does
+not need `step`: `cellsteps` gives generation n of a starting grid
+directly, natively, so the scene asks for `now rate mul` and the movie
+stays pure (it seeks, renders in parallel, and can be a component). It
+remembers what it has computed, so playing forward costs one generation a
+frame. `cellcolors` turns the grid into one `colorimage`, with dying cells
+fading over a few generations; the catalog's `/automaton` entry does all of
+this with looks and palettes.
+
+```postscript
+%!PS
+<< /Size [640 400] /Duration 6 /FPS 30 /Background [0.03 0.03 0.05] >> animation
+/C 80 def /R 50 def
+/g0 C R << /Pattern [ [/gun 22 8] [/rpentomino 60 36] ] >> cellgrid def   % x y: the cell each centres on
+/rules << /Rule /life /Edge /open >> def                                % /open: gliders fly off the edge
+/pal << /Born [1 1 0.9] /Alive [1 0.7 0.3] /Mature 3 /Trail [0.8 0.2 0.15] /Fade 6
+        /Ground [0.03 0.03 0.05] >> def
+/scene {
+  /gen now 12 mul def                                    % twelve generations a second
+  /g g0 C rules gen cellsteps def
+  640 400 scale                                          % a unit square, row 0 at the top
+  C R 8 [C 0 0 R neg 0 R] g pal gen dup floor sub cellcolors false 3 colorimage
+} def
+```
+
+`cellrows` gives the whole history of an elementary rule at once, one row a
+generation: compute it in setup and show as many rows as the clock has
+reached. Each grid is capped (2048 x 2048 cells, about a billion cell
+updates a frame) and charged to the budgets; seeking far into a long film
+pays for every generation before it once.
+
 ## Persistent: paint over the last frame
 
 `/Persist true` stops the engine erasing between frames. Each call of
