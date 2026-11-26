@@ -1,0 +1,104 @@
+%!PS
+% Poster: 52
+% A Turing machine at work
+% A paper tape, a head on a carriage, a state dial and a program card: the
+% catalog's /turing entry, which simulates the table it is given and draws each
+% step from that run. Two programs: unary addition (2 + 3 becomes five marks),
+% then the four-state busy beaver, 107 steps from a blank tape to 13 marks.
+% Each instance carries /Expect, so `psanim check` fails if either run is wrong.
+%   psanim render turing.ps -o turing.mp4
+%   psanim check turing.ps --param report=1      prints both results
+
+/report 0 param 0 ne /tu-report exch def
+
+% ---- the programs: rows [state reads writes move next]; 0 is a blank, H halts ------------
+/tu-adder [
+  [/A 1 1 /R /A]          % walk right over the first number
+  [/A 0 1 /R /B]          % fill the gap between the numbers
+  [/B 1 1 /R /B]          % walk right over the second
+  [/B 0 0 /L /C]          % past its end, step back
+  [/C 1 0 /L /H]          % and rub out one mark: there was one too many
+] def
+/tu-beaver [
+  [/A 0 1 /R /B] [/A 1 1 /L /B]
+  [/B 0 1 /L /A] [/B 1 0 /L /C]
+  [/C 0 1 /R /H] [/C 1 1 /L /D]
+  [/D 0 1 /R /D] [/D 1 0 /R /A]
+] def
+
+% each with the result it must reach: setup fails, and so does `psanim check`, if it does not
+/tu-addp << /Name (Unary addition: 2 + 3) /Table tu-adder /Tape [1 1 0 1 1 1]
+  /Slow 2.1 /Fast 1.2 /Ramp 0.9 /Lead 3.8 /Tail 4.2
+  /Expect << /Steps 8 /Ones 5 /Tape (11111) >> >> def
+/tu-bbp << /Name (Busy beaver: 4 states, 2 symbols) /Table tu-beaver
+  /Slow 1.7 /Fast 0.14 /Ramp 0.74 /Lead 3.4 /Tail 5.5
+  /Expect << /Steps 107 /Ones 13 /Tape (10111111111111) >> >> def
+/tu-add /turing << /Params tu-addp >> instance
+/tu-bb /turing << /Params tu-bbp >> instance
+
+% ---- when: each machine's length is its own run's --------------------------------------
+/tu-x 1.0 def                                        % the cross-fade from one program to the next
+/tu-t1 /tu-add componentduration def                 % the adder holds its halt until here
+/tu-t2 tu-t1 tu-x sub def                            % the beaver begins
+/tu-addhalt tu-t1 4.2 sub def                        % (its /Tail)
+/tu-bbhalt tu-t2 /tu-bb componentduration add 5.5 sub def
+/tu-len tu-t2 /tu-bb componentduration add def
+
+<< /Size [1280 720] /Duration tu-len /FPS 30 /Background [0.07 0.075 0.085]
+   /Title (A Turing machine at work)
+   /Description (A paper tape, a head that reads, stamps and erases, a state dial and a program card with the rule in use lit: unary addition turns 2 + 3 into five marks, then the four-state busy beaver runs 107 steps from a blank tape and halts with 13 marks. The machine simulates its table; nothing is keyframed.)
+>> animation
+
+% --param report=1: make them again, after the declaration so it prints once, saying what they did
+tu-report {
+  tu-addp /Report true put /tu-add /turing << /Params tu-addp >> instance
+  tu-bbp /Report true put /tu-bb /turing << /Params tu-bbp >> instance
+} if
+
+% ---- the captions above the machine -------------------------------------------------------
+% [ from to (heading) (detail) ], on the film's clock
+/tu-caps [
+  [ 0 3.4 (A Turing machine at work)
+          (A tape of cells, a head that reads and writes one cell at a time, a state, and a table of rules.) ]
+  [ 3.4 tu-addhalt 0.6 add (Program 1: unary addition)
+          (2 + 3 written as marks, with a blank between. The rules close the gap and rub out one mark.) ]
+  [ tu-addhalt 0.6 add tu-t2 0.4 add (Five marks: 2 + 3 = 5)
+          (Each step uses exactly one row of the table: the state it is in and the symbol under the head.) ]
+  [ tu-t2 0.4 add tu-t2 7 add (Program 2: the busy beaver)
+          (Four states and a blank tape. How many marks can a machine this small leave and still halt?) ]
+  [ tu-t2 7 add tu-bbhalt 5.5 sub (The long stretch)
+          (The same eight rules, over and over, while the tape grows to the left and the camera follows.) ]
+  [ tu-bbhalt 5.5 sub tu-bbhalt 0.8 add (Into the halt)
+          (The last few steps, slowly: state C reading a blank is the rule that stops it.) ]
+  [ tu-bbhalt 0.8 add tu-len 1 add (It halts)
+          (No four-state, two-symbol machine that halts leaves more marks than this one.) ]
+] def
+
+/tu-caption { % [from to (h) (d)]
+  aload pop /tu-d exch def /tu-h exch def /tu-b exch def /tu-a exch def
+  now tu-a ge now tu-b lt and {
+    now tu-a sub 0.5 div 0 1 clamp tu-b now sub 0.4 div 0 1 clamp min /tu-u exch def
+    tu-u setalpha
+    /Palatino-Bold findfont 27 scalefont setfont 0.95 0.9 0.78 setrgbcolor
+    40 1 tu-u sub 8 mul 686 sub neg moveto tu-h show
+    /Palatino-Italic findfont 19 scalefont setfont 0.72 0.7 0.64 setrgbcolor
+    40 1 tu-u sub 8 mul 656 sub neg moveto tu-d show
+    1 setalpha
+  } if
+} def
+
+/scene {
+  % the band above the machine, continuing its wall
+  0 1 7 { /tu-i exch def tu-i 8 div 0.025 mul 0.09 exch sub dup dup 1.06 mul exch 1.2 mul setrgbcolor
+    0 640 tu-i 10 mul add 1280 11 rectfill } for
+  % the machines: the second fades in over the first's last picture
+  now tu-t2 tu-x add lt { /tu-add << /Box [0 0 1280 640] /Before /hold /After /hold >> place } if
+  now tu-t2 ge {
+    now tu-t2 sub tu-x div 0 1 clamp /tu-u exch def
+    tu-u 1 lt { tu-u { /tu-bb << /Box [0 0 1280 640] /At tu-t2 >> place } faded }
+              { /tu-bb << /Box [0 0 1280 640] /At tu-t2 /After /hold >> place } ifelse
+  } if
+  tu-caps { tu-caption } forall
+  % up from the dark at the start
+  now 1.2 lt { 0 setgray 1 now 1.2 div sub setalpha 0 0 1280 720 rectfill 1 setalpha } if
+} def
