@@ -461,8 +461,13 @@ export class PsAnimWidget extends HTMLElement {
         if (!this.driver) {
           const driver = await this.#newDriver(module, generation);
           // A newer open (or a disconnect) superseded this one while the
-          // Worker started: that one makes its own engine and canvas.
+          // engine was made, even in the moment after #newDriver returned:
+          // that one makes its own engine and canvas.
           if (!driver) return;
+          if (generation !== this.generation || !this.isConnected) {
+            driver.close();
+            return;
+          }
           this.driver = driver;
         }
       }
