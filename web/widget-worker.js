@@ -7,6 +7,7 @@
 //   { type: "frame", id, at, signals: [[name, value], ...] }
 //   { type: "event", name, t }  { type: "clear", name }
 // and gets back, for each message with an id,
+//   { id, begun: true }   when it starts on it (the page times it from here)
 //   { id, ok: true, value }  or  { id, ok: false, info, text }
 // Messages are handled one at a time, in the order they came: an event
 // posted after a clear is added after it.
@@ -54,6 +55,7 @@ async function handle(d) {
 self.onmessage = (m) => {
   const d = m.data;
   queue = queue.then(async () => {
+    if (d.id != null) self.postMessage({ id: d.id, begun: true });
     try {
       const value = await handle(d);
       if (d.id != null) self.postMessage({ id: d.id, ok: true, value });

@@ -117,6 +117,10 @@ class WorkerDriver {
       const r = m.data;
       const call = this.calls.get(r.id);
       if (!call) return;
+      if (r.begun) {
+        call.begin();
+        return;
+      }
       this.calls.delete(r.id);
       if (r.ok) call.resolve(r.value);
       else call.reject(r.ps ? new PsAnimError(r.info, r.text) : new Error(r.text));
@@ -128,15 +132,23 @@ class WorkerDriver {
     const off = canvas.transferControlToOffscreen();
     // Settles once the Worker has run its script and started the engine;
     // rejects if the browser could not run it (a module Worker it does not
-    // support fails here, after the constructor returned).
+    // support fails here, after the constructor returned). Timed from now,
+    // not from when it begins: a script that never loads never begins.
     this.ready = this.#call({ type: "init", module, canvas: off }, [off]);
+    delete this.ready.begun;
   }
+  /** Post `msg`; a promise of its result, with `begun`, a promise that
+   * settles when the Worker starts on it (after anything queued before). */
   #call(msg, transfer = []) {
     const id = ++this.next;
-    return new Promise((resolve, reject) => {
-      this.calls.set(id, { resolve, reject });
+    let begin;
+    const begun = new Promise((r) => { begin = r; });
+    const done = new Promise((resolve, reject) => {
+      this.calls.set(id, { resolve, reject, begin });
       this.worker.postMessage({ ...msg, id }, transfer);
     });
+    done.begun = begun;
+    return done;
   }
   #failAll(err) {
     for (const call of this.calls.values()) call.reject(err);
@@ -370,20 +382,30 @@ export class PsAnimWidget extends HTMLElement {
   }
 
   /** `work`, or an error once it has taken longer than the timeout. Only a
-   * Worker can be stopped: the page's own thread cannot be interrupted. */
+   * Worker can be stopped: the page's own thread cannot be interrupted.
+   * The time counts from when the Worker starts on it (`work.begun`), not
+   * while it waits behind an earlier call: that call has its own timeout. */
   #guard(work, what, driver = this.driver) {
     if (driver?.thread !== "worker") return work;
     const ms = this.#timeout();
     let timer;
     const late = new Promise((_, reject) => {
-      timer = setTimeout(() => {
-        const e = new Error(
-          `${what} took longer than ${ms} ms, so the widget was stopped (its timeout attribute sets the limit)`);
-        e.timedOut = true;
-        reject(e);
-      }, ms);
+      const arm = () => {
+        timer = setTimeout(() => {
+          const e = new Error(
+            `${what} took longer than ${ms} ms, so the widget was stopped (its timeout attribute sets the limit)`);
+          e.timedOut = true;
+          reject(e);
+        }, ms);
+      };
+      if (work.begun) work.begun.then(() => { if (!settled) arm(); });
+      else arm();
     });
-    return Promise.race([work, late]).finally(() => clearTimeout(timer));
+    let settled = false;
+    return Promise.race([work, late]).finally(() => {
+      settled = true;
+      clearTimeout(timer);
+    });
   }
 
   /** Close the engine and put a fresh canvas in place of the one it had. */
