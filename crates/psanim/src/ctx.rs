@@ -106,6 +106,12 @@ pub(crate) struct Ctx {
     /// trail: native work the interpreter's budgets cannot see, so it is
     /// capped here (see `particles::charge_gust`).
     pub gust_work: f64,
+    /// Cell updates the cellular automaton words did this moment (see
+    /// `ca::MAX_WORK`).
+    pub cell_work: f64,
+    /// States `cellsteps` has computed, kept across frames: the answer is
+    /// a function of the operands alone, the cache only saves the work.
+    pub cells: crate::ca::Cache,
     /// The particles of each open `particles` call, innermost last.
     pub particles: Vec<crate::particles::ParticleSet>,
     /// Planes opened by `onplane`, innermost last: where the plane is, and
@@ -197,6 +203,8 @@ impl Ctx {
             comps: Vec::new(),
             particles: Vec::new(),
             gust_work: 0.0,
+            cell_work: 0.0,
+            cells: crate::ca::Cache::default(),
             planes: Vec::new(),
             base_dir: None,
             measured_reels: Vec::new(),
@@ -284,6 +292,7 @@ impl Ctx {
         self.comps.clear();
         self.particles.clear();
         self.gust_work = 0.0;
+        self.cell_work = 0.0;
         self.planes.clear();
         self.hint = None;
     }
