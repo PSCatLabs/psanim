@@ -146,6 +146,7 @@ is too low: an entrance is three tweens, a diagram is arithmetic. The
 | (core) | `script` / `then` (one thing after another), `storyboard` (named beats), `cascade`, `within` | [stage.md](references/stage.md) |
 | (core) | `component`, `instance`, `place`: a movie written on its own, placed in another in a box at a time | [components.md](references/components.md) |
 | (core) | `spec { ... } particles`: sparks, fireworks, confetti, snow; bursts and streams under gravity, drag and wind, every particle a function of time | [patterns.md](references/patterns.md#particles-without-state) |
+| (core) | `cellgrid`, `cellsteps`, `cellrows`, `cellcolors`: cellular automata (Life, Brian's Brain, Rule 30) run natively, in a pure movie; the `/automaton` catalog entry | [modes.md](references/modes.md#cellular-automata-a-simulation-that-stays-pure) |
 | (core) | `playlist`, `playlistduration`, `weektime`: a screen that cycles through scenes for ever, with transitions, a schedule and a safe area | [signage.md](references/signage.md) |
 | `pktype` | text in boxes, wrapping, `kinetic` type, counters, captions, end credits | [type.md](references/type.md) |
 | `pkdiagram` | `node`, `edge` (with flowing pulses), `group`, `note`, `circled` | [explain.md](references/explain.md) |

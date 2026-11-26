@@ -4,6 +4,36 @@ Generated from `crates/psanim/catalog/` by `scripts/gen_reference.sh`. Do not ed
 
 Ready-made elements, each a movie of its own. Place one as a component (see components.md): `/x /entry component` in setup, then `/x << /Box [x y w h] /At t >> place` in the scene; `/y /entry << /Params << ... >> >> instance` makes another with other parameters. `psanim catalog NAME` prints an entry's source, which is also the way to learn from or adapt it.
 
+## `/automaton`: Cellular automaton
+
+A cellular automaton that really runs: the Game of Life or another Life-like rule, Brian's Brain, or an elementary rule such as Rule 30 growing a row at a time, from a named pattern, a picture, RLE or a random soup. Dying cells fade. Square, round or LED cells.
+
+768x480, 20.0 s. `/x /automaton component`, then `/x << /Box [..] >> place`.
+
+| Param | Default | Meaning |
+|---|---|---|
+| /Alive | `null` | a live cell [r g b] |
+| /Born | `null` | a cell just born [r g b]; it takes /Mature generations to become /Alive |
+| /Clock | `null` | a procedure { t -- generation } instead of /Rate |
+| /Cols | `0` | cells across, instead of /Grid's (for --param, which cannot give an array) |
+| /Density | `0.3` | for /random: the share of cells alive at the start |
+| /Edge | `/wrap` | /wrap (a torus; the default for /random), /open (gliders fly off; the default for a pattern) or /dead (dead cells beyond the edge) |
+| /Fade | `6` | generations a dead cell takes to fade |
+| /Gap | `0.12` | the space between cells, as a share of /Pitch |
+| /Ghost | `null` | where a cell once lived [r g b] |
+| /Grid | `[96 60]` | cells across and down |
+| /Ground | `null` | the ground [r g b], or /none for a transparent one |
+| /Length | `20` | seconds the entry lasts |
+| /Look | `/square` | /square, /round, or /led (round cells, unlit ones shown, with a glow) |
+| /Mature | `3` | generations a newborn takes to reach /Alive |
+| /Palette | `/ember` | /ember /phosphor /ice /paper: the colours below, unless they are given |
+| /Pattern | `/random` | /random, /gun /glider /rpentomino /acorn /diehard /pulsar /lwss ..., a picture (array of strings, O alive), RLE text, or [ [pattern x y] ... ] |
+| /Pitch | `8` | canvas units from one cell to the next |
+| /Rate | `8` | generations (or rows) a second |
+| /Rows | `0` | cells down, likewise |
+| /Rule | `/life` | /life /highlife /seeds /daynight /maze /replicator /brain, (B3/S23) text, or an elementary rule 0..255 (30, 110) |
+| /Trail | `null` | a cell that has just died [r g b]; it fades over /Fade generations |
+
 ## `/chat`: Chat
 
 A phone conversation of text messages: bubbles in two colours with tails, bouncing dots before each message, timestamps, delivered and read marks, reactions, emoji, and the list scrolling up as messages arrive. Its /Script is a list of [ sender (text) when ]: sender /me or /them, when a pause in seconds or a dictionary (/Typing /At /Time /React ...); the length of the movie follows it.
