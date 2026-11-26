@@ -357,3 +357,24 @@ fn a_join_unlike_anything_else_is_a_seam() {
         "{warnings:?}"
     );
 }
+
+#[test]
+fn a_fixed_sweep_covers_the_same_pairs_every_run() {
+    let src = "<< /Size [64 48] /Duration 20 /FPS 24 >> animation
+        /scene { 0 0 0 setrgbcolor 0 0 64 48 rectfill
+                 1 setgray now 3 mul 64 fmod 20 4 0 360 arc fill } def";
+    let a = run("sweep_fixed", src, &["--sweep", "2"]);
+    let b = run("sweep_fixed", src, &["--sweep", "2"]);
+    assert_eq!(a["pop_scan"]["stretches"], 2, "{a}");
+    assert_eq!(a["pop_scan"]["sized_by"], "flag");
+    assert_eq!(a["pop_scan"]["pairs_judged"], b["pop_scan"]["pairs_judged"]);
+    assert_eq!(a["warnings"], b["warnings"]);
+    // None at all is no "too slow" note: it was asked for.
+    let z = run("sweep_none", src, &["--sweep", "0"]);
+    assert!(
+        !strings(&z, "notes").iter().any(|n| n.contains("too slow")),
+        "{z}"
+    );
+    // Sized by time, it says so.
+    assert_eq!(run("sweep_time", src, &[])["pop_scan"]["sized_by"], "time");
+}

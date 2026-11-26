@@ -34,6 +34,7 @@ is kept per command; past that the text ends with
 | `--from T --to T` | a time range | sheet, render, check |
 | `--seam N` | the last N frames, then the first N | sheet |
 | `--all` | every frame | check |
+| `--sweep N` | exactly N runs of 24 frames scanned for pops, the same on any machine | check |
 
 ## Size and timing
 
@@ -197,10 +198,15 @@ is set by what a frame costs: as many (up to 8, about 230 frames) as fit in
 about 3 seconds, measured on the sampled frames. So the scan adds at most
 about 3 s however slow the frames are; the cost is that a movie with slow
 frames is looked at more thinly (35 ms a frame: 2 runs, about 50 pairs;
-over about 100 ms: none beyond the sampled frames, and a note says so). The runs chosen depend on the machine's speed in that sense,
-and the summary line says how many of the frame pairs were covered. `--all`
-covers every one: use it before a long render. If a run is still going
-after 4 seconds, the scan stops there and a note says so. A movie with
+over about 100 ms: none beyond the sampled frames, and a note says so).
+How many runs that is depends on the machine's speed, so when it is fewer
+than 8 a note names the number: `--sweep N` scans exactly N runs, with no
+time limit, and gives the same pairs and the same findings on any machine
+(`--json` has it as `pop_scan.stretches`, with `sized_by` "time", "flag"
+or "all"). The summary line says how many of the frame pairs were
+covered. `--all` covers every one: use it before a long render. If a
+default run is still going after 4 seconds, the scan stops there and a
+note says so. A movie with
 state (stateful or persistent) is scanned only in a run of six frames
 around each sampled frame, because reaching a frame costs every tick before
 it.

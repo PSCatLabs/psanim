@@ -47,6 +47,7 @@ SELECTING FRAMES
   --count N           N frames spread evenly    (sheet; default 12)
   --from T --to T     a time range              (sheet, render, check)
   --seam N            the last N frames then the first N: a loop's join   (sheet)
+  --sweep N           scan exactly N runs of frames for pops, on any machine (check)
 
 SIZE AND TIMING
   --scale F           pixels per canvas unit (0.5 for a half-size preview)
@@ -529,7 +530,7 @@ struct Sample {
 }
 
 fn cmd_check(rest: &[String]) -> Result<(), Fail> {
-    let c = parse(rest, &["count", "from", "to", "all"])?;
+    let c = parse(rest, &["count", "from", "to", "all", "sweep"])?;
     let (path, source) = c.source().map_err(usage)?;
     // Small frames: a check is about whether the movie works, not how it looks.
     let opts = c.options(Scale::Width(320)).map_err(usage)?;
@@ -591,7 +592,15 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
     let sweep_started = Instant::now();
     let mut cut_short = false;
     let mut chunks = scan::MAX_CHUNKS;
-    if !c.has("all") && meta.mode == psanim::Mode::Pure {
+    // `--sweep N`: exactly N stretches, with no time limit, so a scan the
+    // report names can be repeated on any machine.
+    let fixed: Option<u64> = c.extra_num("sweep").map_err(usage)?;
+    if let (Some(n), false) = (fixed, c.has("all")) {
+        chunks = n;
+        if meta.mode == psanim::Mode::Pure && n > 0 {
+            scan.sweep(&mut movie, first, n, std::time::Duration::from_secs(86_400))?;
+        }
+    } else if !c.has("all") && meta.mode == psanim::Mode::Pure {
         // As many stretches as fit the time budget at what a frame costs
         // (the median of the sampled ones: the first is slow to warm up).
         let mut costs: Vec<f64> = samples.iter().map(|s| s.millis).collect();
@@ -662,8 +671,14 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
     let found = scan.findings();
     if cut_short {
         notes.push(format!("the scan for pops hit its {} s time limit with frames this slow, so which pairs it covered, and what it found, depend on the machine's speed", scan::SWEEP_CEILING.as_secs()));
-    } else if chunks == 0 {
+    } else if chunks == 0 && fixed.is_none() {
         notes.push("frames are too slow for the default scan for pops (it takes about 3 s): only the sampled frames were looked at. `--all` scans every frame".into());
+    } else if fixed.is_none()
+        && !c.has("all")
+        && meta.mode == psanim::Mode::Pure
+        && chunks < scan::MAX_CHUNKS
+    {
+        notes.push(format!("the scan for pops covered {chunks} stretches of frames, as many as fit about 3 s on this machine; `--sweep {chunks}` repeats this scan anywhere, and `--all` scans every frame"));
     }
     // A cut the movie declares (`/Cuts [t ...]`) is not reported: the pair
     // whose later frame is within a frame of it.
@@ -867,7 +882,7 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
                 "mean_frame_ms": mean_ms,
                 "slowest_frame": slowest.map(|s| json!({"frame": s.index, "ms": s.millis})),
                 "loop_seam": seam.map(|(join, typical)| json!({"step": join, "typical_step": typical})),
-                "pop_scan": {"pairs_judged": covered, "pairs_possible": possible, "ms": (sweep_ms * 10.0).round() / 10.0},
+                "pop_scan": {"pairs_judged": covered, "pairs_possible": possible, "stretches": if c.has("all") || meta.mode != psanim::Mode::Pure { serde_json::Value::Null } else { chunks.into() }, "sized_by": if c.has("all") { "all" } else if fixed.is_some() { "flag" } else { "time" }, "ms": (sweep_ms * 10.0).round() / 10.0},
                 "warnings": warnings, "notes": notes, "printed": printed.text,
                 "output_truncated": printed.truncated,
                 "samples": samples.iter().map(|s| json!({
