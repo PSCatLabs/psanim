@@ -430,3 +430,23 @@ fn a_rotated_components_vignette_and_grain_stay_inside_its_rotated_box() {
         }
     }
 }
+
+#[test]
+fn a_playlist_made_in_a_components_setup_plays_its_scenes() {
+    let mut m = load(
+        "/outer << /Size [40 40]
+             /Setup { /show [ [1 /spinner] ] << >> playlist }
+             /Scene { /show << >> place } >> component
+         /scene { /outer << >> place } def",
+    );
+    m.render_at(0.5).unwrap_or_else(|e| panic!("{e}"));
+}
+
+#[test]
+fn a_playlist_forwards_its_seed() {
+    let mut m = load(
+        "/show [ [1 { movieseed == }] ] << /Seed 7 >> playlist
+         /scene { /show << >> place } def",
+    );
+    assert_eq!(printed(&mut m, 0.5), "7");
+}

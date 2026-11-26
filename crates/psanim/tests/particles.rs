@@ -321,3 +321,18 @@ fn many_gust_tables_count_against_the_budget_before_they_are_built() {
         started.elapsed()
     );
 }
+
+#[test]
+fn a_periodic_moving_emitter_repeats_its_path() {
+    let src = "<< /Size [200 100] /Duration 6 /FPS 10 /Background [0 0 0] >> animation
+        /scene { << /At [0 [40 50] /linear 1 [160 50] /linear 2 [40 50]] /Inherit 1
+                    /Period 2 /Rate 2 /Life 0.5 /Speed 0 >>
+                 { 1 setgray 0 0 3 0 360 arc fill } particles } def";
+    let mut m = psanim::Movie::load(src, &psanim::Options::default()).unwrap();
+    let a = m.render_at(0.7).unwrap().premultiplied.to_vec();
+    let b = m.render_at(2.7).unwrap().premultiplied.to_vec();
+    let c = m.render_at(4.7).unwrap().premultiplied.to_vec();
+    assert!(a.iter().any(|v| *v != 0), "a particle is drawn");
+    assert_eq!(a, b);
+    assert_eq!(a, c);
+}

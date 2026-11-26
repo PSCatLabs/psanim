@@ -654,10 +654,13 @@ end
   } ifelse
 } bind def
 /.compget {
-  dup .compfind { exch pop } {
-    (no component named /) exch 64 string cvs strcat
-    (: define it in setup with /name (file.ps) component or /name << ... >> component) strcat .comperror
-  } ifelse
+  % A record already (a playlist's scene) is its own component.
+  dup type /dicttype ne {
+    dup .compfind { exch pop } {
+      (no component named /) exch 64 string cvs strcat
+      (: define it in setup with /name (file.ps) component or /name << ... >> component) strcat .comperror
+    } ifelse
+  } if
 } bind def
 % /name dict-or-(file.ps)-or-/entry component
 %                                       define a component and set up its
@@ -883,9 +886,12 @@ end
         sc-kind /proc eq {
           pf-box .plwhat dup type /nametype eq { load } if /within cvx
         } {
-          sc-cname
+          % The scene's own record, not its name: a playlist made in a
+          % component's setup plays in a namespace of its own, which cannot
+          % look that component's registry up.
+          sc-cname .compget dup
           << /Box pf-box /Before /hold /After
-             sc-cname .compget /loop get { /loop } { /hold } ifelse >>
+             7 -1 roll /loop get { /loop } { /hold } ifelse >>
           /place cvx
         } ifelse
       ] cvx
@@ -932,6 +938,7 @@ end
     pf-r /cycle 0 pf-r /scenes get { begin sc-hold sc-dout add end add } forall put
     .pls pf-n pf-r put
     pf-n << /Size pf-r /size get
+            /Seed pf-o /Seed 1 .dget
             /Duration
               pf-r /scheduled get { pf-o /Duration 604800 .dget } { pf-r /cycle get } ifelse
             /Loop true

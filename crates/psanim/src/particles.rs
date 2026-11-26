@@ -277,6 +277,13 @@ impl Emitter {
         match &self.at {
             Place::Point(x, y) => Ok((*x, *y)),
             Place::Keys(items) => {
+                // A periodic emitter follows its path on the periodic clock,
+                // so the particles born a period apart start from one place.
+                let t = if self.period > 0.0 {
+                    t.rem_euclid(self.period)
+                } else {
+                    t
+                };
                 let v = eval_keys(ctx, items, t)?;
                 match v.as_numbers().as_deref() {
                     Some([x, y]) => Ok((*x, *y)),
