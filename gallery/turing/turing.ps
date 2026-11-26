@@ -40,8 +40,8 @@
 /tu-x 1.0 def                                        % the cross-fade from one program to the next
 /tu-t1 /tu-add componentduration def                 % the adder holds its halt until here
 /tu-t2 tu-t1 tu-x sub def                            % the beaver begins
-/tu-addhalt tu-t1 4.2 sub def                        % (its /Tail)
-/tu-bbhalt tu-t2 /tu-bb componentduration add 5.5 sub def
+/tu-addhalt tu-t1 tu-addp /Tail get sub def          % when it halts
+/tu-bbhalt tu-t2 /tu-bb componentduration add tu-bbp /Tail get sub def
 /tu-len tu-t2 /tu-bb componentduration add def
 
 << /Size [1280 720] /Duration tu-len /FPS 30 /Background [0.07 0.075 0.085]

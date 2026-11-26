@@ -270,9 +270,9 @@ dup tm-head0 tm-dz sub lt { pop tm-head0 tm-dz sub } if dup tm-head0 tm-dz add g
   0.3 0.32 0.34 setrgbcolor tm-x0 544 tm-x1 tm-x0 sub 4 rectfill
   0.13 0.14 0.15 setrgbcolor tm-x0 352 tm-x1 tm-x0 sub 3 rectfill
   % the scale engraved on it, a number under every cell, and its ticks
-  /Helvetica-Bold findfont 13 scalefont setfont
+  /Helvetica-Bold findfont 16 scalefont setfont
   tm-c0 1 tm-c1 { /tm-i exch def
-    0.5 0.5 0.47 setrgbcolor tm-i 3 string cvs tm-i tm-cw mul 368 tm-ctext
+    0.55 0.55 0.51 setrgbcolor tm-i 3 string cvs tm-i tm-cw mul 365 tm-ctext
     0.36 0.37 0.38 setrgbcolor tm-i tm-cw mul tm-cw 2 div sub 384 1.2 10 rectfill
   } for
   % guide blocks along the bed that hold the tape down, every fourth cell
@@ -354,12 +354,12 @@ dup tm-head0 tm-dz sub lt { pop tm-head0 tm-dz sub } if dup tm-head0 tm-dz add g
   % the slot the stamp rides in, dark, with the stamp seen inside when it is up
   % the read lamp, and the state the head is in, on its front
   -66 602 7.5 [1 0.72 0.3] tm-readlit tm-lamp
-  /Helvetica-Bold findfont 9 scalefont setfont 0.82 0.76 0.6 setrgbcolor (READ) -66 583 1 tm-track
+  /Helvetica-Bold findfont 12 scalefont setfont 0.82 0.76 0.6 setrgbcolor (READ) -66 580 0.5 tm-track
   0.08 0.09 0.09 setrgbcolor 50 572 34 40 3 tm-rrect fill
   /Courier-Bold findfont 32 scalefont setfont
   tm-halt tm-shown eq { 1 0.35 0.25 } { 1 0.78 0.42 } ifelse setrgbcolor
   tm-shown tm-halt eq { (H) } { tm-shown 8 string cvs } ifelse 67 580 tm-ctext
-  /Helvetica-Bold findfont 9 scalefont setfont 0.82 0.76 0.6 setrgbcolor (STATE) 67 560 1 tm-track
+  /Helvetica-Bold findfont 12 scalefont setfont 0.82 0.76 0.6 setrgbcolor (STATE) 67 557 0.5 tm-track
   -78 536 tm-screw 78 536 tm-screw -78 618 tm-screw 78 618 tm-screw
   grestore
 } def
@@ -417,7 +417,7 @@ dup tm-head0 tm-dz sub lt { pop tm-head0 tm-dz sub } if dup tm-head0 tm-dz add g
       { 0.12 0.12 0.13 setrgbcolor /Courier-Bold findfont 26 scalefont setfont tm-sn 8 string cvs } ifelse
     tm-a cos 64 mul tm-a sin 64 mul 9 sub tm-ctext
   } for
-  0.4 0.38 0.34 setrgbcolor /Helvetica-Bold findfont 11 scalefont setfont (STATE) 0 -52 2 tm-track
+  0.4 0.38 0.34 setrgbcolor /Helvetica-Bold findfont 13 scalefont setfont (STATE) 0 -54 2 tm-track
   % the needle, and its hub
   gsave tm-needle rotate
   0 setgray 0.25 setalpha newpath -14 -4 moveto 74 -3 lineto 74 -1 lineto -14 2 lineto closepath fill 1 setalpha
@@ -428,13 +428,13 @@ dup tm-head0 tm-dz sub lt { pop tm-head0 tm-dz sub } if dup tm-head0 tm-dz add g
   1 setgray 0.07 setalpha newpath 0 0 96 100 170 arc 0 0 70 170 100 arcn closepath fill 1 setalpha
   grestore
   % the counters
-  (STEPS) 432 226 12 tm-engrave
+  (STEPS) 432 226 15 tm-engrave
   tm-stepv tm-sdig 432 tm-sdig 44 mul 2 div sub 154 tm-drums
-  (MARKS ON TAPE) 432 122 12 tm-engrave
+  (MARKS ON TAPE) 432 122 15 tm-engrave
   tm-onesv tm-odig 432 tm-odig 44 mul 2 div sub 50 tm-drums
   % the lamps
-  356 262 8 [0.35 1 0.45] tm-runlit tm-lamp (RUN) 386 258 10 tm-engrave
-  480 262 8 [1 0.22 0.12] tm-haltlit tm-lamp (HALT) 514 258 10 tm-engrave
+  356 262 8 [0.35 1 0.45] tm-runlit tm-lamp (RUN) 392 257 13 tm-engrave
+  480 262 8 [1 0.22 0.12] tm-haltlit tm-lamp (HALT) 522 257 13 tm-engrave
   tm-card
 } def
 /tm-dang { % i -> the dial angle of state i
@@ -444,9 +444,9 @@ dup tm-head0 tm-dz sub lt { pop tm-head0 tm-dz sub } if dup tm-head0 tm-dz add g
 % ---- the program card ----------------------------------------------------------------
 /tm-cx 588 def /tm-cy 26 def /tm-cwid 640 def /tm-chi 254 def
 /tm-cols [ 70 160 0 290 400 530 ] def      % state, reads, (arrow), writes, moves, next: centres from the card's left
-/tm-rowh tm-chi 66 sub tm-table length div 30 min def
+/tm-rowh tm-chi 72 sub tm-table length div 30 min def
 /tm-rowy { % i -> the baseline of row i
-  tm-cy tm-chi add 64 sub tm-rowh 0.72 mul sub exch tm-rowh mul sub
+  tm-cy tm-chi add 70 sub tm-rowh 0.72 mul sub exch tm-rowh mul sub
 } def
 /tm-cardsym { % sym x y: a symbol as the card writes it, a blank as an empty cell
   3 dict begin /y exch def /x exch def /sy exch def
@@ -474,9 +474,9 @@ dup tm-head0 tm-dz sub lt { pop tm-head0 tm-dz sub } if dup tm-head0 tm-dz add g
   % the program's name, typed, and the column heads
   /Courier-Bold findfont 19 scalefont setfont 0.16 0.15 0.14 setrgbcolor
   tm-cx 22 add tm-cy tm-chi add 30 sub moveto tm-name show
-  /Helvetica-Bold findfont 10 scalefont setfont 0.45 0.42 0.38 setrgbcolor
+  /Helvetica-Bold findfont 13 scalefont setfont 0.42 0.39 0.35 setrgbcolor
   [ (IN STATE) (READS) () (WRITES) (MOVES) (GOES TO) ] 0 1 5 { /tm-i exch def
-    dup tm-i get tm-cx tm-cols tm-i get add tm-cy tm-chi add 56 sub 1 tm-track } for pop
+    dup tm-i get tm-cx tm-cols tm-i get add tm-cy tm-chi add 58 sub 0.8 tm-track } for pop
   % the rule in use: lit from behind, the last one fading as the next comes on
   0 1 tm-table length 1 sub { dup tm-rowlit exch get tm-lightrow } for
   % the rows

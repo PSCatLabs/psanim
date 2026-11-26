@@ -63,12 +63,13 @@ never halts.
   So at full speed they compress together.
 - **The camera is a dead zone, worked out in setup, then averaged.** For
   each step, the camera moves only if the head would leave the middle of
-  the frame. A frame averages that track over sixteen moments either side
-  of its own time. The average looks ahead as far as it looks back, so it
-  does not lag, and a fast run becomes a steady pan rather than one jerk
-  per cell.
+  the frame. A frame averages that track at sixteen moments spread over
+  0.36 s, centred on its own time. The average looks ahead as far as it
+  looks back, so it does not lag, and a fast run becomes a steady pan
+  rather than one jerk per cell.
 - **The rows fade like warm bulbs.** A row lights as its step begins, and
-  the rows used before it fade out over about a tenth of a second. In the
+  the rows used before it fade out exponentially, with a time constant of
+  0.13 s. In the
   fast stretch the card therefore shows the last few rules, not a
   highlight jumping every four frames, which `check --all` would report as
   a pop.
