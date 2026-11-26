@@ -182,6 +182,12 @@ fn bad_operands_say_what_is_wanted() {
         ("(.O.) 30 1e30 cellrows", "1 to"),
         ("(abc) 1e30 [0 0 0] cellmask", "1 to 2048"),
         ("() 4 [0 0 0] cellmask", "rows"),
+        // A cell's age saturates at 126 dead and 127 alive.
+        ("(abc) << /Fade 200 >> 0 cellcolors", "/Fade at most 126"),
+        (
+            "(abc) << /Mature 128 >> 0 cellcolors",
+            "/Mature is at most 127",
+        ),
     ] {
         let src = format!("{HEAD}/scene {{ {prog} pop }} def");
         let mut m = Movie::load(&src, &Options::default()).unwrap();

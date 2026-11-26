@@ -55,8 +55,8 @@
 /Trail null param /trail0 exch def                                  % a cell that has just died [r g b]; it fades over /Fade generations
 /Ghost null param /ghost0 exch def                                  % where a cell once lived [r g b]
 /Ground null param /ground0 exch def                                % the ground [r g b], or /none for a transparent one
-/Fade 6 param /fade exch def                                        % generations a dead cell takes to fade
-/Mature 3 param /mature exch def                                    % generations a newborn takes to reach /Alive
+/Fade 6 param /fade exch def                                        % generations a dead cell takes to fade (at most 126)
+/Mature 3 param /mature exch def                                    % generations a newborn takes to reach /Alive (at most 127)
 /MaxGeneration 0 param /maxgen0 exch def                             % elementary rules: the most rows a /Clock reaches, if sampling it may miss its peak (0: sampled)
 
 % ---- colours ----------------------------------------------------------------------

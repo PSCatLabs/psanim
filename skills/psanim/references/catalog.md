@@ -18,14 +18,14 @@ A cellular automaton that really runs: the Game of Life or another Life-like rul
 | /Cols | `0` | cells across, instead of /Grid's (for --param, which cannot give an array) |
 | /Density | `0.3` | for /random: the share of cells alive at the start |
 | /Edge | `/wrap` | /wrap (a torus; the default for /random), /open (gliders fly off; the default for a pattern) or /dead (dead cells beyond the edge) |
-| /Fade | `6` | generations a dead cell takes to fade |
+| /Fade | `6` | generations a dead cell takes to fade (at most 126) |
 | /Gap | `0.12` | the space between cells, as a share of /Pitch |
 | /Ghost | `null` | where a cell once lived [r g b] |
 | /Grid | `[96 60]` | cells across and down |
 | /Ground | `null` | the ground [r g b], or /none for a transparent one |
 | /Length | `20` | seconds the entry lasts |
 | /Look | `/square` | /square, /round, or /led (round cells, unlit ones shown, with a glow); /round and /led draw cell by cell: keep them to about 100 x 60 |
-| /Mature | `3` | generations a newborn takes to reach /Alive |
+| /Mature | `3` | generations a newborn takes to reach /Alive (at most 127) |
 | /MaxGeneration | `0` | elementary rules: the most rows a /Clock reaches, if sampling it may miss its peak (0: sampled) |
 | /Palette | `/ember` | /ember /phosphor /ice /paper: the colours below, unless they are given |
 | /Pattern | `/random` | /random, /gun /glider /rpentomino /acorn /diehard /pulsar /lwss ..., a picture (array of strings, O alive), RLE text, or [ [pattern x y] ... ] |

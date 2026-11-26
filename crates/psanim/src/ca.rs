@@ -36,6 +36,10 @@ pub const MAX_CELLS: usize = 1 << 22;
 /// The most cells a grid may have across, or down (except an elementary
 /// history, which may be as many rows as fit in [`MAX_CELLS`]).
 pub const MAX_SIDE: usize = 2048;
+/// The longest `/Mature` and `/Fade`, in generations: how far a cell's
+/// 7-bit age counts alive and dead.
+pub const MAX_MATURE: f64 = 127.0;
+pub const MAX_FADE: f64 = 126.0;
 /// The most cell updates the words may do in one moment (a frame, or a
 /// tick): about a second of native work on an Apple M4, where the acorn's
 /// 5206 generations on 300 x 380 cells (593 million updates) took 0.49 s.
@@ -1013,6 +1017,17 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             ghost: rgb_of(p.get("Ghost"), ground),
             ground,
         };
+        // A cell's age is kept in 7 bits: it counts to 127 generations alive
+        // and 126 dead, and a transition longer than that would never end.
+        if !(pal.mature <= MAX_MATURE && pal.fade <= MAX_FADE) {
+            return fail(
+                ctx,
+                PsError::Rangecheck,
+                format!(
+                    "cellcolors: /Mature is at most {MAX_MATURE} generations and /Fade at most {MAX_FADE} (a cell's age is kept in 7 bits)"
+                ),
+            );
+        }
         if cells.len() > MAX_CELLS {
             return fail(
                 ctx,
