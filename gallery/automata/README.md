@@ -1,20 +1,20 @@
 # Simple Rules
 
-A 56 second film (1280x720, 30 fps, pure) about cellular automata: simple
+A 58 second film (1280x720, 30 fps, pure) about cellular automata: simple
 local rules that grow into structure nobody drew. Three movements, each a
 rule that really runs.
 
-1. **Rule 30** (0 to 21 s). One live cell. Each row below is made from
+1. **Rule 30** (0 to 23 s). One live cell. Each row below is made from
    the three cells above it; the rule's eight cases are on screen while
    the first ten rows arrive. Then the rows come faster, the camera
    follows the newest one down through the chaos, and pulls back to show
-   all 360 generations at once: a triangle, regular stripes down its left
+   all 300 generations at once: a triangle, regular stripes down its left
    side, chaos on its right.
-2. **The Game of Life** (21 to 36 s). Gosper's glider gun fires a glider
+2. **The Game of Life** (23 to 38 s). Gosper's glider gun fires a glider
    every thirty generations, at 18 generations a second; cells that die
    fade from ember to ash, so the motion reads at film speed, and the
    camera eases back from the gun.
-3. **Methuselahs** (35.5 s to the end). Diehard, the R-pentomino and the
+3. **Methuselahs** (37.5 s to the end). Diehard, the R-pentomino and the
    acorn side by side, each starting at four generations a second and
    gathering speed so that all three reach their known ends together:
    diehard is gone after 130 generations, the R-pentomino settles at
@@ -27,12 +27,16 @@ rule that really runs.
 Nothing is keyframed but the cameras. The cells come from the native
 cellular automaton words:
 
-- `cellrows` gives Rule 30's whole history (361 rows of 721 cells) once,
+- `cellrows` gives Rule 30's whole history (301 rows of 601 cells) once,
   in setup; `cellcolors` colours it row by row (gold, coral, violet), and
   the scene shows as many rows as the clock has reached, as one
   `colorimage` cropped to what the camera sees. Below 4 pixels a cell the
-  image is drawn with `/Interpolate true`, which keeps the pull-back from
-  shimmering.
+  image is drawn with `/Interpolate true` (bilinear), so a cell 1.85
+  pixels wide is blended at its edges instead of being snapped to one or
+  two whole pixels.
+- The rows arrive two a second for the first ten, then follow one cubic
+  that leaves at that speed and arrives at row 300 at rest, and the zoom
+  is one ease in log scale: the scroll never stops or jumps.
 - Movements 2 and 3 place the catalog's `/automaton` entry: one instance
   for the gun, three for the methuselahs. Each has its own `/Clock`, a
   procedure from its time to its generation (for the methuselahs an
@@ -57,16 +61,23 @@ your own) and the film is different and still right.
 
 ## Things worth knowing
 
-- Playing in order, a frame costs about 17 ms at full size on an Apple
-  M4 (`check --all --scale 1`: mean 16.6 ms, slowest 47.9 ms) and 2.4 ms
-  at preview size. A frame reached cold costs every generation before it:
-  `psanim frame --at 53` runs the acorn's 5206 generations on 114,000
-  cells first, about half a second.
-- `check --all` warns of abrupt changes on every frame from 9.5 to 16.8 s.
-  That is the camera following the newest row and pulling back: the
-  whole picture moves every frame through a texture of cells a few
-  pixels wide, which the pop detector reads as a cut. Nothing appears
-  or vanishes there.
+- While the rows rush past (7.4 to 19.7 s) the triangle is drawn four
+  times across half a frame, each over the last with weight 1/(k+1), a
+  motion blur of its own: `/MotionBlur` would also blur the Life films,
+  mixing several generations into one frame.
+- Measured on an Apple M4 with `check --all` (every frame, in order): a
+  mean of 27 ms a frame at full size (slowest 191 ms, in the blurred
+  pull-back) and 2.7 ms at preview size. A frame reached cold costs every
+  generation before it: `psanim frame --at 55` runs the acorn's 5206
+  generations on 114,000 cells first, 0.6 s in all; the default `check`,
+  which samples frames out of order, averages 55 ms a frame at preview
+  size.
+- `check --all` warns of abrupt changes on every frame from 7.9 to 16.9 s.
+  There the camera follows the newest row and pulls back, so a texture of
+  high-contrast cells a few pixels wide moves by about a cell every frame
+  and nearly every pixel changes; the detector reads that as a cut.
+  Nothing appears or vanishes there. (A smooth full-frame move, such as
+  the tilt in `salt-roads`, does not trip it.)
 
 ## Render
 

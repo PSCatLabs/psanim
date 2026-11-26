@@ -1,11 +1,11 @@
 %!PS
-% Poster: 53
+% Poster: 55
 % Simple Rules: cellular automata, from Rule 30 to the Game of Life.
 %
 % Three movements, each a rule that really runs:
 %   1. Rule 30. One live cell; each row below is the rule applied to the row above
 %      (the eight cases are on screen). The camera follows the newest row, then
-%      pulls back to show 360 generations at once.
+%      pulls back to show 300 generations at once.
 %   2. Conway's Life. Gosper's glider gun fires a glider every 30 generations;
 %      cells that die fade from ember to ash.
 %   3. Methuselahs. Diehard, the R-pentomino and the acorn, side by side, each
@@ -28,10 +28,10 @@
 %     its colours, a gradient down the rows, are made once in setup with
 %     `cellcolors`.
 
-<< /Size [1280 720] /Duration 56 /FPS 30
+<< /Size [1280 720] /Duration 58 /FPS 30
    /Background [0.027 0.025 0.043]
    /Title (Simple Rules)
-   /Description (Cellular automata that really run: Rule 30 grows from one cell and pulls back to 360 generations, Gosper's glider gun fires, and diehard, the R-pentomino and the acorn run to their known ends.)
+   /Description (Cellular automata that really run: Rule 30 grows from one cell and pulls back to 300 generations, Gosper's glider gun fires, and diehard, the R-pentomino and the acorn run to their known ends.)
 >> animation
 
 /pkstage use /pktype use /pkmotion use
@@ -40,19 +40,19 @@
    /body /Palatino-Italic /serif /Palatino-Roman /mono /Courier >> usetheme
 
 % ---- what can be edited ----------------------------------------------------------
-/A0 0 def    /A1 21.5 def       % movement 1: Rule 30
-/B0 21 def   /B1 36 def         % movement 2: the gun
-/C0 35.5 def /Cend 56 def       % movement 3: methuselahs
+/A0 0 def    /A1 23.5 def       % movement 1: Rule 30
+/B0 23 def   /B1 38 def         % movement 2: the gun
+/C0 37.5 def /Cend 58 def       % movement 3: methuselahs
 /xfade 1.2 def                  % seconds one movement takes to give way to the next
 /bgc [0.027 0.025 0.043] def
 
 /rule 30 def
-/R 360 def                      % rows of Rule 30 shown at the end
+/R 300 def                      % rows of Rule 30 shown at the end
 /RC R 2 mul 1 add def           % columns: wide enough that the edge never matters
 
 % ---- 1. Rule 30 -------------------------------------------------------------------
 /hist RC 1 /single cellgrid rule R 1 add cellrows def
-% Colours down the rows: gold at the apex, coral, then violet at row 360.
+% Colours down the rows: gold at the apex, coral, then violet at the last row.
 /rowcol { % i -> [r g b]
   R div /u exch def
   u 0.5 lt { u 2 mul [1 0.8 0.45] [0.97 0.42 0.34] } { u 0.5 sub 2 mul [0.97 0.42 0.34] [0.56 0.34 0.86] } ifelse
@@ -67,11 +67,20 @@
 } for
 
 % rows shown and the camera, as functions of the clock
-/rowsat { % -> r (fractional)
-  [ 1.2 0 6.2 10 /linear 10.5 64 /quad-in 18.2 R /sine-inout ] keyframes
+/slowend 6.2 def /pullend 20.2 def                 % ten rows one by one, then the rest and the pull back
+/rowsat { % -> r (fractional): two rows a second, then a cubic that leaves at that speed
+  % and arrives at row R at rest, so the scroll never stops or jumps
+  now slowend lt { now 1.2 sub 0 max 2 mul } {
+    /hu now slowend sub pullend slowend sub div 0 1 clamp def
+    /hT pullend slowend sub def
+    hu hu mul /hu2 exch def hu2 hu mul /hu3 exch def
+    hu3 2 mul hu2 3 mul sub 1 add 10 mul                % h00 x 10
+    hu3 hu2 2 mul sub hu add hT 2 mul mul add           % h10 x the slope
+    hu3 -2 mul hu2 3 mul add R mul add                  % h01 x R
+  } ifelse
 } def
-/pxat { % -> pixels per cell: held, then a zoom out even in log scale
-  [ 6.2 30 ln 10.5 14 ln /sine-inout 18.2 1.55 ln /sine-inout ] keyframes 2.718281828 exch exp
+/pxat { % -> pixels per cell: held, then a zoom out even in log scale, at rest at both ends
+  slowend pullend /sine-inout tween 30 ln 1.85 ln between 2.718281828 exch exp
 } def
 
 /drawrule30 {
@@ -110,9 +119,9 @@
     gsave r n sub 0 1 clamp 1.6 mul 1 min setalpha n n 1 add drows grestore
   } if
   % the gaps between cells, while they are big enough to see
-  s 5 gt {
+  s 24 gt {
     gsave
-      bgc aload pop setrgbcolor s 5 sub 6 div 1 min setalpha s 0.12 mul setlinewidth
+      bgc aload pop setrgbcolor s 24 sub 4 div 1 min setalpha s 0.12 mul setlinewidth
       c0 1 c1 1 add { s mul x0 add dup topy n 1 add s mul sub 0 max moveto topy 720 min lineto } for
       r0 1 n 1 add { s mul topy exch sub dup x0 c0 s mul add exch moveto x0 c1 1 add s mul add exch lineto } for
       stroke
@@ -146,10 +155,18 @@
   grestore
 } def
 
+/blurn 4 def                                        % samples a frame while the rows rush
 /movement1 {
-  drawrule30
+  % While the rows rush past, a motion blur of our own: the triangle drawn at four
+  % moments across half a frame, each over the last with weight 1/(k+1), so all
+  % four count the same. (/MotionBlur would blur the Life films too.)
+  now 7.4 gt now pullend 0.5 sub lt and {
+    0 1 blurn 1 sub { /bk exch def
+      1 bk 1 add div { bk blurn div 0.5 mul fps div { drawrule30 } delayed } faded
+    } for
+  } { drawrule30 } ifelse
   % a dusk over the oldest rows, so the words stay legible over the cells
-  /dk 1 16.5 18.2 /sine-inout tween sub 0.85 mul def
+  /dk 1 18.5 20.2 /sine-inout tween sub 0.85 mul def
   dk 0 gt {
     gsave bgc aload pop setrgbcolor
       0 1 23 { /i exch def i 24 div /v exch def 1 v sub 1.5 exp dk mul setalpha 0 720 i 1 add 7 mul sub 1280 7.5 rectfill } for
@@ -160,10 +177,10 @@
   0 0.8 /quad-out tween { /title 50 face /fg ink (Rule 30) [ 64 628 400 60 ] /w showin } faded
   /body 26 face [0.82 0.78 0.76] aload pop setrgbcolor
   0.6 1.4 /quad-out tween { (each cell is made from the three above it) [ 66 590 800 32 ] /w showin } faded
-  0.8 1.6 /quad-out tween 7.8 8.6 /quad-in tween 1 exch sub mul legend
-  17.9 18.8 /quad-out tween {
+  0.8 1.6 /quad-out tween 6.0 6.8 /quad-in tween 1 exch sub mul legend
+  19.9 20.8 /quad-out tween {
     /body 26 face /muted ink
-    (three hundred and sixty generations from a single cell) [ 0 28 1280 34 ] /c showin
+    (three hundred generations from a single cell) [ 0 28 1280 34 ] /c showin
   } faded
 } def
 
@@ -243,7 +260,7 @@
 /pw 360 def /ph 430 def /pgap 40 def /py 140 def
 /px0 640 pw 1.5 mul sub pgap sub def
 /smax 14 def                                         % pixels a cell, at most
-/fill 0.8 def                                        % of the panel the lived-in box fills
+/framefill 0.8 def                                   % of the panel the lived-in box fills
 
 /livedbox { % gen -> [x0 y0 x1 y1]: where life has been, without the gliders' tracks
   /lg exch def panelgrids pidx get pcols opengrid lg cellsteps pcols 0.3 cellbounds
@@ -259,7 +276,7 @@
   % the camera frames where life has been, between this generation and the next
   g dup floor sub g floor cvi livedbox g floor cvi 1 add livedbox between aload pop
   /y1 exch def /x1 exch def /y0 exch def /x0 exch def
-  /s pw fill mul x1 x0 sub 5 add div ph fill mul y1 y0 sub 5 add div min smax min def
+  /s pw framefill mul x1 x0 sub 5 add div ph framefill mul y1 y0 sub 5 add div min smax min def
   /cx x0 x1 add 1 add 2 div def
   /cy y0 y1 add 1 add 2 div def
   gsave
