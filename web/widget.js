@@ -72,6 +72,11 @@ function compiled(url) {
   return p;
 }
 
+/** The error a widget's timeout gives. */
+function timedOut(e) {
+  return e?.timedOut === true;
+}
+
 /** Whether this browser can render a widget in a Worker. */
 function workersWork() {
   return typeof Worker === "function" && typeof OffscreenCanvas === "function" &&
@@ -121,13 +126,16 @@ class WorkerDriver {
       this.#failAll(new Error(`the widget's worker failed: ${e.message || "it could not start"}`));
     };
     const off = canvas.transferControlToOffscreen();
-    this.worker.postMessage({ type: "init", module, canvas: off }, [off]);
+    // Settles once the Worker has run its script and started the engine;
+    // rejects if the browser could not run it (a module Worker it does not
+    // support fails here, after the constructor returned).
+    this.ready = this.#call({ type: "init", module, canvas: off }, [off]);
   }
-  #call(msg) {
+  #call(msg, transfer = []) {
     const id = ++this.next;
     return new Promise((resolve, reject) => {
       this.calls.set(id, { resolve, reject });
-      this.worker.postMessage({ ...msg, id });
+      this.worker.postMessage({ ...msg, id }, transfer);
     });
   }
   #failAll(err) {
@@ -140,7 +148,11 @@ class WorkerDriver {
   clear(name) { this.worker.postMessage({ type: "clear", name }); }
   close() {
     this.worker.terminate();
-    this.#failAll(new Error("the widget was closed"));
+    // What was waiting on it was cut off by the widget itself (a timeout,
+    // a disconnect): not an error of its own to show.
+    const e = new Error("the widget was closed");
+    e.closed = true;
+    this.#failAll(e);
   }
 }
 
@@ -359,13 +371,17 @@ export class PsAnimWidget extends HTMLElement {
 
   /** `work`, or an error once it has taken longer than the timeout. Only a
    * Worker can be stopped: the page's own thread cannot be interrupted. */
-  #guard(work, what) {
-    if (this.driver?.thread !== "worker") return work;
+  #guard(work, what, driver = this.driver) {
+    if (driver?.thread !== "worker") return work;
     const ms = this.#timeout();
     let timer;
     const late = new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error(
-        `${what} took longer than ${ms} ms, so the widget was stopped (its timeout attribute sets the limit)`)), ms);
+      timer = setTimeout(() => {
+        const e = new Error(
+          `${what} took longer than ${ms} ms, so the widget was stopped (its timeout attribute sets the limit)`);
+        e.timedOut = true;
+        reject(e);
+      }, ms);
     });
     return Promise.race([work, late]).finally(() => clearTimeout(timer));
   }
@@ -377,25 +393,31 @@ export class PsAnimWidget extends HTMLElement {
     this.inflight = false;
   }
 
-  #newDriver(module) {
+  /** Put a fresh canvas in place of the current one: a canvas handed to
+   * an OffscreenCanvas cannot be drawn on from the page again. */
+  #freshCanvas() {
     const fresh = document.createElement("canvas");
     fresh.setAttribute("part", "canvas");
     this.canvas.replaceWith(fresh);
     this.canvas = fresh;
-    const want = this.getAttribute("thread");
-    if (want !== "main" && workersWork()) {
+    return fresh;
+  }
+
+  /** An engine in a Worker if this browser can run one, else in the page.
+   * A Worker that fails to start (synchronously, or once it runs its
+   * script) is dropped for the page. */
+  async #newDriver(module) {
+    if (this.getAttribute("thread") !== "main" && workersWork()) {
+      let driver = null;
       try {
-        return new WorkerDriver(module, fresh);
+        driver = new WorkerDriver(module, this.#freshCanvas());
+        await this.#guard(driver.ready, "starting the widget's worker", driver);
+        return driver;
       } catch {
-        // A browser that cannot start a module Worker draws in the page;
-        // the canvas may already be handed over, so take another.
-        const again = document.createElement("canvas");
-        again.setAttribute("part", "canvas");
-        this.canvas.replaceWith(again);
-        this.canvas = again;
+        driver?.close();
       }
     }
-    return new PageDriver(module, this.canvas);
+    return new PageDriver(module, this.#freshCanvas());
   }
 
   async #open() {
@@ -405,7 +427,17 @@ export class PsAnimWidget extends HTMLElement {
         const url = this.getAttribute("wasm") ?? new URL("psanim.wasm", import.meta.url).href;
         const module = await compiled(url);
         if (generation !== this.generation || !this.isConnected) return;
-        if (!this.driver) this.driver = this.#newDriver(module);
+        // Another open may have made the engine while this one waited.
+        if (!this.driver) {
+          const driver = await this.#newDriver(module);
+          // A newer open (or a disconnect) superseded this one while the
+          // Worker started: that one makes its own engine and canvas.
+          if (generation !== this.generation || !this.isConnected) {
+            driver.close();
+            return;
+          }
+          this.driver = driver;
+        }
       }
       const text = this._entry ? null : this._source;
       if (!this._entry && !text) return;
@@ -428,7 +460,7 @@ export class PsAnimWidget extends HTMLElement {
       this.dispatchEvent(new CustomEvent("psanim-load", { detail: this.meta }));
       this.#wake();
     } catch (e) {
-      if (generation !== this.generation) return;
+      if (generation !== this.generation || e?.closed) return;
       this.#fail(e);
     }
   }
@@ -445,7 +477,7 @@ export class PsAnimWidget extends HTMLElement {
     this.running = false;
     // A Worker that ran over its time is stopped for good; the next open
     // (a new src, entry or params) starts another.
-    if (/took longer than/.test(e.message)) {
+    if (timedOut(e)) {
       this.#dropDriver();
       this.meta = null;
     }
@@ -469,7 +501,7 @@ export class PsAnimWidget extends HTMLElement {
         this.running = false;   // asleep until the observer or the tab wakes it
         return;
       }
-      this.#step(loop);
+      this.#step();
       if (this.running && loop === this.loop) this.frameRequest = requestAnimationFrame(tick);
     };
     this.frameRequest = requestAnimationFrame(tick);
@@ -477,7 +509,7 @@ export class PsAnimWidget extends HTMLElement {
 
   /** One animation frame: start drawing if there is something new and no
    * frame is being drawn already. */
-  #step(loop) {
+  #step() {
     // A frame still being drawn: wait, leaving what changed meanwhile for
     // the next one.
     if (this.inflight) return;
@@ -517,8 +549,12 @@ export class PsAnimWidget extends HTMLElement {
         this.err.textContent = "";
       })
       .catch((e) => {
-        if (generation !== this.generation || loop !== this.loop) return;
-        this.#fail(e);
+        // Decided by the engine, not the animation loop: a widget that went
+        // off screen and back has a new loop, and its Worker is still stuck
+        // on this frame. A timeout stops that Worker whatever happened
+        // since; another error matters only for the movie still open.
+        if (this.driver !== driver) return;
+        if (timedOut(e) || generation === this.generation) this.#fail(e);
       })
       .finally(() => {
         if (this.driver === driver) this.inflight = false;
