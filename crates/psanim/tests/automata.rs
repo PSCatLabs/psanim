@@ -192,3 +192,9 @@ fn bad_operands_say_what_is_wanted() {
         assert!(e.contains(want), "{prog}: {e}");
     }
 }
+
+#[test]
+fn a_mask_covers_a_history_taller_than_a_grid() {
+    // One column, 2049 rows, all ground: what `cellrows` allows, `cellmask` takes.
+    assert_eq!(eval("", "6147 string 1 [0 0 0] cellmask length =="), "2049");
+}

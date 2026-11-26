@@ -124,3 +124,14 @@ fn a_run_that_misses_expect_fails_setup() {
     let e = entry("/Table [ [/A 0 1 /R /A] ] /MaxSteps 5 /Expect << /Steps 5 >>").unwrap_err();
     assert!(e.contains("turing-run-differs-from-Expect"), "{e}");
 }
+
+#[test]
+fn a_machine_that_travels_far_still_draws_its_tape() {
+    // The head ends past cell 999: the tape's labels need more than three digits.
+    // The host runs longer than the machine, which then holds its last step.
+    let src = "<< /Size [320 160] /Duration 5000 /FPS 1 >> animation
+         /m /turing << /Params << /Table [ [/A 0 1 /R /A] ] /MaxSteps 1000 >> >> instance
+         /scene { /m << /After /hold >> place } def";
+    let mut m = Movie::load(src, &Options::default()).unwrap_or_else(|e| panic!("{e}"));
+    m.render_at(4999.0).unwrap_or_else(|e| panic!("{e}"));
+}

@@ -222,7 +222,7 @@ dup tm-head0 tm-dz sub lt { pop tm-head0 tm-dz sub } if dup tm-head0 tm-dz add g
 } def
 /tm-glyphfont { /Bookman-Demi findfont exch scalefont setfont } def
 /tm-symtext { % symbol -> (text) for a non-blank symbol
-  dup 1 eq { pop (1) } { 3 string cvs } ifelse
+  dup 1 eq { pop (1) } { 12 string cvs } ifelse
 } def
 
 % ---- the tape and the head (in cell units, under the camera) ---------------------------
@@ -272,7 +272,7 @@ dup tm-head0 tm-dz sub lt { pop tm-head0 tm-dz sub } if dup tm-head0 tm-dz add g
   % the scale engraved on it, a number under every cell, and its ticks
   /Helvetica-Bold findfont 16 scalefont setfont
   tm-c0 1 tm-c1 { /tm-i exch def
-    0.55 0.55 0.51 setrgbcolor tm-i 3 string cvs tm-i tm-cw mul 365 tm-ctext
+    0.55 0.55 0.51 setrgbcolor tm-i 12 string cvs tm-i tm-cw mul 365 tm-ctext
     0.36 0.37 0.38 setrgbcolor tm-i tm-cw mul tm-cw 2 div sub 384 1.2 10 rectfill
   } for
   % guide blocks along the bed that hold the tape down, every fourth cell

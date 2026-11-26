@@ -1050,7 +1050,18 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 "cellmask: give the colours cellcolors made, the grid's width and the ground [r g b]",
             );
         }
-        check_grid(&rgb[..rgb.len() / 3], cols, "cellmask", ctx)?;
+        // The colours of a simulation's grid or of an elementary history
+        // (`cellrows`), which may be taller than a grid: bounded by the total.
+        let n = rgb.len() / 3;
+        if n == 0 || !n.is_multiple_of(cols) || n > MAX_CELLS {
+            return fail(
+                ctx,
+                PsError::Rangecheck,
+                format!(
+                    "cellmask: the colours ({n} cells) must be a whole number of rows of {cols}, at most {MAX_CELLS} cells"
+                ),
+            );
+        }
         let g: Vec<u8> = ground
             .iter()
             .map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8)
