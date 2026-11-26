@@ -89,6 +89,9 @@ this with looks and palettes.
 } def
 ```
 
+`cellbounds` gives the box of everywhere life has been (leaving out the
+thin tracks of gliders that flew away): frame a camera on it and it
+pulls back as the pattern spreads. `cellcount` counts the live cells.
 `cellrows` gives the whole history of an elementary rule at once, one row a
 generation: compute it in setup and show as many rows as the clock has
 reached. Each grid is capped (2048 x 2048 cells, about a billion cell

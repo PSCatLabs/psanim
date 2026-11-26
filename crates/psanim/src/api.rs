@@ -396,6 +396,12 @@ pub const API: &[ApiEntry] = &[
     ),
     e(
         "cells",
+        "cellbounds",
+        "cells cols share  cellbounds  [x0 y0 x1 y1] | null",
+        "The box, in cells from the top left (inclusive), of the cells that are or once were alive, counting only rows and columns that hold more than `share` of what the fullest one holds (0.2 leaves out the thin tracks of gliders that flew away; 0 counts every one); null if none ever lived. It grows as a pattern spreads, so a camera framed on it pulls back smoothly.",
+    ),
+    e(
+        "cells",
         "cellcount",
         "cells  cellcount  n",
         "How many cells of a grid are alive.",

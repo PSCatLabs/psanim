@@ -43,6 +43,8 @@ const CELLS_PER_STEP: u64 = 256;
 const CACHE_ENTRIES: usize = 8;
 /// Generations between remembered states, in cell updates.
 const CHECKPOINT_WORK: u64 = 1 << 24;
+/// The latest states kept per grid, besides the checkpoints.
+const RECENT: usize = 3;
 /// Remembered states per grid before every other one is dropped.
 const MAX_CHECKPOINTS: usize = 48;
 
@@ -497,6 +499,37 @@ pub fn grid(cols: usize, rows: usize, how: &Seeding) -> Result<Vec<u8>, String> 
     Ok(g)
 }
 
+/// The box of the cells that are or once were alive, as [x0 y0 x1 y1]
+/// (cells, from the top left, inclusive), counting only the rows and
+/// columns that hold more than `share` of what the fullest one holds: 0.2
+/// leaves out the thin tracks of gliders that flew away from a pattern.
+/// None if nothing ever lived.
+pub fn bounds(cells: &[u8], cols: usize, share: f64) -> Option<[usize; 4]> {
+    let rows = cells.len() / cols.max(1);
+    let mut colsum = vec![0usize; cols];
+    let mut rowsum = vec![0usize; rows];
+    for (k, v) in cells.iter().enumerate() {
+        if *v > 0 {
+            colsum[k % cols] += 1;
+            rowsum[k / cols] += 1;
+        }
+    }
+    let span = |sums: &[usize]| {
+        let most = *sums.iter().max()?;
+        let over = (most as f64 * share.clamp(0.0, 0.99)).floor() as usize;
+        let over = over.min(most.saturating_sub(1));
+        let lo = sums.iter().position(|s| *s > over)?;
+        let hi = sums.iter().rposition(|s| *s > over)?;
+        Some((lo, hi))
+    };
+    if cells.iter().all(|v| *v == 0) {
+        return None;
+    }
+    let (x0, x1) = span(&colsum)?;
+    let (y0, y1) = span(&rowsum)?;
+    Some([x0, y0, x1, y1])
+}
+
 // ---- colour -------------------------------------------------------------------
 
 /// How states become colours.
@@ -572,7 +605,9 @@ struct Entry {
     /// Generations between checkpoints, and the checkpoints, by generation.
     every: u64,
     checkpoints: Vec<(u64, Vec<u8>)>,
-    head: (u64, Vec<u8>),
+    /// The latest states asked for, newest last: a film that asks for
+    /// generation n and n + 1 in one frame, then n again, costs nothing.
+    recent: Vec<(u64, Vec<u8>)>,
     used: u64,
 }
 
@@ -627,7 +662,7 @@ impl Cache {
                     base: base.to_vec(),
                     every,
                     checkpoints: Vec::new(),
-                    head: (0, base.to_vec()),
+                    recent: Vec::new(),
                     used: clock,
                 },
             );
@@ -641,8 +676,10 @@ impl Cache {
                 from = (*g, s);
             }
         }
-        if e.head.0 <= n && e.head.0 >= from.0 {
-            from = (e.head.0, &e.head.1);
+        for (g, st) in &e.recent {
+            if *g <= n && *g >= from.0 {
+                from = (*g, st);
+            }
         }
         let (mut g, mut state) = (from.0, from.1.to_vec());
         while g < n {
@@ -659,7 +696,11 @@ impl Cache {
                 }
             }
         }
-        e.head = (n, state.clone());
+        e.recent.retain(|r| r.0 != n);
+        e.recent.push((n, state.clone()));
+        if e.recent.len() > RECENT {
+            e.recent.remove(0);
+        }
         Ok(state)
     }
 }
@@ -883,6 +924,25 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         Ok(())
     });
 
+    // cells cols share  cellbounds  [x0 y0 x1 y1] | null
+    reg(interp, ctx, "cellbounds", |i, ctx| {
+        let share = i.pop_value()?.as_f64().unwrap_or(0.0);
+        let cols = dim(&i.pop_value()?, "cellbounds: cols", ctx)?;
+        let cells = i.pop_string()?;
+        if cells.len() % cols != 0 {
+            return fail(
+                ctx,
+                PsError::Rangecheck,
+                "cellbounds: the grid's length must be a whole number of rows",
+            );
+        }
+        match bounds(&cells, cols, share) {
+            Some(b) => i.push_numbers(&b.map(|v| v as f64)),
+            None => i.push_value(&Value::Null)?,
+        }
+        Ok(())
+    });
+
     // cells  cellcount  n
     reg(interp, ctx, "cellcount", |i, _| {
         let cells = i.pop_string()?;
@@ -1012,6 +1072,17 @@ mod tests {
         assert_eq!(g1[6], 127);
         // cells above and below the pair had exactly two live neighbours
         assert_eq!(live(&g1, 4), vec![(1, 0), (2, 0), (1, 2), (2, 2)]);
+    }
+
+    #[test]
+    fn bounds_leave_out_a_gliders_track_when_asked() {
+        let mut g = from_picture(&["OOOO", "OOOO", "OOOO"], 30, 20, (2, 2));
+        for k in 0..12 {
+            g[(6 + k) * 30 + 8 + k] = 1; // a thin diagonal track of cells that once lived
+        }
+        assert_eq!(bounds(&g, 30, 0.0), Some([2, 2, 19, 17]));
+        assert_eq!(bounds(&g, 30, 0.4), Some([2, 2, 5, 4]));
+        assert_eq!(bounds(&[0u8; 9], 3, 0.2), None);
     }
 
     #[test]

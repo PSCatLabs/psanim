@@ -400,6 +400,12 @@ The history of an elementary automaton: `rows` rows, the first being `row` (a gr
 
 Three bytes a cell, for `cols rows 8 [cols 0 0 rows neg 0 rows] rgb false 3 colorimage` in a unit square (row 0 at the top, square cells). palette is a dictionary of colours [r g b] or grey levels: /Alive, /Born and /Mature (a newborn cell is /Born and takes /Mature generations to become /Alive), /Trail and /Fade (a cell that dies starts at /Trail and fades over /Fade generations to /Ghost), /Ghost (where a cell once lived: /Ground unless given), /Ground. frac (0 to 1, how far the clock is to the next generation) keeps a dying cell fading smoothly between generations.
 
+### `cellbounds`
+
+`cells cols share  cellbounds  [x0 y0 x1 y1] | null`
+
+The box, in cells from the top left (inclusive), of the cells that are or once were alive, counting only rows and columns that hold more than `share` of what the fullest one holds (0.2 leaves out the thin tracks of gliders that flew away; 0 counts every one); null if none ever lived. It grows as a pattern spreads, so a camera framed on it pulls back smoothly.
+
 ### `cellcount`
 
 `cells  cellcount  n`
