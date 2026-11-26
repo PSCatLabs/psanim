@@ -155,7 +155,10 @@
 /glowing { 3 1 roll .clipmask .glowbegin  exec .layerend } bind def  % radius strength proc draw proc with a halo
 /blurlayer { .clipmask .blurlayer } bind def                         % radius               blur the layer so far
 /glowlayer { .clipmask .glowlayer } bind def                         % radius strength      add a halo to it
-% - .clipmask -   capture the clip in force, for the blur or glow about to
+/vignette { .clipmask .vignette } bind def                           % amount               darken toward the corners
+/filmgrain { .clipmask .filmgrain } bind def                         % amount               moving grain
+/.prelude-vignette /vignette load def  % the engine's own, so a redefinition is told apart from it
+% - .clipmask -   capture the clip in force, for the effect about to
 % begin to stay inside: paint through it, in device space, on a layer of
 % its own (the engine keeps the coverage). A blur spreads past the clip
 % its body was drawn under; this is what holds it in.

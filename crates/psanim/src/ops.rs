@@ -1402,11 +1402,16 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let (strength, radius) = (i.pop_f64()?, i.pop_f64()?);
         spread_layer(i, ctx, radius, Some(strength))
     });
-    reg(interp, ctx, "vignette", |i, ctx| {
+    // The native halves of vignette and filmgrain, after `.clipmask`: they
+    // work within the component's box and hand back what the clip in force
+    // (a rotated box's own outline) leaves outside it.
+    reg(interp, ctx, ".vignette", |i, ctx| {
         let amount = i.pop_f64()?.clamp(0.0, 1.0);
+        let clip = take_clip(ctx);
         let (cw, ch) = i.canvas_size();
         let r = ctx.borrow().effect_rect(cw as usize, ch as usize);
-        with_canvas_pixels(i, ctx, |px, w, _, _| {
+        with_canvas_pixels(i, ctx, |px, w, h, _| {
+            let orig = clip.as_ref().map(|_| px.to_vec());
             // Centred on the component's box when inside one.
             let (hw, hh) = ((r[2] - r[0]) as f64 / 2.0, (r[3] - r[1]) as f64 / 2.0);
             let (cx, cy) = (r[0] as f64 + hw, r[1] as f64 + hh);
@@ -1423,17 +1428,26 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                     }
                 }
             }
-        })
+            if let (Some(c), Some(o)) = (&clip, &orig) {
+                apply_clip(px, w, h, c, Some(o));
+            }
+        })?;
+        if let Some(c) = clip {
+            ctx.borrow_mut().recycle_mask(c);
+        }
+        Ok(())
     });
-    reg(interp, ctx, "filmgrain", |i, ctx| {
+    reg(interp, ctx, ".filmgrain", |i, ctx| {
         let amount = i.pop_f64()?.clamp(0.0, 1.0);
+        let clip = take_clip(ctx);
         let (seed, frame) = {
             let c = ctx.borrow();
             (c.seed(), c.frame)
         };
         let (cw, ch) = i.canvas_size();
         let r = ctx.borrow().effect_rect(cw as usize, ch as usize);
-        with_canvas_pixels(i, ctx, |px, w, _, _| {
+        with_canvas_pixels(i, ctx, |px, w, h, _| {
+            let orig = clip.as_ref().map(|_| px.to_vec());
             // One cheap xorshift stream per frame: grain that moves.
             let mut s =
                 crate::ctx::mix64(seed as u64 ^ (frame as u64).wrapping_mul(0x9E37_79B9)) | 1;
@@ -1455,7 +1469,14 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                     *c = ((f64::from(*c) + n).clamp(0.0, 255.0) as u8).min(a);
                 }
             }
-        })
+            if let (Some(c), Some(o)) = (&clip, &orig) {
+                apply_clip(px, w, h, c, Some(o));
+            }
+        })?;
+        if let Some(c) = clip {
+            ctx.borrow_mut().recycle_mask(c);
+        }
+        Ok(())
     });
 
     // --- inputs -------------------------------------------------------------------

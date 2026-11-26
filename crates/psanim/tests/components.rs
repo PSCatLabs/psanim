@@ -404,3 +404,29 @@ fn a_component_using_a_library_its_child_loaded_still_owns_its_words() {
     );
     assert_eq!(printed(&mut m, 0.0), "1.0");
 }
+
+#[test]
+fn a_rotated_components_vignette_and_grain_stay_inside_its_rotated_box() {
+    // An empty component turned 45 degrees: vignette and filmgrain darken
+    // and speckle only its turned box, not the corners of its bounds.
+    for fx in ["0.8 vignette", "1 filmgrain"] {
+        let mut m = load(&format!(
+            "/b << /Size [40 40] /Scene {{ {fx} }} >> component
+             /scene {{ 0.5 setgray 0 0 200 100 rectfill
+                      gsave 100 50 translate 45 rotate -20 -20 translate /b << /Box [0 0 40 40] >> place grestore }} def"
+        ));
+        let f = m.render_at(0.0).unwrap();
+        let px = |x: u32, y: u32| {
+            let o = ((y * f.width + x) * 4) as usize;
+            [
+                f.premultiplied[o],
+                f.premultiplied[o + 1],
+                f.premultiplied[o + 2],
+            ]
+        };
+        let ground = px(5, 5);
+        for (x, y) in [(75, 25), (125, 25), (75, 75), (125, 75)] {
+            assert_eq!(px(x, y), ground, "{fx}: corner {x},{y} was touched");
+        }
+    }
+}

@@ -689,7 +689,10 @@ impl Movie {
         let shadowed: Vec<String> = crate::api::API
             .iter()
             .filter(|e| NATIVE_WORDS.contains(&e.name))
-            .filter(|e| !matches!(interp.lookup(e.name), Some(Value::Other(o)) if o.type_name() == "operatortype"))
+            .filter(|e| {
+                !matches!(interp.lookup(e.name), Some(Value::Other(o)) if o.type_name() == "operatortype")
+                    && !is_prelude_word(&mut interp, e.name)
+            })
             .map(|e| e.name.to_string())
             .collect();
 
@@ -1230,6 +1233,21 @@ fn host_params(params: &BTreeMap<String, Param>) -> BTreeMap<String, Value> {
 
 /// Run `program`, turning a PostScript error into an [`Error`] that says
 /// where in the movie it happened.
+/// The word is still the prelude's own procedure (saved by the prelude as
+/// `.prelude-<name>`), not one the program put in its place.
+fn is_prelude_word(interp: &mut Interp, name: &str) -> bool {
+    let saved = format!(".prelude-{name}");
+    if interp.lookup(&saved).is_none() {
+        return false;
+    }
+    // systemdict on top, so the program's own `load` or `eq` are not used.
+    let probe = format!("systemdict begin /{name} load /{saved} load eq end");
+    let same =
+        interp.run_str(&probe).is_ok() && matches!(interp.pop_value(), Ok(Value::Bool(true)));
+    interp.clear_operands();
+    same
+}
+
 fn run(
     interp: &mut Interp,
     ctx: &Rc<RefCell<Ctx>>,

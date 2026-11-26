@@ -1384,6 +1384,9 @@ fn redefining_a_psanim_word_is_reported() {
     assert_eq!(m.meta().shadowed, ["frame", "width"]);
     let m = load("/scene { 1 setgray 0 0 8 8 rectfill } def");
     assert!(m.meta().shadowed.is_empty());
+    // A word the prelude defines is reported only when the program replaces it.
+    let m = load("/vignette { pop } def /scene { } def");
+    assert_eq!(m.meta().shadowed, ["vignette"]);
 }
 
 #[test]
