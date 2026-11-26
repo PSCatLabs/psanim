@@ -405,17 +405,24 @@ export class PsAnimWidget extends HTMLElement {
 
   /** An engine in a Worker if this browser can run one, else in the page.
    * A Worker that fails to start (synchronously, or once it runs its
-   * script) is dropped for the page. */
-  async #newDriver(module) {
+   * script) is dropped for the page. Null when a newer open (or a
+   * disconnect) superseded `generation` while the Worker started: the
+   * canvas is that open's by then, and is left alone. */
+  async #newDriver(module, generation) {
     if (this.getAttribute("thread") !== "main" && workersWork()) {
       let driver = null;
       try {
         driver = new WorkerDriver(module, this.#freshCanvas());
         await this.#guard(driver.ready, "starting the widget's worker", driver);
-        return driver;
       } catch {
         driver?.close();
+        driver = null;
       }
+      if (generation !== this.generation || !this.isConnected) {
+        driver?.close();
+        return null;
+      }
+      if (driver) return driver;
     }
     return new PageDriver(module, this.#freshCanvas());
   }
@@ -429,13 +436,10 @@ export class PsAnimWidget extends HTMLElement {
         if (generation !== this.generation || !this.isConnected) return;
         // Another open may have made the engine while this one waited.
         if (!this.driver) {
-          const driver = await this.#newDriver(module);
+          const driver = await this.#newDriver(module, generation);
           // A newer open (or a disconnect) superseded this one while the
           // Worker started: that one makes its own engine and canvas.
-          if (generation !== this.generation || !this.isConnected) {
-            driver.close();
-            return;
-          }
+          if (!driver) return;
           this.driver = driver;
         }
       }
@@ -443,6 +447,10 @@ export class PsAnimWidget extends HTMLElement {
       if (!this._entry && !text) return;
       let scale = Number(this.getAttribute("scale"));
       const want = (this.clientWidth || 0) * Math.min(devicePixelRatio || 1, 2);
+      // No frames while the movie opens: one sent now would be drawn after
+      // the open, from the old movie's clock, and its timeout would count
+      // the open's time as its own.
+      this.opening = generation;
       const opened = await this.#guard(this.driver.open({
         text, entry: this._entry, params: this.params, scale: scale > 0 ? scale : null, want,
       }), "opening the movie");
@@ -462,6 +470,8 @@ export class PsAnimWidget extends HTMLElement {
     } catch (e) {
       if (generation !== this.generation || e?.closed) return;
       this.#fail(e);
+    } finally {
+      if (this.opening === generation) this.opening = null;
     }
   }
 
@@ -510,9 +520,9 @@ export class PsAnimWidget extends HTMLElement {
   /** One animation frame: start drawing if there is something new and no
    * frame is being drawn already. */
   #step() {
-    // A frame still being drawn: wait, leaving what changed meanwhile for
-    // the next one.
-    if (this.inflight) return;
+    // A frame still being drawn, or the movie being opened: wait, leaving
+    // what changed meanwhile for the next frame.
+    if (this.inflight || this.opening != null) return;
     const meta = this.meta;
     const fps = Math.min(Number(this.getAttribute("fps")) || meta.fps, meta.fps);
     const elapsed = this.#elapsed();
