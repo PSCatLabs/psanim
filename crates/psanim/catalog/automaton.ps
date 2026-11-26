@@ -71,7 +71,8 @@
 >> def
 
 % ---- the automaton ----------------------------------------------------------------
-/genof { clockp null eq { rate mul } { clockp } ifelse 0 max } def   % t -> generation
+/hasclock /clockp load null ne def
+/genof { hasclock { clockp } { rate mul } ifelse 0 max } def   % t -> generation
 elem {
   % The whole history, once: every row the entry can show.
   /total len genof ceiling cvi nrows add 1 add def

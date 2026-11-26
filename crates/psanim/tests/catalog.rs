@@ -901,3 +901,24 @@ fn automaton_pattern_and_seed_change_the_film() {
         .to_vec();
     assert_ne!(a, gun);
 }
+
+#[test]
+fn automaton_clock_replaces_the_rate() {
+    let rate = automaton("/Pattern /acorn /Rate 6")
+        .render_at(2.5)
+        .unwrap()
+        .premultiplied
+        .to_vec();
+    let clock = automaton("/Pattern /acorn /Clock { 6 mul }")
+        .render_at(2.5)
+        .unwrap()
+        .premultiplied
+        .to_vec();
+    assert_eq!(rate, clock, "a /Clock of 6 t is a /Rate of 6");
+    let held = automaton("/Pattern /acorn /Clock { pop 4 }")
+        .render_at(2.5)
+        .unwrap()
+        .premultiplied
+        .to_vec();
+    assert_ne!(rate, held);
+}
