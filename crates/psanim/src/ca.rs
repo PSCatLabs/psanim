@@ -34,8 +34,9 @@ use crate::ops::{Shared, fail, reg};
 /// The most cells one grid may have (2048 x 2048).
 pub const MAX_CELLS: usize = 1 << 22;
 /// The most cell updates the words may do in one moment (a frame, or a
-/// tick): under half a second of native work on an Apple M4. They are also charged to
-/// the interpreter's budgets as they go.
+/// tick): about a second of native work on an Apple M4, where the acorn's
+/// 5206 generations on 300 x 380 cells (593 million updates) took 0.49 s.
+/// They are also charged to the interpreter's budgets as they go.
 pub const MAX_WORK: f64 = 1_073_741_824.0;
 /// Cell updates charged as one interpreter step.
 const CELLS_PER_STEP: u64 = 256;

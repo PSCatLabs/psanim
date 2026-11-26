@@ -20,6 +20,10 @@
 %
 % /Clock, a procedure { t -- generation } from the entry's time in seconds, replaces
 % /Rate: an accelerating film, a pause, a run backward to the start.
+%
+% Cost, measured with `psanim bench` at full size on an Apple M4: /square is one image,
+% 3.3 ms a frame at 96 x 60 cells, 5.4 ms at 200 x 120, 12 ms at 400 x 300. /round and
+% /led draw cell by cell in PostScript: 17 and 34 ms at 96 x 60, 55 and 92 ms at 200 x 120.
 
 /Rule /life param dup type /stringtype eq { dup length 0 gt { dup 0 get 48 ge 1 index 0 get 57 le and { cvi } if } if } if /rule exch def  % /life /highlife /seeds /daynight /maze /replicator /brain, (B3/S23) text, or an elementary rule 0..255 (30, 110)
 /Grid [96 60] param aload pop cvi /nr0 exch def cvi /nc0 exch def   % cells across and down
@@ -43,7 +47,7 @@
 /Edge pattern /random eq { /wrap } { /open } ifelse param dup type /stringtype eq { cvn } if /edge exch def  % /wrap (a torus; the default for /random), /open (gliders fly off; the default for a pattern) or /dead (dead cells beyond the edge)
 /Rate 8 param /rate exch def                                        % generations (or rows) a second
 /Clock null param /clockp exch def                                  % a procedure { t -- generation } instead of /Rate
-/Look /square param dup type /stringtype eq { cvn } if /look exch def  % /square, /round, or /led (round cells, unlit ones shown, with a glow)
+/Look /square param dup type /stringtype eq { cvn } if /look exch def  % /square, /round, or /led (round cells, unlit ones shown, with a glow); /round and /led draw cell by cell: keep them to about 100 x 60
 /Gap 0.12 param /gap exch def                                       % the space between cells, as a share of /Pitch
 /Palette /ember param dup type /stringtype eq { cvn } if /palname exch def  % /ember /phosphor /ice /paper: the colours below, unless they are given
 /Alive null param /alive0 exch def                                  % a live cell [r g b]

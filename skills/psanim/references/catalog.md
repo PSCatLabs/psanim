@@ -24,7 +24,7 @@ A cellular automaton that really runs: the Game of Life or another Life-like rul
 | /Grid | `[96 60]` | cells across and down |
 | /Ground | `null` | the ground [r g b], or /none for a transparent one |
 | /Length | `20` | seconds the entry lasts |
-| /Look | `/square` | /square, /round, or /led (round cells, unlit ones shown, with a glow) |
+| /Look | `/square` | /square, /round, or /led (round cells, unlit ones shown, with a glow); /round and /led draw cell by cell: keep them to about 100 x 60 |
 | /Mature | `3` | generations a newborn takes to reach /Alive |
 | /Palette | `/ember` | /ember /phosphor /ice /paper: the colours below, unless they are given |
 | /Pattern | `/random` | /random, /gun /glider /rpentomino /acorn /diehard /pulsar /lwss ..., a picture (array of strings, O alive), RLE text, or [ [pattern x y] ... ] |
