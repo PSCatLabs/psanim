@@ -14,7 +14,6 @@
 /Days [ (Monday) (Tuesday) (Wednesday) (Thursday) (Friday) (Saturday) (Sunday) ] def
 
 /hours { weektime 86400 fmod 3600 div } def
-/two { 2 zeropad } def
 
 % box dial   an analog face in the largest circle that fits the box
 /dial {
@@ -45,7 +44,7 @@
     0 0 r 0.06 mul 0 360 arc fill grestore
 } def
 
-/hhmm { dup floor cvi two (:) strcat exch 1 fmod 60 mul 0.0001 add floor cvi two strcat } def
+/hhmm { 3600 mul 0.001 add fmtday 0 5 getinterval } def   % hours -> (HH:MM), a millisecond to spare against rounding
 /remain { nextat 3600 mul weektime 86400 fmod sub floor cvi 0 max } def   % seconds to go
 
 /scene {
@@ -62,7 +61,7 @@
     /muted ink /body 5 vmin face
     Days weektime 86400 div floor cvi 7 mod get top /nw showin
     /fg ink /display 17 vmin face
-    hours hhmm top /w showin
+    weektime fmtday 0 5 getinterval top /w showin
   } enters
   0.9 /rise {
     /surface ink bot 2 vmin roundpath fill
@@ -71,7 +70,6 @@
     /fg ink /title 5 vmin face nexttitle in 0 -5 vmin shifted /nw showin
     /muted ink /body 3.8 vmin face nextat hhmm (  in ) strcat nextroom strcat in /sw showin
     /accent ink /display 8.5 vmin face
-    remain 3600 idiv two (:) strcat remain 3600 mod 60 idiv two strcat (:) strcat
-    remain 60 mod two strcat in /se showin
+    remain fmtday in /se showin                       % (HH:MM:SS): the time to go is under a day
   } enters
 } def

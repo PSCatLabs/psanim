@@ -176,16 +176,24 @@ A scene is a component, so it can read anything a movie can. For the time:
 00:00. Inside a playlist it is `/Day` and `/Time` plus the playlist's
 clock, so it moves on during the loop and a scene needs no clock of its
 own. `weektime 86400 fmod` is the time of day; `weektime 3600 div`, hours.
+The clock words of the rest of psanim read it too: `weektime fmtday` is the
+text `(HH:MM:SS)`, `weektime clockparts` is hours, minutes, seconds and the
+fraction, and `/From` and `/To` above are read by `parseclock`. `weektime`
+is the one time of a playlist; `daytime` is the one time of a clock entry
+(a start plus the movie's own time, or a signal). They are separate on
+purpose: a clock placed in a scene has the movie time of its own scene,
+and the schedule's time is the playlist's. A catalog clock entry cannot
+show the playlist's time of day yet (its `/Signal` reads the host's
+signal, not the playlist's clock); a scene that wants it draws from
+`weektime`, as the gallery's clock scene does.
 
 ```postscript
 %!PS
 /clock << /Size [400 200] /Duration 5
   /Scene {
     /Helvetica-Bold findfont 90 scalefont setfont 1 1 1 setrgbcolor
-    weektime 86400 fmod cvi /s exch def
     20 70 moveto
-    s 3600 idiv 2 zeropad show (:) show s 3600 mod 60 idiv 2 zeropad show (:) show
-    s 60 mod 2 zeropad show
+    weektime fmtday show
   } >> component
 
 /show [ [5 /clock << /Fill true >>] [1 /dissolve] ] << /Time (9:41:50) /Background [0.1 0.1 0.3] >> playlist

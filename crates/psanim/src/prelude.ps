@@ -282,6 +282,10 @@
   exch .particlepick      % procs x y emitter
   gsave 3 1 roll translate get exec grestore
 } bind def
+% seconds n particletrail -   the particle's own track over the last seconds as the current
+%                             path, n segments, ending at the origin of the particle's
+%                             procedure: in whatever rotation and scale the procedure has now
+/particletrail { matrix currentmatrix .particletrail } bind def
 /particles {              % spec proc
   2 dict begin
     /.ptproc exch def
@@ -289,6 +293,7 @@
     mark exch { /Draw /.ptproc load .dget } forall counttomark array astore exch pop
   end                     % spec procs
   exch .particlesbegin    % procs n
+  matrix currentmatrix .particlebase       % the caller's space, for `particletrail`
   1 sub 0 exch 1 exch 4 -1 roll
   /.particlestep cvx 2 array astore cvx for
   .particlesend
@@ -728,41 +733,37 @@ end
 % Each scene dictionary has sc- keys (hold, what, opts, dout, kout, days, from, to, ...).
 /.pls 16 dict def                                   % playlist records, by name
 /.plclock << /on false /t 0 >> def                 % what `weektime` answers
-/.pldaybit << /mon 1 /tue 2 /wed 4 /thu 8 /fri 16 /sat 32 /sun 64
-              /weekdays 31 /weekend 96 /daily 127 >> def
-/.pldayno << /mon 0 /tue 1 /wed 2 /thu 3 /fri 4 /sat 5 /sun 6 >> def
-% day | [days]  .pldays  mask     /mon .. /sun, /weekdays /weekend /daily, or 0 (Monday) to 6
-/.pldays {
-  dup type /arraytype eq { 0 exch { .pldays or } forall } {
-    dup type /integertype eq {
-      dup 0 lt 1 index 6 gt or { (playlist: a day number is 0 (Monday) to 6 (Sunday)) .comperror } if
-      1 exch bitshift
-    } {
-      dup type /stringtype eq { cvn } if
-      dup .pldaybit exch known not {
-        (playlist: a day is /mon /tue /wed /thu /fri /sat /sun, /weekdays, /weekend, /daily, or 0 (Monday) to 6) .comperror
-      } if
-      .pldaybit exch get
-    } ifelse
-  } ifelse
-} def
-% day  .pldayidx  0..6
+/.pldayno << /mon 0 /tue 1 /wed 2 /thu 3 /fri 4 /sat 5 /sun 6 >> def     % Monday is day 0, as `weektime` counts
+/.pldaygrp << /weekdays 31 /weekend 96 /daily 127 >> def                   % masks, bit n for day n
+% day  .pldayidx  0..6      /mon .. /sun, or 0 (Monday) to 6
 /.pldayidx {
   dup type /integertype eq {
-    dup 0 lt 1 index 6 gt or { (playlist: /Day is 0 (Monday) to 6) .comperror } if
+    dup 0 lt 1 index 6 gt or { (playlist: a day number is 0 (Monday) to 6 (Sunday)) .comperror } if
   } {
     dup type /stringtype eq { cvn } if
-    dup .pldayno exch known not { (playlist: /Day is /mon .. /sun, or 0 (Monday) to 6) .comperror } if
+    dup type /nametype ne 1 index .pldayno exch known not or {
+      (playlist: a day is /mon /tue /wed /thu /fri /sat /sun, /weekdays, /weekend, /daily, or 0 (Monday) to 6) .comperror
+    } if
     .pldayno exch get
   } ifelse
 } def
-% hours | (H:MM) | (H:MM:SS)  .pltime  seconds
+% day | [days]  .pldays  mask     a day, /weekdays /weekend /daily, or a list of them
+/.pldays {
+  dup type /arraytype eq { 0 exch { .pldays or } forall } {
+    dup type /stringtype eq { cvn } if
+    dup type /nametype eq { dup .pldaygrp exch known } { false } ifelse
+    { .pldaygrp exch get } { .pldayidx 1 exch bitshift } ifelse
+  } ifelse
+} def
+% hours | (H) | (H:MM[:SS]) .pltime  seconds     a number, or text with no colon, is hours; text with one is
+%                                               a time of day for `parseclock`
 /.pltime {
   dup type /stringtype eq {
-    (:) search {                               % post match pre
-      cvi 3600 mul exch pop exch               % secs post
-      (:) search { cvi 60 mul exch pop exch cvi add add } { cvi 60 mul add } ifelse
-    } { cvr 3600 mul } ifelse
+    dup (:) search { pop pop pop parseclock } {
+      pop                                              % no colon: plain hours if it starts like a number
+      dup length 0 gt { dup 0 get 48 ge 1 index 0 get 58 lt and } { false } ifelse
+      { cvr 3600 mul } { parseclock } ifelse
+    } ifelse
   } { 3600 mul } ifelse
 } def
 % /name .pltrans bool    a transition: in `transitions`, or named t-... (defined before it plays)

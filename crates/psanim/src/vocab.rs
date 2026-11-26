@@ -58,6 +58,11 @@ pub const LIBRARIES: &[(&str, &str, &str)] = &[
         include_str!("../lib/pkfigure.ps"),
         "a rig for cartoon characters: bounce, limbs, eyes, mouths, springs, and a dance step from the beat",
     ),
+    (
+        "pkpixel",
+        include_str!("../lib/pkpixel.ps"),
+        "a pixel font for LED signs and dot-matrix printers: 5, 7 and 9 rows, characters and lines as dot columns",
+    ),
 ];
 
 fn spec_from(i: &mut Interp, ctx: &Shared) -> Result<Spec, PsError> {

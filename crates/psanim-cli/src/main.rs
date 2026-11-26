@@ -11,7 +11,7 @@ use std::time::Instant;
 
 use args::{Common, number_list};
 use encode::{Encoder, Format};
-use psanim::render::{Rendered, effective_threads, render_frames};
+use psanim::render::{Rendered, effective_threads, render_frames, render_frames_from};
 use psanim::sheet::{self, Still};
 use psanim::{Error, Meta, Movie, Options, Scale, raster};
 use serde_json::json;
@@ -371,9 +371,10 @@ fn cmd_sheet(rest: &[String]) -> Result<(), Fail> {
     // Render at thumbnail size directly unless a size was asked for: a
     // sheet is a preview, and small frames are fast.
     let opts = c.options(Scale::Width(thumb)).map_err(usage)?;
-    let probe = Movie::load(&source, &opts)?;
-    let meta = probe.meta().clone();
-    drop(probe);
+    // Loaded once: its metadata chooses the frames, and it renders them.
+    let mut first = Movie::load(&source, &opts)?;
+    let meta = first.meta().clone();
+    let mut printed = first.take_printed();
     let frames = select_frames(&c, &meta, 12)?;
     let cols: usize = c.extra_num("cols").map_err(usage)?.unwrap_or(4);
     let out = c
@@ -382,7 +383,7 @@ fn cmd_sheet(rest: &[String]) -> Result<(), Fail> {
         .unwrap_or_else(|| format!("{}_sheet.png", name_of(&path)).into());
     let started = Instant::now();
     let mut stills = Vec::new();
-    render_frames(&source, &opts, &frames, c.threads, |f: Rendered| {
+    let rendered = render_frames_from(first, &source, &opts, &frames, c.threads, |f: Rendered| {
         stills.push(Still {
             index: f.index,
             time: f.time,
@@ -390,8 +391,12 @@ fn cmd_sheet(rest: &[String]) -> Result<(), Fail> {
             height: f.height,
             premultiplied: f.premultiplied,
         });
+        printed.append(&f.printed);
         Ok(())
-    })?;
+    });
+    // What was printed is the best clue to a frame that failed, too.
+    report_printed(&printed, c.json);
+    rendered?;
     let title = sheet::default_title(&meta, &name_of(&path));
     let page =
         sheet::compose(&stills, cols, thumb, Some(&title), matte(&meta)).map_err(Fail::Output)?;
@@ -402,7 +407,7 @@ fn cmd_sheet(rest: &[String]) -> Result<(), Fail> {
         println!(
             "{}",
             json!({"ok": true, "output": out, "frames": frames, "width": page.width(), "height": page.height(),
-                   "seconds": elapsed})
+                   "seconds": elapsed, "printed": printed.text, "output_truncated": printed.truncated})
         );
     } else if !c.quiet {
         eprintln!(
@@ -426,9 +431,9 @@ fn cmd_render(rest: &[String]) -> Result<(), Fail> {
         .clone()
         .unwrap_or_else(|| format!("{}.mp4", name_of(&path)).into());
     let format = Format::from_path(&out).map_err(usage)?;
-    let probe = Movie::load(&source, &opts)?;
-    let meta = probe.meta().clone();
-    drop(probe);
+    let mut movie = Movie::load(&source, &opts)?;
+    let meta = movie.meta().clone();
+    let mut printed = movie.take_printed();
     let (first, end) = range(&c, &meta)?;
     let frames: Vec<u64> = (first..end).collect();
     let threads = effective_threads(&meta, c.threads, frames.len());
@@ -452,13 +457,14 @@ fn cmd_render(rest: &[String]) -> Result<(), Fail> {
     // A progress line is for a person at a terminal; in a pipe or a log it
     // is noise, so only the final summary is printed there.
     let show = !c.quiet && !c.json && std::io::IsTerminal::is_terminal(&std::io::stderr());
-    render_frames(&source, &opts, &frames, threads, |f: Rendered| {
+    let rendered = render_frames_from(movie, &source, &opts, &frames, threads, |f: Rendered| {
         raster::flatten_onto(&f.premultiplied, matte, &mut flat);
         encoder.write(&flat, || {
             psanim::Page::from_premultiplied_rgba8(f.width, f.height, f.premultiplied.clone())
                 .and_then(|p| p.to_png().ok())
                 .unwrap_or_default()
         })?;
+        printed.append(&f.printed);
         done += 1;
         if show && (last_report.elapsed().as_millis() > 200 || done == total) {
             last_report = Instant::now();
@@ -477,9 +483,15 @@ fn cmd_render(rest: &[String]) -> Result<(), Fail> {
         if show {
             eprintln!();
         }
-    })?;
+        report_printed(&printed, c.json);
+    });
+    rendered?;
     let render_secs = started.elapsed().as_secs_f64();
     encoder.finish().map_err(Fail::Output)?;
+    if show {
+        eprintln!();
+    }
+    report_printed(&printed, c.json);
     let total_secs = started.elapsed().as_secs_f64();
     let bytes = if format == Format::PngSequence {
         0
@@ -493,12 +505,10 @@ fn cmd_render(rest: &[String]) -> Result<(), Fail> {
                    "width": meta.pixel_width, "height": meta.pixel_height, "fps": meta.fps,
                    "seconds_of_video": total as f64 / meta.fps, "threads": threads,
                    "render_seconds": render_secs, "total_seconds": total_secs,
-                   "frames_per_second": total as f64 / render_secs.max(1e-9), "bytes": bytes})
+                   "frames_per_second": total as f64 / render_secs.max(1e-9), "bytes": bytes,
+                   "printed": printed.text, "output_truncated": printed.truncated})
         );
     } else if !c.quiet {
-        if show {
-            eprintln!();
-        }
         eprintln!(
             "wrote {} ({}, {total} frames, {}x{}, {:.1} s on {threads} thread{}, {:.1} fps{})",
             out.display(),
@@ -516,6 +526,19 @@ fn cmd_render(rest: &[String]) -> Result<(), Fail> {
         );
     }
     Ok(())
+}
+
+/// What the program printed while a render ran (`==`, `print`), on stderr as
+/// `frame` shows it; the text says so itself when it was cut at 64 KB. In
+/// `--json` it is in the result instead.
+fn report_printed(printed: &psanim::Printed, json: bool) {
+    if json || printed.text.is_empty() {
+        return;
+    }
+    eprint!("{}", printed.text);
+    if !printed.text.ends_with('\n') {
+        eprintln!();
+    }
 }
 
 /// Stretches of 24 consecutive frames `check` scans for pops beyond its
@@ -767,7 +790,7 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
         let changed = after.changed_since(before);
         if let Some(first_path) = changed.first() {
             let name = first_path
-                .split(['/', '['])
+                .split(['/', '[', '{'])
                 .next()
                 .unwrap_or(first_path.as_str());
             let list = changed
@@ -777,8 +800,15 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
                 .collect::<Vec<_>>()
                 .join(", ");
             let more = if changed.len() > 5 { ", and more" } else { "" };
+            // `name{3}` is a literal string in a procedure's body: one string
+            // shared by every call, not something a name can be copied over.
+            let literal = if changed.iter().any(|p| p.contains('{')) {
+                " A string written in a procedure's body (`name{n}` above), like `(abcd) dup 0 65 put`, is one string for every call: make a fresh one inside the procedure (`4 string`), or copy the literal with `dup length string copy` first."
+            } else {
+                ""
+            };
             warnings.push(format!(
-                "a frame wrote into {} made in setup: {list}{more}. PostScript's `restore` does not roll back the contents of a string, so the change stays for every later frame: a frame is no longer a function of its time, and a parallel render differs from a serial one. Copy the string inside the scene before writing to it (`/{name} {name} dup length string copy def`), or build it there",
+                "a frame wrote into {} made in setup: {list}{more}. PostScript's `restore` does not roll back the contents of a string, so the change stays for every later frame: a frame is no longer a function of its time, and a parallel render differs from a serial one. Copy the string inside the scene before writing to it (`/{name} {name} dup length string copy def`), or build it there.{literal}",
                 if changed.len() == 1 { "a string" } else { "strings" }
             ));
         }
@@ -971,10 +1001,6 @@ fn cmd_catalog(rest: &[String]) -> Result<(), Fail> {
         print!("{src}");
         return Ok(());
     }
-    let mut entries = Vec::new();
-    for (name, src) in psanim::CATALOG {
-        entries.push((*name, *src, catalog_meta(name, src)?));
-    }
     if c.has("sheet") {
         let thumb: u32 = c.extra_num("thumb").map_err(usage)?.unwrap_or(240);
         let cols: usize = c.extra_num("cols").map_err(usage)?.unwrap_or(4);
@@ -988,9 +1014,11 @@ fn cmd_catalog(rest: &[String]) -> Result<(), Fail> {
         };
         let mut stills = Vec::new();
         let mut captions = Vec::new();
-        for (name, src, meta) in &entries {
-            let mut m = Movie::load(src, &opts)?;
-            let t = meta.duration * 0.5;
+        // Each entry is loaded once, at thumbnail size: its duration is in its metadata.
+        for (name, src) in psanim::CATALOG {
+            let mut m = Movie::load(src, &opts)
+                .map_err(|e| Fail::Output(format!("catalog entry /{name} does not load: {e}")))?;
+            let t = m.meta().duration * 0.5;
             let f = m.render_at(t)?;
             stills.push(Still {
                 index: 0,
@@ -1016,6 +1044,10 @@ fn cmd_catalog(rest: &[String]) -> Result<(), Fail> {
             eprintln!("wrote {} ({} entries)", out.display(), stills.len());
         }
         return Ok(());
+    }
+    let mut entries = Vec::new();
+    for (name, src) in psanim::CATALOG {
+        entries.push((*name, *src, catalog_meta(name, src)?));
     }
     let params = |m: &psanim::Meta| {
         m.params

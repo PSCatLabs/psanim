@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc;
 
-use crate::engine::{Meta, Mode, Movie, Options};
+use crate::engine::{Meta, Mode, Movie, Options, Printed};
 use crate::error::{Error, Phase};
 
 /// A frame handed to a sink: owned pixels.
@@ -26,6 +26,10 @@ pub struct Rendered {
     pub premultiplied: Vec<u8>,
     /// Interpreter steps the frame took, when a step budget is set.
     pub steps: u64,
+    /// What the program printed while rendering this frame (`==`, `print`),
+    /// cut at 64 KB. What setup printed is not here: it is what the movie
+    /// handed to [`render_frames_from`] holds.
+    pub printed: Printed,
 }
 
 /// How many threads a render of `meta` on `requested` threads will use
@@ -54,14 +58,34 @@ pub fn render_frames<F>(
     options: &Options,
     indices: &[u64],
     threads: usize,
-    mut sink: F,
+    sink: F,
 ) -> Result<Meta, Error>
 where
     F: FnMut(Rendered) -> Result<(), String>,
 {
     // One movie here, on the calling thread: it reports load errors once,
     // and it is the only renderer when the movie cannot be parallel.
-    let mut first = Movie::load(source, options)?;
+    let first = Movie::load(source, options)?;
+    render_frames_from(first, source, options, indices, threads, sink)
+}
+
+/// [`render_frames`] for a caller that has loaded the movie already (to
+/// read its metadata and choose the frames): `first` is the movie from
+/// `source` and `options`, and renders on the calling thread unless the
+/// render is parallel, so it is not loaded twice. What setup printed stays
+/// with `first` for the caller to collect (`take_printed`); a worker's own
+/// copy of it is dropped.
+pub fn render_frames_from<F>(
+    mut first: Movie,
+    source: &str,
+    options: &Options,
+    indices: &[u64],
+    threads: usize,
+    mut sink: F,
+) -> Result<Meta, Error>
+where
+    F: FnMut(Rendered) -> Result<(), String>,
+{
     let meta = first.meta().clone();
     let threads = effective_threads(&meta, threads, indices.len());
     let sink_error = |msg: String| Error::new(Phase::Load, "output", msg);
@@ -75,9 +99,16 @@ where
                 height: frame.height,
                 premultiplied: frame.premultiplied.to_vec(),
                 steps: 0,
+                printed: Printed::default(),
             };
             let steps = first.last_frame_steps();
-            sink(Rendered { steps, ..rendered }).map_err(sink_error)?;
+            let printed = first.take_printed();
+            sink(Rendered {
+                steps,
+                printed,
+                ..rendered
+            })
+            .map_err(sink_error)?;
         }
         return Ok(meta);
     }
@@ -104,6 +135,8 @@ where
                         return;
                     }
                 };
+                // Setup's output is the first movie's to report, not each worker's.
+                let _ = movie.take_printed();
                 loop {
                     if stop.load(Ordering::Relaxed) {
                         return;
@@ -126,10 +159,19 @@ where
                         height: f.height,
                         premultiplied: f.premultiplied.to_vec(),
                         steps: 0,
+                        printed: Printed::default(),
                     });
                     let steps = movie.last_frame_steps();
+                    let printed = movie.take_printed();
                     if tx
-                        .send((pos, out.map(|r| Rendered { steps, ..r })))
+                        .send((
+                            pos,
+                            out.map(|r| Rendered {
+                                steps,
+                                printed,
+                                ..r
+                            }),
+                        ))
                         .is_err()
                     {
                         return;

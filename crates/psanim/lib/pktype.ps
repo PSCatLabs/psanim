@@ -708,6 +708,16 @@ end
     } ifelse
   } ifelse
 } bind def
+% t .cr-vel -> units a second the roll moves at after t seconds of rolling (settings open);
+% a roll with no /Settle stops dead, and counts as moving at its speed to the end
+/.cr-vel {
+  0 max /cv-t exch def
+  /cv-t1 Dist Settle sub Speed div def
+  cv-t cv-t1 le Settle 0 le or { Speed } {
+    /cv-T2 Settle 0.0001 max 2 mul Speed div def
+    cv-t cv-t1 sub dup cv-T2 ge { pop 0 } { cv-T2 div 1 exch sub Speed mul } ifelse
+  } ifelse
+} bind def
 % y .cr-snap -> y    the same place, moved to where a whole device pixel starts,
 %                    so a roll moves a whole number of pixels a frame
 /.cr-snap {
@@ -766,7 +776,11 @@ end
     cf-u CardFade div CardTime cf-u sub CardFade div min 0 1 clamp
     0 .cr-place
   } {
-    Items Box 1 get cf-t CardsT sub .cr-off add Snap { .cr-snap } if
+    % Snapping to whole pixels keeps type from shimmering while the roll moves
+    % a pixel or more a frame; below that it would make the roll hold and hop,
+    % so the settle tail glides.
+    /cf-fast cf-t CardsT sub .cr-vel dt mul 0 1 dtransform exch pop abs mul 1 ge dt 0 le or def
+    Items Box 1 get cf-t CardsT sub .cr-off add Snap cf-fast and { .cr-snap } if
     1 Fade .cr-place
   } ifelse
 } bind def

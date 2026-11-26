@@ -361,26 +361,6 @@ fn hash_bytes(bytes: &[u8]) -> u64 {
     h ^ (bytes.len() as u64)
 }
 
-/// Record the strings inside `value`, which sits at `path`.
-fn collect_strings(path: &str, value: &Value, depth: usize, out: &mut BTreeMap<String, u64>) {
-    match value {
-        Value::String(bytes) => {
-            out.insert(path.to_string(), hash_bytes(bytes));
-        }
-        Value::Array(items) if depth < 8 => {
-            for (i, v) in items.iter().enumerate() {
-                collect_strings(&format!("{path}[{i}]"), v, depth + 1, out);
-            }
-        }
-        Value::Dict(entries) if depth < 8 => {
-            for (k, v) in entries {
-                collect_strings(&format!("{path}/{k}"), v, depth + 1, out);
-            }
-        }
-        _ => {}
-    }
-}
-
 /// A loaded animation program. See the [crate docs](crate).
 pub struct Movie {
     interp: Interp,
@@ -430,6 +410,15 @@ pub struct Printed {
     pub text: String,
     /// More was printed than `text` holds.
     pub truncated: bool,
+}
+
+impl Printed {
+    /// Add `more` after this text, keeping the whole within the 64 KB a
+    /// movie keeps: what a render of many frames collects, frame by frame.
+    pub fn append(&mut self, more: &Printed) {
+        push_output(&mut self.text, &mut self.truncated, more.text.as_bytes());
+        self.truncated |= more.truncated;
+    }
 }
 
 /// Add `bytes` to `out`, keeping at most [`MAX_OUTPUT`] bytes and ending
@@ -794,6 +783,58 @@ impl Movie {
         self.last_ticks
     }
 
+    /// Record the strings inside `value`, which sits at `path`: those in
+    /// arrays and dictionaries, and the literal strings in the bodies of
+    /// procedures, which are one string object shared by every call (a
+    /// frame that writes into `(    )` in a procedure changes it for good).
+    /// A procedure's elements are written `path{i}`.
+    fn collect_strings(
+        &mut self,
+        path: &str,
+        value: &Value,
+        depth: usize,
+        out: &mut BTreeMap<String, u64>,
+    ) {
+        match value {
+            Value::String(bytes) => {
+                out.insert(path.to_string(), hash_bytes(bytes));
+            }
+            Value::Array(items) if depth < 8 => {
+                for (i, v) in items.iter().enumerate() {
+                    self.collect_strings(&format!("{path}[{i}]"), v, depth + 1, out);
+                }
+            }
+            Value::Dict(entries) if depth < 8 => {
+                for (k, v) in entries {
+                    self.collect_strings(&format!("{path}/{k}"), v, depth + 1, out);
+                }
+            }
+            Value::Other(_) if depth < 8 => {
+                // An operator, a file or the like has no body: only an array
+                // object (a procedure) does, and `aload` opens it.
+                if self.interp.push_value(value).is_err() {
+                    return;
+                }
+                let body = self.exec(
+                    Phase::Setup,
+                    "dup type dup /arraytype eq exch /packedarraytype eq or \
+                     { [ exch aload pop ] } { pop null } ifelse",
+                );
+                let items = match (body, self.interp.pop_value()) {
+                    (Ok(()), Ok(Value::Array(items))) => items,
+                    _ => {
+                        self.interp.clear_operands();
+                        return;
+                    }
+                };
+                for (i, v) in items.iter().enumerate() {
+                    self.collect_strings(&format!("{path}{{{i}}}"), v, depth + 1, out);
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// Fingerprint the strings reachable from userdict, after rolling a
     /// pure movie back to its setup checkpoint (so what a frame defined is
     /// gone and what it wrote into a string is not). `None` for a stateful
@@ -817,12 +858,8 @@ impl Movie {
         let mut snap = StringSnapshot::default();
         for key in keys.as_array().unwrap_or(&[]) {
             let Some(name) = key.as_text() else { continue };
-            match self.interp.lookup(name) {
-                Some(Value::Other(_)) | None => {
-                    // A procedure, an operator, or a value too large to
-                    // copy out. Only the last matters, and it is rare.
-                }
-                Some(v) => collect_strings(name, &v, 0, &mut snap.strings),
+            if let Some(v) = self.interp.lookup(name) {
+                self.collect_strings(name, &v, 0, &mut snap.strings);
             }
         }
         Ok(Some(snap))

@@ -1809,6 +1809,26 @@ fn strings_written_by_a_scene_survive_the_rollback_and_are_found() {
 }
 
 #[test]
+fn a_literal_string_in_a_procedure_is_found_when_a_scene_writes_into_it() {
+    // A string literal in a procedure body is one string shared by every call:
+    // the write below changes it for every later frame, so it is found, and so
+    // is one in a procedure nested in another. A literal that is only read is not.
+    let mut m = load(
+        "/stamp { (abcd) dup 0 now cvi 65 add put pop } def
+         /outer { { (wxyz) dup 1 90 put pop } exec (read only) pop } def
+         /scene { stamp outer } def",
+    );
+    let before = m.string_snapshot().unwrap().expect("a pure movie");
+    assert!(before.len() >= 3, "{}", before.len());
+    m.render_frame(1).unwrap();
+    let after = m.string_snapshot().unwrap().unwrap();
+    assert_eq!(
+        after.changed_since(&before),
+        vec!["outer{0}{0}", "stamp{0}"]
+    );
+}
+
+#[test]
 fn only_a_pure_movie_has_a_string_snapshot() {
     let mut m = load("/step { } def /scene { } def");
     assert!(m.string_snapshot().unwrap().is_none());
