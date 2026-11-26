@@ -451,6 +451,7 @@ export class PsAnimWidget extends HTMLElement {
 
   async #open() {
     const generation = (this.generation = (this.generation ?? 0) + 1);
+    let openedOn = null; // the engine this open was sent to
     try {
       if (!this.driver) {
         const url = this.getAttribute("wasm") ?? new URL("psanim.wasm", import.meta.url).href;
@@ -473,6 +474,7 @@ export class PsAnimWidget extends HTMLElement {
       // the open, from the old movie's clock, and its timeout would count
       // the open's time as its own.
       this.opening = generation;
+      openedOn = this.driver;
       const opened = await this.#guard(this.driver.open({
         text, entry: this._entry, params: this.params, scale: scale > 0 ? scale : null, want,
       }), "opening the movie");
@@ -490,7 +492,14 @@ export class PsAnimWidget extends HTMLElement {
       this.dispatchEvent(new CustomEvent("psanim-load", { detail: this.meta }));
       this.#wake();
     } catch (e) {
-      if (generation !== this.generation || e?.closed) return;
+      if (e?.closed) return;
+      // A timeout stops the Worker that was stuck, even when a newer open
+      // has come since: that open waits behind this one and never begins.
+      if (timedOut(e) && openedOn && this.driver === openedOn) {
+        this.#fail(e);
+        return;
+      }
+      if (generation !== this.generation) return;
       this.#fail(e);
     } finally {
       if (this.opening === generation) this.opening = null;
