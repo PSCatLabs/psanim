@@ -5,6 +5,9 @@
 //   const meta = engine.open(source, { scale: 0.5 });   // throws PsAnimError
 //   const frame = engine.render(1.25);                  // { width, height, data }
 //   ctx.putImageData(new ImageData(frame.data, frame.width, frame.height), 0, 0);
+//   engine.open(engine.catalog("clock-digital"), { params: { Signal: "clock" } });
+//   engine.setSignal("clock", 12 * 3600);               // live inputs
+//   engine.event("click", 3.2);                         // an event at movie time 3.2
 //
 // The module is the same engine as the native `psanim` binary; there is no
 // generated glue, only the C ABI in crates/psanim-wasm.
@@ -64,10 +67,17 @@ export class PsAnim {
   /**
    * Load a program. Returns its metadata (the same object as
    * `psanim info --json`'s `movie`). Throws PsAnimError.
+   * `params` gives the program's `/Name default param` values, read as
+   * the command line reads `--param Name=value` (a number if it parses as
+   * one, else text): `{ Signal: "clock", Theme: "amber" }`.
    * @param {string} source
-   * @param {{scale?: number, maxSteps?: number}} [options]
+   * @param {{scale?: number, maxSteps?: number, params?: Record<string, string|number>}} [options]
    */
-  open(source, { scale = 1, maxSteps = 50_000_000 } = {}) {
+  open(source, { scale = 1, maxSteps = 50_000_000, params = {} } = {}) {
+    for (const [name, value] of Object.entries(params)) {
+      this.#withString(name, (np, nn) =>
+        this.#withString(String(value), (vp, vn) => this.x.pa_param(np, nn, vp, vn)));
+    }
     const status = this.#withString(source, (p, n) => this.x.pa_load(p, n, scale, maxSteps));
     if (status !== 0) {
       this.meta = null;
@@ -92,6 +102,36 @@ export class PsAnim {
   /** Set a signal the program reads with `/name signal`. */
   setSignal(name, value) {
     this.#withString(name, (p, n) => this.x.pa_set_signal(p, n, value));
+  }
+
+  /** Add an event at movie time `time` to the track the program reads with
+   * `/name sinceevent` and `/name eventcount`. */
+  event(name, time) {
+    this.#withString(name, (p, n) => this.x.pa_event(p, n, time));
+  }
+
+  /** Forget the events of a track. */
+  clearEvents(name) {
+    this.#withString(name, (p, n) => this.x.pa_clear_events(p, n));
+  }
+
+  /** The source of a catalog entry (a whole movie), or null. */
+  catalog(name) {
+    const n = this.#withString(name, (p, len) => this.x.pa_catalog(p, len));
+    return n < 0 ? null : this.#string(this.x.pa_out_ptr(), this.x.pa_out_len());
+  }
+
+  /** The names of the catalog's entries. */
+  catalogNames() {
+    this.x.pa_catalog_names();
+    return this.#string(this.x.pa_out_ptr(), this.x.pa_out_len()).split("\n");
+  }
+
+  /** Add a reading of a signal taken at movie time `t`, keeping the earlier
+   *  ones, so the program can read its recent past (`signalago`,
+   *  `signalseries`) and draw smoothly between readings. */
+  recordSignal(name, t, value) {
+    this.#withString(name, (p, n) => this.x.pa_record_signal(p, n, t, value));
   }
 
   /** Interpreter steps the last frame took. */

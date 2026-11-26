@@ -1,0 +1,156 @@
+%!PS
+% Build Farm: a day on twenty build machines, replayed in a minute.
+%
+% The data is not in this file: it comes from the host, as a live
+% dashboard's would. day.csv beside it is a synthetic recording of one day
+% (written by gen_day.py, seed 1118: made up, not measured), with time in
+% movie seconds, 1 s = 24 minutes. Render it with the recording:
+%
+%   psanim render gallery/buildfarm/buildfarm.ps --signals gallery/buildfarm/day.csv -o buildfarm.mp4
+%
+% Signals: day.csv
+% Poster: 41.5
+<< /Size [1280 720] /Duration 64 /FPS 30
+   /Title (Build Farm)
+   /Description (A day on a twenty-machine build farm replayed in a minute as a dashboard: a horizon chart of every builder, stat tiles, a gauge, a counter and a queue chart, all from a recorded CSV the host passes in.)
+>> animation
+/pkchart use
+
+/hosts [ /mac01 /mac02 /mac03 /mac04 /lin01 /lin02 /lin03 /lin04 /lin05 /lin06
+         /lin07 /lin08 /lin09 /lin10 /lin11 /lin12 /win01 /win02 /win03 /win04 ] def
+/dayend 60 def                       % the recording runs from 0 to 60 s
+/clock [0 1440] def                  % 00:00 at 0 s, 1440 clock seconds a second
+/incidents [ (lin07 stopped answering) (win02 pinned by a runaway test) (Release candidate: everything at once) ] def
+
+% --- the layout: a header, a wide column on the left, a narrow one on the right
+/hdr  [16 668 1248 40] def
+/hz   [16 236 816 424] def
+/ts   [16 16 404 212] def
+/hm   [428 16 404 212] def
+/cnt  [844 536 420 124] def
+/gau  [844 316 206 212] def
+/st1  [1058 424 206 104] def
+/st2  [1058 316 206 104] def
+/st3  [844 160 206 148] def
+/st4  [1058 160 206 148] def
+/log  [844 16 420 136] def
+
+% --- the panels: catalog entries, each sized to its box, all reading the host's signals
+% box /name opts sized -     an instance of entry /name the shape of its box
+/sized {
+  2 dict begin /po exch def /pb exch def
+    po /Width pb 2 get put po /Height pb 3 get put
+    << /Params po >>
+  end
+} def
+/fleet /horizon hz << /Title (CPU by builder) /Signals hosts /From 0 /To dayend /Points 360
+  /Extent 100 /Bands 4 /Unit (%) /Clock clock /Tick 10800
+  /Thresholds [ /bad 0.5 /good 85 /warn 99 /bad ] >> sized instance
+/queue /timeseries ts << /Title (Jobs waiting) /Signals [ /queue ] /Labels [ (queue) ]
+  /Window 5 /Points 150 /Least 20 /Clock clock /Tick 3600 /Roles [ /accent ] >> sized instance
+/total /counter cnt << /Signal /builds /Label (builds today) /Icon /check /Role /good >> sized instance
+/util /gauge gau << /Title (Farm load) /Signal /util /Label (mean CPU)
+  /Thresholds [ /good 70 /warn 85 /bad ] >> sized instance
+/rate /stat st1 << /Title (Builds / hour) /Signal /rate /Spark 2.5 /Delta 1.25 >> sized instance
+/fail /stat st2 << /Title (Failed today) /Signal /failed /Spark 0 /Delta 2.5 /DownIsGood true
+  /Thresholds [ /fg 100 /warn 150 /bad ] >> sized instance
+/p95 /stat st3 << /Title (p95 build time) /Signal /p95 /Unit (min) /Decimals 1 /Spark 5 /Delta 1.25
+  /DownIsGood true /Thresholds [ /good 15 /warn 25 /bad ] >> sized instance
+/cache /stat st4 << /Title (Cache hits) /Signal /cache /Unit (%) /Decimals 1 /Spark 5
+  /Thresholds [ /bad 80 /warn 88 /good ] /Fill /threshold >> sized instance
+
+% --- the heatmap: mean load per pool per hour, worked out once from the recording
+/pools [ [0 4] [4 12] [16 4] ] def             % first host and how many, per pool
+hosts 0 get hassignal {
+  /hourly [ pools { aload pop /pn exch def /p0 exch def
+    [ 0 1 23 { /hr exch def
+      0 p0 1 p0 pn add 1 sub { hosts exch get hr 2.5 mul dup 2.5 add 31 signalbetween { add } forall } for
+      pn 31 mul div
+    } for ]
+  } forall ] def
+} if
+
+% --- helpers
+% t clocktext -> (HH:MM)
+/clocktext {
+  clock aload pop 3 -1 roll mul add 86400 min 60 div floor cvi
+  dup 60 idiv 2 zeropad (:) strcat exch 60 mod 2 zeropad strcat
+} def
+
+/header {
+  hdr aload pop /hh exch def /hw exch def /hy exch def /hx exch def
+  /fg ink /title 24 face hx hy 10 add moveto (Build Farm) show
+  /muted ink /body 15 face (     Wednesday 18 November 2026, replayed at 1440x) show
+  % the clock, top right, and a replay lamp that breathes
+  /tc signaltime 0 dayend clamp def
+  /fg ink /mono 30 face hx hw add hy 7 add moveto tc clocktext showright
+  hx hw add (00:00) stringwidth pop sub 26 sub hy 18 add 6
+    tc dayend lt { /bad } { /muted } ifelse statuslight
+  % an incident, while it is news
+  /incident sinceevent 3 lt /incident eventcount 0 gt and {
+    /se /incident sinceevent def
+    /ia se 0.25 div 0 1 clamp se 2.5 sub 0.5 div 0 1 clamp sub def
+    gsave ia 0 max setalpha
+      /bad ink [ 560 hy 3 add 400 32 ] 16 roundpath fill
+      /bg ink /title 15 face
+      incidents /incident eventcount 1 sub 2 min get [ 560 hy 3 add 400 32 ] /c showin
+    grestore
+  } if
+} def
+
+/heat {
+  hm << /Title (Load by pool and hour) /Size 14 >> panel
+  aload pop /mh exch def /mw exch def /my exch def /mx exch def
+  /lab 34 def
+  hourly [ mx lab add my 18 add mw lab sub mh 18 sub ] << /Range [0 100] /Roles [ /surface /accent2 /bad ]
+    /Gap 2 /Draw signaltime dayend div 0 1 clamp >> heatmap
+  /muted ink /body 12 face
+  0 1 2 { /pk exch def
+    mx my 18 add mh 18 sub 1 pk 0.5 add 3 div sub mul add 4 sub moveto [ (mac) (lin) (win) ] pk get show
+  } for
+  0 6 18 { /hr exch def
+    mx lab add mw lab sub hr 0.5 add 24 div mul add my 2 add moveto hr 2 zeropad showcenter } for
+} def
+
+/incidentlog {
+  log << /Title (Incidents) /Size 14 >> panel
+  aload pop /lh exch def /lw exch def /ly exch def /lx exch def
+  /n /incident eventcount def
+  n 0 eq {
+    /muted ink /body 14 face lx ly lh add 16 sub moveto (None today, so far.) show
+  } if
+  0 1 n 1 sub { /i exch def
+    % each line fades in as it is logged; event times come from the track itself
+    /age /incident sinceevent n 1 sub i sub 0 ne { pop 9 } if def
+    gsave age 0.4 div 0 1 clamp setalpha
+      lx ly lh add 14 sub i 26 mul sub 8 /bad statuslight
+      /mono 14 face /muted ink lx 16 add ly lh add 19 sub i 26 mul sub moveto
+      [ (11:10) (13:20) (16:30) ] i get show         % when the recording's incidents began
+      /fg ink /body 14 face (   ) show incidents i get show
+    grestore
+  } for
+} def
+
+/scene {
+  ground
+  hosts 0 get hassignal not {
+    /muted ink /body 22 face (No data. Render with  --signals gallery/buildfarm/day.csv) canvasbox /c showin
+  } {
+    0 0.6 /cubic-out tween setalpha header 1 setalpha
+    [
+      { /fleet << /Box hz >> place }
+      { /total << /Box cnt /After /hold >> place }
+      { /util << /Box gau >> place }
+      { /rate << /Box st1 >> place }
+      { /fail << /Box st2 >> place }
+      { /p95 << /Box st3 >> place }
+      { /cache << /Box st4 >> place }
+      { /queue << /Box ts >> place }
+      { heat }
+      { incidentlog }
+    ] 0.1 { pop 0.25 exch /rise exch enters } cascade
+    % the end of the day: everything else steps back from the totals
+    dayend 0.6 add dayend 2 add /sine-inout tween 0.55 mul
+    dup 0 gt { [ cnt st2 log ] exch spotlight } { pop } ifelse
+  } ifelse
+} def

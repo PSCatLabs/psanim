@@ -1,0 +1,211 @@
+%!PS
+% Catalog entry: fireworks. Shells rise on trails and burst into stars
+% behind a message, which arrives with the first burst and pulses on each.
+% In a movie:  /cheer /fireworks component   then   /cheer << /Box [x y w h] >> place
+% The burst times are an event track: pass your own /Bursts and react to
+% the same array with `sincelast` (inside `a { ... } delayed` for an
+% instance placed at /At a).
+% A value given as text (`--param Palette=dusk`, `--param Bursts='[1 2]'`) as a name or an array.
+/astext { dup type /stringtype eq { dup length 0 gt { dup 0 get 91 eq { cvx exec } { cvn } ifelse } { cvn } ifelse } if } bind def
+/Style /show param astext /style exch def                        % /show (six shells), /single (one, for a small success), /finale (a crescendo)
+/Bursts null param astext /bursts exch def                       % burst times on its own clock (the event track); null: the style's
+bursts null eq {
+  /bursts
+    style /single eq { [0.9] } {
+    style /finale eq { [0.6 1.1 1.5 1.85 2.15 2.4 2.6 2.8 2.95 3.1 3.25 3.4 3.5] }
+                     { [0.8 1.45 2.05 2.7 3.25 3.8] } ifelse } ifelse
+  def
+} if
+% It lasts until the last burst's stars have gone, and at least 3.5 s.
+/lastburst 0 bursts { max } forall def
+<< /Size [1280 720]
+   /Duration lastburst 3.1 add 3.5 max
+   /Background /transparent
+   /Title (Fireworks)
+   /Description (Shells rise on trails and burst into glowing stars that fall and fade behind a message, which arrives with the first burst and pulses on every one. Styles: a show, a single shell for a small success, a finale. It lasts until the last stars are gone (6.9 s for the show); place it with /After /hold to keep the message up after that. /Seed on the instance changes the shells.)
+>> animation
+
+/pktype use
+
+/Message (Huzzah!) param /msg exch def                    % the headline; () for none
+/Detail (The builds passed) param /detail exch def        % a smaller line under it; () for none
+/Palette /festive param astext /palette exch def                 % /festive, a theme name (its accents and fonts), or [[r g b] ...]
+/Sky true param astext dup type /nametype eq { /true eq } if /sky exch def                             % paint a night sky; false to burst over your own picture
+/Weight 1 param /wt exch def                              % line weight of the stars and trails: more for a small placement
+
+% ---- the plan: when, where and what each shell is ---------------------------------
+/cols
+  palette type /arraytype eq { palette } {
+  palette /festive eq {
+    [[1 0.36 0.38] [1 0.80 0.32] [0.40 0.80 1] [0.55 1 0.62] [0.86 0.52 1] [1 0.58 0.86]]
+  } {
+    palette usetheme
+    [ theme /accent get theme /accent2 get theme /accent3 get theme /good get theme /bad get ]
+  } ifelse } ifelse
+def
+/gold [1 0.82 0.48] def
+/W width def /H height def
+/fw-e { 2.718281828 exch exp } bind def                  % x -> e^x
+/nshell bursts length def
+/shells [ 0 1 nshell 1 sub {
+  12 dict begin
+    /i exch def
+    /h { [i 3 -1 roll] hash01 } def                       % k h -> this shell's constant k
+    /B bursts i get def
+    /side i 2 mod 0 eq { 1 } { -1 } ifelse def
+    style /single eq {
+      /bx W 0.5 mul 0 h 0.5 sub W mul 0.08 mul add def
+      /by H 0.74 mul def
+    } {
+      /bx W 0.5 side 0.08 0 h 0.32 mul add mul add mul def
+      /by H 0.60 1 h 0.24 mul add mul def
+    } ifelse
+    /T 0.95 2 h 0.3 mul add def                           % rise time
+    /lx bx 3 h 0.5 sub W mul 0.1 mul add def
+    /ly -10 def
+    /g by ly sub 2 mul T dup mul div def                  % so the shell stops rising as it bursts
+    /vx bx lx sub T div def
+    /vy g T mul def
+    /col cols i 7 mul 4 h 3 mul cvi add cols length mod get def
+    /kind
+      style /single eq { /peony } {
+      style /finale eq i nshell 3 sub ge and { /willow } {
+      5 h dup 0.5 lt { pop /peony } { 0.72 lt { /ring } { /willow } ifelse } ifelse } ifelse } ifelse
+    def
+    /big style /single eq { 1.25 } { style /finale eq { 0.85 } { 1 } ifelse } ifelse def
+    currentdict
+  end
+} for ] def
+
+% ---- how each part looks --------------------------------------------------------------
+% col fw-star     a star: white hot, then its colour; a short streak; flickers as it dies
+/fw-star {
+  /c exch def
+  particleage 0.18 div 1 min [1 1 1] c between aload pop setrgbcolor
+  1 particleu sub 1.6 exp
+  particleu 0.6 gt { [particlekey 9] hash01 0.5 gt { particlekey 14 0.5 wiggle 0.5 add mul } if } if
+  setalpha
+  1 setlinecap 3 wt mul 1 particleu 0.5 mul sub mul setlinewidth
+  0.12 5 particletrail stroke
+  0 0 2.4 wt mul 0 360 arc fill
+} bind def
+% col fw-willow   a long golden drip
+/fw-willow {
+  pop gold aload pop setrgbcolor
+  1 particleu sub 1.2 exp 0.9 mul setalpha
+  1 setlinecap 1.7 wt mul setlinewidth
+  0.5 8 particletrail stroke
+} bind def
+% col fw-shell    the rising shell: a hot head on a fading tail
+/fw-shell {
+  pop 1 0.9 0.7 setrgbcolor
+  1 setlinecap
+  2.4 wt mul setlinewidth
+  0.3 setalpha 0.35 6 particletrail stroke
+  0.8 setalpha 0.12 3 particletrail stroke
+  1 setalpha 0 0 2.2 wt mul 0 360 arc fill
+} bind def
+% col fw-spark    the sparks a shell sheds as it rises
+/fw-spark {
+  pop 1 0.75 0.45 setrgbcolor
+  1 particleu sub 0.7 mul setalpha
+  0 0 1.3 wt mul 0 360 arc fill
+} bind def
+
+% Every shell is three emitters: the shell, the sparks it sheds, its stars.
+/emitters [ shells {
+  begin
+    << /At [lx ly] /Bursts [B T sub] /Count 1 /Life T /Spread 0
+       /Speed vx dup mul vy dup mul add sqrt /Angle vy vx atan /Gravity g
+       /Draw [col /fw-shell cvx] cvx >>
+    << /At [ 0 1 6 { /k exch def
+               B T sub T k mul 6 div add
+               [ lx vx T k mul 6 div mul add
+                 ly vy T k mul 6 div mul add g T k mul 6 div dup mul mul 2 div sub ] } for ]
+       /Rate 70 /From B T sub /To B /Life [0.3 0.8] /Speed [10 50] /Gravity 140 /Drag 1
+       /Seed i 100 add /Draw [col /fw-spark cvx] cvx >>
+    kind /ring eq {
+      << /At [bx by] /Bursts [B] /Count 64 /Shape /even /Speed 320 big mul /Life [1.5 1.9]
+         /Gravity 60 /Drag 1.3 /Seed i 200 add /Draw [col /fw-star cvx] cvx >>
+    } {
+    kind /willow eq {
+      << /At [bx by] /Bursts [B] /Count 110 /Shape /sphere /Speed [260 big mul 320 big mul] /Life [2.4 3]
+         /Gravity 55 /Drag 1.5 /Seed i 200 add /Draw [col /fw-willow cvx] cvx >>
+    } {
+      << /At [bx by] /Bursts [B] /Count 150 /Shape /sphere /Speed [320 big mul 370 big mul] /Life [1.5 2.2]
+         /Gravity 70 /Drag 1.3 /Seed i 200 add /Draw [col /fw-star cvx] cvx >>
+    } ifelse } ifelse
+  end
+} forall ] def
+
+% ---- the sky ---------------------------------------------------------------------------
+/fw-sky {
+  0 1 23 { /k exch def
+    k 23 div [0.07 0.05 0.14] [0.012 0.016 0.05] between aload pop setrgbcolor
+    0 H k mul 24 div W H 24 div 1 add rectfill
+  } for
+  1 1 0.95 setrgbcolor
+  0 1 89 { /k exch def
+    [k 1] hash01 0.25 add 0.35 mul [k 4] 0.7 0.35 wiggle add 0 max setalpha
+    [k 2] hash01 W mul [k 3] hash01 0.75 mul 0.25 add H mul
+    [k 5] hash01 1.1 mul 0.5 add 0 360 arc fill
+  } for
+  1 setalpha
+  % the sky lights up a little with each burst
+  shells { begin
+    now B sub dup 0 ge exch 1.2 lt and {
+      col aload pop setrgbcolor
+      now B sub -3 mul fw-e 0.09 mul setalpha
+      0 0 W H rectfill
+    } if
+  end } forall
+  1 setalpha
+} bind def
+
+% ---- a flash at the heart of each burst ----------------------------------------------
+/fw-flash {
+  shells { begin
+    now B sub dup 0 ge exch 0.35 lt and {
+      /f 1 now B sub 0.35 div sub def
+      1 0.96 0.88 setrgbcolor
+      f dup mul setalpha bx by 8 f mul 3 add wt mul 0 360 arc fill
+    } if
+  end } forall
+  1 setalpha
+} bind def
+
+% ---- the message -------------------------------------------------------------------------
+/headbox [W 0.18 mul H 0.40 mul W 0.64 mul H 0.15 mul] def
+/subbox  [W 0.20 mul H 0.29 mul W 0.60 mul H 0.065 mul] def
+% the colour of the latest shell to burst, for the message's glow
+/fw-lastcol {
+  [1 0.85 0.5] shells { begin B now le { pop col } if end } forall
+} bind def
+/fw-words {                                           % draw the message in the current colour
+  msg length 0 gt { msg headbox /display fitface msg headbox /c showin } if
+  detail length 0 gt { detail subbox /body fitface detail subbox /c showin } if
+} bind def
+/fw-message {
+  msg length detail length add 0 gt {
+    % worked out on this clock: inside `enters` the clock starts at the entrance
+    /pul bursts sincelast -7 mul -30 max fw-e 0.07 mul 1 add def
+    /lc fw-lastcol def
+    bursts 0 get 0.1 sub [/pop 0.7] {
+      gsave
+        % a pulse on every burst
+        W 2 div H 0.42 mul translate
+        pul dup scale
+        W 2 div neg H 0.42 mul neg translate
+        10 { 0 0 0 setrgbcolor 0.55 setalpha fw-words } blurred
+        16 1.1 { lc aload pop setrgbcolor fw-words } glowing
+        1 setalpha 1 1 1 setrgbcolor fw-words
+      grestore
+    } enters
+  } if
+} bind def
+
+/scene {
+  sky { fw-sky } if
+  12 1.3 { emitters { pop } particles fw-flash } glowing
+  fw-message
+} def

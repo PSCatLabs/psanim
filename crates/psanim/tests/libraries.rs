@@ -4,7 +4,7 @@
 use psanim::{Frame, Movie, Options};
 
 const HEAD: &str = "<< /Size [200 120] /Duration 4 /FPS 10 /Background [0 0 0] >> animation
-/pkstage use /pkmotion use /pktype use /pkdiagram use /pkcode use /pkchart use /pkink use\n";
+/pkstage use /pkmotion use /pktype use /pkdiagram use /pkcode use /pkchart use /pkink use /pkfigure use\n";
 
 fn load(body: &str) -> Movie {
     Movie::load(&format!("{HEAD}{body}"), &Options::default()).unwrap_or_else(|e| panic!("{e}"))
@@ -531,6 +531,146 @@ fn captions_show_in_their_time_only() {
     assert!(ink_at(&mut m, 2.5).is_none());
 }
 
+// --- credits ---------------------------------------------------------------------
+
+/// The columns (x) that hold ink in a frame.
+fn ink_columns(f: &Frame) -> Vec<u32> {
+    (0..f.width)
+        .filter(|&x| {
+            (0..f.height).any(|y| {
+                let o = ((y * f.width + x) * 4) as usize;
+                f.premultiplied[o..o + 3].iter().any(|c| *c > 8)
+            })
+        })
+        .collect()
+}
+
+#[test]
+fn credits_set_roles_and_names_on_either_side_of_a_gutter() {
+    let mut m = load(
+        "/scene { [ [/pair (Role) (Name)] ] << /Size 12 /Gutter 40 /Fade 0 >> 73 creditsat } def",
+    );
+    let cols = ink_columns(&m.render_at(0.0).unwrap());
+    let left: Vec<u32> = cols.iter().copied().filter(|x| *x < 100).collect();
+    let right: Vec<u32> = cols.iter().copied().filter(|x| *x >= 100).collect();
+    assert!(!left.is_empty() && !right.is_empty(), "{cols:?}");
+    assert!(
+        *left.last().unwrap() <= 80,
+        "role ends at the gutter: {left:?}"
+    );
+    assert!(
+        *left.last().unwrap() >= 76,
+        "role is right-aligned: {left:?}"
+    );
+    assert!(
+        *right.first().unwrap() >= 119,
+        "name starts after it: {right:?}"
+    );
+    assert!(
+        *right.first().unwrap() <= 123,
+        "name is left-aligned: {right:?}"
+    );
+}
+
+#[test]
+fn credits_timing_comes_from_the_duration_or_the_speed_and_ends_on_the_final_card() {
+    let setup = "/body [ [/heading (Cast)] [/pair (Role) (Name)] [/space 2] [/name (Someone)] ] def
+        /opts << /Duration 6 /Cards [ [[/name (Hello)]] ] /CardTime 2
+                 /Final [ [/heading (END)] ] >> def";
+    // cards, then the roll's own duration
+    assert_eq!(
+        nums(&eval_at(setup, "body opts creditsduration ==", 0.0)),
+        [8.0]
+    );
+    // the speed follows: the distance covered in the roll's time
+    let v = nums(&eval_at(setup, "body opts creditsspeed ==", 0.0))[0];
+    let h = nums(&eval_at(setup, "body opts creditsheight ==", 0.0))[0];
+    assert!(v > 0.0 && v * 6.0 > h / 2.0, "{v} {h}");
+    // a given speed gives its own duration
+    let d = nums(&eval_at(
+        setup,
+        "body << /Speed 20 /Box [0 0 200 120] /Final [ [/heading (END)] ] >> creditsduration ==",
+        0.0,
+    ))[0];
+    assert!(
+        (d * 20.0 - v * 6.0).abs() < 1e-6,
+        "{d} at 20 covers what {v} does in 6 s"
+    );
+    let mut m = load(&format!("{setup} /scene {{ body opts credits }} def"));
+    assert!(ink_at(&mut m, 0.0).is_none(), "the card fades in");
+    assert!(ink_at(&mut m, 1.0).is_some(), "a card holds");
+    assert!(
+        ink_at(&mut m, 2.0).is_none(),
+        "the roll starts below the box"
+    );
+    assert!(ink_at(&mut m, 5.0).is_some());
+    // the final card stops where it is centred, and stays
+    let end = pixels(&mut m, 8.0);
+    assert_eq!(end, pixels(&mut m, 8.5));
+    assert_ne!(end, pixels(&mut m, 7.0));
+    let b = ink_at(&mut m, 8.0).unwrap();
+    let cy = f64::from(b.1 + b.3) / 2.0;
+    assert!((cy - 60.0).abs() < 3.0, "centred in the box: {b:?}");
+}
+
+#[test]
+fn credits_roll_whole_pixels_so_type_does_not_shimmer() {
+    // 73 units a second at 10 frames a second is 7.3 pixels a frame.
+    let scene = |snap: &str| {
+        load(&format!(
+            "/scene {{ [ [/heading (Cast)] [/pair (Role) (Name)] [/pair (Other) (Person)] [/pair (More) (Folk)] [/name (Someone)] ]
+               << /Size 9 /Fade 0 /Speed 73 /Snap {snap} >> credits }} def"
+        ))
+    };
+    let shifted = |a: &[u8], b: &[u8], dy: usize| {
+        // frame b is frame a moved up by dy rows, everywhere but the edges
+        let row = 200 * 4;
+        (50..88).all(|y| a[(y + dy) * row..(y + dy + 1) * row] == b[y * row..(y + 1) * row])
+    };
+    let mut snapped = scene("true");
+    let mut loose = scene("false");
+    let mut loose_exact = 0;
+    for k in 10..14 {
+        let t = f64::from(k) / 10.0;
+        let (a, b) = (pixels(&mut snapped, t), pixels(&mut snapped, t + 0.1));
+        assert!(
+            (5..=9).any(|dy| shifted(&a, &b, dy)),
+            "frame {k} is not the one before moved a whole number of pixels"
+        );
+        let (a, b) = (pixels(&mut loose, t), pixels(&mut loose, t + 0.1));
+        if (5..=9).any(|dy| shifted(&a, &b, dy)) {
+            loose_exact += 1;
+        }
+    }
+    assert!(
+        loose_exact < 4,
+        "without snapping the type changes shape: {loose_exact}"
+    );
+}
+
+#[test]
+fn a_credits_procedure_runs_at_its_slot_with_no_dictionary_left_open() {
+    let mut m = load(
+        "/scene { countdictstack ==
+           [ [/proc { countdictstack == 1 1 1 setrgbcolor -5 -5 10 10 rectfill } 20] ] << /Fade 0 >> 70 creditsat } def",
+    );
+    m.take_output();
+    let b = ink_at(&mut m, 0.0).unwrap();
+    let out = nums(&m.take_output());
+    assert_eq!(out[0], out[1], "dictionaries open: {out:?}");
+    assert_eq!(
+        (b.0 + b.2, b.1 + b.3),
+        (200, 120),
+        "the origin is the slot's centre, over the column's: {b:?}"
+    );
+}
+
+#[test]
+fn an_unknown_credits_entry_is_an_error() {
+    let mut m = load("/scene { [ [/bogus (x)] ] << >> 0 creditsat } def");
+    assert!(m.render_at(0.0).is_err());
+}
+
 // --- diagrams -------------------------------------------------------------------
 
 #[test]
@@ -706,6 +846,103 @@ fn charts_map_data_and_grow() {
            [ 1 5 3 ] seriesline plotarea fill }} def"
     ));
     assert!(ink_at(&mut m, 1.5).is_some());
+}
+
+#[test]
+fn dashboard_words_colour_by_threshold_fold_bands_and_format() {
+    let th = "[ /good 70 /warn 90 /bad ] thresholdrole ==";
+    assert_eq!(
+        eval_at("", &format!("10 {th} 70 {th} 95 {th}"), 0.0),
+        "/good\n/warn\n/bad"
+    );
+    assert_eq!(
+        eval_at(
+            "",
+            "12431 1 fmtshort == 999.96 1 fmtshort == 3.2e6 0 fmtshort ==",
+            0.0
+        ),
+        "(12.4k)\n(1.0k)\n(3M)"
+    );
+    // A horizon chart folds a ramp into bands: one row, every band touched,
+    // nothing outside its box; /Draw reveals it from the left.
+    let ramp = "/rp [ 0 1 50 { 2 mul } for ] def";
+    let mut m = load(&format!(
+        "{ramp} /scene {{ rp [ 20 40 160 20 ] << /Extent 100 /Bands 4 /Role [1 1 1] /Ground [0 0 0] /Draw 0 4 ramp >> horizon }} def"
+    ));
+    assert!(ink_at(&mut m, 0.0).is_none());
+    let (x0, y0, x1, y1, _) = ink_at(&mut m, 4.0).unwrap();
+    assert!(
+        x0 >= 20 && x1 <= 180 && y0 >= 60 && y1 <= 80,
+        "{x0} {y0} {x1} {y1}"
+    );
+    let half = ink_at(&mut m, 2.0).unwrap();
+    assert!(half.2 <= 101, "half drawn reaches the middle: {half:?}");
+    // The highest band is the brightest: the right end is white, the left end dark.
+    let f = m.render_at(4.0).unwrap();
+    let at = |x: u32, y: u32| f.premultiplied[((y * f.width + x) * 4) as usize];
+    assert!(
+        at(178, 70) > 240 && at(178, 70) > at(60, 79),
+        "{} {}",
+        at(178, 70),
+        at(60, 79)
+    );
+    // Negative values hang from the top in the other role.
+    let mut m = load(
+        "/scene { [ 0 -50 -100 ] [ 20 40 160 20 ] << /Extent 100 /Bands 1 /NegRole [1 0 0] /Ground [0 0 0] >> horizon } def",
+    );
+    let f = m.render_at(0.0).unwrap();
+    let px = |x: u32, y: u32| {
+        let o = ((y * f.width + x) * 4) as usize;
+        [f.premultiplied[o], f.premultiplied[o + 1]]
+    };
+    assert_eq!(px(175, 61), [255, 0], "red at the top right");
+    assert_eq!(px(30, 78), [0, 0], "nothing near zero");
+    // Every panel word draws inside its box, on any theme.
+    for theme in ["midnight", "paper"] {
+        let mut m = load(&format!(
+            "/{theme} usetheme /s [ 3 1 4 1 5 9 2 6 ] def
+             /scene {{ 0 0 0 setrgbcolor 0 0 200 120 rectfill
+               80 [ 10 10 90 50 ] << /Title (CPU) /Unit (%) /Thresholds [/good 70 /warn 90 /bad] /Delta -2 /Spark s >> stattile
+               62 [ 110 10 80 50 ] << /Unit (%) /Label (disk) >> dial
+               s [ 10 70 50 40 ] << >> sparkline
+               [ s s ] [ 70 70 50 40 ] << /Roles [ /surface /accent /bad ] >> heatmap
+               170 90 6 /good statuslight
+               [ 130 70 30 40 ] << /Title (x) /Status /bad >> panel pop }} def"
+        ));
+        assert!(ink_at(&mut m, 0.0).is_some());
+    }
+}
+
+#[test]
+fn ticks_fade_while_a_range_moves() {
+    // Half way between the steps 20 and 50 the in-between ticks are half shown.
+    let out = eval_at("", "0 31.62 5 mul 5 fadeticks ==", 0.0);
+    let v = nums(&out);
+    let pairs: Vec<(f64, f64)> = v.chunks(2).map(|p| (p[0], p[1])).collect();
+    assert!(
+        pairs.contains(&(0.0, 1.0)) && pairs.contains(&(100.0, 1.0)),
+        "{out}"
+    );
+    assert!(
+        pairs.iter().any(|p| p.0 == 40.0 && p.1 > 0.3 && p.1 < 0.7),
+        "{out}"
+    );
+    // plotaxes takes them with /Fade.
+    let mut m = load(
+        "/scene { 1 1 1 setrgbcolor [ 40 20 140 80 ] [ 0 1 ] [ 0 0 4 ramp 100 mul 60 add ] plotframe
+                  << /Fade true /YTicks 5 >> plotaxes } def",
+    );
+    for t in [0.0, 1.3, 2.7, 4.0] {
+        assert!(ink_at(&mut m, t).is_some());
+    }
+    assert_eq!(
+        nums(&eval_at(
+            "",
+            "[ 0 10 ] [ 0 0 100 50 ] [ 0 10 ] seriespoints ==",
+            0.0
+        )),
+        [0.0, 0.0, 100.0, 50.0]
+    );
 }
 
 // --- ink ------------------------------------------------------------------------
@@ -889,6 +1126,54 @@ fn tempo_counts_and_kicks() {
 }
 
 #[test]
+fn time_of_day_from_a_start_and_the_movie_clock_or_a_signal() {
+    // clockparts splits and wraps; fmtday writes the 24 hour clock.
+    assert_eq!(
+        nums(&eval_at("", "45296.25 clockparts == == == ==", 0.0)),
+        [0.25, 56.0, 34.0, 12.0]
+    );
+    assert_eq!(
+        nums(&eval_at("", "-1 clockparts == == == ==", 0.0)),
+        [0.0, 59.0, 59.0, 23.0]
+    );
+    assert_eq!(eval_at("", "3725 fmtday ==", 0.0), "(01:02:05)");
+    // parseclock takes text or seconds, and says what it accepts.
+    assert_eq!(
+        nums(&eval_at(
+            "",
+            "(7:05) parseclock == 100 parseclock == (0:00:01.5) parseclock ==",
+            0.0
+        )),
+        [25500.0, 100.0, 1.5]
+    );
+    let mut m = load("/scene { (nonsense) parseclock } def");
+    let e = m
+        .render_at(0.0)
+        .map(|_| ())
+        .expect_err("a bad time is an error")
+        .to_string();
+    assert!(e.contains("HH:MM:SS"), "{e}");
+    // daytime: the start plus the movie time, across midnight.
+    assert_eq!(
+        eval_at("", "(23:59:50) null daytime fmtday ==", 15.0),
+        "(00:00:05)"
+    );
+    assert_eq!(nums(&eval_at("", "36000 null daytime ==", 2.5)), [36002.5]);
+    // With a signal name the host's value is the time and the start is ignored.
+    let mut m = load("/scene { (01:00:00) /clock daytime fmtday == } def");
+    m.set_signal("clock", 83_000.0);
+    m.take_output();
+    m.render_at(3.0).unwrap();
+    assert_eq!(m.take_output().trim(), "(23:03:20)");
+    // A signal named by text, as --param gives it, works too.
+    let mut m = load("/scene { 0 (clock) daytime == } def");
+    m.set_signal("clock", 61.5);
+    m.take_output();
+    m.render_at(0.0).unwrap();
+    assert_eq!(m.take_output().trim(), "61.5");
+}
+
+#[test]
 fn more_box_words_and_text_placed_for_kinetic() {
     let n = nums(&eval_at(
         "",
@@ -958,4 +1243,163 @@ fn a_band_of_a_stroke_is_revealed_for_persistent_painting() {
         ink_at(&mut m, 0.0).map(|b| (b.0, b.1, b.2, b.3)),
         Some((60, 45, 100, 75))
     );
+}
+
+// --- pkfigure ------------------------------------------------------------
+
+#[test]
+fn a_dance_step_hops_higher_when_louder_and_grins_on_a_big_kick() {
+    let pose = |loud: f64, since: f64| {
+        eval_at(
+            "",
+            &format!(
+                "<< /Beat 4 /Since {since} /Length 0.5 /Loud {loud} >> dancepose \
+                 dup /Hop get == /Eyes get =="
+            ),
+            0.0,
+        )
+    };
+    let quiet = pose(0.2, 0.19);
+    let loud = pose(1.0, 0.19);
+    assert!(nums(&loud)[0] > nums(&quiet)[0] * 1.5, "{quiet} / {loud}");
+    assert!(loud.contains("grin"), "{loud}");
+    assert!(quiet.contains("open"), "{quiet}");
+    // On the beat itself and once landed, the feet are on the ground.
+    assert_eq!(nums(&pose(1.0, 0.0))[0], 0.0);
+    assert_eq!(nums(&pose(1.0, 0.49))[0], 0.0);
+}
+
+#[test]
+fn a_spring_starts_at_one_and_dies_away_and_poses_blend() {
+    let v = nums(&eval_at(
+        "",
+        "0 1.7 4.5 spring == -1 1.7 4.5 spring == 3 1.7 4.5 spring abs 0.01 lt ==",
+        0.0,
+    ));
+    assert_eq!(&v[..2], &[1.0, 0.0]);
+    let out = eval_at(
+        "",
+        "restpose << /Beat 0 /Since 0.1 /Length 0.5 /Loud 0.2 >> dancepose 0.5 blendpose \
+         dup /ArmR get == /Eyes get ==",
+        0.0,
+    );
+    // Halfway: arms between hanging (14) and the first move's (up), the eyes the dance's.
+    assert!(nums(&out)[0] > 14.0 && nums(&out)[0] < 149.0, "{out}");
+    assert!(out.contains("open"), "{out}");
+}
+
+#[test]
+fn squashed_keeps_the_feet_on_the_ground_and_leaves_no_dictionary_open() {
+    // A point on the ground stays put under any squash; the proc sees the caller's dictionaries.
+    let out = eval_at(
+        "/mine 7 def",
+        "0 0.7 0.2 { 0 0 transform exch round cvi == round cvi == mine == } squashed \
+         0 0 transform exch round cvi == round cvi ==",
+        0.0,
+    );
+    let v = nums(&out);
+    assert_eq!(v[2], 7.0, "{out}");
+    assert_eq!((v[0], v[1]), (v[3], v[4]), "{out}");
+}
+
+// --- emoji -----------------------------------------------------------------
+
+#[test]
+fn emoji_text_measures_the_emoji_as_one_letter_wide() {
+    let font = "/Helvetica findfont 20 scalefont setfont";
+    let out = eval_at(
+        "",
+        &format!(
+            "{font} (a:heart:b) emojitextwidth (a) stringwidth pop emojiwidth add (b) stringwidth pop add sub abs ="
+        ),
+        0.0,
+    );
+    assert!(out.parse::<f64>().unwrap() < 1e-6, "{out}");
+    // A clock time and an unknown name are plain text.
+    let out = eval_at(
+        "",
+        &format!(
+            "{font} (9:41 :nope: x:) emojitextwidth (9:41 :nope: x:) stringwidth pop sub abs ="
+        ),
+        0.0,
+    );
+    assert!(out.parse::<f64>().unwrap() < 1e-6, "{out}");
+    // An emoji is 1.2 times the font's size.
+    let out = eval_at("", &format!("{font} emojiwidth ="), 0.0);
+    assert!((out.parse::<f64>().unwrap() - 24.0).abs() < 1e-6, "{out}");
+}
+
+#[test]
+fn emojilines_wrap_with_emoji_counted_at_their_width() {
+    // Plain text wraps as wraplines does; a token counts as the emoji, not as its seven letters.
+    let out = eval_at(
+        "",
+        "/Helvetica findfont 20 scalefont setfont
+         (one two three four five) 120 emojilines length =
+         (one two three four five) 120 wraplines length =
+         (:laugh::laugh::laugh::laugh:) 100 emojilines length =
+         (:laugh::laugh::laugh::laugh:) 100 wraplines length =",
+        0.0,
+    );
+    let n: Vec<&str> = out.lines().collect();
+    assert_eq!(n[0], n[1], "{out}");
+    // 4 emoji of 24 units fit a 100-unit width as one unbroken word
+    assert_eq!(n[2], "1", "{out}");
+    assert_eq!(n[3], "1", "{out}");
+}
+
+const EMOJI_NAMES: [&str; 12] = [
+    "smile", "laugh", "wink", "sad", "cool", "heart", "thumbsup", "party", "fire", "check",
+    "rocket", "eyes",
+];
+
+#[test]
+fn every_emoji_is_drawn_inside_its_square() {
+    // emojinames lists what is drawn, in this order.
+    let listed = eval_at("", "emojinames { == } forall", 0.0);
+    assert_eq!(
+        listed.split_whitespace().collect::<Vec<_>>(),
+        EMOJI_NAMES
+            .iter()
+            .map(|n| format!("/{n}"))
+            .collect::<Vec<_>>()
+    );
+    for name in EMOJI_NAMES {
+        let mut m = load(&format!("/scene {{ /{name} 100 60 40 emojiat }} def"));
+        let (x0, y0, x1, y1, n) =
+            ink_at(&mut m, 0.0).unwrap_or_else(|| panic!("/{name} drew nothing"));
+        // 40 across, centred on 100,60 (pixel rows count from the top of a 120 high canvas)
+        assert!(
+            x0 >= 79 && x1 <= 121 && y0 >= 39 && y1 <= 81,
+            "/{name} left its square: {x0},{y0}..{x1},{y1}"
+        );
+        assert!(n > 150, "/{name} is nearly empty ({n} pixels)");
+    }
+}
+
+#[test]
+fn an_inline_emoji_sits_on_the_baseline_and_moves_the_point_on() {
+    // 40 point font, baseline at y = 40: the emoji spans from just under it to the cap line
+    let mut m = load(
+        "/scene { /Helvetica findfont 40 scalefont setfont 20 40 moveto /heart emoji
+                 currentpoint 40 sub exch 20 sub emojiwidth sub abs exch abs add = }
+         def",
+    );
+    let out = {
+        m.take_output();
+        m.render_at(0.0).unwrap();
+        m.take_output()
+    };
+    assert!(out.trim().parse::<f64>().unwrap() < 1e-6, "{out}");
+    let (x0, y0, x1, y1, _) = ink_at(&mut m, 0.0).expect("it drew");
+    // pixel rows from the top of the 120 high canvas: y = 40 is row 80
+    assert!(x0 >= 20 && x1 <= 20 + 48, "x {x0}..{x1}");
+    assert!(y1 <= 80 + 10 && y0 >= 80 - 40 - 6, "y {y0}..{y1}");
+}
+
+#[test]
+fn an_unknown_emoji_is_a_range_error_not_a_blank() {
+    let mut m = load("/scene { /nosuch 10 10 20 emojiat } def");
+    let e = m.render_at(0.0).expect_err("an error").to_string();
+    assert!(e.contains("rangecheck") || e.contains("emojiat"), "{e}");
 }

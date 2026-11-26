@@ -142,7 +142,7 @@ The part of the world the frame shows under the current transformation (the boun
 
 `-  themes  dict`
 
-The built-in themes by name: /midnight /paper /blueprint /terminal /poster /dusk. Each maps roles to colours (/bg /surface /line /fg /muted /accent /accent2 /accent3 /good /bad), fonts (/title /body /mono /display /serif) and sizes (/corner /stroke).
+The built-in themes by name: /midnight /paper /blueprint /terminal /poster /dusk. Each maps roles to colours (/bg /surface /line /fg /muted /accent /accent2 /accent3 /good /warn /bad), fonts (/title /body /mono /display /serif) and sizes (/corner /stroke).
 
 ### `theme`
 
@@ -368,6 +368,48 @@ Select the role's font (or any font name) at the largest size at which the strin
 
 Break text into lines no wider than width in the current font; \n forces a break.
 
+### `emojinames`
+
+`-  emojinames  [ /name ... ]`
+
+The emoji psanim draws itself, no font needed: smile laugh wink sad cool heart thumbsup party fire check rocket eyes. Flat, round and friendly, in a style of their own; they paint in their own colours.
+
+### `emoji`
+
+`/name  emoji  -`
+
+Draw an emoji at the current point as if it were a letter of the current font: sized to it, sitting on its baseline, and the current point moves past it. `(Great ) show /party emoji`.
+
+### `emojiat`
+
+`/name x y size  emojiat  -`
+
+Draw an emoji centred on x y, size across: for a reaction, a badge, a big one on its own.
+
+### `emojiwidth`
+
+`-  emojiwidth  w`
+
+How far `emoji` advances in the current font: 1.2 times its size.
+
+### `emojitext`
+
+`(text)  emojitext  -`
+
+Show text at the current point, each `:name:` of a known emoji (`:heart:`, `:laugh:`, see `emojinames`) drawn as that emoji. Anything else with colons, like 9:41, is plain text.
+
+### `emojitextwidth`
+
+`(text)  emojitextwidth  w`
+
+The width `emojitext` will advance by.
+
+### `emojilines`
+
+`(text) width  emojilines  [ (line) ... ]`
+
+`wraplines` for text with `:name:` emoji: each counts as the emoji it will be drawn as. Show the lines with `emojitext`.
+
 ### `textlayout`
 
 `(text) box opts  textlayout  [ [ (line) x y ] ... ]`
@@ -427,6 +469,36 @@ Show the first u (0..1) of the string with a block caret after it; the caret bli
 `[ [ t0 t1 (text) ] ... ] box opts  captions  -`
 
 Subtitles: show the caption whose time has come, centred at the bottom of the box on a plate, fading in and out. opts: << /Size s /Role /body /Plate true /Karaoke false >>; with /Karaoke the words light up across the caption's time. Times are on the current scope's clock.
+
+### `credits`
+
+`sections opts  credits  -`
+
+End credits, rolling upward at a constant rate, on the current scope's clock. sections is an array of entries, each an array that starts with a name: [/heading (Cast)] (or [/heading (THE END) 2.5], larger), [/pair (Director) (Name) (Name2)] (the role right-aligned left of a gutter, its names left-aligned right of it), [/name (Name) ...] (centred, one a line), [/text (a note)], [/space n] (n lines), [/proc { ... } h] (a slot h high: the procedure runs with the origin at its centre, over the column's centre: a logo). opts is a dictionary, all keys optional: /Box [x y w h] it rolls through (the canvas); /Size /HeadingSize /RoleSize /TextSize /Leading /Gutter /HeadingGap (units; sizes follow the box); /HeadingFace /RoleFace /NameFace /TextFace and /HeadingInk /RoleInk /NameInk /TextInk (theme roles or font names and colours); /Speed units a second, or /Duration seconds the roll takes (the speed follows); /Cards [ sections ... ] each held /CardTime seconds (4) before the roll; /Final sections, which the roll stops on, centred, after /FinalGap (half the box's height); /Settle units over which it slows to the stop; /Fade the fraction of the box's height over which lines fade at its top and bottom (0.12); /Snap (true) moves it whole device pixels a frame, so type does not shimmer. The roll starts when the scope's clock does: wrap it in `after` or a scope to place it. Keep the movie /Duration at least `creditsduration`.
+
+### `creditsat`
+
+`sections opts offset  creditsat  -`
+
+The roll after it has moved offset units, for a caller who owns the clock (an eased or scrubbed roll). opts as for `credits`; cards and /Settle are not applied.
+
+### `creditsheight`
+
+`sections opts  creditsheight  h`
+
+The height of the roll's content in units, final card included: what the roll has to travel, besides the box's own height.
+
+### `creditsspeed`
+
+`sections opts  creditsspeed  units-a-second`
+
+How fast the roll goes: /Speed if opts gives one, else the speed that makes it take /Duration seconds, else 8% of the box's height a second. To move whole pixels a frame at a render scale, give /Speed as pixels-a-frame times fps divided by the scale.
+
+### `creditsduration`
+
+`sections opts  creditsduration  seconds`
+
+How long the credits take: the cards, then the roll to its stop. Use it for the movie's /Duration (it works before `animation`, when opts has a /Box, since sizes follow the box): `<< /Duration secs opts creditsduration ... >> animation`.
 
 ## pkdiagram: nodes, connectors, flows, a presenter's marks
 
@@ -570,7 +642,7 @@ Data coordinates to canvas coordinates, in the current plot frame: for placing a
 
 `opts  plotaxes  -`
 
-Draw the axes, ticks, labels and grid of the current plot frame. opts: << /Draw u (drawn on, 0..1) /YTicks 5 /XTicks 5 /Grid true /Decimals 0 /XDecimals 0 /XNames [ (a) ... ] (names under evenly spaced slots, for bars) /XValues [ ... ] /YValues [ ... ] (ticks exactly there) /Suffix (%) /XLabel (text) /YLabel (text) /Size s >>. The plot frame's box is the data rectangle; labels and titles are drawn outside it, about three times /Size to the left and below, so inset the box from the page.
+Draw the axes, ticks, labels and grid of the current plot frame. opts: << /Draw u (drawn on, 0..1) /YTicks 5 /XTicks 5 /Grid true /Decimals 0 /XDecimals 0 /XNames [ (a) ... ] (names under evenly spaced slots, for bars) /XValues [ ... ] /YValues [ ... ] (ticks exactly there) /Fade true (while the range moves, ticks cross-fade between round steps instead of jumping) /Suffix (%) /XLabel (text) /YLabel (text) /Size s >>. The plot frame's box is the data rectangle; labels and titles are drawn outside it, about three times /Size to the left and below, so inset the box from the page.
 
 ### `bars`
 
@@ -638,6 +710,54 @@ Mark a data point: a dot, dashed drop lines to both axes, and a label on a leade
 
 The roles marks cycle through when none are given.
 
+### `thresholdrole`
+
+`v [ role v1 role v2 role ... ]  thresholdrole  role`
+
+The role for a value by thresholds, the way dashboards colour status: the first role below v1, the next from v1 up, and so on. `v [ /good 70 /warn 90 /bad ] thresholdrole ink`.
+
+### `sparkline`
+
+`[ v ... ] box opts  sparkline  -`
+
+A small line chart filling the box, no axes: the shape of a recent past. opts: << /Range [lo hi] (the data's own, padded) /Role /accent2 /Fill 0.18 (opacity of the shading under it; 0 for none) /Width w /Dot true (a dot on the newest value) /Draw u (the part drawn, from the left) /From 0 /To 1 (where the first and last values sit, as fractions of the box's width, the rest clipped: for a window read on a fixed grid that slides by part of a step) >>.
+
+### `horizon`
+
+`[ v ... ] box opts  horizon  -`
+
+A horizon chart in the box: the series folded into bands of colour, darker the higher, so a row a few pixels high still shows its shape and a fleet of rows fits on a screen. Values above /Base rise from the bottom in /Role; below it, they hang from the top in /NegRole. opts: << /Extent e (the value that fills every band; the data's largest by default) /Bands 3 /Base 0 /Role /accent2 /NegRole /accent3 /Ground /surface (the colour the bands rise from) /Mirror false (negatives from the bottom too) /Draw u (the part drawn, from the left) >>. The catalog's /horizon draws many rows with a cursor.
+
+### `heatmap`
+
+`[ [ v ... ] ... ] box opts  heatmap  -`
+
+A matrix as cells in the box, first row at the top, coloured from a low role to a high one. opts: << /Range [lo hi] (the data's) /Roles [ /surface /accent ] (low high, or low mid high) /Gap g /Draw u (columns brought in from the left) >>.
+
+### `statuslight`
+
+`x y r role  statuslight  -`
+
+A status lamp: a dot of radius r in the role with a soft halo and a glint. With `thresholdrole`, a status light: `x y 8 v [ /good 70 /warn 90 /bad ] thresholdrole statuslight`.
+
+### `panel`
+
+`box opts  panel  box`
+
+A dashboard card: the theme's surface with rounded corners and a title; leaves the box inside it for the contents. opts: << /Title (text) /Status role (a lamp at the top right) /Fill /surface /Size s (title size; a fifteenth of the card's width, at most a seventh of its height) /Pad p >>.
+
+### `stattile`
+
+`v box opts  stattile  -`
+
+A stat panel: a card with a title, the value large in its threshold's colour, its unit, a change with an up or down arrow, and a sparkline of its recent past along the bottom. opts: << /Title (text) /Unit (%) /Decimals 0 /Short false (12.4k instead of 12,431) /Thresholds [ /good 70 /warn 90 /bad ] (default /fg) /Delta d (the change to show) /DeltaDecimals 1 /DeltaSuffix (%) /DownIsGood false /Spark [ v ... ] /SparkRange [lo hi] /SparkFrom 0 /SparkTo 1 (as sparkline's /From /To) /Fill /surface, or /threshold to colour the card instead of the number >>.
+
+### `dial`
+
+`v box opts  dial  -`
+
+A gauge: an arc from bottom left round to bottom right, filled to the value in its threshold's colour, the thresholds as a thin band round it, the number in the middle. opts: << /Range [0 100] /Thresholds [ /good 70 /warn 90 /bad ] (default all /accent) /Sweep 240 /Thick 0.17 (of the radius) /Unit (%) /Decimals 0 /Short false /Label (text, under the number) /Track /line >>.
+
 ## pkink: marks with a hand in them
 
 Load with `/pkink use`.
@@ -677,4 +797,56 @@ Fill a box with a gradient between two colours (roles or [r g b]) along an angle
 `key amount  jitter  dx dy`
 
 A small steady offset within amount either way, fixed by key: the hand-set unevenness of a row of marks. The same key always gives the same offset.
+
+## pkfigure: a rig for characters that dance
+
+Load with `/pkfigure use`.
+
+### `squashed`
+
+`hop squash lean proc  squashed  -`
+
+Run proc with a character's bounce: the origin on the ground under it, lifted by hop, squashed (squash < 1) or stretched (> 1) keeping its area, and leaned (x moves lean times y). Draw the figure standing on y = 0 and the squash stays anchored to its feet. No dictionary is open around proc.
+
+### `limb`
+
+`x y angle len r  limb  ex ey`
+
+Fill an arm or a leg from the joint (x, y): len long, 2r thick, round at both ends, in the current colour. angle is from straight down, counter-clockwise (90 points right, -90 left, 180 straight up). Leaves where it ends, for a hand or a foot: `0.9 1.4 armR 0.7 0.14 limb 0.2 0 360 arc fill`.
+
+### `eye`
+
+`x y r opts  eye  -`
+
+A cartoon eye about r wide either side of x, taller than wide. opts: /State /open (with two highlights), /blink (a line), /grin (shut tight, ^), /sleep (shut softly, a lid curved down); /Look how far it has turned right, in eye widths; /Ink and /Shine colours (roles or [r g b]).
+
+### `mouth`
+
+`x y w opts  mouth  -`
+
+A cartoon mouth, its top edge centred at (x, y), w wide either side: a smile when shut, opening downward into a D with a tongue as /Open goes from 0 to 1. opts: /Open, /Ink, /Tongue.
+
+### `spring`
+
+`t freq damp  spring  u`
+
+1 at t = 0, swinging about 0 at freq Hz and dying away at rate damp; 0 before. Multiply by how far a part was left behind by a jolt t seconds ago: an antenna's bobble, an ear, a tail lagging behind a hop, as a function of time and not of the last frame.
+
+### `dancepose`
+
+`beat  dancepose  pose`
+
+A dance step as numbers, from a beat the caller reads (a tempo, an event track, a signal): beat is << /Beat index /Since seconds /Length seconds-per-beat /Loud 0..1 /Sing 0..1 >>. The pose has /Hop /Squash /Lean (for `squashed`), /ArmL /ArmR (degrees raised), /LiftL /LiftR /Spread (feet), /Eyes (/open /grin /wink) /Look, /Mouth (0..1) and /BobX /BobY (a bobble left behind). Eight moves, one a beat; louder beats hop higher, and a beat at /Loud 0.75 or more is a grin. Lengths are in body half-widths.
+
+### `restpose`
+
+`-  restpose  pose`
+
+A pose standing still with the eyes softly shut: asleep, with the same keys as `dancepose`.
+
+### `blendpose`
+
+`a b u  blendpose  pose`
+
+The pose u of the way from a to b: numbers in between, anything else (the eyes) a's until halfway and b's after. For settling from a dance into rest, or waking.
 

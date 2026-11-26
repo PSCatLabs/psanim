@@ -1,0 +1,72 @@
+%!PS
+% Poster: 62.7
+% Midnight: a morphing-digit clock counts through a minute change and then
+% the turn of the day, when all six digits melt at once.
+%
+% The film never reads a clock. It is given a start time (/Start, 23:58:57)
+% and counts from it by its own time, so it renders the same every time.
+% The clock itself is the /clock-morph catalog entry: each digit is one
+% closed outline that `morphpath` carries into the next.
+<< /Size [1280 720] /Duration 70 /FPS 30 /Background [0.02 0.03 0.06]
+   /Title (Midnight)
+   /Description (A morphing-digit clock counts from 23:58:57 through a minute change and the turn of the day, its digits melting from one into the next. The time is a start plus the film's own time, never the wall clock.)
+>> animation
+
+/Start (23:58:57) param /start exch def     % time of day at the start of the film: (HH:MM:SS), or seconds since midnight
+
+/clock /clock-morph << /Params << /Start start /Panel 0 /Theme /midnight /Melt 0.7 >> >> instance
+/ink { 0.42 0.86 1.0 setrgbcolor } def
+
+% The time of day now, in seconds with fractions, as the clock itself sees it.
+/tod { start null daytime } def
+
+% A night that warms toward the horizon: 48 bands, darkest at the top.
+/sky {
+  0 1 47 { /i exch def
+    i 47 div dup mul /v exch def
+    0.02 0.05 v mul add  0.03 0.09 v mul add  0.06 0.17 v mul add setrgbcolor
+    0 height i 1 add 48 div height mul sub width height 48 div 1 add rectfill
+  } for
+} def
+
+% Ninety stars that twinkle a little.
+/stars {
+  0 1 89 { /i exch def
+    i 31 add hash01 width mul
+    i 53 add hash01 0.62 mul 0.38 add height mul
+    1 1 1 setrgbcolor
+    i 7 add hash01 0.55 mul 0.2 add  i 0.4 1 wiggle 0.25 mul 0.75 add  mul setalpha
+    i 11 mod 4 lt { 1.8 } { 1.1 } ifelse 0 360 arc fill
+  } for
+  1 setalpha
+} def
+
+% A ring that opens from the clock when a time boundary has just passed:
+% age maxradius alpha  (age in seconds; nothing before 0 or after 4).
+/ring {
+  /ra exch def /rr exch def /ag exch def
+  ag 0 ge ag 4 lt and {
+    /rp ag 4 div def
+    ink
+    ra 1 rp sub dup mul mul setalpha
+    3 setlinewidth
+    640 380 rr 1 1 rp sub 3 exp sub mul 0 360 arc stroke
+    1 setalpha
+  } if
+} def
+
+/scene {
+  sky stars
+  tod 60 fmod 420 0.22 ring
+  tod 20 lt { tod 900 0.5 ring } if
+  % the seconds of the minute, as a hairline under the clock
+  ink
+  0.2 setalpha 100 192 1080 2 rectfill
+  0.85 setalpha 100 191 1080 tod 60 fmod 60 div mul 4 rectfill
+  1 setalpha
+  /clock << /Box [100 200 1080 360] >> place
+  % a caption
+  0.62 0.7 0.82 setrgbcolor 0.8 setalpha
+  /Helvetica findfont 22 scalefont setfont
+  100 140 moveto (a clock is a function of the time it is given) show
+} def

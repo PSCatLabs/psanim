@@ -1,0 +1,89 @@
+%!PS
+% Catalog entry: clock-analog. A round clock face with hour, minute and second hands.
+% In a movie:  /c /clock-analog component   then   /c << /Box [x y w h] >> place
+%
+% The time comes from the host, never the wall clock: a start time plus the
+% movie's own time, or a live signal (see /Signal). Not a loop: the movie
+% time is the clock.
+% The default start is 12 hours before the time the catalog sheet should show
+% (its middle frame is 12 hours in): the sheet reads 10:10:35.
+<< /Size [640 640] /Duration 86400 /Background /transparent
+   /Title (Analog clock)
+   /Description (A round clock face with tapered hour and minute hands and a red second hand that either ticks with a little overshoot, like quartz, or sweeps. Themes, optional numerals. Time of day from a start time and the movie's own time, or from a host signal.)
+>> animation
+
+/Start (22:10:35) param /start exch def          % time of day at movie time 0: seconds since midnight, or (HH:MM:SS) text
+/Signal null param /sig exch def            % name of a host signal that carries seconds since midnight (a live page); Start is then ignored
+/Theme /midnight param /theme exch def      % /midnight /amber /paper /phosphor
+/Second /tick param /secmode exch def       % the second hand: /tick (jumps once a second, with a little overshoot), /sweep (glides), /none
+/Numerals 1 param /numerals exch def        % 1 writes the twelve numerals, 0 leaves only the ticks
+/Panel 1 param /panel exch def              % 1 paints the face and bezel, 0 draws only the ticks and hands on whatever is there
+
+<< /midnight << /bg [0.05 0.07 0.12] /ink [0.42 0.86 1.0]  /dim [0.16 0.24 0.34] /hot [1.0 0.45 0.40] >>
+   /amber    << /bg [0.07 0.04 0.02] /ink [1.0 0.62 0.10] /dim [0.28 0.17 0.06] /hot [1.0 0.85 0.40] >>
+   /paper    << /bg [0.96 0.94 0.89] /ink [0.13 0.13 0.16] /dim [0.78 0.75 0.68] /hot [0.84 0.24 0.14] >>
+   /phosphor << /bg [0.02 0.06 0.04] /ink [0.35 1.00 0.55] /dim [0.08 0.22 0.13] /hot [0.90 1.00 0.50] >>
+>> theme get /pal exch def
+/role { pal exch get aload pop setrgbcolor } def
+
+/R 300 def                                  % face radius, in the 640 unit square
+/hand { % angle length width tail : a tapered hand at the centre, pointing clockwise from 12
+  /hd-t exch def /hd-w exch def /hd-l exch def /hd-a exch def
+  matrix currentmatrix /hd-m exch def
+  hd-a neg rotate
+  hd-w 2 div neg hd-t neg moveto
+  hd-w 2 div hd-t neg lineto
+  hd-w 0.2 mul hd-l lineto
+  hd-w 0.2 mul neg hd-l lineto
+  closepath
+  hd-m setmatrix
+} def
+/hands { % angle length width tail : draw it, with a soft shadow beneath
+  4 copy
+  gsave 4 -7 translate 0 0 0 setrgbcolor 0.28 setalpha hand fill grestore
+  hand fill
+} def
+
+/scene {
+  320 320 translate
+  /tod start sig daytime def
+  tod clockparts /fr exch def /ss exch def /mm exch def /hh exch def
+  panel 1 eq {
+    /ink role 0.9 setalpha 0 0 R 0 360 arc fill                   % bezel
+    1 setalpha /bg role 0 0 R 14 sub 0 360 arc fill               % face
+    /ink role 0.12 setalpha 0 0 R 22 sub 0 360 arc 3 setlinewidth stroke
+    1 setalpha
+  } if
+  % minute and hour ticks
+  /ink role
+  0 1 59 { /k exch def
+    gsave k 6 mul rotate
+      k 5 mod 0 eq
+        { 7 setlinewidth 0 R 40 sub moveto 0 R 62 sub lineto stroke }
+        { gsave 0.5 setalpha 2.5 setlinewidth 0 R 52 sub moveto 0 R 62 sub lineto stroke grestore }
+      ifelse
+    grestore
+  } for
+  numerals 1 eq {
+    /Helvetica-Bold findfont 54 scalefont setfont
+    1 1 12 { /k exch def
+      /nt k 20 string cvs def
+      90 k 30 mul sub cos 195 mul nt stringwidth pop 2 div sub
+      90 k 30 mul sub sin 195 mul 19 sub moveto nt show
+    } for
+  } if
+  % hands
+  /hr12 hh 12 mod mm 60 div add ss 3600 div add fr 3600 div add def
+  hr12 30 mul 170 22 24 hands
+  /ink role
+  mm ss 60 div add fr 60 div add 6 mul 255 14 28 hands
+  secmode /none ne {
+    /hot role
+    secmode /tick eq
+      { ss fr 0.12 div 1 min /back-out ease add } { ss fr add } ifelse 6 mul
+    268 4.5 62 hands
+    0 0 9 0 360 arc fill
+  } if
+  /ink role 0 0 14 0 360 arc fill
+  /bg role 0 0 5 0 360 arc fill
+} def

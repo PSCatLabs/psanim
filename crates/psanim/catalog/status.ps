@@ -1,0 +1,61 @@
+%!PS
+% Catalog entry: status. A column of status lights: one lamp per service,
+% coloured by thresholds, with its name and value; a lamp in the last
+% colour pulses.
+% In a movie:  /svc /status << /Params << /Signals [/api /db /queue] >> >> instance
+%              then  /svc << /Box [x y w h] >> place
+/Width 300 param /cw0 exch def                           % its width in units: give it the shape of the box it is placed in
+/Height 260 param /ch0 exch def                          % its height in units
+<< /Size [cw0 ch0] /Duration 12 /Loop true /Background /transparent
+   /Title (Status lights)
+   /Description (One lamp per service, green, amber or red by thresholds, with its name and value; the worst ones pulse. From host signals or arrays.)
+>> animation
+/pkchart use
+
+/Title (Services) param /ttl exch def                    % the panel's title; () for none
+/Signals null param /sigs exch def                       % the host signals, one lamp each; null plays /Values
+/Values null param /vals exch def                        % without signals: one array per lamp, played across the duration (null: a demo)
+/Labels null param /labels exch def                      % a name per lamp; null: the signal names
+/Thresholds [/good 70 /warn 90 /bad] param /ths exch def % the lamp's colour by value
+/Unit () param /unit exch def                            % after each value
+/Decimals 0 param /dec exch def                          % decimal places
+/Lag 0 param /lag exch def                               % read the signals this many seconds late, so live values glide between updates
+/Card true param /card exch def                          % draw the panel's card behind it
+/Theme null param /thm exch def                          % a theme name, or null for the movie's own
+
+thm null ne { thm usetheme } if
+sigs null eq vals null eq and {
+  /labels [ (api) (auth) (builds) (cache) (db) ] def
+  /unit (ms) def
+  /vals [ 0 1 4 { /r exch def
+    [ 0 1 48 { 48 div 360 mul /a exch def
+      a r 70 mul add sin 18 mul r 12 mul add 40 add  a 4 mul r 40 mul add sin 0 max 3 exp 45 mul r 2 mod mul add
+    } for ]
+  } for ] def
+} if
+/n sigs null ne { sigs length } { vals length } ifelse def
+labels null eq {
+  /labels sigs null ne { [ sigs { 32 string cvs } forall ] } { [ 1 1 n { 3 string cvs (series ) exch strcat } for ] } ifelse def
+} if
+/value-of {
+  sigs null ne { sigs exch get lag signalago }
+  { vals exch get globaltime duration div 1 fmod 1 index length 1 sub mul valueat } ifelse
+} def
+
+/scene {
+  canvasbox 3 inset
+  card { << /Size height 0.075 mul ttl () ne { /Title ttl } if >> panel } if
+  aload pop /bh exch def /bw exch def /by exch def /bx exch def
+  /rh bh n div def
+  /fs rh 0.42 mul bh 0.12 mul min def
+  /worst ths ths length 1 sub get def
+  0 1 n 1 sub { /i exch def
+    /v i value-of def
+    /role v ths thresholdrole def
+    /cy by bh add i 0.5 add rh mul sub def
+    /r fs 0.42 mul role worst eq { globaltime 360 mul 2.2 mul sin 0.18 mul 1 add mul } if def
+    bx fs 0.6 mul add cy r role statuslight
+    /fg ink /body fs face bx fs 1.6 mul add cy fs 0.36 mul sub moveto labels i get show
+    role ink /mono fs face bx bw add cy fs 0.36 mul sub moveto v dec fmtnum unit strcat showright
+  } for
+} def

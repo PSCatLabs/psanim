@@ -129,16 +129,36 @@ for the common case.
 | core additions | `within`, `fitted`, `script`/`then`, `storyboard`, `tempo`/`counts`, `cascade`, `onpath`, `taperpath`, `straightenpath`, `smoothkeys`, `valueat`, `fmtnum`, `codetokens` ... | Rust + prelude |
 | `pkstage` | boxes, themes, `lookat`, `spotlight` | PostScript |
 | `pkmotion` | `enters`, `leaves`, `onstage`, `emphasized`, `motion`, `echoed`, `rank` | native layer placement |
-| `pktype` | `showin`, `placetext`, `fitface`, `paragraph`, `kinetic`, `marker`, `typewrite`, `captions`, `sym`, run lists (`showruns`) | pkstage, pkmotion |
+| `pktype` | `showin`, `placetext`, `fitface`, `paragraph`, `kinetic`, `marker`, `typewrite`, `captions`, `credits`, `sym`, run lists (`showruns`) | pkstage, pkmotion |
 | `pkdiagram` | `node`, `edge`, `connect`, `arrow`, `pulse`, `group`, `note`, `circled` | pktype |
 | `pkcode` | `codeblock`, `codelinebox`, `codediff` | native tokenizer and diff |
-| `pkchart` | `plotframe`, `plotaxes`, `bars`, `hbars`, `plotline`, `plotmark`, `plotrule`, `dots`, `donut` | pktype |
+| `pkchart` | `plotframe`, `plotaxes`, `bars`, `hbars`, `plotline`, `plotmark`, `plotrule`, `dots`, `donut`; for dashboards `stattile`, `dial`, `horizon`, `sparkline`, `heatmap`, `statuslight`, `panel`, `thresholdrole` | pktype |
 | `pkink` | `revealalong`, `revealband`, `around`, `brushstroke`, `boxgradient` | pkstage |
+| `pkfigure` | `squashed`, `limb`, `eye`, `mouth`, `spring`, `dancepose`, `restpose`, `blendpose` | pkstage |
 
 Libraries are PostScript source compiled into the binary and loaded with
 `/pkmotion use`. They are opt-in so that a movie's namespace holds only
 what it asked for; a word used without its library produces an error
 that names the library.
+
+### Why characters have a library of their own
+
+`pkfigure` came with the catalog's first character (`/twiddle`, #51). A
+dancing character is a pose computed from a beat, then a drawing that
+reads it. The drawing is each character's own, so it stays in the
+character's catalog entry, where `psanim catalog twiddle` shows it to
+anyone who wants to copy it. The rest is shared by every dancer: the
+bounce, the limbs, the faces and the dance step. A library is the only
+place two catalog entries can share code. pkmotion was the wrong home,
+because its words measure and place an arbitrary drawing, and a rig
+draws a particular kind of one.
+
+The same rules as everywhere else apply. No word reads the clock:
+`dancepose` takes the beat index, the seconds since that beat and the
+loudness, so an entry can read the beat from a tempo, an event track or
+a signal. A pose is a plain dictionary of numbers, not an object. The
+lag of an antenna, an ear or a tail is `spring`, a closed form in the
+time since the jolt, so the frames stay pure.
 
 ### What is in Rust and what is in PostScript
 
@@ -147,7 +167,7 @@ anything that is data processing rather than drawing (tokenizing,
 diffing, number formatting, tick selection, ranks), and anything that
 needs the flattened path (`taperpath`). In PostScript: everything that
 draws, so an author can read a library word, copy it and change it. The
-libraries are about 1,750 lines of PostScript.
+libraries are about 2,000 lines of PostScript.
 
 ### Conventions
 
@@ -163,6 +183,15 @@ libraries are about 1,750 lines of PostScript.
   open around it; private names carry a dot or a prefix.
 - Names are checked by a test against every PSCat library and against
   each other.
+- `credits` lives in pktype because it is set type measured with the
+  theme's faces; it reads `now` as `captions` and `kinetic` do, and
+  `creditsat` is the same drawing from a distance the caller computes.
+  It lays the whole roll out in a settings dictionary, turns it into
+  finished records (place, alpha, text) and only then draws, so the
+  caller's `/proc` entries run with no dictionary open. It snaps the
+  roll's offset to a whole device pixel through the current
+  transformation: the one place a library word looks at device space,
+  because shimmer is a property of pixels.
 
 ## What was deliberately not built
 
@@ -194,3 +223,128 @@ fresh agents with only the skill and a brief for an ambitious film each,
 with a required friction report. Their reports changed the libraries and
 the skill; the evaluation lists what changed and what the experiment
 measured.
+
+## Components (added for 0.2)
+
+A movie can be built from parts written on their own (`component`,
+`instance`, `place`). The constraints above still hold: there is no scene
+graph, nothing owns a clock, and a box is a plain array. A component is
+not an object with bounds: it is a movie whose scene is called, at a time
+the host computes, inside `fitted`.
+
+What makes a component more than a procedure is isolation:
+
+- **Names.** Each instance gets a dictionary, open while its setup and
+  scene run. This is the one place the prelude opens a dictionary around
+  code it did not write, and it is the point: that dictionary is the
+  component's namespace, not one left around a caller's procedure.
+  Libraries always load into userdict, whoever calls `use`.
+- **Clock, seed, parameters.** A native stack of component frames
+  (`Ctx::comps`) makes `globaltime`, `duration`, `globally`, `movieseed`,
+  the noise words and `param` answer for the innermost component. Signals
+  and events stay on the movie's clock: they come from outside.
+- **Library state.** Libraries that change a shared dictionary (pkstage's
+  `theme`, pkchart's current plot) do it through `.mine`, which inside a
+  component gives a private copy made on first use.
+
+Rejected: running each instance in its own interpreter (cost, and the
+drawing must land in the host's page); a `/Params` key in the declaration
+(the movie's own `param` defaults already say it, and keep a component
+file runnable on its own).
+
+## Particles (added for 0.2)
+
+`spec proc particles` is in the core, not a library. It is a time
+primitive of the same kind as `wiggle` and `keyframes`: it reads the
+clock of the current scope and the seed of the current component, and
+needs nothing from a theme or a box. Its names all begin `particle`, so
+it adds no likely collision to a movie's namespace.
+
+Purity is kept the way the rest of the engine keeps it, by computing
+instead of remembering. A particle's birth time, place, velocity and
+life come from its emitter and `hash01` of its key; its state at time t
+is the closed form for gravity, linear drag and a steady wind, or, when
+a gust varies over time, a walk through cells of a grid anchored at time
+0 (the gust is constant over each cell, and each cell is integrated
+exactly). Either way the answer depends on the birth and t alone, so
+frames still render in any order. Only particles that can be alive are
+visited, so cost follows what is on screen, not how long the film has
+run. `/Period` makes continuous emission and the noise forces repeat, for
+loops.
+
+The split follows the time scopes: the native half computes every live
+particle and keeps them on a stack in `Ctx`; the prelude's loop calls the
+author's procedure once per particle inside `gsave`, with the origin at
+the particle and the caller's stack; `particleage`, `particleu`,
+`particlevel`, `particlekey` and the rest read the current particle the
+way `now` reads the clock. No dictionary is opened around the procedure,
+and no per-particle dictionary is allocated. `particletrail` hands back
+the particle's own recent track as the current path, from the same
+closed form, so streaks and comet tails need no history either.
+
+Rejected: a dictionary per particle passed to the procedure (allocation
+for every particle on every frame, and an invitation to `begin` it);
+simulating in `step` (stateful movies render on one thread and cannot
+seek); noise forces evaluated at every step of every particle (done that
+way, the gust alone doubled the frame time of 10,000 particles; it is
+now worked out once per cell per frame, and `/Sway` gives each particle
+its own wandering as an offset, in closed form).
+
+## Playlists (added for 0.2)
+
+A playlist (`playlist`, `playlistduration`, `weektime`) is a component whose
+scene plays other scenes in turn, for signage. It follows the same
+constraints: no scene graph, nothing owns a clock, a frame is a function of
+time.
+
+- **It reuses the reel.** Each frame builds the reel for the round it is in
+  and plays it, so the transitions (the `transitions` dictionary, including a
+  program's own), the clips' clocks and the validation are the reel's. What
+  is new is only the loop: the reel is padded with the next round's first
+  scene as a last clip and played from the length of the last hand-over in,
+  so at the wrap both copies of the first scene are at the same moment.
+- **Scenes are components, placed by `place`**, each over its own ground so
+  a transition works as in a reel. A playlist is itself registered as a
+  component, so it is placed, timed, and nested like any other.
+- **Time of day is data, never the wall clock.** A playlist knows /Day and
+  /Time at its own time 0 (the movie takes them from `param`) and `weektime`
+  is that plus its clock. A frame stays a pure function of time. A live host
+  can instead set a `weektime` signal (/Clock /signal).
+- **Schedules are per round.** Which scenes are on the list is chosen when a
+  round starts, so a scene is never cut off and the hand-over always goes to
+  a scene that will play. Finding the round that contains a time without
+  playing the rounds before it is native (`src/playlist.rs`: a stretch of
+  rounds with one set is skipped arithmetically, so a render of a long run
+  costs the same per frame). Rejected: a fixed-length round with a substitute
+  scene for each one that is off the list (a scene could then never be left
+  out, only replaced).
+- **The list is PostScript data in a file**, read like a component file: no
+  parser to write or to disagree with the language, typed `/Params`, comments,
+  the same read roots. A line-oriented format would have needed its own quoting.
+- **No library word owns a clock**: `weektime` is read, not driven; a scene
+  that shows a clock owns none.
+
+## Dashboards (added for 0.2)
+
+Telemetry panels follow the same rules. The pkchart words (`stattile`,
+`dial`, `horizon`, `sparkline`, `heatmap`) take numbers and a box; none
+reads a signal or a clock. Data reaches a movie only from the host:
+signals, which now have a past (`signalago`, `signalseries`,
+`signalbetween`) so a pure frame can draw a window of history, and which
+a live host feeds with `Movie::record_signal` so the same movie works on
+a wall display. The ready-made panels are catalog entries that read
+their signal by name. A recorded day and a live feed are the same thing
+to the movie; a gallery piece names its recording with a
+`% Signals: day.csv` line that the gallery scripts and the docs test pass
+as `--signals`.
+
+Two choices keep a dashboard steady. A window of history is read on a
+grid fixed in time, not at instants that slide with `now`, so peaks do
+not shimmer. And a moving axis cross-fades between the round tick sets
+either side of its ideal step (`fadeticks`, `plotaxes /Fade`), instead of
+re-picking ticks and jumping.
+
+Rejected: a declaration key naming the movie's data file (the host
+should decide where data comes from, and a browser host has no files);
+an accumulating history inside the movie (state between frames; a host
+recording is the explicit place for it).

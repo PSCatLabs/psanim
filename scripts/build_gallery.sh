@@ -19,19 +19,22 @@ for name in "${names[@]}"; do
   out=site/gallery/$name
   mkdir -p "$out"
   echo "== $name"
+  # A piece that reads host data names its recording: "% Signals: FILE.csv" (beside it).
+  sig=()
+  for f in $(sed -n 's/^% *Signals: *\([^ ]*\).*/\1/p' "$src"); do sig+=(--signals "gallery/$name/$f"); done
   $P info "$src" --json > "$out/info.json"
-  $P check "$src" --json > "$out/check.json"
+  $P check "$src" ${sig[@]+"${sig[@]}"} --json > "$out/check.json"
   # The poster: the frame named by a "% Poster: SECONDS" comment, else 60% through.
   at=$(sed -n 's/^% *Poster: *\([0-9.]*\).*/\1/p' "$src" | head -1)
   [ -n "$at" ] || at=$(python3 -c "import json;print(json.load(open('$out/info.json'))['movie']['duration']*0.6)")
-  $P frame "$src" --at "$at" -o "$out/poster.png" -q
+  $P frame "$src" ${sig[@]+"${sig[@]}"} --at "$at" -o "$out/poster.png" -q
   # A small still for docs/gallery.md, which is kept in git.
   mkdir -p docs/img/gallery
   ffmpeg -v error -y -i "$out/poster.png" -vf scale=480:-2 -q:v 4 "docs/img/gallery/$name.jpg"
-  $P sheet "$src" -o "$out/sheet.png" --count 12 --cols 4 --thumb 400 -q
-  $P render "$src" -o "$out/$name.mp4" $scale --json > "$out/render.json"
+  $P sheet "$src" ${sig[@]+"${sig[@]}"} -o "$out/sheet.png" --count 12 --cols 4 --thumb 400 -q
+  $P render "$src" ${sig[@]+"${sig[@]}"} -o "$out/$name.mp4" $scale --json > "$out/render.json"
   # An animated GIF too: 480 wide at 20 fps keeps it a few megabytes.
-  $P render "$src" -o "$out/$name.gif" --width 480 --fps 20 -q
+  $P render "$src" ${sig[@]+"${sig[@]}"} -o "$out/$name.gif" --width 480 --fps 20 -q
   cp "$src" "$out/$name.ps"
   python3 -c "import json;r=json.load(open('$out/render.json'));print('   %d frames %dx%d in %.1fs on %d threads (%.1f fps), %.1f MB' % (r['frames'],r['width'],r['height'],r['total_seconds'],r['threads'],r['frames_per_second'],r['bytes']/1e6))"
 done

@@ -16,9 +16,12 @@ Scene bodies below run on a 640x360 canvas, 4 seconds, libraries loaded.
 - [Marking a word](#marking-a-word)
 - [Numbers that count](#numbers-that-count)
 - [Typing](#typing)
+- [Emoji](#emoji)
 - [Captions](#captions)
+- [End credits](#end-credits)
 - [Mathematics](#mathematics)
 - [Hierarchy](#hierarchy)
+- [An opening crawl](#an-opening-crawl)
 
 ## Text in a box
 
@@ -156,6 +159,94 @@ ground /mono 24 face /good ink
 60 180 moveto (psanim render film.ps -o film.mp4) 0.4 2.6 ramp typewrite
 ```
 
+### Typing like a person
+
+`typewrite` reveals a string at an even rate. A person does not: keys come
+in bursts, words are separated by longer gaps, there is the odd thinking
+pause, and now and then a finger slips to a neighbouring key and the
+mistake is backspaced and fixed. `typingplan` makes that schedule from a
+seed, once, in setup; `typedat` then answers what is on the line at any
+time, so it stays a pure function of the clock. Another seed types the
+same text another way; `/Typos 0` types it cleanly; `/Slips [4]` makes
+the fifth character slip for certain.
+
+```postscript
+%!PS
+<< /Size [640 360] /Duration 6 /FPS 30 /Background [0.03 0.05 0.04] >> animation
+/pktype use
+/line (git push origin main) 11 << /Think 0.4 /Slips [5] >> typingplan def
+/scene {
+  /mono 28 face /good ink
+  40 200 moveto (> ) show
+  line now typedat show
+} def
+```
+
+A whole terminal session is data too. `sessionplan` takes prompts, typed
+commands, output that arrives at once (`/out`) or line by line (`/lines`),
+a line redrawn in place (`/progress`), waits and marks, and `screenat`
+gives the character grid at any time (the screen scrolls when it fills).
+Because the screen is a function of time, the screen a moment ago is
+`t 0.1 sub screenat`: that is how the catalog's `/terminal` fades text
+out like a phosphor. For a screen to look at, place that entry; to act
+when the session reaches a point, give it the plan and ask `plan /name
+planmark` (see [catalog.md](catalog.md)).
+
+```postscript
+%!PS
+<< /Size [640 360] /Duration 7 /FPS 30 /Background [0 0 0] >> animation
+/pktype use
+/session [
+  [/type (make test)] [/lines (cc a.c\ncc b.c\nlink) 0.25]
+  [/mark /ran] [/out (all 12 tests passed)]
+] 3 << /Prompt ($ ) >> sessionplan def
+/scene {
+  /mono 24 face /good ink
+  session now 9 50 screenat pop pop
+  /rows exch def
+  0 1 rows length 1 sub { /i exch def 40 320 i 28 mul sub moveto rows i get show } for
+  session /ran planmark now lt { /accent ink 40 30 moveto (the tests ran) show } if
+} def
+```
+
+## Emoji
+
+Real Unicode emoji need font support PSCat does not have yet, so psanim
+draws twelve of its own: `emojinames` lists them (smile laugh wink sad cool
+heart thumbsup party fire check rocket eyes). They are flat, round and in
+one style, and paint in their own colours.
+
+`/name emoji` draws one as if it were a letter of the current font: sized
+to it, sitting on its baseline, and the current point moves past it.
+`(text) emojitext` shows a string in which `:name:` is the emoji (anything
+else with colons, like 9:41, stays text). `/name x y size emojiat` puts one
+anywhere, as big as you like, for a reaction or a stamp.
+
+```postscript
+ground /title 34 face /fg ink
+60 290 moveto (Shipped it :party: thanks :heart: all) emojitext
+/body 22 face /muted ink
+60 230 moveto (:smile: :laugh: :wink: :sad: :cool: :heart:) emojitext
+60 190 moveto (:thumbsup: :party: :fire: :check: :rocket: :eyes:) emojitext
+/rocket 500 110 120 emojiat  /fire 590 70 50 emojiat
+```
+
+Wrap text that has emoji with `emojilines`, which counts each as the
+emoji it will be drawn as (`wraplines` would count its seven letters), and
+show the lines with `emojitext`. `emojitextwidth` is the width a string
+will take.
+
+```postscript
+ground /body 22 face /fg ink
+(Dinner is at eight :party: bring a friend :smile: and an appetite :fire:)
+300 emojilines
+/y 250 def
+{ 60 y moveto emojitext /y y 34 sub def } forall
+```
+
+A conversation of text messages, with these in it, is the `chat` entry of
+the [catalog](catalog.md).
+
 ## Captions
 
 `[ [t0 t1 (text)] ... ] box opts captions` shows each caption in its
@@ -169,6 +260,88 @@ ground
   [2.1 3.9 (and can light up word by word)] ]
 canvasbox 5 vmin inset << /Karaoke true /Size 20 >> captions
 ```
+
+## End credits
+
+`sections opts credits` rolls credits upward at a constant rate, as at
+the end of a film. `sections` is an array of entries, each an array that
+starts with a name:
+
+| Entry | Sets |
+|---|---|
+| `[/heading (Cast)]` | a heading, centred, in the title face and the accent colour; a third element scales it: `[/heading (THE END) 2.5]` |
+| `[/pair (Director) (Name) (Name2)]` | the role right-aligned on the left of a gutter, its names left-aligned on the right |
+| `[/name (Name) (Name2)]` | centred names, one to a line |
+| `[/text (a note)]` | a centred note, smaller and muted |
+| `[/space n]` | n lines of space |
+| `[/proc { ... } h]` | a slot h high: the procedure runs with the origin at its centre, over the column's centre (a logo) |
+
+`opts` is a dictionary, every key optional. The roll moves through
+`/Box` (the canvas) and everything is sized from the box: `/Size` is the
+size of the names (4% of the box's shorter side), `/HeadingSize`,
+`/RoleSize`, `/TextSize`, `/Leading`, `/Gutter` and `/HeadingGap` follow it
+unless given. `/HeadingFace /RoleFace /NameFace /TextFace` and
+`/HeadingInk /RoleInk /NameInk /TextInk` are theme roles (or font names
+and colours), so a theme change restyles the whole roll. Lines fade over
+`/Fade` of the box's height at its top and bottom (0.12).
+
+Timing comes from either end. `/Speed` is units a second; `/Duration` is
+the seconds the roll takes, and the speed follows. The clock is the
+current scope's, so `after` places it like anything else; the roll starts
+with the first card or, with none, with the first line entering at the
+bottom edge. `/Cards [ sections ... ]` shows each section list centred
+for `/CardTime` seconds (4) before the roll. `/Final sections` is a card
+at the end of the same roll that stops centred in the box; `/Settle`
+units before it the roll slows to the stop (0 keeps the rate constant
+all the way), and `/FinalGap` is the space before it (half the box's
+height, so the last credits have gone when it arrives).
+
+```postscript
+%!PS
+/pktype use
+/film [
+  [/heading (Cast)]
+  [/pair (The Keeper) (Odette Brandvold)]
+  [/pair (The Visitor) (Imre Lindqvist)]
+  [/space 1]
+  [/heading (Crew)]
+  [/pair (Directed by) (Fenwick Alder)]
+  [/pair (Music by) (Lucian Marsh)]
+  [/space 1]
+  [/name (Thanks to everyone who held a lamp)]
+] def
+/opts << /Box [0 0 640 360] /Speed 44 /Settle 50
+         /Cards [ [[/text (Lamp Oil Films presents)]] ] /CardTime 2
+         /Final [ [/heading (The End) 2] ] >> def
+<< /Size [640 360] /Duration film opts creditsduration 1 add /FPS 30 >> animation
+/scene { ground film opts credits } def
+```
+
+`creditsduration` (the cards, then the roll to its stop) works before
+`animation` when `opts` has a `/Box`, so the movie can be as long as its
+credits. The other way round, leave out `/Speed` and give `/Duration`
+(the movie's length minus the cards and a hold at the end). `creditsspeed`
+and `creditsheight` report the speed and the content's height;
+`creditsat` takes the distance rolled instead of using the clock, for a
+roll that is eased or scrubbed by the caller. The catalog's `/credits`
+(`psanim catalog credits`) wraps all of this with the sections as a
+parameter, to place as a component.
+
+**No shimmer.** Type that moves a fraction of a pixel a frame is
+re-rasterised at a new subpixel position each frame and its edges
+flicker. `credits` moves its whole content by a distance that puts it on
+a whole device pixel, measured through the current transformation, so it
+holds at any render scale, inside a placed component and under a camera
+(checked on pixels at scales 1, 1.5 and 2, placed, and under `lookat`),
+and the lines never move relative to one another. A frame is then the one
+before it shifted by whole rows, give or take colour rounding. The snap is
+skipped if the transformation is rotated. The speed is constant to within
+half a pixel, and steps of 3 and 4 pixels a frame alternate if it is not a
+whole number of pixels a frame; to avoid that, give `/Speed` as pixels a
+frame times the frame rate divided by the render scale (4 px a frame at
+30 fps and scale 1 is 120). In the `/Settle` tail, where the roll slows
+below a pixel a frame, the snap makes it hold and hop a pixel rather than
+glide. `/Snap false` turns it off.
 
 ## Mathematics
 
@@ -221,3 +394,33 @@ smaller than 22. In `vmin` these are 10 to 15, 5.5 to 7.5, 4 to 5 and 3.
 - Moving type should be legible while it moves: short distances
   (`/rise`, `/mask-up`), 0.4 to 0.8 s, gaps of 0.03 to 0.08 s per glyph
   and 0.1 to 0.2 s per word.
+
+## An opening crawl
+
+Text that recedes on a tilted plane towards a vanishing point, fading as
+it goes, is the catalog's `/crawl` entry: give it title lines and
+paragraphs, and it justifies them once in setup and draws each line on
+the plane with `onplane` (see
+[patterns.md](patterns.md#perspective-drawing-on-a-plane)). Its clock
+runs 40 seconds and fits the text into them; `/Speed` in `place` makes
+the whole crawl slower or faster.
+
+```postscript
+%!PS
+<< /Size [1280 720] /Duration 12 /Background [0 0 0] >> animation
+/intro /crawl << /Params <<
+  /Title [ (PART ONE) (A LONG WAY ROUND) ]
+  /Text [ (The ferry was late, the map was wrong, and the only road north had been closed for a hundred years.)
+          (Nobody told the cartographer, who set out anyway.) ]
+  /Font /Palatino-Bold /Size 52 /Width 900
+  /Color [0.9 0.95 1] /Stars 300
+>> >> instance
+/scene { /intro << /Speed 3 >> place } def
+```
+
+At 720p, keep `/Size` at 40 or more where the plane meets the bottom
+edge. Letters shrink with distance in width and, faster, in height (with
+the square of it): a third of the way up to the vanishing point they are
+two thirds as wide and under half as tall, and half way up a quarter as
+tall, a texture rather than words. That is where `/Fade` (fractions of
+the way up) should take them away.

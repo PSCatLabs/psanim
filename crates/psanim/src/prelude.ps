@@ -13,9 +13,113 @@
 %   - Every procedure is `bind`-ed, so a user redefining `exec` or `now`
 %     for themselves does not change what these do.
 
+% --- perspective: painting on a plane ----------------------------------------
+% `onplane` runs a procedure whose painting lands on a plane in 3D. While a
+% plane is open, the painting operators below stand in userdict (inside a
+% component, in its own namespace) in front of the built-ins: each turns what it paints into a path (strokepath,
+% charpath), projects it (`.planeproject`, native) and fills that. They are
+% put there when the first plane opens and taken away (and whatever userdict
+% held under those names put back) when the last one closes, so outside
+% `onplane` the built-ins are untouched, cost nothing and report errors where
+% they happen. No dictionary is opened around the caller's procedure: its
+% `def`s land where they would anyway. A procedure that was `bind`-ed (the
+% prelude's, the pk libraries') holds the built-ins and paints flat.
+/.sysfill   systemdict /fill   get def
+/.syseofill systemdict /eofill get def
+/.sysstroke systemdict /stroke get def
+/.sysclip   systemdict /clip   get def
+/.syseoclip systemdict /eoclip get def
+% op .planeink -   project the current path onto the innermost plane and
+%                  paint it with op at the opacity the fade leaves; the path
+%                  is left as it was
+/.planeink {
+  gsave .planectm setmatrix .planeproject
+  dup 0 gt { currentalpha mul setalpha exec } { pop pop } ifelse
+  grestore
+} bind def
+% x y w h .planerect -   append a rectangle (rectfill's operands: four
+%                        numbers, or an array of them in fours)
+/.planerect1 { 4 2 roll moveto 1 index 0 rlineto 0 exch rlineto neg 0 rlineto closepath } bind def
+/.planerect {
+  dup type /arraytype eq { aload length 4 idiv { .planerect1 } repeat } { .planerect1 } ifelse
+} bind def
+% (s) .planeshow -   show as charpath, projected, moving the current point
+/.planeshow {
+  gsave currentpoint newpath moveto false charpath currentpoint
+  { .sysfill } .planeink grestore moveto
+} bind def
+% ax ay cx cy char (s) .planeshows -   the show family, a character at a time
+/.planeshows {
+  {
+    1 string dup 0 3 index put .planeshow
+    1 index eq { 2 index 2 index rmoveto } if
+    4 index 4 index rmoveto
+  } forall pop pop pop pop pop
+} bind def
+% proc op .planeclip -   project the path and clip to it (op: clip, eoclip)
+/.planeclip {
+  matrix currentmatrix .planectm setmatrix .planeproject pop setmatrix exec
+} bind def
+/.planeops <<
+  /fill   { { .sysfill } .planeink newpath } bind
+  /eofill { { .syseofill } .planeink newpath } bind
+  /stroke { gsave strokepath { .sysfill } .planeink grestore newpath } bind
+  /show   { .planeshow } bind
+  /ashow  { 0 0 -1 4 -1 roll .planeshows } bind
+  /widthshow  { 0 0 6 2 roll .planeshows } bind
+  /awidthshow { 6 3 roll 4 -1 roll .planeshows } bind
+  /rectfill   { gsave newpath .planerect { .sysfill } .planeink grestore } bind
+  /rectstroke { gsave newpath .planerect strokepath { .sysfill } .planeink grestore } bind
+  /clip   { { .sysclip } .planeclip } bind
+  /eoclip { { .syseoclip } .planeclip } bind
+  /rectclip { newpath .planerect { .sysclip } .planeclip newpath } bind
+>> def
+% target .planeinstallin -> [target held] | null
+%   put the projecting operators in target (userdict, or inside a component
+%   its own namespace, which holds its own copies of the built-ins), keeping
+%   what target held under those names; null if they are already there
+/.planeinstallin {
+  dup /fill known { dup /fill get .planeops /fill get eq } { false } ifelse
+  { pop null } {
+    16 dict
+    .planeops {
+      3 index 2 index known { 2 index 2 index 5 index 4 index get put } if
+      3 index 3 1 roll put
+    } forall
+    2 array astore
+  } ifelse
+} bind def
+% [target held] | null .planeuninstall -   put back what target held
+/.planeuninstall {
+  dup null eq { pop } {
+    aload pop
+    .planeops { pop
+      1 index 1 index known
+      { 2 index exch 2 index 1 index get put }
+      { 2 index exch undef } ifelse
+    } forall pop pop
+  } ifelse
+} bind def
+/.planest << /n 0 /a 64 array >> def   % what each open plane installed
+% proc plane onplane -   run proc with its painting on the plane
+/onplane {
+  matrix currentmatrix .planebegin
+  /.isinst where { } { userdict } ifelse .planeinstallin
+  .planest /a get .planest /n get 3 -1 roll put
+  .planest /n 2 copy get 1 add put
+  exec
+  .planeend
+  .planest /n 2 copy get 1 sub put
+  .planest /a get .planest /n get get .planeuninstall
+} bind def
+% plane projectpath -    replace the current path by its projection
+/projectpath { matrix currentmatrix .projectpath } bind def
+
 % --- declaration ---------------------------------------------------------
 % dict animation -      declare the movie; first statement of a program.
-/animation { .animation { quit } if } bind def
+/animation {
+  .compst /n get 0 gt { .companimation } { .animation { quit } if } ifelse
+} bind def
 
 % --- time scopes -----------------------------------------------------------
 % Time is part of the state a drawing procedure runs in, like the CTM. Each
@@ -32,6 +136,11 @@
 /timewindow { .timewindow exec .timepop } bind def         % t dur proc   now is t, in a window dur long
 /reversed   { .reversed   exec .timepop } bind def         % proc         now runs backward through the window
 /globally   { .globally   exec .timepop } bind def         % proc         now is the movie time again, whatever scopes are open
+/daytime    {                                              % start /sig|null  time of day, 0..86400
+  dup type /stringtype eq { cvn } if                  % a --param gives text
+  dup null eq { pop parseclock globaltime add } { exch pop signal } ifelse
+  dup 86400 div floor 86400 mul sub
+} bind def
 % i gap proc staggered: item i of a row starts gap seconds after item i-1.
 /staggered  { 3 1 roll mul exch delayed } bind def
 % [ dur proc dur proc ... ] sequence: play the procs one after another.
@@ -42,8 +151,22 @@
 % radius and so on are taken first and kept by the engine.
 /faded   { exch   .fadebegin  exec .layerend } bind def      % alpha proc           draw proc as a group at one opacity
 /blended { 3 1 roll .blendbegin exec .layerend } bind def    % alpha /mode proc     ... with a blend mode
-/blurred { exch   .blurbegin  exec .layerend } bind def      % radius proc          draw proc out of focus
-/glowing { 3 1 roll .glowbegin  exec .layerend } bind def    % radius strength proc draw proc with a halo
+/blurred { exch   .clipmask .blurbegin  exec .layerend } bind def    % radius proc          draw proc out of focus
+/glowing { 3 1 roll .clipmask .glowbegin  exec .layerend } bind def  % radius strength proc draw proc with a halo
+/blurlayer { .clipmask .blurlayer } bind def                         % radius               blur the layer so far
+/glowlayer { .clipmask .glowlayer } bind def                         % radius strength      add a halo to it
+/vignette { .clipmask .vignette } bind def                           % amount               darken toward the corners
+/filmgrain { .clipmask .filmgrain } bind def                         % amount               moving grain
+/.prelude-vignette /vignette load def  % the engine's own, so a redefinition is told apart from it
+% - .clipmask -   capture the clip in force, for the effect about to
+% begin to stay inside: paint through it, in device space, on a layer of
+% its own (the engine keeps the coverage). A blur spreads past the clip
+% its body was drawn under; this is what holds it in.
+/.clipmask {
+  gsave matrix setmatrix clippath .maskbegin {
+    1 setgray 1 setalpha /Normal setblendmode rectfill .maskend
+  } if grestore
+} bind def
 % procA procB u crossfade: A, with B over it at opacity u.
 /crossfade {
   [ 4 1 roll 3 -1 roll /exec cvx 4 2 roll exch /faded cvx ] cvx exec
@@ -146,6 +269,31 @@
   for
 } bind def
 
+% --- particles: emitters whose particles are functions of time -------------------------
+% spec proc particles      draw proc once for every particle alive now. spec
+%                          is an emitter dictionary or an array of them; an
+%                          emitter's own /Draw replaces proc for its particles.
+%                          proc runs with the origin moved to the particle and
+%                          the caller's stack; `particleage`, `particleu`,
+%                          `particlevel`, `particlekey` ... read the particle.
+%                          The positions come from the native half; nothing
+%                          is kept from one frame to the next.
+/.particlestep {          % i procs
+  exch .particlepick      % procs x y emitter
+  gsave 3 1 roll translate get exec grestore
+} bind def
+/particles {              % spec proc
+  2 dict begin
+    /.ptproc exch def
+    dup dup type /arraytype ne { 1 array astore } if
+    mark exch { /Draw /.ptproc load .dget } forall counttomark array astore exch pop
+  end                     % spec procs
+  exch .particlesbegin    % procs n
+  1 sub 0 exch 1 exch 4 -1 roll
+  /.particlestep cvx 2 array astore cvx for
+  .particlesend
+} bind def
+
 % --- reels: clips joined by transitions ---------------------------------------------
 % A transition is a procedure `procA procB u name`: draw the frame that is
 % u (0..1) of the way from clip A to clip B. A and B are ready to run: each
@@ -236,9 +384,42 @@ end
 .pk /cur get 0 0 put
 /use {
   dup type /stringtype eq { cvn } if
-  dup .pk /used get exch known { pop } {
+  dup .pk /used get exch known {
+    pop
+    % Already loaded (perhaps by a component this one placed): a component
+    % asking for it still gets the library's words in its own namespace,
+    % from .base, so the movie's later names cannot change them for it.
+    /.isinst where {
+      .base { .compword { 2 index 2 index known { pop pop } { 2 index 3 1 roll put } ifelse } { pop pop } ifelse } forall
+      pop
+    } if
+  } {
     dup .pk /used get exch true put
-    .libsource cvx exec
+    % Into userdict, whoever asks: a component's setup loading a library
+    % must not keep it to itself, since every later `use` skips it. What it
+    % defines is also kept in .base, for components (see .mkinst). Loaded
+    % from a component's setup, it also goes in that component's namespace
+    % (never over its own words), and any name the movie had already
+    % defined for itself is put back in userdict: the component loading a
+    % library must not change the movie's own words.
+    8 dict begin
+      /.us-before userdict dup length dict copy def
+      /.us-ns /.isinst where { } { null } ifelse def
+      /.us-back 16 dict def
+      userdict begin .libsource cvx exec end
+      userdict {
+        /.us-v exch def /.us-k exch def
+        .us-before .us-k known { .us-before .us-k get /.us-v load ne } { true } ifelse {
+          .base .us-k /.us-v load put
+          .us-ns null ne {
+            .us-k /.us-v load .compword
+            { .us-ns 3 1 roll 2 index 2 index known { pop pop pop } { put } ifelse } { pop pop } ifelse
+            .us-before .us-k known { .us-back .us-k .us-before .us-k get put } if
+          } if
+        } if
+      } forall
+      .us-back { userdict 3 1 roll put } forall
+    end
   } ifelse
 } bind def
 
@@ -347,5 +528,518 @@ end
   exch pathpoint gsave 3 1 roll translate rotate newpath exec grestore
 } bind def
 
+% --- components: movies placed inside movies ---------------------------------------------
+% A component is written like a movie (a declaration, setup, a scene) and
+% each instance of it keeps its own names, clock, seed and parameters. The
+% instance's dictionary is open while its setup and scene run: that is its
+% namespace, not a dictionary left around somebody else's procedure.
+/.comps 32 dict def
+/.compst << /n 0 /a 16 array >> def                  % instances being set up, innermost last
+% -> [x0 y0 x1 y1]   the current view, 0 0 width height, in device pixels
+%                    (the bounds of all four corners, so a rotated or
+%                    sheared view keeps its whole area)
+/.devbox {
+  6 dict begin
+    0 0 transform /y0 exch def /x0 exch def
+    /x1 x0 def /y1 y0 def
+    [ width 0 0 height width height ] 0 2 4 {
+      1 index exch 2 getinterval aload pop transform      % arr dx dy
+      dup y0 lt { dup /y0 exch def } if dup y1 gt { dup /y1 exch def } if pop
+      dup x0 lt { dup /x0 exch def } if dup x1 gt { dup /x1 exch def } if pop
+    } for pop
+    [ x0 y0 x1 y1 ]
+  end
+} bind def
+% /k v .compword -> /k v bool    is this a word a component should keep:
+%                               an operator or a procedure, not state
+/.compword {
+  dup type /operatortype eq { true } {
+    dup type dup /arraytype eq exch /packedarraytype eq or { dup xcheck } { false } ifelse
+  } ifelse
+} bind def
+/.unitlen { 1 0 dtransform dup mul exch dup mul add sqrt } bind def   % device length of a unit here
+/.compcur { .compst /a get .compst /n get 1 sub get } bind def
+% dict key default .dget -> value      dict's value for key, or the default
+/.dget { 3 1 roll 2 copy known { get exch pop } { pop pop } ifelse } bind def
+% /name .mine -> dict     the library state dictionary called name, as this
+%                         instance may change it: inside a component a
+%                         private copy, made the first time it is asked for.
+/.mine {
+  % A library loading (`use` runs it with userdict current) sets up the
+  % shared state, whoever asked for it: not a component's private copy.
+  currentdict userdict eq { userdict exch get } {
+  /.isinst where {
+    1 index 2 copy known { get exch pop } {
+      pop exch userdict 1 index get dup length dict copy
+      3 copy put 3 1 roll pop pop
+    } ifelse
+  } { userdict exch get } ifelse
+  } ifelse
+} bind def
+% decl .companimation     `animation`, called while an instance is set up:
+%                         read its declaration instead of the movie's.
+/.companimation {
+  dup type /dicttype ne { (a component's animation takes a dictionary) .comperror } if
+  .compcur /decl known { (a component calls animation once) .comperror } if
+  .compcur /decl 2 index put
+  dup /Persist false .dget { (a component cannot /Persist: only the movie's own canvas persists) .comperror } if
+  dup /Step known { (a component cannot have a /Step: simulations run only as the movie itself) .comperror } if
+  .compcur /size 2 index /Size [1280 720] .dget put
+  .compcur /dur  2 index /Duration 5 .dget put
+  .compcur /loop 2 index /Loop false .dget put
+  .compcur /bg   2 index /Background null .dget dup /transparent eq { pop null } if put
+  .compcur /scene 2 index /Scene /scene .dget put
+  .compcur /seed get null eq { .compcur /seed 2 index /Seed 1 .dget put } if
+  pop
+  .compcur /dur get .compcur /seed get .compset
+  .compcur /size get aload pop .viewpush
+  .compcur /view true put
+} bind def
+% src seed params .mkinst -> record     set up one instance. src is the
+%                                       component's dictionary or file name;
+%                                       seed and params may be null.
+/.mkinst {
+  16 dict
+  dup /params 3 index put
+  dup /seed 4 index put
+  dup /src 5 index put
+  4 1 roll pop pop pop
+  dup /view false put
+  dup /ns 64 dict put
+  dup /ns get
+    % The words it was written against, whatever the movie has since
+    % defined under the same names: PostScript's operators, the prelude's
+    % and the libraries' procedures. Its own definitions come after.
+    systemdict { .compword { 2 index 3 1 roll put } { pop pop } ifelse } forall
+    .base { .compword { 2 index 3 1 roll put } { pop pop } ifelse } forall
+    dup /.isinst true put
+    dup /.comps 8 dict put            % the components it defines are its own
+    dup /.pls 4 dict put              % and so are its playlists
+    dup /.pk << /used .pk /used get /cur 32 array /depth 0 /beats 1 dict /storylen 0 /bpm 120 >>
+    dup /cur get 0 0 put put
+  pop
+  .compst /n get 16 ge { (components are set up more than 16 deep: does one load itself?) .comperror } if
+  .compst /a get .compst /n get 2 index put
+  .compst /n 2 copy get 1 add put
+  0 5 2 index /seed get dup null eq { pop 1 } if 3 index /params get .unitlen null .comppush   % its own seed from the start, so code before `animation` sees it
+  dup /ns get begin                   % the instance's names, while its setup runs
+    dup /src get exch pop dup type /nametype eq {
+      .catsource cvx exec
+    } { dup type /stringtype eq {
+      .comppath run
+    } {
+      dup animation
+      dup /Setup known { /Setup get exec } { pop } ifelse
+    } ifelse } ifelse
+  end
+  .compcur /decl known not { << >> .companimation } if
+  .compcur /view get { .viewpop } if
+  .comppop
+  .compst /n 2 copy get 1 sub put
+  .compst /a get .compst /n get get
+  dup /ns get /step known { (a component cannot define step: simulations run only as the movie itself) .comperror } if
+  dup /scene get dup type /nametype eq {
+    1 index /ns get 1 index known not {
+      (a component must define its scene: /scene { ... } def, or /Scene { ... } in its dictionary) .comperror
+    } if
+    1 index /ns get exch get
+  } if
+  1 index exch /scene exch put
+} bind def
+% /name .compfind -> record true | false    the nearest definition: this
+%                                           instance's own, then the movie's
+/.compfind {
+  .comps 1 index known { .comps exch get true } {
+    userdict /.comps get 1 index known { userdict /.comps get exch get true } { pop false } ifelse
+  } ifelse
+} bind def
+/.compget {
+  % A record already (a playlist's scene) is its own component.
+  dup type /dicttype ne {
+    dup .compfind { exch pop } {
+      (no component named /) exch 64 string cvs strcat
+      (: define it in setup with /name (file.ps) component or /name << ... >> component) strcat .comperror
+    } ifelse
+  } if
+} bind def
+% /name dict-or-(file.ps)-or-/entry component
+%                                       define a component and set up its
+%                                       first instance, under the same name.
+%                                       A name is a catalog entry.
+/component { null null .mkinst .comps 3 1 roll put } bind def
+% /new /name << /Seed s /Params << ... >> >> instance
+%                                       another instance of a component (or
+%                                       of a catalog entry), set up again
+%                                       with its own seed and params.
+/instance {
+  dup /Seed null .dget exch /Params null .dget
+  3 -1 roll .compsrc 3 1 roll .mkinst .comps 3 1 roll put
+} bind def
+% /name .compsrc -> src     what an instance of name is set up from: a
+%                          component's source, or a catalog entry's name.
+/.compsrc {
+  dup .compfind { exch pop /src get } { dup .catknown not { .compget } if } ifelse
+} bind def
+/componentduration { .compget /dur get } bind def      % /name -> seconds
+/componentsize { .compget /size get aload pop } bind def % /name -> w h
+% bg t dur seed params ns scene .placed     draw one instance at its time t.
+/.placed {
+  7 -1 roll dup null ne { aload pop backdrop } { pop } ifelse
+  6 2 roll .unitlen .devbox .comppush
+  exch begin exec end .comppop
+} bind def
+% /name opts place      draw an instance. opts (all optional): /At start time
+%                       (0), /Speed (1), /Box [x y w h] (the whole view),
+%                       /Before /hide or /hold, /After /hide /hold or /loop
+%                       (/loop if the component declares /Loop, else /hide).
+/place {
+  12 dict begin
+    /pl-o exch def /pl-r exch .compget def
+    /pl-d pl-r /dur get def
+    /pl-t now pl-o /At 0 .dget sub pl-o /Speed 1 .dget mul def
+    /pl-live true def
+    pl-t 0 lt {
+      pl-o /Before /hide .dget /hold eq { /pl-t 0 def } { /pl-live false def } ifelse
+    } if
+    pl-t pl-d ge {
+      pl-o /After pl-r /loop get { /loop } { /hide } ifelse .dget
+      dup /loop eq { pop /pl-t pl-t pl-d fmod def }
+      % hold a hair before the end, inside the last frame: a time of exactly
+      % the duration is outside every half-open window (`during`, reels)
+      { /hold eq { /pl-t pl-d dup abs 1e-9 mul 1e-6 add sub def } { /pl-live false def } ifelse } ifelse
+    } if
+    pl-live {
+      pl-o /Box [0 0 width height] .dget
+      pl-r /size get aload pop
+      [ pl-r /bg get pl-t pl-d pl-r /seed get pl-r /params get pl-r /ns get pl-r /scene get /.placed cvx ] cvx
+    } if
+    pl-live
+  end
+  { fitted } if
+} bind def
+
+% --- playlists: scenes that cycle, for signage -----------------------------------------
+% A playlist is a component whose scene plays other scenes in turn, each held a few
+% seconds, joined by the reel's transitions, and loops: the last scene hands over to the
+% first. In setup:  /lobby [ [8 /welcome] [1 /dissolve] [8 (events.ps)] [1 /wipe-left] ]
+% << >> playlist   then in the scene  /lobby << /Box [x y w h] >> place.
+% A round is one pass through the scenes on the list; each frame builds the reel for the
+% round it is in and plays it, so the transitions, the clocks and the seam are the reel's.
+% Each scene dictionary has sc- keys (hold, what, opts, dout, kout, days, from, to, ...).
+/.pls 16 dict def                                   % playlist records, by name
+/.plclock << /on false /t 0 >> def                 % what `weektime` answers
+/.pldaybit << /mon 1 /tue 2 /wed 4 /thu 8 /fri 16 /sat 32 /sun 64
+              /weekdays 31 /weekend 96 /daily 127 >> def
+/.pldayno << /mon 0 /tue 1 /wed 2 /thu 3 /fri 4 /sat 5 /sun 6 >> def
+% day | [days]  .pldays  mask     /mon .. /sun, /weekdays /weekend /daily, or 0 (Monday) to 6
+/.pldays {
+  dup type /arraytype eq { 0 exch { .pldays or } forall } {
+    dup type /integertype eq {
+      dup 0 lt 1 index 6 gt or { (playlist: a day number is 0 (Monday) to 6 (Sunday)) .comperror } if
+      1 exch bitshift
+    } {
+      dup type /stringtype eq { cvn } if
+      dup .pldaybit exch known not {
+        (playlist: a day is /mon /tue /wed /thu /fri /sat /sun, /weekdays, /weekend, /daily, or 0 (Monday) to 6) .comperror
+      } if
+      .pldaybit exch get
+    } ifelse
+  } ifelse
+} def
+% day  .pldayidx  0..6
+/.pldayidx {
+  dup type /integertype eq {
+    dup 0 lt 1 index 6 gt or { (playlist: /Day is 0 (Monday) to 6) .comperror } if
+  } {
+    dup type /stringtype eq { cvn } if
+    dup .pldayno exch known not { (playlist: /Day is /mon .. /sun, or 0 (Monday) to 6) .comperror } if
+    .pldayno exch get
+  } ifelse
+} def
+% hours | (H:MM) | (H:MM:SS)  .pltime  seconds
+/.pltime {
+  dup type /stringtype eq {
+    (:) search {                               % post match pre
+      cvi 3600 mul exch pop exch               % secs post
+      (:) search { cvi 60 mul exch pop exch cvi add add } { cvi 60 mul add } ifelse
+    } { cvr 3600 mul } ifelse
+  } { 3600 mul } ifelse
+} def
+% /name .pltrans bool    a transition: in `transitions`, or named t-... (defined before it plays)
+/.pltrans {
+  transitions 1 index known { pop true } {
+    64 string cvs (t-) anchorsearch { pop pop true } { pop false } ifelse
+  } ifelse
+} def
+/.plisproc { dup where { exch get dup xcheck exch type /arraytype eq and } { pop false } ifelse } def
+% bg  .plground    paint a ground: a colour [r g b] or a procedure
+/.plground { dup type /arraytype eq 1 index xcheck not and { aload pop backdrop } { exec } ifelse } def
+% mask n  .plbits  [ i ... ]    the set bits below n
+/.plbits {
+  4 dict begin
+    /bn exch def /bm exch def
+    [ 0 1 bn 1 sub { dup bm exch neg bitshift 1 and 0 ne { } { pop } ifelse } for ]
+  end
+} def
+% (path)|array  .plsrc  array    a playlist's entries, or a file that holds them
+/.plsrc {
+  dup type /stringtype eq {
+    mark exch .comppath run
+    counttomark 1 ne { cleartomark (a playlist file holds one array: [ [hold /scene] [dur /transition] ... ]) .comperror } if
+    exch pop
+  } if
+  dup type /arraytype ne { (a playlist is an array: [ [hold /scene] [dur /transition] [hold /scene] ... ]) .comperror } if
+} def
+% -> [ scene dicts ]    from pp-a, each with the transition written after it (pp-o's
+%                       /Transition if none) and without those for the other orientation
+/.plnorm {
+  pp-o /Transition [1 /dissolve] .dget /pn-dt exch def
+  pn-dt type /arraytype ne pn-dt length 2 ne or
+    { (playlist: /Transition is [seconds /name], e.g. [1 /dissolve]) .comperror } if
+  pn-dt 1 get .pltrans not
+    { (playlist: /Transition names no transition: see `transitions`) .comperror } if
+  /pn-skip false def
+  mark
+  pp-a {
+    /pn-e exch def
+    pn-e type /arraytype ne pn-e length 2 lt or pn-e length 3 gt or {
+      (playlist: each entry is [hold /scene], [hold /scene << options >>] or [seconds /transition]) .comperror
+    } if
+    pn-e 0 get type dup /integertype eq exch /realtype eq or not
+      { (playlist: each entry starts with a number of seconds) .comperror } if
+    pn-e 1 get type /nametype eq { pn-e 1 get .pltrans } { false } ifelse
+    pn-e length 2 eq and {
+      pn-skip not {
+        counttomark 0 eq { (playlist: a transition goes after a scene, not first) .comperror } if
+        pn-e 0 get 0 lt { (playlist: a transition lasts 0 seconds or more) .comperror } if
+        dup /sc-dout pn-e 0 get put
+        dup /sc-kout pn-e 1 get put
+      } if
+    } {
+      pn-e 0 get 0 le { (playlist: a scene is held for more than 0 seconds) .comperror } if
+      pn-e length 3 eq { pn-e 2 get } { << >> } ifelse /pn-eo exch def
+      pn-eo type /dicttype ne { (playlist: a scene's options are a dictionary: [8 /name << /Params << >> >>]) .comperror } if
+      pn-eo /Orientation null .dget dup null eq { pop true } { pp-land { /landscape } { /portrait } ifelse eq } ifelse {
+        /pn-skip false def
+        << /sc-hold pn-e 0 get /sc-what pn-e 1 get /sc-opts pn-eo
+           /sc-dout pn-dt 0 get /sc-kout pn-dt 1 get >>
+      } { /pn-skip true def } ifelse
+    } ifelse
+  } forall
+  ]
+} def
+% the scene's what, without running it if it is a procedure (a name would run it)
+/.plwhat { /sc-what load } def
+% d idx .plone  [cname what opts]?    one scene's fields; a scene that needs a component set
+%                                     up leaves a triple to do it with, outside any dictionary
+/.plone {
+  exch begin
+    /sc-idx exch def
+    sc-opts /Days /daily .dget .pldays /sc-days exch def
+    sc-opts /From 0 .dget .pltime /sc-from exch def
+    sc-opts /To 24 .dget .pltime /sc-to exch def
+    /sc-kind
+      .plwhat type /nametype eq {
+        .comps .plwhat known { /comp } {
+          .plwhat .plisproc { /proc } {
+            .plwhat .catknown { /comp } {
+              (playlist: /) .plwhat 64 string cvs strcat
+              ( is not a component, a procedure or a catalog entry: define it before the playlist) strcat .comperror
+            } ifelse
+          } ifelse
+        } ifelse
+      } {
+        .plwhat type /stringtype eq .plwhat type /dicttype eq or { /comp } {
+          .plwhat type /arraytype eq .plwhat xcheck and { /proc } {
+            (playlist: a scene is a name, a file name, a component dictionary or a procedure) .comperror
+          } ifelse
+        } ifelse
+      } ifelse
+    def
+    sc-kind /comp eq {
+      .plwhat type /nametype eq .comps .plwhat known and
+      sc-opts /Params known not and sc-opts /Seed known not and sc-opts /Fill known not and {
+        /sc-cname .plwhat def
+      } {
+        /sc-cname pp-n 64 string cvs (.) strcat sc-idx 12 string cvs strcat cvn def
+        [ sc-cname .plwhat sc-opts ]
+      } ifelse
+    } if
+  end
+} def
+% cname what opts .plmake    set a scene's component up (runs the scene's own setup)
+/.plmake {
+  1 index type /nametype eq { instance } {
+    dup /Seed null .dget exch /Params null .dget .mkinst .comps 3 1 roll put
+  } ifelse
+} def
+% d .plclip    the procedure that draws one scene over its own ground, full bleed
+/.plclip {
+  begin
+    sc-kind /comp eq sc-opts /Fill false .dget and {
+      .comps sc-cname get /size pf-box 2 get pf-box 3 get 2 array astore put
+    } if
+    /sc-clip
+      [
+        sc-opts /Background pf-bg .dget
+        dup type /arraytype eq 1 index xcheck not and { aload pop /backdrop cvx } { /exec cvx } ifelse
+        sc-kind /proc eq {
+          pf-box .plwhat dup type /nametype eq { load } if /within cvx
+        } {
+          % The scene's own record, not its name: a playlist made in a
+          % component's setup plays in a namespace of its own, which cannot
+          % look that component's registry up.
+          sc-cname .compget dup
+          << /Box pf-box /Before /hold /After
+             7 -1 roll /loop get { /loop } { /hold } ifelse >>
+          /place cvx
+        } ifelse
+      ] cvx
+    def
+  end
+} def
+% /name arr opts .plprepare  /name rec triples     (no scene's code runs here)
+/.plprepare {
+  32 dict begin
+    /pp-o exch def  /pp-a exch def  /pp-n exch def
+    pp-o type /dicttype ne { (playlist: the options are a dictionary: << /Safe 0.05 >>, or << >>) .comperror } if
+    pp-o /Size [ width height ] .dget aload pop /pp-h exch def /pp-w exch def
+    pp-o /Safe 0 .dget /pp-safe exch def
+    pp-safe 0 lt pp-safe 0.4 gt or { (playlist: /Safe is the fraction of each edge kept clear, 0 to 0.4) .comperror } if
+    /pp-box [ pp-w pp-safe mul  pp-h pp-safe mul
+              pp-w 1 pp-safe 2 mul sub mul  pp-h 1 pp-safe 2 mul sub mul ] def
+    /pp-land pp-w pp-h ge def
+    .plnorm /pp-s exch def
+    pp-s length 0 eq { (playlist: there are no scenes on the list) .comperror } if
+    pp-s length 60 gt { (playlist: a playlist holds at most 60 scenes) .comperror } if
+    /pp-tr [
+      0 1 pp-s length 1 sub { dup pp-s exch get exch .plone } for
+    ] def
+    pp-n
+    << /scenes pp-s /opts pp-o /size [pp-w pp-h] /box pp-box
+       /bg pp-o /Background [0.05 0.06 0.09] .dget
+       /guides pp-o /Guides false .dget
+       /host pp-o /Clock /playlist .dget /signal eq >>
+    pp-tr
+  end
+} def
+% /name rec .plfinish    build the clips, work out the schedule and register
+/.plfinish {
+  24 dict begin
+    /pf-r exch def  /pf-n exch def
+    /pf-bg pf-r /bg get def  /pf-box pf-r /box get def
+    /pf-o pf-r /opts get def
+    pf-r /scenes get { .plclip } forall
+    pf-r /sched [ pf-r /scenes get { begin [ sc-hold sc-dout add sc-days sc-from sc-to ] end } forall ] put
+    pf-r /start pf-o /Day 0 .dget .pldayidx 86400 mul pf-o /Time 0 .dget .pltime add put
+    pf-r /scheduled
+      false pf-r /scenes get { begin sc-days 127 ne sc-from 0 ne or sc-to 86400 ne or end or } forall
+    put
+    pf-r /cycle 0 pf-r /scenes get { begin sc-hold sc-dout add end add } forall put
+    .pls pf-n pf-r put
+    pf-n << /Size pf-r /size get
+            /Seed pf-o /Seed 1 .dget
+            /Duration
+              pf-r /scheduled get { pf-o /Duration 604800 .dget } { pf-r /cycle get } ifelse
+            /Loop true
+            /Scene [ pf-r /.plscene cvx ] cvx >>
+  end
+  component
+} def
+% /name entries-or-(file) opts  playlist
+/playlist {
+  exch .plsrc exch .plprepare
+  { aload pop .plmake } forall
+  .plfinish
+} def
+% /name playlistduration  seconds    one round at the playlist's start time: the length of
+%                                    its loop (a scheduled list's rounds can change later)
+/playlistduration {
+  4 dict begin
+    .pls 1 index known { .pls exch get } { userdict /.pls get exch get } ifelse /pd-r exch def
+    pd-r /sched get pd-r /start get 0 .plsolve pop pop exch pop
+    pd-r /sched get length .plbits
+    0 exch { pd-r /sched get exch get 0 get add } forall
+  end
+} def
+% seconds since Monday 00:00 for what is on screen: in a playlist, its /Day and /Time plus its
+% clock; elsewhere the host's `weektime` signal.
+/weektime { .plclock /on get { .plclock /t get } { /weektime signal } ifelse } bind def
+% rec mask prev next .plreel  arr din    the reel for one round, and how far into it the
+%   round starts: the first scene's clock has been running since the last round's hand-over
+/.plreel {
+  16 dict begin
+    /pr-nx exch def /pr-pv exch def /pr-m exch def
+    /pr-sc exch /scenes get def
+    /pr-n pr-sc length def
+    /pr-act pr-m pr-n .plbits def
+    /pr-nxa pr-nx pr-n .plbits def
+    /pr-pva pr-pv pr-n .plbits def
+    /pr-din
+      pr-pva length 0 gt { pr-sc pr-pva dup length 1 sub get get /sc-dout get } { 0 } ifelse
+    def
+    /pr-last pr-sc pr-act dup length 1 sub get get /sc-dout get def
+    [
+      0 1 pr-act length 1 sub {
+        /pr-j exch def
+        /pr-d pr-sc pr-act pr-j get get def
+        pr-j 0 eq { pr-din } { pr-sc pr-act pr-j 1 sub get get /sc-dout get } ifelse
+        pr-d /sc-hold get add pr-d /sc-dout get add
+        pr-d /sc-clip get
+        2 array astore
+        pr-d /sc-dout get 0 gt { pr-d /sc-dout get pr-d /sc-kout get 2 array astore } if
+      } for
+      % the last scene hands over to the next round's first scene (or to nothing)
+      pr-last 0 gt {
+        pr-nxa length 0 gt {
+          pr-sc pr-nxa 0 get get /pr-nd exch def
+          pr-last pr-nd /sc-hold get add pr-nd /sc-dout get add pr-nd /sc-clip get
+        } { pr-last 1 add { } } ifelse
+        2 array astore
+      } if
+    ]
+    pr-din
+  end
+} def
+% box .plguides   the safe area, as a dashed rectangle, for checking a layout
+/.plguides {
+  gsave 1 0.25 0.45 setrgbcolor width 300 div setlinewidth
+  [ width 80 div dup ] 0 setdash newpath aload pop rectstroke grestore
+} def
+% rec arr tp wk .plrun    play the round's reel at time tp, with `weektime` at wk
+/.plrun {
+  [ .plclock /t get .plclock /on get ]       % rec arr tp wk old
+  exch .plclock exch /t exch put             % rec arr tp old
+  .plclock /on true put
+  3 1 roll                                   % rec old arr tp
+  1 index length 0 eq {
+    pop pop 1 index /bg get .plground         % nothing is scheduled: just the ground
+  } {
+    exch [ exch /reel cvx ] cvx              % rec old tp proc
+    1000000 exch timewindow
+  } ifelse
+  aload pop
+  .plclock exch /on exch put
+  .plclock exch /t exch put
+} def
+% record .plscene    the playlist's scene: which round is it, and play it
+/.plscene {
+  8 dict begin
+    /ps-r exch def
+    /ps-t now def
+    ps-r /sched get ps-r /start get ps-t .plsolve
+    /ps-nx exch def /ps-pv exch def /ps-m exch def /ps-r0 exch def
+    ps-r
+    ps-m 0 eq { [ ] 0 } { ps-r ps-m ps-pv ps-nx .plreel ps-t ps-r0 sub add } ifelse
+    ps-r /host get { /weektime signal } { ps-r /start get ps-t add } ifelse
+  end
+  .plrun
+  dup /guides get { /box get .plguides } { pop } ifelse
+} def
+
 % Pictures are composed over a transparent page; a program draws its own
 % ground, or declares /Background.
+
+% The prelude's own words, as the libraries' will be when they load: a
+% component sees these whatever names the movie defines (see .mkinst).
+/.base userdict dup length 256 add dict copy def

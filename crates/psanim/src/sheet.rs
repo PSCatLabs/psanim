@@ -54,13 +54,29 @@ pub fn compose(
     title: Option<&str>,
     matte: [u8; 3],
 ) -> Result<Page, String> {
+    let captions: Vec<String> = stills
+        .iter()
+        .map(|s| format!("#{}  {:.2}s", s.index, s.time))
+        .collect();
+    compose_captioned(stills, &captions, columns, thumb_width, title, matte)
+}
+
+/// [`compose`] with a caption of your own under each still.
+pub fn compose_captioned(
+    stills: &[Still],
+    captions: &[String],
+    columns: usize,
+    thumb_width: u32,
+    title: Option<&str>,
+    matte: [u8; 3],
+) -> Result<Page, String> {
     if stills.is_empty() {
         return Err("a contact sheet needs at least one frame".into());
     }
     let columns = columns.clamp(1, stills.len());
     let err = |e: pscat::sheet::SheetError| e.to_string();
     let mut cells: Vec<(Page, Option<Page>)> = Vec::new();
-    for s in stills {
+    for (k, s) in stills.iter().enumerate() {
         let tw = thumb_width.clamp(16, s.width.max(16));
         let th = ((u64::from(s.height) * u64::from(tw)) as f64 / f64::from(s.width))
             .round()
@@ -76,8 +92,8 @@ pub fn compose(
         raster::flatten_onto(&small, matte, &mut flat);
         let page =
             Page::from_premultiplied_rgba8(tw, th, flat).ok_or("thumbnail size is not usable")?;
-        let caption =
-            text_strip(&format!("#{}  {:.2}s", s.index, s.time), 13, false).map_err(err)?;
+        let text = captions.get(k).map_or("", String::as_str);
+        let caption = text_strip(text, 13, false).map_err(err)?;
         cells.push((page, caption));
     }
     let header = match title {

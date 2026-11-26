@@ -1,0 +1,119 @@
+%!PS
+% Catalog entry: clock-digital. A seven-segment clock, with the unlit segments faintly visible.
+% In a movie:  /c /clock-digital component   then   /c << /Box [x y w h] >> place
+%
+% The time comes from the host, never the wall clock: a start time plus the
+% movie's own time, or a live signal (see /Signal). Not a loop: the movie
+% time is the clock, so place it with the default /After /hide and a
+% movie no longer than the 24 hours it declares.
+% The default start is 12 hours before the time the catalog sheet should show
+% (its middle frame is 12 hours in): the sheet reads 12:34:56.
+<< /Size [960 320] /Duration 86400 /Background /transparent
+   /Title (Digital clock)
+   /Description (A seven-segment clock with the unlit segments faintly visible, a blinking colon, and a choice of 12 or 24 hours and of themes. Time of day from a start time and the movie's own time, or from a host signal.)
+>> animation
+
+/Start (00:34:56) param /start exch def          % time of day at movie time 0: seconds since midnight, or (HH:MM:SS) text
+/Signal null param /sig exch def            % name of a host signal that carries seconds since midnight (a live page); Start is then ignored
+/Theme /midnight param /theme exch def      % /midnight /amber /paper /phosphor
+/Seconds 1 param /showsec exch def          % 1 shows HH:MM:SS, 0 shows HH:MM
+/Hours 24 param /hours exch def             % 24, or 12 (no leading zero, 12 at midnight)
+/Slant 0.1 param /slant exch def            % lean of the digits (0 upright)
+/Blink 1 param /blink exch def              % 1 blinks the colons once a second, 0 keeps them lit
+/Panel 1 param /panel exch def              % 1 paints a rounded panel behind the digits, 0 leaves them on whatever is there
+
+<< /midnight << /bg [0.05 0.07 0.12] /ink [0.42 0.86 1.0]  /dim [0.12 0.17 0.25] /hot [1.0 0.45 0.40] >>
+   /amber    << /bg [0.07 0.04 0.02] /ink [1.0 0.62 0.10] /dim [0.18 0.11 0.05] /hot [1.0 0.85 0.40] >>
+   /paper    << /bg [0.96 0.94 0.89] /ink [0.13 0.13 0.16] /dim [0.85 0.82 0.75] /hot [0.84 0.24 0.14] >>
+   /phosphor << /bg [0.02 0.06 0.04] /ink [0.35 1.00 0.55] /dim [0.05 0.15 0.09] /hot [0.90 1.00 0.50] >>
+>> theme get /pal exch def
+/role { pal exch get aload pop setrgbcolor } def
+
+% ---- one digit: seven hexagonal segments in a cell 100 wide, 180 tall -------
+% bits: 1 top, 2 upper right, 4 lower right, 8 bottom, 16 lower left,
+% 32 upper left, 64 middle.
+/bits [ 63 6 91 79 102 109 125 7 127 111 ] def
+/T 18 def                                   % segment thickness
+/G 5 def                                    % gap between segment tips
+/hseg { % y x0 x1 : a horizontal hexagon on the line y, tip to tip
+  /x1 exch def /x0 exch def /y exch def
+  x0 y moveto x0 T 2 div add y T 2 div add lineto x1 T 2 div sub y T 2 div add lineto
+  x1 y lineto x1 T 2 div sub y T 2 div sub lineto x0 T 2 div add y T 2 div sub lineto closepath
+} def
+/vseg { % x y0 y1 : a vertical hexagon on the line x
+  /y1 exch def /y0 exch def /x exch def
+  x y0 moveto x T 2 div add y0 T 2 div add lineto x T 2 div add y1 T 2 div sub lineto
+  x y1 lineto x T 2 div sub y1 T 2 div sub lineto x T 2 div sub y0 T 2 div add lineto closepath
+} def
+/segpath { % i : segment i, as the current path (appended)
+  /si exch def
+  si 0 eq { 171 T 2 div G add 100 T 2 div sub G sub hseg } if
+  si 1 eq { 91 90 G add 171 G sub vseg } if
+  si 2 eq { 91 9 G add 90 G sub vseg } if
+  si 3 eq { 9 T 2 div G add 100 T 2 div sub G sub hseg } if
+  si 4 eq { 9 9 G add 90 G sub vseg } if
+  si 5 eq { 9 90 G add 171 G sub vseg } if
+  si 6 eq { 90 T 2 div G add 100 T 2 div sub G sub hseg } if
+} def
+/segs { % mask want : append every segment whose lit state is want (true lit)
+  /sw exch def /sm exch def
+  0 1 6 { /i exch def
+    sm 1 i bitshift and 0 ne sw eq { i segpath } if
+  } for
+} def
+/halo { % proc : the proc's path, glowing: two wide faint strokes, then nothing
+  gsave 1 setlinejoin
+    0.05 setalpha 22 setlinewidth dup exec stroke
+    0.10 setalpha 10 setlinewidth exec stroke
+  grestore
+} def
+/digit { % d x : draw digit d (-1 for blank) at cell x
+  gsave 0 translate
+    dup 0 lt { pop 0 } { bits exch get } ifelse /dm exch def
+    /dim role newpath dm false segs fill
+    /ink role
+    { dm true segs } halo
+    newpath dm true segs fill
+  grestore
+} def
+/box { /bh exch def /bw exch def /by exch def /bx exch def bx by moveto bw 0 rlineto 0 bh rlineto bw neg 0 rlineto closepath } def
+/dots { % x : the two square dots of a colon, lit or not, at cell x
+  /dx exch def /dl exch def
+  [ 55 125 ] {
+    /dy exch def
+    dl { /ink role } { /dim role } ifelse
+    newpath dx dy T 2 div sub T T box
+    dl { { dx dy T 2 div sub T T box } halo newpath dx dy T 2 div sub T T box } if
+    fill
+  } forall
+} def
+/rrect { % x y w h r
+  /rr-r exch def /rr-h exch def /rr-w exch def /rr-y exch def /rr-x exch def
+  rr-x rr-r add rr-y moveto
+  rr-x rr-w add rr-y rr-x rr-w add rr-y rr-h add rr-r arcto 4 { pop } repeat
+  rr-x rr-w add rr-y rr-h add rr-x rr-y rr-h add rr-r arcto 4 { pop } repeat
+  rr-x rr-y rr-h add rr-x rr-y rr-r arcto 4 { pop } repeat
+  rr-x rr-y rr-x rr-w add rr-y rr-r arcto 4 { pop } repeat
+  closepath
+} def
+
+/scene {
+  panel 1 eq { /bg role 0 0 width height 28 rrect fill } if
+  /tod start sig daytime def
+  tod clockparts /fr exch def /ss exch def /mm exch def /hr exch def
+  hours 12 eq { hr 12 mod dup 0 eq { pop 12 } if /hr exch def } if
+  /tens hours 12 eq hr 10 lt and { -1 } { hr 10 idiv } ifelse def
+  /lit blink 1 eq { fr 0.5 lt } { true } ifelse def
+  % The row is 806 x 180 units (514 without seconds) plus the slant, centred.
+  /cw showsec 1 eq { 806 } { 514 } ifelse def
+  /s width 56 sub cw 180 slant mul add div height 56 sub 180 div min def
+  width cw 180 slant mul add s mul sub 2 div height 180 s mul sub 2 div translate
+  s s scale [ 1 0 slant 1 0 0 ] concat
+  tens 0 digit  hr 10 mod 122 digit
+  lit 248 dots
+  mm 10 idiv 292 digit  mm 10 mod 414 digit
+  showsec 1 eq {
+    lit 540 dots
+    ss 10 idiv 584 digit  ss 10 mod 706 digit
+  } if
+} def

@@ -1,0 +1,195 @@
+%!PS
+% Catalog entry: twiddle. The twiddle project's mascot, a staticling: a
+% small round clay-orange critter who eats radio static and dances to the
+% beat. Drawn from his half-block original (twiddle's CHARACTERS.md,
+% viz/modes/h_buddy.py, palette `clay`), and kept to his rules:
+%   - he dances only to a real beat: the /Tempo, or an event track read
+%     with `--signals` (/Beat); he hops higher when it is loud, grins ^ ^
+%     on a big kick, and sings a beat late;
+%   - with no music he sleeps, with a z, and the picture is still;
+%   - on a splash (/State /wave) he only waves, blinks and sways his bobble;
+%   - one Twiddle at a time: placing two in one frame is an error.
+% In a movie:  /tw /twiddle component   then   /tw << /Box [x y w h] >> place
+% Give him a box about as wide as it is tall.
+<< /Size [400 400] /Duration 32 /FPS 30 /Loop true /Background /transparent
+   /Title (Twiddle)
+   /Description (Twiddle, the twiddle project's mascot: a round clay-orange staticling who dances to a real beat (a tempo or an event track), grins on a big kick, sings a beat late, waves on a splash and falls asleep when the music stops.)
+>> animation
+/pkfigure use
+
+/State /dance param /tw-state exch def     % /dance (to the beat), /wave (a splash: no music), /sleep
+/Tempo 120 param /tw-bpm exch def          % beats a minute, from his clock; 0 is no music. Loops at multiples of 15
+/From 0 param /tw-from exch def            % seconds into his clock when the tempo's music starts (asleep before)
+/Until 0 param /tw-until exch def          % seconds into his clock when the tempo's music stops (0: it never does)
+/Accents [1 0.5 0.8 0.5] param /tw-acc exch def   % loudness of beat after beat, cycled (a bar, or a whole song), times /Level
+/Level 0.9 param /tw-level exch def        % loudness 0..1, or a signal name to read it from (/level)
+/Beat /none param /tw-track exch def       % an event track to dance to instead of the tempo (/beat, via --signals)
+/Period 0.5 param /tw-period exch def      % with /Beat: about how long a beat is, in seconds
+
+% The clay palette (twiddle's viz/canvas.py): heats of his half blocks.
+/tw-shadow [0.08 0.04 0.03] def
+/tw-rim    [0.72 0.37 0.24] def
+/tw-body   [0.85 0.47 0.31] def
+/tw-belly  [0.94 0.62 0.47] def
+/tw-pink   [1.00 0.56 0.66] def
+/tw-shine  [1.00 0.96 0.91] def
+/tw-ink    [0.14 0.08 0.06] def
+
+% His body: a rounded square (a superellipse, power 3.2), 1.05 by 0.85.
+/tw-bodypath {
+  newpath
+  0 7.5 360 {
+    /a exch def
+    a cos dup abs 0.625 exp exch 0 lt { neg } if 1.05 mul
+    a sin dup abs 0.625 exp exch 0 lt { neg } if 0.85 mul
+    a 0 eq { moveto } { lineto } ifelse
+  } for
+  closepath
+} def
+/tw-oval { % x y rx ry
+  matrix currentmatrix 5 1 roll
+  4 2 roll translate scale 0 0 1 0 360 arc setmatrix
+} def
+
+% ---- the beat ------------------------------------------------------------
+% beat index, seconds since it, beat length, this beat's loudness, the
+% last beat's (he sings it), and whether there is music at all.
+/tw-level-now { tw-level type /nametype eq { tw-level signal } { tw-level } ifelse 0 max 1 min } def
+/tw-listen {
+  tw-track /none ne {
+    /bl tw-period def
+    /nb tw-track eventcount 1 sub def
+    /since tw-track sinceevent def
+    /loud tw-level-now def
+    /sing nb 0 gt { loud } { 0 } ifelse def
+  } {
+    tw-bpm 0 gt {
+      /bl 60 tw-bpm div def
+      /tnow tw-until 0 gt { now tw-until 0.001 sub min } { now } ifelse tw-from sub def
+      /nb tnow bl div floor cvi def
+      /since now tw-from sub nb bl mul sub def
+      nb 0 lt { /since 1.0e6 def } if
+      /loud nb 0 ge { tw-acc nb tw-acc length mod get tw-level-now mul } { 0 } ifelse def
+      /sing nb 0 gt { tw-acc nb 1 sub tw-acc length mod get tw-level-now mul } { 0 } ifelse def
+    } {
+      /nb -1 def /since 1.0e6 def /bl 0.5 def /loud 0 def /sing 0 def
+    } ifelse
+  } ifelse
+  % No beat yet, or none for two beats: the music has stopped.
+  /awake nb 0 ge since bl 2 mul lt and def
+} def
+
+% ---- poses ---------------------------------------------------------------
+% A blink every few seconds, at times fixed by the seed.
+/tw-blinking {
+  now 4 div floor /bk exch def
+  now bk 4 mul sub  bk hash01 3.4 mul 0.3 add  sub  dup 0 ge exch 0.14 lt and
+} def
+/tw-pose {
+  /zt 1.0e6 def                                 % seconds asleep, for the z
+  tw-state /sleep eq { restpose } {
+  tw-state /wave eq {
+    % A splash: awake and waving, no hop and no song.
+    restpose dup begin
+      /Squash 1 def /ArmL 29 def /ArmR now 720 mul sin 20 mul 135 add def
+      /Lean -0.07 def /Look -0.09 def
+      /Eyes tw-blinking { /blink } { /open } ifelse def
+      /BobX now 0.5 mul 360 mul sin 0.09 mul def
+      /BobY now 360 mul sin 0.025 mul def
+    end
+  } {
+    tw-listen
+    awake {
+      /zt -1 def
+      << /Beat nb /Since since /Length bl /Loud loud /Sing sing >> dancepose
+      dup /Eyes get /open eq tw-blinking and { dup /Eyes /blink put } if
+      % The first beat after silence wakes him with a start.
+      nb 0 eq since 0.25 lt and tw-from 0 gt tw-track /none ne or and { restpose exch since 0.25 div blendpose } if
+      % A beat late and no next one: the music has stopped. He settles,
+      % his eyes droop, and he is asleep where he stands.
+      since bl gt {
+        restpose since bl sub bl div /cubic-inout ease blendpose
+        dup /Eyes get /sleep ne since bl sub bl div 0.3 gt and { dup /Eyes /blink put } if
+      } if
+    } { /zt nb 0 ge { since bl 2 mul sub } { 1.0e6 } ifelse def restpose } ifelse
+  } ifelse } ifelse
+} def
+
+% ---- drawing -------------------------------------------------------------
+/tw-draw { % pose
+  begin
+  % shadow: smaller when he is in the air
+  gsave tw-shadow aload pop setrgbcolor 0.5 setalpha
+    Lean 0.3 mul -0.03 0.95 1 Hop 0.6 mul sub mul 0.08 tw-oval fill
+  grestore
+  Hop Squash Lean {
+    % legs and feet, one lifted on alternate steps
+    tw-body aload pop setrgbcolor
+    [ [-1 LiftL] [1 LiftR] ] {
+      aload pop /lift exch def /sg exch def
+      0.42 Spread add sg mul 0.74 0 0.45 lift sub 0.17 limb
+      /fy exch def /fx exch def
+      fx 0.06 sg mul add fy 0.07 sub 0.25 0.14 tw-oval fill
+    } forall
+    % antenna and bobble, left behind by the bounce
+    tw-body aload pop setrgbcolor
+    gsave 0.09 setlinewidth 1 setlinecap
+      0 2.25 moveto 0 2.5 BobX 0.6 mul 2.62 BobY 0.5 mul add BobX 2.82 BobY add curveto stroke
+    grestore
+    tw-pink aload pop setrgbcolor BobX 2.82 BobY add 0.15 0 360 arc fill
+    tw-shine aload pop setrgbcolor BobX 0.05 sub 2.87 BobY add 0.045 0 360 arc fill
+    % arms and hands
+    tw-body aload pop setrgbcolor
+    -0.9 1.47 ArmL neg 0.72 0.14 limb 0.2 0 360 arc fill
+    0.9 1.47 ArmR 0.72 0.14 limb 0.2 0 360 arc fill
+    % body: shaded round its lower right, a gloss at the upper left
+    gsave 0 1.52 translate
+      tw-bodypath gsave tw-rim aload pop setrgbcolor fill grestore clip newpath
+      gsave tw-body aload pop setrgbcolor -0.07 0.06 translate 0.97 0.97 scale tw-bodypath fill grestore
+      tw-belly aload pop setrgbcolor 0 -0.56 0.55 0.27 tw-oval fill
+      -0.72 0.52 0.13 0.07 tw-oval fill
+      % face
+      tw-pink aload pop setrgbcolor
+      -0.68 -0.08 0.14 0.08 tw-oval fill  0.68 -0.08 0.14 0.08 tw-oval fill
+      /look Look def
+      [-1 1] {
+        /sg exch def
+        /ex 0.38 sg mul def
+        /st Eyes /wink eq { sg 0 lt { /grin } { /open } ifelse } { Eyes } ifelse def
+        ex 0.2 0.18 << /State st /Look look /Ink tw-ink /Shine tw-shine >> eye
+        % brows: a gentle arch, up for a grin, pulled down on the winking side
+        st /sleep ne {
+          tw-ink aload pop setrgbcolor 0.065 setlinewidth 1 setlinecap
+          /by 0.58 Eyes /grin eq { 0.06 add } if def
+          /bx ex look 0.18 mul add def
+          /bin Eyes /wink eq sg 0 lt and { -0.06 } { 0 } ifelse def
+          bx 0.13 sg mul sub by bin add moveto
+          bx 0.04 sg mul sub by 0.05 add  bx 0.06 sg mul add by 0.05 add  bx 0.14 sg mul add by 0.01 sub curveto stroke
+        } if
+      } forall
+      0 -0.12 Eyes /sleep eq { 0.1 } { 0.15 Mouth 0.06 mul add Eyes /grin eq { 0.05 add } if } ifelse
+      << /Open Mouth /Ink tw-ink /Tongue tw-pink >> mouth
+    grestore
+  } squashed
+  % asleep: a z, still
+  Eyes /sleep eq {
+    tw-shine aload pop setrgbcolor
+    /Helvetica-Bold findfont /zf exch def
+    [ [1.12 2.42 0.28 (z)] [1.38 2.74 0.36 (z)] [1.68 3.1 0.46 (Z)] ] {
+      /zi 1 index 2 get 0.28 sub 0.18 div 0.4 mul def   % 0, 0.4, 1.0 s after he drops off
+      zt zi ge { aload pop exch zf exch scalefont setfont 3 1 roll moveto show } { pop } ifelse
+    } forall
+  } if
+  end
+} def
+
+/scene {
+  % One Twiddle at a time: there is only one staticling.
+  userdict /.twiddle-here known {
+    (there is only one Twiddle, a staticling: place one /twiddle per frame) .comperror
+  } if
+  userdict /.twiddle-here true put
+  width 2 div height 0.13 mul translate
+  height 4.35 div dup scale
+  tw-pose tw-draw
+} def

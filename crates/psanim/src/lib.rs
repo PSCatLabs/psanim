@@ -35,7 +35,7 @@
 //! - [`api`] is the animation vocabulary as data, the reference's source.
 //! - [`render`] renders ranges of frames on several threads.
 //! - [`sheet`] lays frames out as a contact sheet.
-//! - [`raster`], [`ease`], [`pathmath`] and [`signals`] are the pure
+//! - [`raster`], [`ease`], [`pathmath`], [`plane`] and [`signals`] are the pure
 //!   building blocks, usable on their own.
 //!
 //! The crate has no platform dependencies beyond the PSCat library: it
@@ -46,6 +46,7 @@
 #![allow(clippy::result_large_err)] // errors are the cold path; a rich one beats a boxed one
 
 pub mod api;
+pub mod catalog;
 pub mod code;
 mod ctx;
 pub mod ease;
@@ -53,15 +54,23 @@ mod engine;
 mod error;
 pub mod motion;
 mod ops;
+mod particles;
 pub mod pathmath;
+pub mod plane;
+pub mod playlist;
 pub mod raster;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod render;
 pub mod sheet;
 pub mod signals;
+pub mod terminal;
 mod vocab;
 
-pub use engine::{Budget, Frame, Meta, Mode, MotionBlur, Movie, Options, PRELUDE, Param, Scale};
+pub use catalog::CATALOG;
+pub use engine::{
+    Budget, Frame, Meta, Mode, MotionBlur, Movie, Options, PREAMBLE_WARN_SECONDS, PRELUDE, Param,
+    Printed, Scale, StringSnapshot,
+};
 pub use error::{Error, Phase, TraceLine};
 pub use ops::TRANSITIONS;
 pub use signals::Signals;

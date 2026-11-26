@@ -23,11 +23,36 @@ assert.ok(first.some((b) => b > 200), "the frame has something bright in it");
 engine.open("<< /Size [16 8] >> animation /scene { /mousex signal 16 div 0 0 setrgbcolor 0 0 16 8 rectfill } def");
 engine.setSignal("mousex", 8);
 assert.equal(engine.render(0).data[0], 128, "signals reach the program");
+engine.open("<< /Size [16 8] >> animation /scene { /cpu 0.5 signalago 0 0 setrgbcolor 0 0 16 8 rectfill } def");
+engine.recordSignal("cpu", 0, 0);
+engine.recordSignal("cpu", 1, 1);
+assert.ok(Math.abs(engine.render(1).data[0] - 128) <= 1, "recorded signals keep their past");
 
 engine.open("<< /Size [8 8] >> animation /scene { 1 (a) add } def");
 assert.throws(() => engine.render(0), (e) => e.name === "PsAnimError" && e.info.kind === "typecheck" && e.info.backtrace[0].procedure === "scene");
 engine.open("<< /Size [8 8] >> animation /scene { { } loop } def", { maxSteps: 100000 });
 assert.throws(() => engine.render(0), (e) => e.info.kind === "limitexceeded" && e.info.limit === "steps");
 assert.throws(() => engine.open("<< /Size [8 8] >> animation (/etc/hosts) (r) file /scene { } def"), (e) => e.info.kind === "invalidfileaccess" || e.info.kind === "undefinedfilename");
+
+// Live use: parameters at open, catalog entries by name, events from the page.
+assert.ok(engine.catalogNames().includes("clock-digital"));
+assert.equal(engine.catalog("no-such-entry"), null);
+const clock = engine.catalog("clock-digital");
+const cmeta = engine.open(clock, { scale: 0.25, params: { Signal: "clock", Theme: "amber" } });
+engine.setSignal("clock", 12 * 3600 + 34 * 60 + 56);
+const noon = Uint8Array.from(engine.render(0).data);
+assert.deepEqual(Uint8Array.from(engine.render(5000).data), noon, "a signal-driven clock ignores movie time");
+engine.setSignal("clock", 13 * 3600);
+assert.notDeepEqual(Uint8Array.from(engine.render(0).data), noon, "and follows its signal");
+engine.open("<< /Size [8 8] >> animation /scene { /tap sinceevent 1 lt { 1 } { 0 } ifelse 0 0 setrgbcolor 0 0 8 8 rectfill } def");
+engine.event("tap", 2);
+assert.equal(engine.render(1.5).data[0], 0, "no event before 2 s");
+assert.equal(engine.render(2.5).data[0], 255, "an event from the page");
+engine.clearEvents("tap");
+assert.equal(engine.render(2.5).data[0], 0, "events cleared");
+const spin = engine.open(engine.catalog("spinner"), { params: { Style: "dots" } });
+assert.equal(spin.loop, true);
+engine.render(spin.duration * 3.5); // a looping widget past its duration renders
+engine.close();
 
 console.log(`wasm ok: ${(bytes.length / 1e6).toFixed(1)} MB, hello.ps at ${perFrame.toFixed(2)} ms/frame`);

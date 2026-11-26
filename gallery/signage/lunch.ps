@@ -1,0 +1,35 @@
+%!PS
+% A signage scene that is only on the list at lunchtime: the playlist file gives it
+% /Days /weekdays /From (11:30) /To (14:00), and nothing in this file knows that.
+<< /Size [1280 720] /Duration 9 /Title (Lunch) >> animation
+/pkmotion use  /pktype use
+<< /bg [0.035 0.05 0.085] /surface [0.085 0.11 0.17] /line [0.17 0.21 0.3]
+   /fg [0.95 0.95 0.92] /muted [0.62 0.68 0.78]
+   /accent [1.0 0.72 0.27] /accent2 [0.35 0.82 0.86] >> usetheme
+
+/Menu [ [(Soup)   (Roast tomato and basil)]
+        [(Hot)    (Chickpea and spinach curry, rice)]
+        [(Salad)  (Beetroot, feta, walnuts)]
+        [(Sweet)  (Lemon polenta cake)] ] param /menu exch def
+
+/scene {
+  /tall height width gt def
+  /page canvasbox 7 vmin inset def
+  page 0 0.8 1 0.2 subbox /head exch def
+  page 0 0 1 0.74 subbox menu length 2 vmin rows /rows exch def
+
+  /accent ink /display 10 vmin face (Lunch today) head /nw placetext
+  (Lunch today) /glyphs 0.05 /mask-up kinetic
+  /muted ink /body 4.4 vmin face 0.7 /fade { (Atrium, 12:00 to 13:30) head /sw showin } enters
+
+  0 1 menu length 1 sub { /i exch def
+    menu i get aload pop /dish exch def /course exch def
+    rows i get /b exch def
+    b tall { 0.3 } { 0.22 } ifelse splitx /rest exch def /left exch def
+    0.9 i 0.2 mul add /rise {
+      /surface ink b 1.8 vmin roundpath fill
+      /accent2 ink /title 4.4 vmin face course left 3 vmin inset /w showin
+      /fg ink /title 5 vmin face dish rest 1 vmin inset /w showin
+    } enters
+  } for
+} def

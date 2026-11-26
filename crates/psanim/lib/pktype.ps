@@ -99,18 +99,18 @@
   face
 } bind def
 
-% (text) width wraplines -> [ (line) ... ]    break into lines no wider
-%                                             than width; \n forces a break
-/wraplines {
+% (text) width proc .wrap -> [ (line) ... ]    wraplines, measuring with proc
+%                                               ((str) -> w)
+/.wrap {
   8 dict begin
-    /wl-w exch def
+    /wl-m exch def /wl-w exch def
     [ exch splitlines {
       /wl-line () def
       splitwords {
         /wl-word exch def
         wl-line length 0 eq { /wl-line wl-word def } {
           /wl-try wl-line ( ) strcat wl-word strcat def
-          wl-try stringwidth pop wl-w gt
+          wl-try wl-m wl-w gt
             { wl-line /wl-line wl-word def }
             { /wl-line wl-try def } ifelse
         } ifelse
@@ -119,6 +119,197 @@
     } forall ]
   end
 } bind def
+% (text) width wraplines -> [ (line) ... ]    break into lines no wider
+%                                             than width; \n forces a break
+/wraplines { { stringwidth pop } .wrap } bind def
+% (text) width emojilines -> [ (line) ... ]   the same, with `:name:` counted
+%                                             as the emoji it will show
+/emojilines { { emojitextwidth } .wrap } bind def
+% --- emoji: small pictures drawn in PostScript -----------------------------------------
+% Twelve round, flat, friendly pictures in one style: a warm yellow face, one dark
+% brown line, a few flat colours. Each is drawn in a unit square centred on the
+% origin (a circle of radius 0.5 just fits) and scaled to the size asked for.
+% They paint in their own colours, with the current alpha, and leave the current
+% colour and line width as they found them.
+/.emoface {
+  0.92 0.56 0.13 setrgbcolor 0 0 0.5 0 360 arc fill
+  1 0.80 0.20 setrgbcolor 0 0.015 0.465 0 360 arc fill
+  gsave 0.45 setalpha 1 0.93 0.62 setrgbcolor -0.07 0.16 0.26 0 360 arc fill grestore
+} bind def
+/.emoink { 0.34 0.19 0.08 setrgbcolor 0.05 setlinewidth 1 setlinecap 1 setlinejoin } bind def
+/.emoeyes { .emoink -0.165 0.095 0.058 0 360 arc fill 0.165 0.095 0.058 0 360 arc fill } bind def
+/.emosmile { .emoink 0 0.03 0.265 205 335 arc stroke } bind def
+% x y .emotear -    a drop of water
+/.emotear {
+  gsave translate 0.40 0.76 1 setrgbcolor
+  0 0.06 moveto -0.045 -0.02 -0.05 -0.075 0 -0.075 curveto 0.05 -0.075 0.045 -0.02 0 0.06 curveto fill
+  grestore
+} bind def
+% the flame's outline, tip up
+/.emoflame {
+  0 -0.44 moveto
+  -0.30 -0.44 -0.40 -0.20 -0.28 0.08 curveto
+  -0.22 0.20 -0.08 0.28 0.04 0.47 curveto
+  0.12 0.30 0.40 0.12 0.34 -0.14 curveto
+  0.30 -0.34 0.18 -0.44 0 -0.44 curveto closepath
+} bind def
+/.emobar {                  % y w -    a finger, as a rounded bar
+  0.105 -0.18 4 1 roll 4 array astore 0.052 roundpath
+  gsave 1 0.80 0.20 setrgbcolor fill grestore
+  0.93 0.56 0.13 setrgbcolor 0.02 setlinewidth stroke
+} bind def
+/.emoeye {                  % x -    one eye, looking right
+  gsave 0 translate 0.7 1 scale
+    1 setgray 0 0 0.22 0 360 arc fill
+    0.34 0.19 0.08 setrgbcolor 0.03 setlinewidth 0 0 0.22 0 360 arc stroke
+    0.09 -0.04 0.095 0 360 arc fill
+  grestore
+} bind def
+/.emo 16 dict def
+.emo begin
+  /smile { .emoface .emoeyes .emosmile } bind def
+  /laugh {
+    .emoface .emoink 0.055 setlinewidth
+    -0.17 0.085 0.075 25 155 arc stroke 0.17 0.085 0.075 25 155 arc stroke
+    gsave newpath 0 -0.03 0.27 0 180 arcn closepath clip
+      .emoink fill
+      0 -0.03 0.27 0 180 arcn closepath fill
+      0.86 0.26 0.28 setrgbcolor 0 -0.30 0.16 0 360 arc fill
+      1 setgray -0.3 -0.03 0.6 0.07 rectfill
+    grestore
+    .emoink 0.04 setlinewidth newpath 0 -0.03 0.27 0 180 arcn closepath stroke
+    -0.37 -0.04 .emotear 0.37 -0.04 .emotear
+  } bind def
+  /wink {
+    .emoface .emoink -0.165 0.095 0.058 0 360 arc fill
+    0.055 setlinewidth 0.165 0.115 0.075 200 340 arc stroke
+    .emosmile
+  } bind def
+  /sad {
+    .emoface .emoeyes .emoink 0.045 setlinewidth
+    0 -0.22 0.2 40 140 arc stroke
+    -0.27 0.2 moveto -0.1 0.255 lineto stroke 0.27 0.2 moveto 0.1 0.255 lineto stroke
+    -0.2 -0.04 .emotear
+  } bind def
+  /cool {
+    .emoface .emosmile
+    .emoink 0.13 0.13 0.16 setrgbcolor
+    [ -0.37 0.02 0.3 0.19 ] 0.06 roundpath fill [ 0.07 0.02 0.3 0.19 ] 0.06 roundpath fill
+    -0.08 0.15 moveto 0.08 0.15 lineto 0.08 0.12 lineto -0.08 0.12 lineto fill
+    gsave 0.5 setalpha 1 setgray 0.06 setlinewidth -0.31 0.16 moveto -0.2 0.2 lineto stroke
+    0.13 0.16 moveto 0.24 0.2 lineto stroke grestore
+  } bind def
+  /heart {
+    0.82 0.10 0.22 setrgbcolor
+    0 -0.40 moveto -0.62 0.02 -0.34 0.5 0 0.17 curveto 0.34 0.5 0.62 0.02 0 -0.40 curveto fill
+    gsave 0.5 setalpha 1 0.72 0.78 setrgbcolor -0.22 0.2 0.075 0 360 arc fill grestore
+  } bind def
+  /check {
+    0.12 0.62 0.34 setrgbcolor 0 0 0.5 0 360 arc fill
+    gsave 0.28 setalpha 1 setgray 0 0.06 0.4 0 360 arc fill grestore
+    1 setgray 0.1 setlinewidth 1 setlinecap 1 setlinejoin
+    -0.2 0.0 moveto -0.06 -0.15 lineto 0.22 0.17 lineto stroke
+  } bind def
+  /thumbsup {
+    0.25 0.45 0.86 setrgbcolor [ -0.43 -0.3 0.17 0.5 ] 0.03 roundpath fill
+    1 setlinecap
+    0.93 0.56 0.13 setrgbcolor 0.2 setlinewidth newpath -0.06 0.12 moveto -0.02 0.33 lineto stroke
+    1 0.80 0.20 setrgbcolor 0.155 setlinewidth newpath -0.06 0.12 moveto -0.02 0.33 lineto stroke
+    -0.29 0.46 .emobar -0.19 0.52 .emobar -0.09 0.54 .emobar 0.01 0.52 .emobar
+  } bind def
+  /party {
+    gsave -0.38 -0.38 translate
+      gsave 45 rotate
+        0.95 0.55 0.12 setrgbcolor 0 0 moveto 0.62 0.21 lineto 0.62 -0.21 lineto closepath fill
+        0.86 0.30 0.30 setrgbcolor 0.2 0.07 moveto 0.2 -0.07 lineto 0.34 -0.12 lineto 0.34 0.12 lineto closepath fill
+        0.86 0.30 0.30 setrgbcolor 0.48 0.16 moveto 0.48 -0.16 lineto 0.54 -0.18 lineto 0.54 0.18 lineto closepath fill
+        gsave 0.62 0 translate 0.3 1 scale 0.98 0.78 0.25 setrgbcolor 0 0 0.21 0 360 arc fill grestore
+      grestore
+    grestore
+    1 setlinecap 0.04 setlinewidth
+    0.30 0.62 0.95 setrgbcolor 0.06 0.1 moveto 0.12 0.32 0.32 0.2 0.30 0.42 curveto stroke
+    0.90 0.30 0.55 setrgbcolor 0.1 0.04 moveto 0.32 0.12 0.2 0.3 0.42 0.28 curveto stroke
+    0.25 0.75 0.45 setrgbcolor 0.17 0.43 0.045 0 360 arc fill
+    0.98 0.80 0.2 setrgbcolor 0.4 0.0 0.04 0 360 arc fill 0.04 0.4 0.04 0 360 arc fill
+    0.30 0.62 0.95 setrgbcolor 0.42 0.4 0.04 0 360 arc fill
+    0.90 0.30 0.55 setrgbcolor 0.28 0.18 0.035 0 360 arc fill
+  } bind def
+  /fire {
+    0.96 0.30 0.10 setrgbcolor .emoflame fill
+    gsave 0 -0.17 translate 0.62 dup scale 1 0.66 0.14 setrgbcolor .emoflame fill grestore
+    gsave 0 -0.31 translate 0.32 dup scale 1 0.93 0.55 setrgbcolor .emoflame fill grestore
+  } bind def
+  /rocket {
+    gsave -45 rotate
+      0.98 0.58 0.12 setrgbcolor
+      -0.07 -0.22 moveto -0.10 -0.34 -0.03 -0.40 0 -0.48 curveto 0.03 -0.40 0.10 -0.34 0.07 -0.22 curveto closepath fill
+      0.85 0.20 0.25 setrgbcolor
+      -0.12 0.02 moveto -0.30 -0.20 lineto -0.29 -0.28 lineto -0.12 -0.2 lineto closepath fill
+      0.12 0.02 moveto 0.30 -0.20 lineto 0.29 -0.28 lineto 0.12 -0.2 lineto closepath fill
+      0.94 0.95 0.98 setrgbcolor
+      newpath 0 0.47 moveto 0.19 0.30 0.18 0.0 0.13 -0.24 curveto -0.13 -0.24 lineto -0.18 0.0 -0.19 0.30 0 0.47 curveto closepath fill
+      gsave newpath 0 0.47 moveto 0.19 0.30 0.18 0.0 0.13 -0.24 curveto -0.13 -0.24 lineto -0.18 0.0 -0.19 0.30 0 0.47 curveto closepath clip
+        0.85 0.20 0.25 setrgbcolor -0.3 0.25 0.6 0.3 rectfill
+        gsave 0.4 setalpha 0.35 0.4 0.6 setrgbcolor 0.1 -0.3 0.2 0.8 rectfill grestore
+      grestore
+      0.25 0.45 0.80 setrgbcolor 0 0.08 0.075 0 360 arc fill
+      1 setgray 0.025 setlinewidth 0 0.08 0.075 0 360 arc stroke
+    grestore
+  } bind def
+  /eyes { -0.17 .emoeye 0.17 .emoeye } bind def
+end
+/emojinames [ /smile /laugh /wink /sad /cool /heart /thumbsup /party /fire /check /rocket /eyes ] def
+% /name x y size emojiat -     draw the emoji centred on x y, size across
+/emojiat {
+  3 index .emo exch known not { pop pop pop /emojiat errordict /rangecheck get exec } if
+  dup 0.05 lt { pop pop pop pop } {
+    gsave newpath 3 1 roll translate dup scale .emo exch get exec grestore
+  } ifelse
+} bind def
+% - emojiwidth -> w     how far `emoji` advances: a little more than the font's size
+/emojiwidth { fontsize 1.2 mul } bind def
+% /name emoji -     draw the emoji at the current point as a letter of the current
+%                   font (sized to it, sitting on its baseline) and move past it
+/emoji {
+  4 dict begin
+    currentpoint /em-y exch def /em-x exch def /em-s fontsize def
+    em-x em-s 0.6 mul add em-y em-s 0.32 mul add em-s 1.1 mul emojiat
+    em-x emojiwidth add em-y moveto
+  end
+} bind def
+% (text) .emosplit -> [ (text) /name (text) ... ]   each `:name:` of a known emoji becomes a name
+/.emosplit {
+  6 dict begin
+    /es-s exch def
+    [
+      {
+        es-s (:) search not { dup length 0 gt { } { pop } ifelse exit } if
+        /es-pre exch def pop /es-post exch def
+        es-post (:) search {
+          /es-nm exch def pop /es-rest exch def
+          es-nm length 0 gt { .emo es-nm cvn known } { false } ifelse {
+            es-pre length 0 gt { es-pre } if
+            es-nm cvn
+            /es-s es-rest def
+          } {
+            es-pre (:) strcat /es-s es-post def
+          } ifelse
+        } { pop es-pre (:) strcat /es-s es-post def } ifelse
+      } loop
+    ]
+  end
+} bind def
+% (text) emojitextwidth -> w     the width `emojitext` will advance by
+% (text) emojitextwidth -> w     the width `emojitext` will advance by
+/emojitextwidth {
+  0 exch .emosplit { dup type /nametype eq { pop emojiwidth } { stringwidth pop } ifelse add } forall
+} bind def
+% (text) emojitext -     show text at the current point, each `:name:` of a known
+%                        emoji (:heart: :laugh: ... see `emojinames`) drawn as that emoji
+/emojitext {
+  .emosplit { dup type /nametype eq { emoji } { show } ifelse } forall
+} bind def
+
 % (text) box opts textlayout -> [ [ (line) x y ] ... ]
 %   opts is an alignment (/left /center /right) or a dictionary:
 %   << /Align /left /Leading 1.3 /VAlign /top >>   (/VAlign /top /middle /bottom)
@@ -372,3 +563,240 @@
       fontsize 0.98 mul ]
   end
 } bind def
+
+% --- credits: text rolling upward -----------------------------------------------------
+% sections opts credits -     the roll, on the current scope's clock.
+% A section list is an array of entries, each an array that starts with a name:
+%   [/heading (Cast)]                    a heading, centred, in the heading face and accent;
+%                                        [/heading (THE END) 2.5] sets it 2.5 times as large
+%   [/pair (Director) (Name) (Name) ..]  a role on the left of the gutter, right-aligned,
+%                                        and its names on the right, left-aligned
+%   [/name (Name) (Name) ..]             centred names, one to a line
+%   [/text (a line)]                     a centred note, smaller and muted
+%   [/space n]                           n lines of space
+%   [/proc { ... } h]                    a slot h high; the procedure runs with the origin
+%                                        at its centre, over the column's centre (a logo)
+% Nothing here owns a clock beyond `now`; `creditsat` takes the distance instead.
+% The layout is measured in a dictionary (the settings), never open while a
+% caller's procedure runs: drawing works on a list of finished records.
+/.cr-heading {
+  cl-cy 0 gt { /cl-cy cl-cy HeadGap add def } if
+  /cl-hs cl-n 2 gt { HS cl-e 2 get mul } { HS } ifelse def
+  /cl-bl cl-cy cl-hs Lead mul 2 div cl-hs 0.36 mul add add def
+  [ /t cl-bl 0 cl-e 1 get HeadFace cl-hs HeadInk /c ]
+  /cl-tr cl-hs 0.25 mul def  /cl-cy cl-cy cl-hs Lead mul cl-tr add add def
+} bind def
+/.cr-pair {
+  2 1 cl-n 1 sub {
+    /cl-j exch def
+    /cl-bl cl-cy S Lead mul 2 div S 0.36 mul add add def
+    cl-j 2 eq { [ /t cl-bl Gutter 2 div neg cl-e 1 get RoleFace RS RoleInk /r ] } if
+    [ /t cl-bl Gutter 2 div cl-e cl-j get NameFace S NameInk /l ]
+    /cl-cy cl-cy S Lead mul add def
+  } for
+  /cl-tr PairGap def  /cl-cy cl-cy cl-tr add def
+} bind def
+/.cr-names {
+  1 1 cl-n 1 sub {
+    /cl-j exch def
+    /cl-bl cl-cy S Lead mul 2 div S 0.36 mul add add def
+    [ /t cl-bl 0 cl-e cl-j get NameFace S NameInk /c ]
+    /cl-cy cl-cy S Lead mul add def
+  } for
+  /cl-tr PairGap def  /cl-cy cl-cy cl-tr add def
+} bind def
+/.cr-text {
+  1 1 cl-n 1 sub {
+    /cl-j exch def
+    /cl-bl cl-cy TS Lead mul 2 div TS 0.36 mul add add def
+    [ /t cl-bl 0 cl-e cl-j get TextFace TS TextInk /c ]
+    /cl-cy cl-cy TS Lead mul add def
+  } for
+  /cl-tr PairGap def  /cl-cy cl-cy cl-tr add def
+} bind def
+/.cr-proc {
+  [ /p cl-cy cl-e 2 get 2 div add 0 cl-e 1 get 0 cl-e 2 get 0 0 ]
+  /cl-cy cl-cy cl-e 2 get add def
+} bind def
+% sections .cr-lay -> [ items ] height       (the settings dictionary is open)
+% An item is [ kind depth x payload role size ink align ]: depth is how far
+% below the top of the content its baseline (or, for a procedure, its
+% centre) lies; x is from the column's centre.
+/.cr-lay {
+  /cl-cy 0 def /cl-tr 0 def
+  [ exch {
+    /cl-e exch def /cl-k cl-e 0 get def /cl-n cl-e length def
+    /cl-tr 0 def
+    cl-k /heading eq { .cr-heading } {
+    cl-k /pair eq { .cr-pair } {
+    cl-k /name eq { .cr-names } {
+    cl-k /text eq { .cr-text } {
+    cl-k /proc eq { .cr-proc } {
+    cl-k /space eq { /cl-cy cl-cy cl-e 1 get S mul Lead mul add def } {
+      /credits errordict /rangecheck get exec
+    } ifelse } ifelse } ifelse } ifelse } ifelse } ifelse
+  } forall ]
+  cl-cy cl-tr sub
+} bind def
+
+% opts .cr-set -> settings
+/.cr-set {
+  80 dict begin
+    /cs-o exch def
+    /Box cs-o /Box known { cs-o /Box get } { canvasbox } ifelse def
+    /S cs-o /Size Box 2 get Box 3 get min 0.04 mul .opt def
+    /HS cs-o /HeadingSize S 1.3 mul .opt def
+    /RS cs-o /RoleSize S 0.82 mul .opt def
+    /TS cs-o /TextSize S 0.82 mul .opt def
+    /Lead cs-o /Leading 1.5 .opt def
+    /Gutter cs-o /Gutter S 1.2 mul .opt def
+    /HeadGap cs-o /HeadingGap S 2.6 mul .opt def
+    /PairGap S 0.45 mul def
+    /HeadFace cs-o /HeadingFace /title .opt def
+    /RoleFace cs-o /RoleFace /body .opt def
+    /NameFace cs-o /NameFace /body .opt def
+    /TextFace cs-o /TextFace /body .opt def
+    /HeadInk cs-o /HeadingInk /accent .opt def
+    /RoleInk cs-o /RoleInk /muted .opt def
+    /NameInk cs-o /NameInk /fg .opt def
+    /TextInk cs-o /TextInk /muted .opt def
+    /Fade cs-o /Fade 0.12 .opt def
+    /Snap cs-o /Snap true .opt def
+    /Settle cs-o /Settle 0 .opt def
+    /Cards cs-o /Cards [ ] .opt def
+    /CardTime cs-o /CardTime 4 .opt def
+    /CardFade cs-o /CardFade 0.7 .opt def
+    /Final cs-o /Final [ ] .opt def
+    /FinalGap cs-o /FinalGap Box 3 get 0.5 mul .opt def
+    currentdict
+  end
+} bind def
+% sections opts .cr-prep -> settings, with the layout and the timing worked out:
+% /Items /H (content height) /Dist (how far it travels) /Speed /CardsT /Total
+/.cr-prep {
+  .cr-set begin
+    /Sections exch def
+    Sections .cr-lay /H exch def /Items exch def
+    Final length 0 gt {
+      Final .cr-lay /fH exch def /fItems exch def
+      /fOff H FinalGap add def
+      fItems { dup 1 get fOff add 1 exch put } forall
+      /Items [ Items aload pop fItems aload pop ] def
+      /Dist fOff fH 2 div add Box 3 get 2 div add def
+      /H fOff fH add def
+    } {
+      /Dist H Box 3 get add def
+    } ifelse
+    /Speed cs-o /Speed known { cs-o /Speed get } {
+      cs-o /Duration known { Dist Settle add cs-o /Duration get div } { Box 3 get 0.08 mul } ifelse
+    } ifelse def
+    /CardsT Cards length CardTime mul def
+    /Total CardsT Dist Settle add Speed div add def
+    currentdict
+  end
+} bind def
+
+% t .cr-off -> distance rolled after t seconds of rolling (settings open)
+/.cr-off {
+  0 max /co-t exch def
+  /co-t1 Dist Settle sub Speed div def
+  co-t co-t1 le { Speed co-t mul } {
+    /co-T2 Settle 0.0001 max 2 mul Speed div def
+    co-t co-t1 sub dup co-T2 ge { pop Dist } {
+      /co-tau exch def
+      Dist Settle sub Speed co-tau mul add Speed co-tau co-tau mul mul co-T2 2 mul div sub
+    } ifelse
+  } ifelse
+} bind def
+% y .cr-snap -> y    the same place, moved to where a whole device pixel starts,
+%                    so a roll moves a whole number of pixels a frame
+/.cr-snap {
+  0 1 dtransform abs 1e-4 gt exch abs 1e-4 lt and
+  { 0 exch transform exch pop round 0 exch itransform exch pop } if
+} bind def
+% items ytop g fadefrac .cr-place -> [ record ... ]    (settings open)
+% A record is [ kind x y alpha payload size role ink align ], absolute and
+% ready to draw; items outside the box are left out.
+/.cr-place {
+  /cp-f exch def /cp-g exch def /cp-ytop exch def
+  /cp-cx Box 0 get Box 2 get 2 div add def
+  /cp-by Box 1 get def /cp-bh Box 3 get def
+  /cp-fd cp-f cp-bh mul def
+  [ exch {
+    /cp-i exch def
+    /cp-y cp-ytop cp-i 1 get sub def
+    /cp-m cp-i 5 get cp-i 0 get /p eq { 2 div } if def
+    cp-y cp-by cp-m sub ge  cp-y cp-by cp-bh add cp-m add le  and {
+      cp-fd 0 gt {
+        cp-y cp-by sub cp-fd div 0 1 clamp  cp-by cp-bh add cp-y sub cp-fd div 0 1 clamp  mul
+        dup dup mul exch 2 mul 3 exch sub mul             % ease it
+      } { 1 } ifelse
+      cp-g mul /cp-a exch def
+      cp-a 0.002 gt {
+        [ cp-i 0 get  cp-cx cp-i 2 get add  cp-y  cp-a  cp-i 3 get  cp-i 5 get  cp-i 4 get  cp-i 6 get  cp-i 7 get ]
+      } if
+    } if
+  } forall ]
+} bind def
+% records .cr-draw -     (no dictionary is open while a caller's procedure runs)
+/.cr-draw {
+  {
+    dup 0 get /p eq {
+      gsave dup 3 get setalpha dup 1 get 1 index 2 get translate 4 get exec grestore
+    } {
+      10 dict begin
+        aload pop /dr-al exch def /dr-ink exch def /dr-role exch def /dr-size exch def
+        /dr-s exch def /dr-a exch def /dr-y exch def /dr-x exch def pop
+        gsave dr-a setalpha dr-ink ink dr-role dr-size face
+        dr-al /c eq { dr-x dr-s stringwidth pop 2 div sub } {
+          dr-al /r eq { dr-x dr-s stringwidth pop sub } { dr-x } ifelse } ifelse
+        dr-y moveto dr-s show grestore
+      end
+    } ifelse
+  } forall
+} bind def
+% (settings open) -> records for now
+/.cr-frame {
+  /cf-t now def
+  cf-t CardsT lt {
+    /cf-k cf-t CardTime div cvi Cards length 1 sub min def
+    /cf-u cf-t cf-k CardTime mul sub def
+    Cards cf-k get .cr-lay /cf-h exch def
+    Box 1 get Box 3 get 2 div add cf-h 2 div add
+    cf-u CardFade div CardTime cf-u sub CardFade div min 0 1 clamp
+    0 .cr-place
+  } {
+    Items Box 1 get cf-t CardsT sub .cr-off add Snap { .cr-snap } if
+    1 Fade .cr-place
+  } ifelse
+} bind def
+
+% sections opts credits -     roll the credits: on the current scope's clock, first
+%     the /Cards (each held /CardTime seconds), then the sections rise from the
+%     bottom of the /Box at a constant rate, and stop where /Final is centred.
+%     opts (all optional): /Box [x y w h] the window it rolls through; /Size
+%     /HeadingSize /RoleSize /TextSize /Leading /Gutter /HeadingGap; /HeadingFace
+%     /RoleFace /NameFace /TextFace (theme roles or font names); /HeadingInk
+%     /RoleInk /NameInk /TextInk; /Speed units a second, or /Duration seconds the
+%     roll takes (the speed follows); /Fade the fraction of the box's height
+%     over which lines fade at its top and bottom edges; /Snap (true: move
+%     whole device pixels); /Cards [ sections ... ]; /Final sections and
+%     /FinalGap; /Settle units over which the roll slows to its stop.
+/credits {
+  .cr-prep begin .cr-frame end .cr-draw
+} bind def
+% sections opts offset creditsat -      the roll after it has moved `offset` units: for
+%     a caller who owns the clock (cards and /Settle are not applied)
+/creditsat {
+  3 1 roll .cr-prep begin
+    /ca-off exch def
+    Items Box 1 get ca-off add Snap { .cr-snap } if 1 Fade .cr-place
+  end .cr-draw
+} bind def
+% sections opts creditsheight -> h     the height of the whole roll, final card included
+/creditsheight { .cr-prep /H get } bind def
+% sections opts creditsspeed -> units a second       (from /Speed, /Duration or the default)
+/creditsspeed { .cr-prep /Speed get } bind def
+% sections opts creditsduration -> seconds       cards, then the roll to its stop:
+%     the length to give the movie, or the scope of the roll
+/creditsduration { .cr-prep /Total get } bind def

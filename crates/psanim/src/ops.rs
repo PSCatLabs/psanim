@@ -13,9 +13,12 @@ use std::rc::Rc;
 use pscat::host::{PathSegment, Value};
 use pscat::{Interp, Page, PsError};
 
-use crate::ctx::{Ctx, LayerEnd, MAX_LAYERS, MAX_SCOPES, Running, TimeScope, hash01, wiggle};
+use crate::ctx::{
+    ClipMask, Ctx, LayerEnd, MAX_LAYERS, MAX_SCOPES, Running, TimeScope, hash01, wiggle,
+};
 use crate::ease;
 use crate::pathmath;
+use crate::plane::{self, Plane};
 use crate::raster::{self, Blend};
 
 pub(crate) type Shared = Rc<RefCell<Ctx>>;
@@ -35,6 +38,26 @@ where
     interp
         .register_operator(name, move |i| f(i, &ctx))
         .expect("psanim's operator names are valid and few");
+}
+
+/// An array of numbers as PostScript writes it, for `info`.
+fn v_numbers(v: &Value) -> String {
+    // Numbers, names and strings print as written; anything deeper as "...".
+    fn one(v: &Value) -> Option<String> {
+        match v {
+            Value::Name(n) => Some(format!("/{n}")),
+            Value::String(s) => Some(format!("({})", String::from_utf8_lossy(s))),
+            v => v.as_f64().map(|x| x.to_string()),
+        }
+    }
+    match v {
+        Value::Array(a) if a.len() <= 12 => a
+            .iter()
+            .map(one)
+            .collect::<Option<Vec<_>>>()
+            .map_or_else(|| "[...]".to_string(), |p| format!("[{}]", p.join(" "))),
+        _ => "[...]".to_string(),
+    }
 }
 
 /// Pop a procedure, kept opaque so it can be pushed back for the prelude
@@ -168,7 +191,7 @@ fn parse_keys<'a>(ctx: &Shared, items: &'a [Value]) -> Result<Vec<Key<'a>>, PsEr
     Ok(keys)
 }
 
-fn eval_keys(ctx: &Shared, items: &[Value], t: f64) -> Result<Value, PsError> {
+pub(crate) fn eval_keys(ctx: &Shared, items: &[Value], t: f64) -> Result<Value, PsError> {
     let keys = parse_keys(ctx, items)?;
     if t <= keys[0].t {
         return Ok(keys[0].v.clone());
@@ -199,8 +222,114 @@ pub(crate) fn flat_path(i: &Interp, ctx: &Shared) -> Result<Vec<pathmath::Poly>,
     Ok(pathmath::flatten(&path, 1.5 / px))
 }
 
+/// A plane's dictionary as `onplane`, `projectpath` and `planepoint` take
+/// it.
+fn parse_plane(ctx: &Shared, v: &Value, who: &str) -> Result<Plane, PsError> {
+    if !matches!(v, Value::Dict(_)) {
+        return fail(
+            ctx,
+            PsError::Typecheck,
+            format!(
+                "{who} takes a plane dictionary, << /Tilt 60 >> for one; << >> is the flat plane"
+            ),
+        );
+    }
+    let view_w = {
+        let c = ctx.borrow();
+        c.views.last().map_or(c.width, |v| v.0)
+    };
+    let num = |key: &str, default: f64| -> Result<f64, PsError> {
+        match v.get(key) {
+            None => Ok(default),
+            Some(x) => match x.as_f64() {
+                Some(n) if n.is_finite() => Ok(n),
+                _ => fail(
+                    ctx,
+                    PsError::Typecheck,
+                    format!("{who}: /{key} must be a number"),
+                ),
+            },
+        }
+    };
+    let pair = |key: &str| -> Result<Option<(f64, f64)>, PsError> {
+        match v.get(key) {
+            None => Ok(None),
+            Some(x) => match x.as_numbers().as_deref() {
+                Some([a, b]) if a.is_finite() && b.is_finite() => Ok(Some((*a, *b))),
+                _ => fail(
+                    ctx,
+                    PsError::Typecheck,
+                    format!("{who}: /{key} must be [a b], two numbers"),
+                ),
+            },
+        }
+    };
+    let distance = num("Distance", view_w)?;
+    if distance <= 0.0 {
+        return fail(
+            ctx,
+            PsError::Rangecheck,
+            format!("{who}: /Distance (how far the eye is from the screen) must be more than 0"),
+        );
+    }
+    Ok(Plane {
+        tilt: num("Tilt", 0.0)?,
+        turn: num("Turn", 0.0)?,
+        depth: num("Depth", 0.0)?,
+        eye: pair("Eye")?.unwrap_or((0.0, 0.0)),
+        distance,
+        fade: pair("Fade")?,
+    })
+}
+
+/// Device pixels per unit of a matrix's user space: the square root of its
+/// determinant's size.
+fn matrix_scale(m: &[f64; 6]) -> f64 {
+    (m[0] * m[3] - m[1] * m[2]).abs().sqrt().max(1e-9)
+}
+
 /// Take the canvas out of the interpreter, run `f` on its pixels, put it
 /// back.
+/// Clear every pixel outside `r` (x0, y0, x1, y1): what a blur or glow
+/// spread past a component's box.
+fn clear_outside(px: &mut [u8], w: usize, h: usize, r: [usize; 4]) {
+    if r == [0, 0, w, h] {
+        return;
+    }
+    for y in 0..h {
+        let row = &mut px[y * w * 4..(y + 1) * w * 4];
+        if y < r[1] || y >= r[3] {
+            row.fill(0);
+        } else {
+            row[..r[0].min(w) * 4].fill(0);
+            row[r[2].min(w) * 4..].fill(0);
+        }
+    }
+}
+
+/// Put back the pixels outside `r` from `orig`: a blur or glow applied in
+/// place to a canvas that also holds other drawing (blurlayer, glowlayer
+/// inside a component) must leave that drawing as it was.
+fn keep_outside(px: &mut [u8], orig: &[u8], w: usize, h: usize, r: [usize; 4]) {
+    if r == [0, 0, w, h] {
+        return;
+    }
+    for y in 0..h {
+        let row = y * w * 4..(y + 1) * w * 4;
+        if y < r[1] || y >= r[3] {
+            px[row.clone()].copy_from_slice(&orig[row]);
+        } else {
+            let (a, b) = (y * w * 4, r[0].min(w) * 4);
+            px[a..a + b].copy_from_slice(&orig[a..a + b]);
+            let (c, d) = (y * w * 4 + r[2].min(w) * 4, (y + 1) * w * 4);
+            px[c..d].copy_from_slice(&orig[c..d]);
+        }
+    }
+}
+
+/// The most points `alignpath` compares (its work grows as the square).
+const ALIGN_MAX_POINTS: usize = 2048;
+
 pub(crate) fn with_canvas_pixels(
     i: &mut Interp,
     ctx: &Shared,
@@ -261,7 +390,114 @@ const PLAIN: LayerEnd = LayerEnd {
     blend: Blend::Normal,
     blur: 0.0,
     glow: (0.0, 0.0),
+    clip: None,
 };
+
+/// The clip `.clipmask` captured for the effect about to begin, or none.
+fn take_clip(ctx: &Shared) -> Option<ClipMask> {
+    ctx.borrow_mut().clip_taken.take().flatten()
+}
+
+/// `.maskbegin`, with the clip as the current path in device space (see
+/// `.clipmask` in the prelude): the rectangle to paint through the clip,
+/// on a fresh layer, and true; or false when the clip is empty and there
+/// is nothing to paint.
+fn mask_begin(i: &mut Interp, ctx: &Shared) -> OpResult {
+    let (w, h) = i.canvas_size();
+    let path = i.current_path()?;
+    let mut b = [
+        f64::INFINITY,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        f64::NEG_INFINITY,
+    ];
+    let mut grow = |x: f64, y: f64| {
+        b = [b[0].min(x), b[1].min(y), b[2].max(x), b[3].max(y)];
+    };
+    for s in &path {
+        match *s {
+            PathSegment::MoveTo(x, y) | PathSegment::LineTo(x, y) => grow(x, y),
+            PathSegment::CurveTo(x1, y1, x2, y2, x3, y3) => {
+                grow(x1, y1);
+                grow(x2, y2);
+                grow(x3, y3);
+            }
+            PathSegment::Close => {}
+        }
+    }
+    // The newest clip's box, a pixel wider all round, on the canvas: the
+    // older clips it was intersected with lie inside it, and painting
+    // through the clip itself gives the exact coverage.
+    let x0 = (b[0].floor() - 1.0).max(0.0);
+    let y0 = (b[1].floor() - 1.0).max(0.0);
+    let x1 = (b[2].ceil() + 1.0).min(f64::from(w));
+    let y1 = (b[3].ceil() + 1.0).min(f64::from(h));
+    if !(x1 > x0 && y1 > y0) {
+        // Everything is clipped away: the effect may show nothing.
+        let mut c = ctx.borrow_mut();
+        let mut alpha = c.mask_pool.pop().unwrap_or_default();
+        alpha.clear();
+        alpha.resize((w * h) as usize, 0);
+        c.clip_taken = Some(Some(ClipMask {
+            alpha,
+            support: [0, 0, 0, 0],
+        }));
+        drop(c);
+        i.push_bool(false);
+        return Ok(());
+    }
+    begin_layer(i, ctx)?;
+    i.push_numbers(&[x0, y0, x1 - x0, y1 - y0]);
+    i.push_bool(true);
+    Ok(())
+}
+
+/// `.maskend`: close the layer `.maskbegin` opened and keep its coverage
+/// as the clip; none at all when it covers the whole canvas.
+fn mask_end(i: &mut Interp, ctx: &Shared) -> OpResult {
+    let Some(below) = ctx.borrow_mut().layers.pop() else {
+        return fail(ctx, PsError::Rangecheck, ".maskend without .maskbegin");
+    };
+    let page = i.swap_canvas(below).map_err(|_| PsError::Rangecheck)?;
+    let (w, h) = (page.width() as usize, page.height() as usize);
+    let px = page.premultiplied_rgba8();
+    let mut c = ctx.borrow_mut();
+    let clip = if px.chunks_exact(4).all(|p| p[3] == 255) {
+        None
+    } else {
+        let mut alpha = c.mask_pool.pop().unwrap_or_default();
+        alpha.clear();
+        alpha.extend(px.chunks_exact(4).map(|p| p[3]));
+        let mut s = [w, h, 0, 0];
+        for y in 0..h {
+            let row = &alpha[y * w..(y + 1) * w];
+            if let (Some(a), Some(b)) = (
+                row.iter().position(|v| *v != 0),
+                row.iter().rposition(|v| *v != 0),
+            ) {
+                s = [s[0].min(a), s[1].min(y), s[2].max(b + 1), s[3].max(y + 1)];
+            }
+        }
+        if s[2] <= s[0] {
+            s = [0, 0, 0, 0];
+        }
+        Some(ClipMask { alpha, support: s })
+    };
+    c.clip_taken = Some(clip);
+    c.spare = Some(page);
+    Ok(())
+}
+
+/// Confine an effect's spread to the clip it began under: zero what lies
+/// outside the clip (a layer, whose own drawing was clipped already), or
+/// with `orig`, put back what was there (the canvas, or a layer drawn on
+/// before the clip was set).
+fn apply_clip(px: &mut [u8], w: usize, h: usize, clip: &ClipMask, orig: Option<&[u8]>) {
+    match orig {
+        None => raster::mask_multiply(px, w, h, &clip.alpha, clip.support),
+        Some(o) => raster::mask_mix(px, o, &clip.alpha),
+    }
+}
 
 fn blend_named(ctx: &Shared, name: &str) -> Result<Blend, PsError> {
     match Blend::from_name(name) {
@@ -294,8 +530,41 @@ fn end_layer(i: &mut Interp, ctx: &Shared, opacity: f64, blend: Blend) -> OpResu
     Ok(())
 }
 
+/// `blurlayer` (no strength) or `glowlayer`: spread what is on the canvas,
+/// within the component's box and the clip in force.
+fn spread_layer(i: &mut Interp, ctx: &Shared, radius: f64, strength: Option<f64>) -> OpResult {
+    let clip = take_clip(ctx);
+    let sigma = radius * ctx.borrow().px_scale * ctx.borrow().unit_scale();
+    let (cw, ch) = i.canvas_size();
+    let rect = ctx.borrow().effect_rect(cw as usize, ch as usize);
+    with_canvas_pixels(i, ctx, |px, w, h, scratch| {
+        // These work in place on a canvas that may hold other drawing (the
+        // movie's, around a component): what lies outside the component's
+        // box or the clip keeps its earlier pixels.
+        let orig = (clip.is_some() || rect != [0, 0, w, h]).then(|| px.to_vec());
+        match strength {
+            None => raster::blur(px, w, h, sigma, scratch),
+            Some(k) => raster::glow(px, w, h, sigma, k.clamp(0.0, 2.0), scratch),
+        }
+        if let Some(o) = &orig {
+            keep_outside(px, o, w, h, rect);
+        }
+        if let (Some(c), Some(o)) = (&clip, &orig) {
+            apply_clip(px, w, h, c, Some(o));
+        }
+    })?;
+    if let Some(c) = clip {
+        ctx.borrow_mut().recycle_mask(c);
+    }
+    Ok(())
+}
+
 pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     crate::vocab::install(interp, ctx);
+    crate::catalog::install(interp, ctx);
+    crate::terminal::install(interp, ctx);
+    crate::particles::install(interp, ctx);
+    crate::playlist::install(interp, ctx);
     // --- declaration ----------------------------------------------------
     reg(interp, ctx, ".animation", |i, ctx| {
         let decl = i.pop_value()?;
@@ -340,7 +609,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         Ok(())
     });
     reg(interp, ctx, "globaltime", |i, ctx| {
-        i.push_real(ctx.borrow().global_t);
+        i.push_real(ctx.borrow().movie_clock().t);
         Ok(())
     });
     reg(interp, ctx, "frame", |i, ctx| {
@@ -356,7 +625,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         Ok(())
     });
     reg(interp, ctx, "duration", |i, ctx| {
-        i.push_real(ctx.borrow().duration);
+        i.push_real(ctx.borrow().movie_clock().dur);
         Ok(())
     });
     reg(interp, ctx, "width", |i, ctx| {
@@ -370,7 +639,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         Ok(())
     });
     reg(interp, ctx, "movieseed", |i, ctx| {
-        i.push_int(ctx.borrow().seed);
+        i.push_int(ctx.borrow().seed());
         Ok(())
     });
 
@@ -382,13 +651,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let (b, a) = (i.pop_f64()?, i.pop_f64()?);
         let s = ctx.borrow().scope();
         if s.t >= a && s.t < b {
-            push_scope(
-                ctx,
-                TimeScope {
-                    t: s.t - a,
-                    dur: b - a,
-                },
-            )?;
+            push_scope(ctx, TimeScope::window(s.t - a, b - a))?;
             i.push_value(&body)?;
             i.push_bool(true);
         } else {
@@ -401,13 +664,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let a = i.pop_f64()?;
         let s = ctx.borrow().scope();
         if s.t >= a {
-            push_scope(
-                ctx,
-                TimeScope {
-                    t: s.t - a,
-                    dur: (s.dur - a).max(0.0),
-                },
-            )?;
+            push_scope(ctx, TimeScope::window(s.t - a, (s.dur - a).max(0.0)))?;
             i.push_value(&body)?;
             i.push_bool(true);
         } else {
@@ -420,7 +677,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let b = i.pop_f64()?;
         let s = ctx.borrow().scope();
         if s.t < b {
-            push_scope(ctx, TimeScope { t: s.t, dur: b })?;
+            push_scope(ctx, TimeScope::window(s.t, b))?;
             i.push_value(&body)?;
             i.push_bool(true);
         } else {
@@ -434,9 +691,13 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let s = ctx.borrow().scope();
         push_scope(
             ctx,
+            // A pure shift of the clock: the window shortens (so `progress`
+            // and `span` are as they always were) but the period that
+            // `turns` and `loopnoise` close over does not.
             TimeScope {
                 t: s.t - d,
                 dur: s.dur - d,
+                cycle: s.cycle,
             },
         )?;
         i.push_value(&body)?;
@@ -451,6 +712,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             TimeScope {
                 t: s.t * k,
                 dur: s.dur * k.abs(),
+                cycle: s.cycle * k.abs(),
             },
         )?;
         i.push_value(&body)?;
@@ -467,13 +729,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             );
         }
         let s = ctx.borrow().scope();
-        push_scope(
-            ctx,
-            TimeScope {
-                t: s.t.rem_euclid(p),
-                dur: p,
-            },
-        )?;
+        push_scope(ctx, TimeScope::window(s.t.rem_euclid(p), p))?;
         i.push_value(&body)?;
         Ok(())
     });
@@ -490,7 +746,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let s = ctx.borrow().scope();
         let phase = s.t.rem_euclid(2.0 * p);
         let t = if phase < p { phase } else { 2.0 * p - phase };
-        push_scope(ctx, TimeScope { t, dur: p })?;
+        push_scope(ctx, TimeScope::window(t, p))?;
         i.push_value(&body)?;
         Ok(())
     });
@@ -498,24 +754,28 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let body = pop_proc(i, ctx, "attime")?;
         let t = i.pop_f64()?;
         let s = ctx.borrow().scope();
-        push_scope(ctx, TimeScope { t, dur: s.dur })?;
+        push_scope(
+            ctx,
+            TimeScope {
+                t,
+                dur: s.dur,
+                cycle: s.cycle,
+            },
+        )?;
         i.push_value(&body)?;
         Ok(())
     });
     reg(interp, ctx, ".timewindow", |i, ctx| {
         let body = pop_proc(i, ctx, "timewindow")?;
         let (dur, t) = (i.pop_f64()?, i.pop_f64()?);
-        push_scope(ctx, TimeScope { t, dur })?;
+        push_scope(ctx, TimeScope::window(t, dur))?;
         i.push_value(&body)?;
         Ok(())
     });
     reg(interp, ctx, ".globally", |i, ctx| {
         let body = pop_proc(i, ctx, "globally")?;
-        let (t, dur) = {
-            let c = ctx.borrow();
-            (c.global_t, c.duration)
-        };
-        push_scope(ctx, TimeScope { t, dur })?;
+        let clock = ctx.borrow().movie_clock();
+        push_scope(ctx, clock)?;
         i.push_value(&body)?;
         Ok(())
     });
@@ -527,6 +787,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             TimeScope {
                 t: s.dur - s.t,
                 dur: s.dur,
+                cycle: s.cycle,
             },
         )?;
         i.push_value(&body)?;
@@ -571,13 +832,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 }
                 i.push_value(&pair[1])?;
                 let body = pop_proc(i, ctx, "sequence")?;
-                push_scope(
-                    ctx,
-                    TimeScope {
-                        t: s.t - start,
-                        dur,
-                    },
-                )?;
+                push_scope(ctx, TimeScope::window(s.t - start, dur))?;
                 i.push_value(&body)?;
                 i.push_bool(true);
                 return Ok(());
@@ -632,13 +887,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 if !next_lead {
                     i.push_value(clip.body)?;
                     let body = pop_proc(i, ctx, "reel")?;
-                    push_scope(
-                        ctx,
-                        TimeScope {
-                            t: t - clip.start,
-                            dur: clip.dur,
-                        },
-                    )?;
+                    push_scope(ctx, TimeScope::window(t - clip.start, clip.dur))?;
                     i.push_value(&body)?;
                     i.push_int(1);
                     return Ok(());
@@ -654,7 +903,16 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         };
         match plan_reel(i, &items, false) {
             Ok(plan) => {
-                i.push_real(plan.last().map_or(0.0, |c| c.start + c.dur));
+                let total = plan.last().map_or(0.0, |c| c.start + c.dur);
+                // Remember what was reported, so the load can check it once
+                // the program has defined its clips and transitions. Only the
+                // program's top level counts: a frame may measure freely.
+                let mut c = ctx.borrow_mut();
+                if c.running == Running::Setup && c.measured_reels.len() < 64 {
+                    c.measured_reels.push((items.to_vec(), total));
+                }
+                drop(c);
+                i.push_real(total);
                 Ok(())
             }
             Err(msg) => fail(ctx, PsError::Rangecheck, msg),
@@ -776,18 +1034,13 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let (amp, freq) = (i.pop_f64()?, i.pop_f64()?);
         let key = pop_key(i, ctx, "wiggle: key freq amp")?;
         let c = ctx.borrow();
-        i.push_real(wiggle(c.seed, key, c.scope().t * freq) * amp);
+        i.push_real(wiggle(c.seed(), key, c.scope().t * freq) * amp);
         Ok(())
     });
     reg(interp, ctx, "turns", |i, ctx| {
         let k = i.pop_f64()?;
         let s = ctx.borrow().scope();
-        let u = if s.dur > 0.0 && s.dur.is_finite() {
-            s.t / s.dur
-        } else {
-            0.0
-        };
-        i.push_real(k * 360.0 * u);
+        i.push_real(k * 360.0 * s.cycle_fraction());
         Ok(())
     });
     reg(interp, ctx, "loopnoise", |i, ctx| {
@@ -795,17 +1048,31 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let key = pop_key(i, ctx, "loopnoise: key radius")?;
         let c = ctx.borrow();
         let s = c.scope();
-        let a = if s.dur > 0.0 && s.dur.is_finite() {
-            s.t / s.dur
-        } else {
-            0.0
-        } * std::f64::consts::TAU;
+        let a = s.cycle_fraction() * std::f64::consts::TAU;
         i.push_real(crate::ctx::noise2(
-            c.seed,
+            c.seed(),
             key,
             radius * a.cos(),
             radius * a.sin(),
         ));
+        Ok(())
+    });
+    reg(interp, ctx, "sincelast", |i, ctx| {
+        let Ok(times) = i.pop_numbers() else {
+            return fail(
+                ctx,
+                PsError::Typecheck,
+                "sincelast takes an array of times: [1.2 2.5 4] sincelast",
+            );
+        };
+        let t = ctx.borrow().scope().t;
+        // "Long ago" when none has passed, as `sinceevent` says it.
+        let last = times
+            .iter()
+            .copied()
+            .filter(|x| *x <= t)
+            .fold(f64::NAN, f64::max);
+        i.push_real(if last.is_nan() { 1.0e6 } else { t - last });
         Ok(())
     });
     reg(interp, ctx, "hash01", |i, ctx| {
@@ -820,7 +1087,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 "hash01 takes a number or an array of numbers as its key",
             );
         };
-        i.push_real(hash01(ctx.borrow().seed, &keys));
+        i.push_real(hash01(ctx.borrow().seed(), &keys));
         Ok(())
     });
 
@@ -905,6 +1172,104 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         i.set_current_path(&path)
     });
 
+    reg(interp, ctx, "alignpath", |i, ctx| {
+        let (b, a) = (i.pop_numbers()?, i.pop_numbers()?);
+        if a.len() != b.len() || a.len() < 4 || a.len() % 2 != 0 {
+            return fail(
+                ctx,
+                PsError::Rangecheck,
+                "alignpath: both arrays must hold the same number of x y pairs (use the same count with resamplepath)",
+            );
+        }
+        // Quadratic native work outside the interpreter's budgets: cap it.
+        if a.len() / 2 > ALIGN_MAX_POINTS {
+            return fail(
+                ctx,
+                PsError::Limitcheck,
+                format!(
+                    "alignpath: at most {ALIGN_MAX_POINTS} points per outline (resample to fewer)"
+                ),
+            );
+        }
+        i.push_numbers(&pathmath::align_outline(&a, &b));
+        Ok(())
+    });
+    // --- perspective ------------------------------------------------------
+    reg(interp, ctx, ".planebegin", |i, ctx| {
+        let m = i.pop_numbers()?;
+        let v = i.pop_value()?;
+        let p = parse_plane(ctx, &v, "onplane")?;
+        let Ok(m) = <[f64; 6]>::try_from(m.as_slice()) else {
+            return Err(PsError::Rangecheck);
+        };
+        let mut c = ctx.borrow_mut();
+        if c.planes.len() >= MAX_SCOPES {
+            drop(c);
+            return fail(
+                ctx,
+                PsError::Limitcheck,
+                "onplane: too many planes open at once",
+            );
+        }
+        c.planes.push((p, m));
+        Ok(())
+    });
+    reg(interp, ctx, ".planeend", |_i, ctx| {
+        ctx.borrow_mut().planes.pop();
+        Ok(())
+    });
+    reg(interp, ctx, ".planedepth", |i, ctx| {
+        i.push_int(ctx.borrow().planes.len() as i64);
+        Ok(())
+    });
+    reg(interp, ctx, ".planectm", |i, ctx| {
+        let m = ctx.borrow().planes.last().map(|p| p.1);
+        i.push_numbers(&m.unwrap_or([1.0, 0.0, 0.0, 1.0, 0.0, 0.0]));
+        Ok(())
+    });
+    // The innermost plane, with the path in its coordinates (the prelude has
+    // set its matrix): replace the path by its projection, every subpath
+    // closed as fill sees it, and leave the opacity the fade gives it.
+    reg(interp, ctx, ".planeproject", |i, ctx| {
+        let Some((p, m)) = ctx.borrow().planes.last().copied() else {
+            i.push_real(1.0);
+            return Ok(());
+        };
+        let path = i.current_path()?;
+        let out = plane::project_path(&p, &path, 1.0 / matrix_scale(&m), true);
+        i.set_current_path(&out.path)?;
+        i.push_real(out.opacity(&p));
+        Ok(())
+    });
+    reg(interp, ctx, ".projectpath", |i, ctx| {
+        let m = i.pop_numbers()?;
+        let v = i.pop_value()?;
+        let p = parse_plane(ctx, &v, "projectpath")?;
+        let Ok(m) = <[f64; 6]>::try_from(m.as_slice()) else {
+            return Err(PsError::Rangecheck);
+        };
+        let path = i.current_path()?;
+        let out = plane::project_path(&p, &path, 1.0 / matrix_scale(&m), false);
+        i.set_current_path(&out.path)
+    });
+    reg(interp, ctx, "planepoint", |i, ctx| {
+        let v = i.pop_value()?;
+        let y = i.pop_f64()?;
+        let x = i.pop_f64()?;
+        let p = parse_plane(ctx, &v, "planepoint")?;
+        let Some((sx, sy)) = p.project(x, y) else {
+            return fail(
+                ctx,
+                PsError::UndefinedResult,
+                "planepoint: the point is behind the eye (or too close to it) and has no place on the screen",
+            );
+        };
+        i.push_real(sx);
+        i.push_real(sy);
+        i.push_real(p.opacity(p.place(x, y)[2]));
+        Ok(())
+    });
+
     reg(interp, ctx, "polypath", |i, ctx| {
         let pts = i.pop_numbers()?;
         if pts.len() < 4 || pts.len() % 2 != 0 {
@@ -951,20 +1316,34 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         )
     });
     reg(interp, ctx, ".blurbegin", |i, ctx| {
-        let blur = i.pop_f64()?;
-        begin_pending(i, ctx, LayerEnd { blur, ..PLAIN })
+        let blur = i.pop_f64()? * ctx.borrow().unit_scale();
+        let clip = take_clip(ctx);
+        begin_pending(
+            i,
+            ctx,
+            LayerEnd {
+                blur,
+                clip,
+                ..PLAIN
+            },
+        )
     });
     reg(interp, ctx, ".glowbegin", |i, ctx| {
         let (strength, radius) = (i.pop_f64()?, i.pop_f64()?);
+        let radius = radius * ctx.borrow().unit_scale();
+        let clip = take_clip(ctx);
         begin_pending(
             i,
             ctx,
             LayerEnd {
                 glow: (radius, strength),
+                clip,
                 ..PLAIN
             },
         )
     });
+    reg(interp, ctx, ".maskbegin", mask_begin);
+    reg(interp, ctx, ".maskend", mask_end);
     reg(interp, ctx, ".layerend", |i, ctx| {
         let Some(end) = ctx.borrow_mut().pending.pop() else {
             return fail(
@@ -974,9 +1353,13 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             );
         };
         let px = ctx.borrow().px_scale;
+        let (cw, ch) = i.canvas_size();
+        let rect = ctx.borrow().effect_rect(cw as usize, ch as usize);
+        let spread = end.blur > 0.0 || end.glow.1 > 0.0;
         if end.blur > 0.0 {
             with_canvas_pixels(i, ctx, |p, w, h, scratch| {
-                raster::blur(p, w, h, end.blur * px, scratch)
+                raster::blur(p, w, h, end.blur * px, scratch);
+                clear_outside(p, w, h, rect);
             })?;
         }
         if end.glow.1 > 0.0 {
@@ -988,8 +1371,15 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                     end.glow.0 * px,
                     end.glow.1.clamp(0.0, 2.0),
                     scratch,
-                )
+                );
+                clear_outside(p, w, h, rect);
             })?;
+        }
+        if let Some(clip) = end.clip {
+            if spread {
+                with_canvas_pixels(i, ctx, |p, w, h, _| apply_clip(p, w, h, &clip, None))?;
+            }
+            ctx.borrow_mut().recycle_mask(clip);
         }
         end_layer(i, ctx, end.opacity, end.blend)
     });
@@ -1003,27 +1393,31 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let blend = blend_named(ctx, &name)?;
         end_layer(i, ctx, opacity, blend)
     });
-    reg(interp, ctx, "blurlayer", |i, ctx| {
+    // The native halves of blurlayer and glowlayer, after `.clipmask`.
+    reg(interp, ctx, ".blurlayer", |i, ctx| {
         let radius = i.pop_f64()?;
-        let sigma = radius * ctx.borrow().px_scale;
-        with_canvas_pixels(i, ctx, |px, w, h, scratch| {
-            raster::blur(px, w, h, sigma, scratch)
-        })
+        spread_layer(i, ctx, radius, None)
     });
-    reg(interp, ctx, "glowlayer", |i, ctx| {
+    reg(interp, ctx, ".glowlayer", |i, ctx| {
         let (strength, radius) = (i.pop_f64()?, i.pop_f64()?);
-        let sigma = radius * ctx.borrow().px_scale;
-        with_canvas_pixels(i, ctx, |px, w, h, scratch| {
-            raster::glow(px, w, h, sigma, strength.clamp(0.0, 2.0), scratch)
-        })
+        spread_layer(i, ctx, radius, Some(strength))
     });
-    reg(interp, ctx, "vignette", |i, ctx| {
+    // The native halves of vignette and filmgrain, after `.clipmask`: they
+    // work within the component's box and hand back what the clip in force
+    // (a rotated box's own outline) leaves outside it.
+    reg(interp, ctx, ".vignette", |i, ctx| {
         let amount = i.pop_f64()?.clamp(0.0, 1.0);
+        let clip = take_clip(ctx);
+        let (cw, ch) = i.canvas_size();
+        let r = ctx.borrow().effect_rect(cw as usize, ch as usize);
         with_canvas_pixels(i, ctx, |px, w, h, _| {
-            let (cx, cy) = (w as f64 / 2.0, h as f64 / 2.0);
-            let rmax2 = cx * cx + cy * cy;
-            for y in 0..h {
-                for x in 0..w {
+            let orig = clip.as_ref().map(|_| px.to_vec());
+            // Centred on the component's box when inside one.
+            let (hw, hh) = ((r[2] - r[0]) as f64 / 2.0, (r[3] - r[1]) as f64 / 2.0);
+            let (cx, cy) = (r[0] as f64 + hw, r[1] as f64 + hh);
+            let rmax2 = (hw * hw + hh * hh).max(1.0);
+            for y in r[1]..r[3] {
+                for x in r[0]..r[2] {
                     let (dx, dy) = (x as f64 + 0.5 - cx, y as f64 + 0.5 - cy);
                     let r2 = (dx * dx + dy * dy) / rmax2;
                     // Untouched in the middle, darkest in the corners.
@@ -1034,20 +1428,38 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                     }
                 }
             }
-        })
+            if let (Some(c), Some(o)) = (&clip, &orig) {
+                apply_clip(px, w, h, c, Some(o));
+            }
+        })?;
+        if let Some(c) = clip {
+            ctx.borrow_mut().recycle_mask(c);
+        }
+        Ok(())
     });
-    reg(interp, ctx, "filmgrain", |i, ctx| {
+    reg(interp, ctx, ".filmgrain", |i, ctx| {
         let amount = i.pop_f64()?.clamp(0.0, 1.0);
+        let clip = take_clip(ctx);
         let (seed, frame) = {
             let c = ctx.borrow();
-            (c.seed, c.frame)
+            (c.seed(), c.frame)
         };
-        with_canvas_pixels(i, ctx, |px, _, _, _| {
+        let (cw, ch) = i.canvas_size();
+        let r = ctx.borrow().effect_rect(cw as usize, ch as usize);
+        with_canvas_pixels(i, ctx, |px, w, h, _| {
+            let orig = clip.as_ref().map(|_| px.to_vec());
             // One cheap xorshift stream per frame: grain that moves.
             let mut s =
                 crate::ctx::mix64(seed as u64 ^ (frame as u64).wrapping_mul(0x9E37_79B9)) | 1;
             let amp = amount * 64.0;
-            for p in px.chunks_exact_mut(4) {
+            let inside = |k: usize| {
+                let (x, y) = (k % w, k / w);
+                x >= r[0] && x < r[2] && y >= r[1] && y < r[3]
+            };
+            for (k, p) in px.chunks_exact_mut(4).enumerate() {
+                if !inside(k) {
+                    continue;
+                }
                 s ^= s << 13;
                 s ^= s >> 7;
                 s ^= s << 17;
@@ -1057,7 +1469,14 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                     *c = ((f64::from(*c) + n).clamp(0.0, 255.0) as u8).min(a);
                 }
             }
-        })
+            if let (Some(c), Some(o)) = (&clip, &orig) {
+                apply_clip(px, w, h, c, Some(o));
+            }
+        })?;
+        if let Some(c) = clip {
+            ctx.borrow_mut().recycle_mask(c);
+        }
+        Ok(())
     });
 
     // --- inputs -------------------------------------------------------------------
@@ -1065,9 +1484,23 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let default = i.pop_value()?;
         let name = i.pop_name()?;
         let mut c = ctx.borrow_mut();
+        // Inside a component, its own parameters and nothing of the host's.
+        if let Some(comp) = c.comps.last() {
+            let v = comp
+                .params
+                .iter()
+                .find(|(k, _)| *k == name)
+                .map_or(default, |(_, v)| v.clone());
+            drop(c);
+            i.push_value(&v)?;
+            return Ok(());
+        }
         let shown = match &default {
             Value::String(s) => format!("({})", String::from_utf8_lossy(s)),
             Value::Name(n) => format!("/{n}"),
+            Value::Array(_) => v_numbers(&default),
+            Value::Null => "null".to_string(),
+            Value::Bool(b) => b.to_string(),
             v => v
                 .as_f64()
                 .map_or_else(|| "?".to_string(), |x| x.to_string()),
@@ -1078,10 +1511,186 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         i.push_value(&v)?;
         Ok(())
     });
+    // --- components (native halves; see prelude.ps) ----------------------
+    // t dur seed params unit rect .comppush -    open a component's clock:
+    //                                  its movie time t of dur, its seed,
+    //                                  the values its `param` lookups get
+    //                                  (a dictionary, or null for none),
+    //                                  the device length of its unit, and
+    //                                  its box in device pixels [x0 y0 x1
+    //                                  y1] (or null).
+    reg(interp, ctx, ".comppush", |i, ctx| {
+        let rect = match i.pop_value()? {
+            Value::Null => None,
+            v => v.as_numbers().filter(|n| n.len() == 4).map(|n| {
+                let px = |x: f64| x.max(0.0).round() as usize;
+                [px(n[0]), px(n[1]), px(n[2]), px(n[3])]
+            }),
+        };
+        let unit = i.pop_f64()?;
+        let params = match i.pop_value()? {
+            Value::Dict(entries) => entries,
+            Value::Null => Vec::new(),
+            _ => {
+                return fail(
+                    ctx,
+                    PsError::Typecheck,
+                    "a component's /Params must be a dictionary: << /Height 0.8 >>",
+                );
+            }
+        };
+        let seed = i.pop_int()?;
+        let dur = i.pop_f64()?;
+        let t = i.pop_f64()?;
+        let mut c = ctx.borrow_mut();
+        if c.comps.len() >= crate::ctx::MAX_COMPS {
+            c.hint = Some(format!(
+                "components are nested more than {} deep: is a component placing itself?",
+                crate::ctx::MAX_COMPS
+            ));
+            return Err(PsError::Limitcheck);
+        }
+        let scale = if c.px_scale > 0.0 && unit.is_finite() && unit > 0.0 {
+            unit / c.px_scale
+        } else {
+            1.0
+        };
+        c.comps.push(crate::ctx::Comp {
+            t,
+            dur,
+            seed,
+            params,
+            scale,
+            rect,
+        });
+        drop(c);
+        push_scope(ctx, TimeScope::window(t, dur))
+    });
+    // dur seed .compset -     the component's declaration has been read:
+    //                         set its length and seed.
+    reg(interp, ctx, ".compset", |i, ctx| {
+        let seed = i.pop_int()?;
+        let dur = i.pop_f64()?;
+        let mut c = ctx.borrow_mut();
+        let Some(comp) = c.comps.last_mut() else {
+            return Err(PsError::Rangecheck);
+        };
+        comp.dur = dur;
+        comp.seed = seed;
+        let t = comp.t;
+        if let Some(s) = c.scopes.last_mut() {
+            *s = TimeScope::window(t, dur);
+        }
+        Ok(())
+    });
+    reg(interp, ctx, ".comppop", |_, ctx| {
+        let mut c = ctx.borrow_mut();
+        if c.comps.pop().is_some() && c.scopes.len() > 1 {
+            c.scopes.pop();
+        }
+        Ok(())
+    });
+    // (why) .comperror -     fail with a rangecheck that explains why.
+    reg(interp, ctx, ".comperror", |i, ctx| {
+        let why = i.pop_string()?;
+        fail(ctx, PsError::Rangecheck, String::from_utf8_lossy(&why))
+    });
+    reg(interp, ctx, ".compdepth", |i, ctx| {
+        let n = ctx.borrow().comps.len();
+        i.push_int(n as i64);
+        Ok(())
+    });
+    // (path) .comppath (path)  a relative path read from the movie's own
+    //                          directory, when the host said what it is.
+    reg(interp, ctx, ".comppath", |i, ctx| {
+        let path = match i.pop_value()? {
+            Value::String(s) => String::from_utf8_lossy(&s).into_owned(),
+            Value::Name(n) => n,
+            _ => {
+                return fail(
+                    ctx,
+                    PsError::Typecheck,
+                    "loadcomponent takes a file name as a string: /fire (fire.ps) loadcomponent",
+                );
+            }
+        };
+        let p = std::path::Path::new(&path);
+        let full = match &ctx.borrow().base_dir {
+            Some(dir) if p.is_relative() => dir.join(p),
+            _ => p.to_path_buf(),
+        };
+        i.push_string(full.to_string_lossy().as_bytes());
+        Ok(())
+    });
+
     reg(interp, ctx, "signal", |i, ctx| {
         let name = i.pop_name()?;
         let c = ctx.borrow();
         i.push_real(c.signals.value(&name, c.global_t).unwrap_or(0.0));
+        Ok(())
+    });
+    // /name dt signalago -> v     the signal dt seconds before now.
+    reg(interp, ctx, "signalago", |i, ctx| {
+        let dt = i.pop_f64()?;
+        let name = i.pop_name()?;
+        let c = ctx.borrow();
+        i.push_real(c.signals.value(&name, c.global_t - dt).unwrap_or(0.0));
+        Ok(())
+    });
+    // /name span n signalseries -> [v ...]   n readings over the last span
+    // seconds, oldest first, the last one now.
+    reg(interp, ctx, "signalseries", |i, ctx| {
+        let n = i.pop_int()?;
+        let span = i.pop_f64()?;
+        let name = i.pop_name()?;
+        if !(2..=100_000).contains(&n) {
+            return fail(
+                ctx,
+                PsError::Rangecheck,
+                "signalseries wants 2 to 100000 readings: /cpu 3600 240 signalseries",
+            );
+        }
+        let c = ctx.borrow();
+        let t = c.global_t;
+        let v = c
+            .signals
+            .series(&name, t - span, t, n as usize)
+            .unwrap_or_else(|| vec![0.0; n as usize]);
+        drop(c);
+        i.push_numbers(&v);
+        Ok(())
+    });
+    // /name t0 t1 n signalbetween -> [v ...]   n readings from signal time
+    // t0 to t1: a fixed grid, for a window that does not slide.
+    reg(interp, ctx, "signalbetween", |i, ctx| {
+        let n = i.pop_int()?;
+        let t1 = i.pop_f64()?;
+        let t0 = i.pop_f64()?;
+        let name = i.pop_name()?;
+        if !(2..=100_000).contains(&n) {
+            return fail(
+                ctx,
+                PsError::Rangecheck,
+                "signalbetween wants 2 to 100000 readings: /cpu 0 60 240 signalbetween",
+            );
+        }
+        let v = ctx
+            .borrow()
+            .signals
+            .series(&name, t0, t1, n as usize)
+            .unwrap_or_else(|| vec![0.0; n as usize]);
+        i.push_numbers(&v);
+        Ok(())
+    });
+    // The movie time signals are read at: the movie's own, inside a component too.
+    reg(interp, ctx, "signaltime", |i, ctx| {
+        i.push_real(ctx.borrow().global_t);
+        Ok(())
+    });
+    reg(interp, ctx, "hassignal", |i, ctx| {
+        let name = i.pop_name()?;
+        let known = ctx.borrow().signals.tracks.contains_key(&name);
+        i.push_bool(known);
         Ok(())
     });
     reg(interp, ctx, "sinceevent", |i, ctx| {
@@ -1128,9 +1737,12 @@ pub(crate) struct ReelClip<'a> {
 /// transition if the prelude's `transitions` dictionary has it (so one a
 /// program adds is recognised), else it must be a procedure.
 ///
-/// `strict` also requires every clip named to be a procedure now. Playing a
-/// reel is strict; measuring one (`reelduration`, usually in the
-/// declaration, before the clips are defined) is not.
+/// `strict` is for playing, when everything is defined: every clip named
+/// must be a procedure and a transition must really be in the dictionary.
+/// Measuring a reel (`reelduration`, usually in the declaration, before the
+/// clips are defined) is not strict, and must guess: a name starting `t-` is
+/// taken for a transition even if it is not defined yet. Load checks the
+/// guess afterwards (`check_measured_reels`).
 fn plan_reel<'a>(
     i: &Interp,
     items: &'a [Value],
@@ -1142,12 +1754,67 @@ fn plan_reel<'a>(
     };
     reel_plan(
         items,
-        // A name starting with `t-` is taken for a transition even before
-        // it is defined, so a reel can be measured in the declaration with
-        // its own transitions defined further down the file.
-        &|n| known.iter().any(|k| k == n) || n.starts_with("t-"),
+        &|n| known.iter().any(|k| k == n) || (!strict && n.starts_with("t-")),
         &|n| !strict || matches!(i.lookup(n), Some(Value::Other(o)) if o.is_procedure()),
     )
+}
+
+/// Once the program's top level has run, compare each reel `reelduration`
+/// measured with the reel as it now plays. The measurement had to guess
+/// which names were transitions; a custom transition with another name than
+/// `t-...`, defined after the measurement, was counted as a clip and made
+/// the film longer. That is an error, naming the entry, rather than a film
+/// that is quietly the wrong length.
+pub(crate) fn check_measured_reels(i: &Interp, ctx: &Shared) -> Result<(), String> {
+    let measured = std::mem::take(&mut ctx.borrow_mut().measured_reels);
+    for (items, reported) in measured {
+        // A reel that does not plan now is reported when it plays, with the
+        // reason; only a reel that plans differently is the guess's fault.
+        let Ok(plan) = plan_reel(i, &items, true) else {
+            continue;
+        };
+        let now = plan.last().map_or(0.0, |c| c.start + c.dur);
+        if (now - reported).abs() < 1e-9 {
+            continue;
+        }
+        // The culprits: custom transitions that were not defined (and not
+        // named `t-...`) when the reel was measured.
+        let mut culprits: Vec<&str> = Vec::new();
+        for item in &items {
+            if let Some([_, Value::Name(n)]) = item.as_array()
+                && !n.starts_with("t-")
+                && !TRANSITIONS.contains(&n.as_str())
+                && plan
+                    .iter()
+                    .all(|c| !matches!(c.body, Value::Name(b) if b == n))
+                && !culprits.contains(&n.as_str())
+            {
+                culprits.push(n);
+            }
+        }
+        let fix = |n: &str| {
+            format!(
+                "define the transition before `reelduration` is called (`transitions /{n} {{ ... }} put`, above the declaration), or name it t-{n}"
+            )
+        };
+        return Err(match culprits.as_slice() {
+            [] => format!(
+                "reelduration measured a reel as {reported} s, but it plays for {now} s: the definitions it depends on changed after it was measured"
+            ),
+            [n, rest @ ..] => {
+                let more = if rest.is_empty() {
+                    String::new()
+                } else {
+                    format!(" (and {} more)", rest.len())
+                };
+                format!(
+                    "reelduration measured a reel as {reported} s, but it plays for {now} s: /{n}{more} was not yet a transition when the reel was measured, so it was counted as a clip. To fix it, {}",
+                    fix(n)
+                )
+            }
+        });
+    }
+    Ok(())
 }
 
 /// Lay a reel's clips out in time: each clip follows the last, pulled

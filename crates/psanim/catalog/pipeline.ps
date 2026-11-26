@@ -1,0 +1,138 @@
+%!PS
+% Catalog entry: pipeline. Stages (build, test, deploy) lighting up one after another.
+% A timed run happens once: place it with /After /hold to keep the result on screen.
+% In a movie:  /ci /pipeline component   then   /ci << /Box [x y w h] /After /hold >> place
+% When each stage runs is data:  /Times [0.5 2 4.5 5.5]  (stage i runs from Times[i] to Times[i+1]);
+% leave it out for equal stages over /Seconds. A failing stage:  /Fail 1  (the later ones are skipped).
+% Or drive it by a number: /Value 1.5 (build done, test half way), still; or /Signal (stage).
+
+/Stages [(build) (test) (deploy)] param /stages exch def   % the names, left to right
+/Times [] param /times exch def                 % N+1 times: stage i runs from Times[i] to Times[i+1]; empty for equal stages over /Seconds
+/Seconds 5 param /secs exch def                 % how long the whole run takes when Times is empty
+/Fail -1 param /fail exch def                   % the stage that fails (from 0), or -1; the stages after it are skipped
+/Value -1 param /value exch def                 % 0 to the number of stages: a still, instead of time (1.5 is build done, test half way)
+/Signal () param /signame exch def              % the name of a movie signal, 0 to the number of stages, instead of time
+/Color [0.36 0.78 0.98] param /col exch def     % the stage that is running
+/OkColor [0.3 0.85 0.5] param /okc exch def     % a stage that passed
+/FailColor [1 0.36 0.36] param /failc exch def  % a stage that failed
+/Idle [1 1 1] param /idle exch def              % a stage not reached yet
+
+/n stages length def
+/nw 150 def  /nh 64 def  /gap 56 def  /m 20 def
+/lead 0.4 def  /rest 1.2 def
+% stage boundaries, in seconds
+/bounds [
+  times length n 1 add eq { times aload pop } {
+    0 1 n { /i exch def lead i secs lead sub mul n div add } for
+  } ifelse
+] def
+/dur bounds n get rest add def
+/driven value 0 ge signame length 0 gt or def
+
+<< /Size [ nw n mul gap n 1 sub mul add m 2 mul add 120 ] /Duration driven { 1 } { dur } ifelse /Loop driven /Background /transparent
+   /Title (Pipeline)
+   /Description (A pipeline of stages lighting up in turn: each runs with a sweeping ring, then passes green with a check, or fails red with a cross and shakes while the stages after it are skipped. Timed by a list of stage times, or driven by a value or signal.)
+>> animation
+
+% ---- where each stage is, as a function of time -------------------------------------------
+% stage progress 0..1 and how long ago it ended (large if it is a still)
+/T { driven { signame length 0 gt { signame cvn signal } { value } ifelse } { 0 } ifelse } def    % read each frame: a signal moves
+/stp { /si exch def                                % -> progress
+  driven { T si sub 0 1 clamp } { bounds si get bounds si 1 add get ramp } ifelse
+} def
+/stage-end { /si exch def                          % -> seconds since the stage finished (10 for a still)
+  driven { 10 } { now bounds si 1 add get sub } ifelse
+} def
+/pl-check { newpath -9 -1 moveto -3 -8 lineto 9 8 lineto } def
+/pl-cross { newpath -7 -7 moveto 7 7 lineto -7 7 moveto 7 -7 lineto } def
+
+% a box with rounded corners
+/rrect { 6 dict begin /r exch def /h exch def /w exch def /y exch def /x exch def
+  x r add y moveto  x w add y x w add y h add r arcto 4 { pop } repeat
+  x w add y h add x y h add r arcto 4 { pop } repeat
+  x y h add x y r arcto 4 { pop } repeat
+  x y x w add y r arcto 4 { pop } repeat closepath end
+} def
+
+/scene {
+  /failed -1 def                                   % the first stage that has failed by now
+  0 1 n 1 sub { /i exch def
+    failed 0 ge { 0 } { i stp } ifelse /p exch def % progress (stages after a failure never start)
+    /age failed 0 ge { 0 } { i stage-end } ifelse def
+    /x m nw gap add i mul add def
+    /y 60 def
+    % the state
+    /isfail i fail eq p 0.9999 ge and def
+    isfail { /failed i def } if
+    /skipped failed 0 ge isfail not and def
+    /ok p 0.9999 ge isfail not and def
+    /run p 0 gt ok not and isfail not and def
+    % the colour
+    /c isfail { failc } { ok { okc } { run { col } { idle } ifelse } ifelse } ifelse def
+    % pass or fail pops once, a failure shakes
+    /pu ok isfail or { age 0.45 div 0 1 clamp } { 1 } ifelse def
+    /bump ok isfail or { 1 pu 180 mul sin 0.06 mul add } { 1 } ifelse def
+    /shake isfail age 0.6 lt and age 0 ge and { 2.71828 age -7 mul exp age 2520 mul sin mul 7 mul } { 0 } ifelse def
+    gsave
+      x shake add nw 2 div add y translate bump dup scale nw 2 div neg 0 translate
+      % the body of the stage
+      run ok or isfail or {
+        c aload pop setrgbcolor
+        [ [14 0.04] [8 0.07] [4 0.1] ] { aload pop setalpha setlinewidth 0 nh -2 div nw nh 12 rrect stroke } forall
+      } if
+      c aload pop setrgbcolor
+      ok isfail or { 0.16 setalpha 0 nh -2 div nw nh 12 rrect fill } if
+      run { 0.07 setalpha 0 nh -2 div nw nh 12 rrect fill } if
+      run ok or isfail or { 1 } { 0.28 } ifelse setalpha 2.4 setlinewidth 0 nh -2 div nw nh 12 rrect stroke
+      % a running stage's progress runs along its bottom edge
+      run {
+        gsave 0 nh -2 div nw nh 12 rrect clip newpath
+        col aload pop setrgbcolor 0.9 setalpha 0 nh -2 div nw p mul 5 rectfill grestore
+      } if
+      % the icon
+      gsave 34 0 translate
+        c aload pop setrgbcolor 4 setlinewidth 1 setlinecap 1 setlinejoin
+        run {
+          now 1 fmod 360 mul neg /sp exch def
+          0.2 setalpha newpath 0 0 14 0 360 arc stroke 1 setalpha
+          newpath 0 0 14 sp sp 100 add arc stroke
+        } {
+          ok {
+            1 setalpha newpath 0 0 14 0 360 arc 0.14 setalpha fill
+            1 setalpha pl-check age 0.1 sub 0.3 div 0 1 clamp /cubic-out ease 0 exch trimpath stroke
+            newpath 0 0 14 0 360 arc stroke
+          } {
+            isfail {
+              1 setalpha newpath 0 0 14 0 360 arc stroke
+              pl-cross age 0.1 sub 0.25 div 0 1 clamp 0 exch trimpath stroke
+            } {
+              skipped { 0.3 setalpha newpath -8 0 moveto 8 0 lineto stroke } {
+                0.28 setalpha newpath 0 0 14 0 360 arc stroke
+              } ifelse
+            } ifelse
+          } ifelse
+        } ifelse
+      grestore
+      % the name, fitted
+      /Helvetica-Bold findfont 100 scalefont setfont
+      stages i get stringwidth pop /sw0 exch def
+      /Helvetica-Bold findfont 24 nw 76 sub 100 mul sw0 0.001 max div 2 copy gt { exch } if pop scalefont setfont
+      ok { 1 setgray 0.92 setalpha } {
+        run isfail or { c aload pop setrgbcolor 1 setalpha } { idle aload pop setrgbcolor 0.4 setalpha } ifelse
+      } ifelse
+      62 -7 moveto stages i get show
+    grestore
+    % the line to the next stage fills once this one has passed
+    i n 1 sub lt {
+      /lfill ok { age 10 ge { 1 } { age 0.3 div 0 1 clamp } ifelse } { 0 } ifelse def
+      /lx0 x nw add 8 add def  /lx1 x nw add gap add 8 sub def
+      gsave 2 setlinewidth 1 setlinecap
+        idle aload pop setrgbcolor 0.22 setalpha newpath lx0 y moveto lx1 y lineto stroke
+        isfail skipped or { [4 5] 0 setdash 0.35 setalpha isfail { failc aload pop setrgbcolor } if lx0 y moveto lx1 y lineto stroke } if
+        lfill 0 gt {
+          okc aload pop setrgbcolor 1 setalpha 3 setlinewidth newpath lx0 y moveto lx1 lx0 sub lfill mul lx0 add y lineto stroke
+        } if
+      grestore
+    } if
+  } for
+} def

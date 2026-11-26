@@ -19,9 +19,9 @@
 
 % box [x0 x1] [y0 y1] plotframe -
 /plotframe {
-  aload pop .plot /y1 3 -1 roll put .plot /y0 3 -1 roll put
-  aload pop .plot /x1 3 -1 roll put .plot /x0 3 -1 roll put
-  aload pop .plot /h 3 -1 roll put .plot /w 3 -1 roll put .plot /y 3 -1 roll put .plot /x 3 -1 roll put
+  aload pop /.plot .mine /y1 3 -1 roll put /.plot .mine /y0 3 -1 roll put
+  aload pop /.plot .mine /x1 3 -1 roll put /.plot .mine /x0 3 -1 roll put
+  aload pop /.plot .mine /h 3 -1 roll put /.plot .mine /w 3 -1 roll put /.plot .mine /y 3 -1 roll put /.plot .mine /x 3 -1 roll put
 } bind def
 /plotbox { .plot begin [ x y w h ] end } bind def
 % x y plotpoint -> X Y     data to canvas
@@ -35,6 +35,7 @@
 % titles are drawn outside it (about 3 x /Size to the left and below), so
 % inset the box from the page.
 % << /XTicks 5 /YTicks 5 /Grid true /Draw u /Decimals 0 /XDecimals 0 /Suffix ()
+%    /Fade true   while the range moves, ticks cross-fade between round steps instead of jumping
 %    /XValues [ ... ] /YValues [ ... ]   ticks exactly here instead of round numbers
 %    /XNames [ (a) (b) ... ]   names under evenly spaced slots instead of numbers
 %    /XLabel (text) /YLabel (text) /Size s >> plotaxes -
@@ -49,18 +50,24 @@
       gsave
         theme /stroke get 0.6 mul setlinewidth /body ax-size face
         % y ticks and grid
-        ax-o /YValues known { ax-o /YValues get } { .plot /y0 get .plot /y1 get ax-o /YTicks 5 .opt niceticks } ifelse {
-          /ax-v exch def
+        % [ v alpha ... ]: fixed ticks, round ones, or (/Fade) round ones that cross-fade
+        ax-o /YValues known { [ ax-o /YValues get { 1 } forall ] } {
+          /.plot .mine /y0 get /.plot .mine /y1 get ax-o /YTicks 5 .opt
+          ax-o /Fade false .opt { fadeticks } { niceticks [ exch { 1 } forall ] } ifelse
+        } ifelse
+        /ax-tk exch def
+        0 2 ax-tk length 1 sub { /ax-i exch def
+          /ax-v ax-tk ax-i get def /ax-a ax-tk ax-i 1 add get ax-u mul def
           0 ax-v plotpoint /ax-ty exch def pop
           ax-o /Grid true .opt {
-            gsave /line ink 0.28 ax-u mul setalpha
+            gsave /line ink 0.28 ax-a mul setalpha
               newpath ax-x ax-ty moveto ax-w ax-u mul 0 rlineto stroke
             grestore
           } if
-          /muted ink ax-u setalpha
+          /muted ink ax-a setalpha
           ax-x ax-size 0.6 mul sub ax-ty ax-size 0.34 mul sub moveto
           ax-v ax-o /Decimals 0 .opt fmtnum ax-o /Suffix () .opt strcat showright
-        } forall
+        } for
         % x names or ticks
         ax-o /XNames known {
           /ax-names ax-o /XNames get def
@@ -71,13 +78,18 @@
           } for
         } {
           ax-o /XTicks 5 .opt 0 gt ax-o /XValues known or {
-            ax-o /XValues known { ax-o /XValues get } { .plot /x0 get .plot /x1 get ax-o /XTicks 5 .opt niceticks } ifelse {
-              /ax-v exch def
+            ax-o /XValues known { [ ax-o /XValues get { 1 } forall ] } {
+              /.plot .mine /x0 get /.plot .mine /x1 get ax-o /XTicks 5 .opt
+              ax-o /Fade false .opt { fadeticks } { niceticks [ exch { 1 } forall ] } ifelse
+            } ifelse
+            /ax-tk exch def
+            0 2 ax-tk length 1 sub { /ax-i exch def
+              /ax-v ax-tk ax-i get def
               ax-v 0 plotpoint pop /ax-tx exch def
-              /muted ink ax-u setalpha
+              /muted ink ax-tk ax-i 1 add get ax-u mul setalpha
               ax-tx ax-y ax-size 1.5 mul sub moveto
               ax-v ax-o /XDecimals 0 .opt fmtfixed showcenter
-            } forall
+            } for
           } if
         } ifelse
         % the axes themselves, drawn on
@@ -125,7 +137,7 @@
     plotbox aload pop /bs-h exch def /bs-w exch def /bs-y exch def /bs-x exch def
     /bs-slot bs-w bs-n div def
     /bs-bw bs-slot 1 bs-o /Gap 0.3 .opt sub mul def
-    0 .plot /y0 get max 0 exch plotpoint /bs-base exch def pop
+    0 /.plot .mine /y0 get max 0 exch plotpoint /bs-base exch def pop
     /bs-size bs-o /Size 2.2 vmin .opt def
     gsave
       0 1 bs-n 1 sub { /bs-i exch def
@@ -204,7 +216,7 @@
   4 dict begin
     /sl-v exch def /sl-n sl-v length def
     [ 0 1 sl-n 1 sub { /sl-i exch def
-      [ .plot /x0 get .plot /x1 get .plot /x0 get sub sl-i sl-n 1 sub 1 max div mul add  sl-v sl-i get ]
+      [ /.plot .mine /x0 get /.plot .mine /x1 get /.plot .mine /x0 get sub sl-i sl-n 1 sub 1 max div mul add  sl-v sl-i get ]
     } for ]
   end
   plotline
@@ -212,8 +224,8 @@
 % - plotarea -     close the current line down to the bottom of the frame,
 %                  for filling under a curve
 /plotarea {
-  currentpoint pop .plot /y get lineto
-  .plot /x get .plot /y get lineto closepath
+  currentpoint pop /.plot .mine /y get lineto
+  /.plot .mine /x get /.plot .mine /y get lineto closepath
 } bind def
 % [ [x y] ... ] u radius dots -     a dot at each point, popping in one
 %                                   after another as u goes 0 to 1
@@ -278,17 +290,17 @@
         pr-o /Role /muted .opt ink theme /stroke get 0.6 mul setlinewidth
         newpath
         pr-o /Y known {
-          .plot /x0 get pr-o /Y get plotpoint moveto .plot /x1 get pr-o /Y get plotpoint lineto
+          /.plot .mine /x0 get pr-o /Y get plotpoint moveto /.plot .mine /x1 get pr-o /Y get plotpoint lineto
         } {
-          pr-o /X get .plot /y0 get plotpoint moveto pr-o /X get .plot /y1 get plotpoint lineto
+          pr-o /X get /.plot .mine /y0 get plotpoint moveto pr-o /X get /.plot .mine /y1 get plotpoint lineto
         } ifelse
         gsave pr-o /Dash true .opt { [ pr-size 0.35 mul dup ] 0 setdash } if 0 pr-u trimpath stroke grestore
         pr-o /Label known {
           pr-u setalpha /body pr-size face
           pr-o /Y known {
-            .plot /x1 get pr-o /Y get plotpoint pr-size 0.35 mul add moveto pr-o /Label get showright
+            /.plot .mine /x1 get pr-o /Y get plotpoint pr-size 0.35 mul add moveto pr-o /Label get showright
           } {
-            pr-o /X get .plot /y1 get plotpoint pr-size 0.9 mul sub exch pr-size 0.4 mul add exch moveto pr-o /Label get show
+            pr-o /X get /.plot .mine /y1 get plotpoint pr-size 0.9 mul sub exch pr-size 0.4 mul add exch moveto pr-o /Label get show
           } ifelse
           1 setalpha
         } if
@@ -310,8 +322,8 @@
       gsave
         pm-o /Drop true .opt {
           /muted ink theme /stroke get 0.5 mul setlinewidth [ pm-size 0.3 mul dup ] 0 setdash
-          newpath pm-x pm-y plotpoint moveto pm-x .plot /y0 get plotpoint lineto
-          pm-x pm-y plotpoint moveto .plot /x0 get pm-y plotpoint lineto
+          newpath pm-x pm-y plotpoint moveto pm-x /.plot .mine /y0 get plotpoint lineto
+          pm-x pm-y plotpoint moveto /.plot .mine /x0 get pm-y plotpoint lineto
           0 pm-u 2 mul 1 min trimeach stroke [] 0 setdash
         } if
         pm-o /Role /accent .opt ink
@@ -322,5 +334,310 @@
         } if
       grestore
     } if
+  end
+} bind def
+
+% --- dashboards ----------------------------------------------------------------
+% Panels for live and recorded telemetry. Each takes numbers (a value, an
+% array, a matrix) and a box and draws; none owns a clock or reads a
+% signal, so a value comes from `signal`, `signalseries`, a tween or an
+% array alike. Colours are roles, so a dashboard follows the theme.
+
+% v [ role v1 role v2 role ... ] thresholdrole -> role
+%   the role for a value: the first role below v1, the next from v1 up, ...
+%   [ /good 70 /warn 90 /bad ] is green, amber from 70, red from 90.
+/thresholdrole {
+  4 dict begin
+    /th-s exch def /th-v exch def
+    /th-r th-s 0 get def
+    1 2 th-s length 2 sub { /th-i exch def
+      th-v th-s th-i get ge { /th-r th-s th-i 1 add get def } if
+    } for
+    th-r
+  end
+} bind def
+% [v ...] .minmax -> lo hi
+/.minmax { dup 0 get exch dup 0 get exch { dup 3 1 roll max 3 1 roll min exch } forall } bind def
+% [v ...] box opts sparkline -     a small line chart filling the box: no axes
+%   << /Range [lo hi] (the data's own, padded) /Role /accent2 /Fill 0.18
+%      /Width w /Dot true /Draw u (the part drawn, from the left)
+%      /From 0 /To 1 (where the first and last values sit, as fractions of the
+%      box's width; outside the box is clipped: for a window read on a fixed
+%      grid that slides by part of a step) >>
+/sparkline {
+  20 dict begin
+    /sk-o exch def /sk-b exch def /sk-v exch def
+    sk-v length 2 ge {
+      sk-o /Range known { sk-o /Range get aload pop } {
+        sk-v .minmax 2 copy sub abs 1e-9 lt { 1 add exch 1 sub exch } if
+        2 copy exch sub 0.12 mul dup 3 1 roll add 3 1 roll sub exch
+      } ifelse
+      /sk-hi exch def /sk-lo exch def
+      /sk-u sk-o /Draw 1 .opt 0 1 clamp def
+      sk-b aload pop /sk-h exch def /sk-w exch def /sk-y exch def /sk-x exch def
+      /sk-a sk-x sk-w sk-o /From 0 .opt mul add def
+      /sk-z sk-x sk-w sk-o /To 1 .opt mul add def
+      /sk-pts sk-v [ sk-a sk-y sk-z sk-a sub sk-h ] [ sk-lo sk-hi ] seriespoints def
+      sk-o /Role /accent2 .opt ink
+      gsave
+        newpath sk-x sk-y sk-h sub sk-w sk-u mul sk-h 3 mul rectclip
+        sk-o /Fill 0.18 .opt dup 0 gt {
+          gsave setalpha sk-pts polypath sk-z sk-y lineto sk-a sk-y lineto closepath fill grestore
+        } { pop } ifelse
+        sk-o /Width theme /stroke get 0.7 mul .opt setlinewidth 1 setlinejoin 1 setlinecap
+        sk-pts polypath stroke
+      grestore
+      sk-o /Dot true .opt {
+        sk-x sk-w sk-u mul add dup
+        sk-a sub sk-z sk-a sub 1e-9 max div sk-v length 1 sub mul sk-v exch valueat
+        sk-lo sub sk-hi sk-lo sub div 0 1 clamp sk-h mul sk-y add
+        sk-o /Width theme /stroke get 0.7 mul .opt 1.5 mul disc
+      } if
+    } if
+  end
+} bind def
+% [v ...] box opts horizon -     a horizon chart: the series folded into
+%   bands of colour, so a row a few pixels high still shows its shape.
+%   Values above /Base fill up from the bottom in /Role, darkest where
+%   highest; values below hang from the top in /NegRole.
+%   << /Extent e (the largest |v - base| in the data) /Bands 3 /Base 0
+%      /Role /accent2 /NegRole /accent3 /Ground /surface (the colour bands rise from)
+%      /Mirror false (negatives from the bottom too) /Draw u (the part drawn, from the left) >>
+/horizon {
+  20 dict begin
+    /hz-o exch def /hz-b exch def /hz-v exch def
+    hz-v length 2 ge {
+      /hz-n hz-o /Bands 3 .opt cvi 1 max def
+      /hz-base hz-o /Base 0 .opt def
+      hz-v .minmax /hz-max exch def /hz-min exch def
+      /hz-e hz-o /Extent hz-max hz-base sub hz-base hz-min sub max 1e-9 max .opt def
+      /hz-step hz-e hz-n div def
+      /hz-u hz-o /Draw 1 .opt 0 1 clamp def
+      hz-b aload pop /hz-h exch def /hz-w exch def /hz-y exch def /hz-x exch def
+      /hz-g hz-o /Ground /surface .opt def
+      gsave
+        newpath hz-x hz-y hz-w hz-u mul hz-h rectclip
+        % above the base, from the bottom
+        hz-max hz-base gt {
+          0 1 hz-n 1 sub { /hz-k exch def
+            hz-max hz-base hz-k hz-step mul add gt {
+              hz-g hz-o /Role /accent2 .opt 0.3 0.7 hz-k 1 add mul hz-n div add mixink ink
+              hz-v hz-b [ hz-base hz-k hz-step mul add dup hz-step add ] seriespoints polypath
+              hz-x hz-w add hz-y lineto hz-x hz-y lineto closepath fill
+            } if
+          } for
+        } if
+        % below it, hanging from the top (or rising from the bottom, mirrored)
+        hz-min hz-base lt {
+          /hz-nb hz-o /Mirror false .opt { hz-b } { [ hz-x hz-y hz-h add hz-w hz-h neg ] } ifelse def
+          /hz-ey hz-nb 1 get def
+          0 1 hz-n 1 sub { /hz-k exch def
+            hz-min hz-base hz-k hz-step mul sub lt {
+              hz-g hz-o /NegRole /accent3 .opt 0.3 0.7 hz-k 1 add mul hz-n div add mixink ink
+              hz-v hz-nb [ hz-base hz-k hz-step mul sub dup hz-step sub ] seriespoints polypath
+              hz-x hz-w add hz-ey lineto hz-x hz-ey lineto closepath fill
+            } if
+          } for
+        } if
+      grestore
+    } if
+  end
+} bind def
+% [[v ...] ...] box opts heatmap -     a matrix of cells, first row at the
+%   top, coloured from the low role to the high one.
+%   << /Range [lo hi] (the data's) /Roles [ /surface /accent ] (low high, or
+%      low mid high) /Gap g /Draw u (columns brought in from the left) >>
+/heatmap {
+  24 dict begin
+    /hm-o exch def /hm-b exch def /hm-m exch def
+    /hm-nr hm-m length def
+    hm-nr 0 gt {
+      /hm-nc 0 hm-m { length max } forall def
+      hm-o /Range known { hm-o /Range get aload pop } {
+        hm-m 0 get 0 get dup hm-m { .minmax 3 -1 roll max 3 1 roll min exch } forall
+      } ifelse
+      /hm-hi exch def /hm-lo exch def
+      /hm-roles hm-o /Roles [ /surface /accent ] .opt def
+      /hm-gap hm-o /Gap 0.15 vmin .opt def
+      /hm-u hm-o /Draw 1 .opt 0 1 clamp def
+      hm-b aload pop /hm-h exch def /hm-w exch def /hm-y exch def /hm-x exch def
+      /hm-cw hm-w hm-nc div def /hm-ch hm-h hm-nr div def
+      0 1 hm-nr 1 sub { /hm-r exch def
+        /hm-row hm-m hm-r get def
+        0 1 hm-row length 1 sub { /hm-c exch def
+          /hm-a hm-u hm-nc mul hm-c sub 0 1 clamp def
+          hm-a 0 gt {
+            hm-row hm-c get hm-lo sub hm-hi hm-lo sub 1e-9 max div 0 1 clamp
+            hm-roles length 3 ge {
+              dup 0.5 lt { 2 mul hm-roles 0 get hm-roles 1 get 3 -1 roll }
+                         { 0.5 sub 2 mul hm-roles 1 get hm-roles 2 get 3 -1 roll } ifelse
+            } { hm-roles 0 get hm-roles 1 get 3 -1 roll } ifelse
+            mixink ink
+            hm-a setalpha
+            hm-x hm-c hm-cw mul add hm-gap 2 div add
+            hm-y hm-h add hm-r 1 add hm-ch mul sub hm-gap 2 div add
+            hm-cw hm-gap sub 0 max hm-ch hm-gap sub 0 max rectfill
+            1 setalpha
+          } if
+        } for
+      } for
+    } if
+  end
+} bind def
+% x y r role statuslight -     a lamp: a dot in the role with a soft halo
+/statuslight {
+  5 dict begin
+    /sl-role exch def /sl-r exch def /sl-y exch def /sl-x exch def
+    sl-role ink
+    gsave
+      0.12 setalpha sl-x sl-y sl-r 1.9 mul disc
+      0.18 setalpha sl-x sl-y sl-r 1.4 mul disc
+    grestore
+    sl-x sl-y sl-r disc
+    gsave 1 1 1 setrgbcolor 0.35 setalpha sl-x sl-r 0.3 mul sub sl-y sl-r 0.3 mul add sl-r 0.35 mul disc grestore
+  end
+} bind def
+% box opts panel -> inner     a dashboard card: the theme's surface with
+%   rounded corners and a title; returns the box left for its contents.
+%   << /Title (text) /Status role (a lamp at the top right) /Fill /surface
+%      /Size s (title size: a fifteenth of the card's width, at most a seventh of its height) /Pad p >>
+/panel {
+  12 dict begin
+    /pn-o exch def /pn-b exch def
+    pn-b aload pop /pn-h exch def /pn-w exch def /pn-y exch def /pn-x exch def
+    /pn-size pn-o /Size pn-w 0.065 mul pn-h 0.14 mul min .opt def
+    /pn-pad pn-o /Pad pn-size 1.1 mul .opt def
+    pn-o /Fill /surface .opt ink pn-b theme /corner get pn-h 0.08 mul min roundpath fill
+    pn-o /Title known {
+      /muted ink /title pn-size face
+      pn-x pn-pad add pn-y pn-h add pn-pad sub pn-size 0.72 mul sub moveto
+      pn-o /Title get show
+    } if
+    pn-o /Status known {
+      pn-x pn-w add pn-pad sub pn-size 0.3 mul sub pn-y pn-h add pn-pad sub pn-size 0.36 mul sub
+      pn-size 0.3 mul pn-o /Status get statuslight
+    } if
+    [ pn-x pn-pad add pn-y pn-pad add pn-w pn-pad 2 mul sub
+      pn-h pn-pad 2 mul sub pn-o /Title known { pn-size 1.5 mul sub } if 0 max ]
+  end
+} bind def
+% v opts .fmtvalue -> (text)     /Short true (12.4k) or grouped (12,431), /Decimals
+/.fmtvalue {
+  dup /Decimals 0 .opt exch /Short false .opt { fmtshort } { fmtnum } ifelse
+} bind def
+% v box opts stattile -     a stat panel: a big number in its threshold's
+%   colour, its unit, a change and a sparkline of its recent past.
+%   << /Title (text) /Unit (%) /Decimals 0 /Short false (12.4k instead of 12,431)
+%      /Thresholds [ /good 70 /warn 90 /bad ] (default: /fg)
+%      /Delta d (a change to show: up or down arrow and the number) /DeltaDecimals 1
+%      /DeltaSuffix (%) /DownIsGood false  /Spark [v ...] /SparkRange [lo hi] /SparkFrom 0 /SparkTo 1 (see sparkline's /From /To)
+%      /Fill /surface, or /threshold to colour the card instead of the number >>
+/stattile {
+  24 dict begin
+    /st-o exch def /st-b exch def /st-v exch def
+    /st-role st-o /Thresholds known { st-v st-o /Thresholds get thresholdrole } { /fg } ifelse def
+    /st-tint st-o /Fill /surface .opt /threshold eq def
+    st-b st-o /Title known { << /Title st-o /Title get >> } { << >> } ifelse
+      st-tint { dup /Fill /surface st-role 0.35 mixink put } if panel
+    aload pop /st-h exch def /st-w exch def /st-y exch def /st-x exch def
+    % the sparkline along the bottom, behind the number
+    st-o /Spark known {
+      st-o /Spark get [ st-x st-y st-w st-h 0.42 mul ]
+      << /Role st-tint { /fg } { st-role dup /fg eq { pop /accent2 } if } ifelse /Fill 0.14
+         st-o /SparkRange known { /Range st-o /SparkRange get } if
+         /From st-o /SparkFrom 0 .opt /To st-o /SparkTo 1 .opt >> sparkline
+    } if
+    % the number and its unit
+    /st-txt st-v st-o .fmtvalue def
+    /st-unit st-o /Unit () .opt def
+    /st-nb [ st-x st-y st-h 0.36 mul add st-w st-h 0.5 mul ] def
+    /title 100 face
+    /st-fs st-h 0.44 mul  st-w 0.9 mul st-txt stringwidth pop st-unit stringwidth pop 0.5 mul add 0.01 max div 100 mul min def
+    st-tint { /fg } { st-role } ifelse ink /title st-fs face
+    st-x st-y st-h 0.36 mul add moveto st-txt show
+    /title st-fs 0.5 mul face /muted ink ( ) show st-unit show
+    % the change, under the title at the right
+    st-o /Delta known {
+      /st-d st-o /Delta get def
+      st-d 0 ge st-o /DownIsGood false .opt xor { /good } { /bad } ifelse
+      st-d abs 1e-9 lt { pop /muted } if ink
+      /st-ds st-h 0.13 mul st-fs 0.36 mul min def
+      /body st-ds face
+      /st-dt st-d abs st-o /DeltaDecimals 1 .opt fmtnum st-o /DeltaSuffix (%) .opt strcat def
+      st-x st-w add st-dt stringwidth pop sub st-y st-h add st-ds sub moveto
+      gsave currentpoint translate st-ds 0.9 mul neg st-ds 0.05 mul translate
+        newpath st-d 0 ge { 0 0 moveto st-ds 0.7 mul 0 lineto st-ds 0.35 mul st-ds 0.62 mul lineto }
+                     { 0 st-ds 0.62 mul moveto st-ds 0.7 mul st-ds 0.62 mul lineto st-ds 0.35 mul 0 lineto } ifelse
+        closepath fill grestore
+      st-dt show
+    } if
+  end
+} bind def
+% v box opts dial -     a gauge: an arc from the bottom left round to the
+%   bottom right, filled to the value in its threshold's colour, with the
+%   thresholds as a thin outer band and the number in the middle.
+%   << /Range [0 100] /Thresholds [ /good 70 /warn 90 /bad ] /Sweep 240
+%      /Thick 0.17 (of the radius) /Unit (%) /Decimals 0 /Short false /Label (text)
+%      /Track /line >>
+/dial {
+  28 dict begin
+    /dl-o exch def /dl-b exch def /dl-v exch def
+    dl-o /Range [0 100] .opt aload pop /dl-hi exch def /dl-lo exch def
+    /dl-th dl-o /Thresholds [ /accent ] .opt def
+    /dl-sw dl-o /Sweep 240 .opt def
+    dl-b aload pop /dl-h exch def /dl-w exch def /dl-y exch def /dl-x exch def
+    % the arc's lowest point is r sin(90 + sweep/2) below the centre
+    /dl-drop 90 dl-sw 2 div add sin neg 0 max def
+    /dl-r dl-w 2 div dl-h 1 dl-drop add 1.12 mul div min 0.94 mul def
+    /dl-cx dl-x dl-w 2 div add def
+    /dl-cy dl-y dl-h dl-r 1 dl-drop add mul sub 2 div add dl-r dl-drop mul add def
+    /dl-t dl-r dl-o /Thick 0.17 .opt mul def
+    /dl-a0 90 dl-sw 2 div add def
+    /dl-f dl-v dl-lo sub dl-hi dl-lo sub div 0 1 clamp def
+    /dl-role dl-v dl-th thresholdrole def
+    gsave
+      0 setlinecap
+      % track
+      dl-o /Track /line .opt ink dl-t setlinewidth
+      gsave 0.35 setalpha newpath dl-cx dl-cy dl-r dl-t 2 div sub dl-a0 dl-a0 dl-sw sub arcn stroke grestore
+      % threshold band, just outside the track
+      dl-t 0.22 mul setlinewidth
+      /dl-ra dl-r dl-t 0.12 mul add def
+      /dl-from dl-lo def
+      0 2 dl-th length 1 sub { /dl-i exch def
+        /dl-to dl-i 1 add dl-th length lt { dl-th dl-i 1 add get } { dl-hi } ifelse dl-hi min def
+        dl-to dl-from gt {
+          dl-th dl-i get ink
+          newpath dl-cx dl-cy dl-ra
+            dl-a0 dl-from dl-lo sub dl-hi dl-lo sub div dl-sw mul sub
+            dl-a0 dl-to dl-lo sub dl-hi dl-lo sub div dl-sw mul sub arcn stroke
+        } if
+        /dl-from dl-to dl-lo max def
+      } for
+      % the value
+      dl-f 0 gt {
+        dl-role ink dl-t 0.78 mul setlinewidth
+        newpath dl-cx dl-cy dl-r dl-t 2 div sub dl-a0 dl-a0 dl-sw dl-f mul sub arcn stroke
+        % a bright cap at the tip
+        dl-a0 dl-sw dl-f mul sub dup cos exch sin dl-r dl-t 2 div sub dup 3 1 roll mul 3 1 roll mul exch
+        dl-cy add exch dl-cx add exch dl-t 0.24 mul /fg ink disc
+      } if
+      % the number
+      /dl-txt dl-v dl-o .fmtvalue def
+      /dl-unit dl-o /Unit () .opt def
+      /title 100 face
+      /dl-fs dl-r 0.5 mul  dl-r 1.25 mul dl-txt stringwidth pop dl-unit stringwidth pop 0.45 mul add 0.01 max div 100 mul min def
+      /title dl-fs face
+      dl-txt stringwidth pop
+      /title dl-fs 0.45 mul face dl-unit stringwidth pop add
+      /dl-tw exch def
+      dl-role ink /title dl-fs face
+      dl-cx dl-tw 2 div sub dl-cy dl-fs 0.3 mul sub moveto dl-txt show
+      /muted ink /title dl-fs 0.45 mul face dl-unit show
+      dl-o /Label known {
+        /body dl-fs 0.32 mul face
+        dl-cx dl-cy dl-r dl-drop mul sub dl-fs 0.1 mul add moveto dl-o /Label get showcenter
+      } if
+    grestore
   end
 } bind def

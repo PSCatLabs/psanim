@@ -1,0 +1,172 @@
+%!PS
+% Poster: 12.62
+% TWIDDLE: the twiddle project's mascot, a staticling, asleep in a dark
+% kitchen beside an old Bakelite set. The set warms up and is tuned
+% through the hiss to a station; he wakes on the first beat and dances
+% through seven bars, hopping higher as the song gets louder and grinning
+% on its big kicks. The set goes off; he settles, and is asleep where he
+% stands. He is the catalog's /twiddle: everything he does comes from the
+% song below, and the speaker and the notes are drawn from the same list.
+
+% ---- the song: one list, read by the radio and by Twiddle ---------------
+/bpm 120 def
+/B 60 bpm div def                     % one beat, in seconds
+/on 1.2 def                           % the set is switched on
+/tuned 2.6 def                        % the station comes in: the first beat
+% Loudness of each beat: two quiet bars, two building, three loud ones.
+/song [
+  0.55 0.25 0.4 0.25   0.55 0.25 0.45 0.3
+  0.7 0.35 0.55 0.35   0.75 0.4 0.6 0.45
+  1 0.55 0.85 0.55     1 0.55 0.85 0.6     1 0.6 0.9 1
+] def
+/off tuned song length B mul add def  % the music stops
+/total off 6.5 add def
+
+<< /Size [1280 720] /Duration total /FPS 30
+   /Background [0.075 0.05 0.045]
+   /Title (Twiddle)
+   /Description (The twiddle project's mascot, a staticling, dances to a station on an old Bakelite set, hopping higher as the song gets louder, and falls asleep where he stands when it stops.)
+>> animation
+
+/tw /twiddle << /Params << /From tuned /Until off /Accents song /Level 1 >> >> instance
+
+% ---- the beat, as the radio hears it -------------------------------------
+/playing { now tuned ge now off lt and } def
+/beatnow { now tuned sub B div floor cvi } def            % index of the beat
+/beatage { now tuned sub beatnow B mul sub } def          % seconds into it
+/loudof { dup 0 ge 1 index song length lt and { song exch get } { pop 0 } ifelse } def
+/thump { playing { beatnow loudof beatage 9 mul neg 2.718 exch exp mul } { 0 } ifelse } def
+
+% ---- the kitchen ---------------------------------------------------------
+/rrect { % x y w h r
+  /rr exch def /rh exch def /rw exch def /ry exch def /rx exch def
+  newpath rx rr add ry moveto
+  rx rw add ry rx rw add ry rh add rr arcto 4 { pop } repeat
+  rx rw add ry rh add rx ry rh add rr arcto 4 { pop } repeat
+  rx ry rh add rx ry rr arcto 4 { pop } repeat
+  rx ry rx rw add ry rr arcto 4 { pop } repeat
+  closepath
+} def
+/glow { now on sub 0.9 div 0 max 1 min now off sub 0.35 div 0 max 1 min 1 exch sub mul } def
+
+/kitchen {
+  % the window: night, a moon, a few stars
+  0.11 0.12 0.2 setrgbcolor 50 480 190 190 10 rrect fill
+  gsave 50 480 190 190 10 rrect clip newpath
+    0.95 0.92 0.82 setrgbcolor 190 625 22 0 360 arc fill
+    0.11 0.12 0.2 setrgbcolor 200 632 20 0 360 arc fill
+    0 1 13 { /i exch def
+      0.9 0.88 0.8 setrgbcolor
+      i hash01 0.5 mul 0.25 add  now 0.3 mul i hash01 add 360 mul sin 0.2 mul add 0 max setalpha
+      i hash01 180 mul 55 add  i 7 add hash01 180 mul 485 add  1.6 0 360 arc fill
+    } for
+  grestore
+  1 setalpha 0.2 0.12 0.09 setrgbcolor 12 setlinewidth 50 480 190 190 10 rrect stroke
+  6 setlinewidth 145 480 moveto 145 670 lineto 50 575 moveto 240 575 lineto stroke
+  % the counter
+  0.25 0.14 0.1 setrgbcolor 0 0 1280 196 rectfill
+  0.38 0.22 0.15 setrgbcolor 0 182 1280 26 rectfill
+  0.45 0.27 0.18 setrgbcolor 0 204 1280 4 rectfill
+} def
+
+% ---- the Bakelite set ----------------------------------------------------
+/dialx { 550 sub 1050 div 108 mul 846 add } def    % kHz -> x on the dial
+/needle-end 1615 dialx def          % between 1610 and 1620: where he was born
+/radio {
+  % lamp light on the wall behind it
+  glow 0 gt {
+    gsave glow 0.035 mul setalpha 1 0.62 0.3 setrgbcolor
+    0 1 23 { /i exch def 780 400 330 i 13 mul sub 0 360 arc fill } for grestore
+  } if
+  % cabinet
+  0.36 0.15 0.09 setrgbcolor 560 208 440 300 46 rrect fill
+  0.47 0.2 0.12 setrgbcolor 572 222 416 274 38 rrect fill
+  gsave 0.62 0.3 0.18 setrgbcolor 0.5 setalpha 600 470 300 14 7 rrect fill grestore
+  % speaker grille, breathing with the music
+  gsave 700 340 translate
+    1 thump 0.05 mul add dup scale
+    0.24 0.1 0.06 setrgbcolor 0 0 96 0 360 arc fill
+    0.62 0.38 0.22 setrgbcolor 5 setlinewidth 0 0 96 0 360 arc stroke
+    0 0 96 0 360 arc clip newpath
+    0.55 0.33 0.2 setrgbcolor 4.5 setlinewidth
+    -96 16 96 { /yy exch def -100 yy moveto 100 yy lineto stroke } for
+    % the hiss, while it is being tuned
+    now on gt now tuned lt and {
+      1 0.9 0.8 setrgbcolor
+      now 30 mul floor /fk exch def
+      0 1 70 { /i exch def
+        [fk i] hash01 0.6 mul setalpha
+        [i fk] hash01 192 mul 96 sub [fk i 3] hash01 192 mul 96 sub 2 0 360 arc fill
+      } for
+    } if
+  grestore
+  1 setalpha
+  % dial window
+  0.86 0.8 0.66 setrgbcolor 830 370 140 100 12 rrect fill
+  glow 0 gt { gsave glow 0.85 mul setalpha 1 0.78 0.42 setrgbcolor 830 370 140 100 12 rrect fill grestore } if
+  0.3 0.15 0.09 setrgbcolor
+  /Helvetica-Bold findfont 11 scalefont setfont
+  [ (55) (70) (90) (110) (130) (160) ] 0 1 5 { /i exch def
+    dup i get dup stringwidth pop 2 div 846 i 21.5 mul add exch sub 444 moveto show } for pop
+  1.5 setlinewidth 846 436 moveto 954 436 lineto stroke
+  846 4.3 958 { 430 moveto 0 4 rlineto stroke } for
+  % the needle: tuned through the gap between stations
+  now on sub 1.2 sub tuned on sub 1.2 sub div 0 max 1 min /cubic-inout ease
+  /u exch def
+  needle-end 850 sub u mul 850 add  now on sub 1.2 sub 0 max 9 mul sin 3 mul u 1 lt { 1 } { 0 } ifelse mul add
+  /nx exch def
+  0.75 0.12 0.1 setrgbcolor 2.5 setlinewidth nx 380 moveto nx 462 lineto stroke
+  % knobs
+  [ 860 940 ] { /kx exch def
+    0.24 0.1 0.06 setrgbcolor kx 300 26 0 360 arc fill
+    0.62 0.38 0.22 setrgbcolor kx 300 20 0 360 arc fill
+    0.24 0.1 0.06 setrgbcolor 3 setlinewidth kx 300 moveto
+    kx 860 eq { u 270 mul 135 add } { glow 120 mul 200 add } ifelse dup cos 18 mul exch sin 18 mul rlineto stroke
+  } forall
+  % pilot light
+  glow 0.8 mul 0.2 add 0.25 glow 0.5 mul add 0.12 setrgbcolor 900 252 7 0 360 arc fill
+} def
+
+% ---- notes from the speaker, one a beat ---------------------------------
+/note { % x y size
+  gsave 3 1 roll translate dup scale
+    -20 rotate 0 0 moveto 1 0.7 scale 0 0 1 0 360 arc fill
+  grestore
+} def
+/notes {
+  0 1 3 { /j exch def
+    /k beatnow j sub def
+    /age beatage j B mul add def
+    k 0 ge k song length lt and now tuned ge and age 2.0 lt and now off 0.4 add lt and {
+      gsave
+        /ld k loudof def
+        1 age 2 div sub ld 0.4 add 1 min mul  1 now off sub 0.4 div 0 max sub 0 max mul setalpha
+        k 2 mod 0 eq { 1 0.56 0.66 } { 1 0.92 0.84 } ifelse setrgbcolor
+        /nx 700 k hash01 140 mul 70 sub add age 30 mul age 220 mul sin mul add def
+        /ny 450 age 110 mul add def
+        /ns 15 ld 8 mul add def
+        nx ny ns note
+        ns 0.22 mul setlinewidth nx ns 0.85 mul add ny moveto 0 ns 3.2 mul rlineto
+        k 4 mod 0 eq { ns 1.1 mul ns -0.8 mul rlineto } if stroke
+      grestore
+    } if
+  } for
+} def
+
+% ---- the slogan ----------------------------------------------------------
+/slogan {
+  now off 2.2 add sub 1.2 div 0 max 1 min /smooth ease /a exch def
+  a 0 gt {
+    gsave a setalpha 1 0.96 0.91 setrgbcolor
+    /Courier-Bold findfont 34 scalefont setfont
+    (all the radio. none of the static.) dup stringwidth pop 2 div 640 exch sub 84 a 12 mul sub moveto show
+    grestore
+  } if
+} def
+
+/scene {
+  kitchen
+  gsave -360 0 translate radio notes grestore
+  /tw << /Box [650 140 520 520] /After /hold >> place
+  slogan
+} def

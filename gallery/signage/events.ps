@@ -1,0 +1,59 @@
+%!PS
+% A signage scene: today's events. The row that is on now is marked, and the next
+% one is called out, from `weektime`: nothing in the file knows what time it is.
+<< /Size [1280 720] /Duration 11 /Title (Today) >> animation
+/pkmotion use  /pktype use
+<< /bg [0.035 0.05 0.085] /surface [0.085 0.11 0.17] /line [0.17 0.21 0.3]
+   /fg [0.95 0.95 0.92] /muted [0.62 0.68 0.78]
+   /accent [1.0 0.72 0.27] /accent2 [0.35 0.82 0.86] >> usetheme
+
+% [ start-time-in-hours minutes title room ]: what the day holds
+/Events [ [ 9.5   15 (Stand-up)                 (Atrium)]
+          [ 10    60 (Design review)            (Room Heron)]
+          [ 11.5  45 (Lunch and learn: profiling) (Atrium)]
+          [ 14    30 (Customer call: Marlow Dairy) (Room Kestrel)]
+          [ 16.5  60 (Demo day rehearsal)       (Room Heron)] ] param /events exch def
+
+/hours { weektime 86400 fmod 3600 div } def
+/clocktext {                      % hours -> (HH:MM)
+  dup floor cvi /h exch def  h sub 60 mul 0.0001 add floor cvi /m exch def
+  h 2 zeropad (:) strcat m 2 zeropad strcat
+} def
+/state {                          % event -> /past, /now or /later
+  /e exch def
+  e 0 get /t exch def  e 1 get 60 div t add /end exch def
+  hours end ge { /past } { hours t ge { /now } { /later } ifelse } ifelse
+} def
+
+/scene {
+  /tall height width gt def
+  /page canvasbox 7 vmin inset def
+  page 0 tall { 0.9 } { 0.86 } ifelse 1 tall { 0.1 } { 0.14 } ifelse subbox /head exch def
+  page 0 tall { 0.16 } { 0 } ifelse 1 tall { 0.7 } { 0.81 } ifelse subbox events length 1.5 vmin rows /rows exch def
+
+  /accent ink /title 4.8 vmin face (TODAY) head /nw placetext
+  (TODAY) /glyphs 0.05 /rise kinetic
+  /muted ink /body 4.2 vmin face hours clocktext head /ne showin
+
+  % the first event still to come is the next one
+  /nextseen false def
+  0 1 events length 1 sub { /i exch def
+    events i get /e exch def
+    rows i get /b exch def
+    e state /s exch def
+    s /later eq nextseen not and { /s /next def /nextseen true def } if
+    b 0.21 splitx /right exch def /left exch def
+    0.4 i 0.18 mul add /slide-right {
+      /surface ink b 1.6 vmin roundpath fill
+      s /now eq { /accent2 ink b 0 get b 1 get 0.9 vmin b 3 get rectfill } if
+      s /past eq { /muted } { /fg } ifelse ink
+      /title 5.4 vmin face e 0 get clocktext left 2.5 vmin inset /w showin
+      /title 5.2 vmin face e 2 get right 2.2 vmin inset /nw showin
+      /muted ink /body 3.8 vmin face e 3 get right 2.2 vmin inset /sw showin
+      s /now eq s /next eq or {
+        s /now eq { /accent2 } { /accent } ifelse ink
+        /title 3.3 vmin face s /now eq { (NOW) } { (NEXT) } ifelse right 2.2 vmin inset tall { /se } { /ne } ifelse showin
+      } if
+    } enters
+  } for
+} def

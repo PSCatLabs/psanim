@@ -9,7 +9,7 @@ same wrapping as crates/psanim/tests/docs.rs.
 """
 import pathlib, subprocess, sys
 
-LIBS = "pkstage pkmotion pktype pkdiagram pkcode pkchart pkink".split()
+LIBS = "pkstage pkmotion pktype pkdiagram pkcode pkchart pkink pkfigure".split()
 
 def fences(text):
     out, cur = [], None

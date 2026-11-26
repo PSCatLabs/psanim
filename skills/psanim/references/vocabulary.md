@@ -88,7 +88,33 @@ The movie's seed.
 
 `k  turns  degrees`
 
-k whole turns spread over the current window: k * 360 * (now / span). The angle for anything that must come home when a loop closes; k must be a whole number (or a whole number divided by the part's rotational symmetry).
+k whole turns spread over the current window: k * 360 * now / (the window's length). The angle for anything that must come home when a loop closes; k must be a whole number (or a whole number divided by the part's rotational symmetry). Under `delayed` (and so `staggered`, `cascade`, `echoed`) the length is the undelayed window's, so it is the undelayed angle from that much earlier and a late copy still closes the loop.
+
+## Time of day, for clocks that show it
+
+### `parseclock`
+
+`(HH:MM:SS) | seconds  parseclock  seconds`
+
+A time of day as seconds since midnight. Text is (H:MM), (H:MM:SS) or (H:MM:SS.fff), the form `--param Start=12:34:56` gives; a number is passed through, so a parameter can be either. A malformed time is an error that says what is accepted.
+
+### `daytime`
+
+`start /signal|null  daytime  seconds`
+
+The time of day to show, in seconds since midnight (fractions kept, wrapped into one day). A movie is a pure function of its own time and never reads the wall clock, so the host supplies the time one of two ways. With null: `start` (seconds, or text as for `parseclock`) plus the movie time, so a render shows the clock running from the start time. With a signal name (a name, or text from `--param`): that signal's value, which a live page sets to the viewer's local seconds since midnight before each frame (`engine.setSignal("clock", s)`); `start` is then ignored.
+
+### `clockparts`
+
+`seconds  clockparts  h m s frac`
+
+Split a time of day, wrapped into one day: hours 0..23, minutes and seconds 0..59 (integers) and the fraction of the second, 0 up to 1. 45296.25 gives 12 34 56 0.25.
+
+### `fmtday`
+
+`seconds  fmtday  string`
+
+A time of day on the 24 hour clock as text: (07:05:09). Build other forms from `clockparts` and `zeropad`.
 
 ## Time scopes: re-basing the clock for a procedure
 
@@ -114,7 +140,7 @@ Run proc only while now < b. Inside, progress runs 0 to 1 over 0..b.
 
 `d proc  delayed  -`
 
-Run proc with its clock d seconds behind: whatever it does happens d seconds later.
+Run proc with its clock d seconds behind: whatever it does happens d seconds later. A pure shift: `span` and `progress` see the window shortened by d, but `turns` and `loopnoise` are the undelayed values from d seconds earlier.
 
 ### `staggered`
 
@@ -242,7 +268,7 @@ Smooth random motion: a value wandering in -amp..amp about freq times a second. 
 
 `key radius  loopnoise  v`
 
-Smooth random motion in -1..1 (key is a number or an array of numbers) that returns exactly to its start at the end of the current window: noise sampled around a circle. A larger radius wanders more. For organic drift in a seamless loop, where wiggle would not close.
+Smooth random motion in -1..1 (key is a number or an array of numbers) that returns exactly to its start after the current window's length: noise sampled around a circle. A larger radius wanders more. For organic drift in a seamless loop, where wiggle would not close. Under `delayed` the length is the undelayed window's, so a late copy still closes.
 
 ### `hash01`
 
@@ -273,6 +299,80 @@ The rank of each value, 0 for the largest. Interpolating two rank arrays with `b
 `lo hi n  niceticks  [ v ... ]`
 
 About n round numbers covering lo..hi (steps of 1, 2, 2.5 or 5 times a power of ten): tick positions for an axis.
+
+### `fadeticks`
+
+`lo hi n  fadeticks  [ v alpha ... ]`
+
+Ticks for a range that is moving: about n round numbers over lo..hi from the two nice steps either side of the ideal one, each with an opacity. Ticks both steps share stay at 1; the rest cross-fade as the range grows or shrinks, so labels never jump. `plotaxes` uses it with /Fade true.
+
+### `seriespoints`
+
+`[ v ... ] box [lo hi]  seriespoints  [ x0 y0 x1 y1 ... ]`
+
+A series spread evenly across a box, lo at its bottom and hi at its top, clamped to the box: points for `polypath`. A reversed range [hi lo] turns it upside down. The fast way to draw a long series.
+
+## Particles: emitters whose particles are functions of time
+
+### `particles`
+
+`spec proc  particles  -`
+
+Draw proc once for every particle alive now, with the origin moved to the particle (inside gsave) and the caller's stack; `particleage`, `particleu`, `particlevel`, `particlekey` and the rest read the particle. spec is an emitter dictionary or an array of them, all keys optional: /At [x y] or keyframes [t [x y] /ease t [x y] ...] (a moving emitter; the view's centre), /Area [w h] (scatter births over a box centred on /At), /Rate per second with /From and /To (continuous), /Bursts [t ...] each emitting /Count (50) at once, /Life seconds or [lo hi] (2), /Speed or [lo hi] (100), /Angle degrees (90, up) and /Spread degrees (360), /Shape /random /even (evenly round) /sphere (a 3-D burst seen from the side), /Gravity (downward units/s/s, or [gx gy]), /Drag (per second: speeds settle to (gravity+wind)/drag), /Wind [ax ay] (a steady force), /Gust [ax ay] with /GustFreq (a force that wanders over time, the same for every particle), /Sway [dx dy] with /SwayFreq (each particle's own wandering offset: snow, leaves, confetti), /Inherit (share of a moving emitter's velocity), /Period seconds (continuous emission and noise repeat: give the loop's length in a /Loop movie), /Seed (this emitter's randomness), /Draw proc (draws this emitter's particles instead of proc). A particle's state is computed from its birth and the time alone, so frames render in any order.
+
+### `particleage`
+
+`-  particleage  seconds`
+
+Inside a particles procedure: seconds since this particle was born.
+
+### `particleu`
+
+`-  particleu  u`
+
+Inside a particles procedure: how far through its life the particle is, 0 at birth to 1 at death. `1 particleu sub setalpha` fades it out.
+
+### `particlelife`
+
+`-  particlelife  seconds`
+
+Inside a particles procedure: how long this particle lives in all.
+
+### `particlepos`
+
+`-  particlepos  x y`
+
+Inside a particles procedure: where the particle is, in the coordinates `particles` was called in (the origin is already there).
+
+### `particlevel`
+
+`-  particlevel  vx vy`
+
+Inside a particles procedure: the particle's velocity, units a second. `particlevel exch atan rotate` turns to its heading.
+
+### `particlekey`
+
+`-  particlekey  n`
+
+Inside a particles procedure: a whole number standing for this particle, the same on every frame: `[particlekey 1] hash01` is its own constant (a size, a colour, a spin).
+
+### `particleemitter`
+
+`-  particleemitter  i`
+
+Inside a particles procedure: the index of the emitter it came from, in the spec array (0 for a single dictionary).
+
+### `particleburst`
+
+`-  particleburst  i`
+
+Inside a particles procedure: the index in /Bursts of the burst it came from, or -1 for continuous emission.
+
+### `particletrail`
+
+`seconds n  particletrail  -`
+
+Inside a particles procedure: replace the current path with the particle's own track over the last seconds (from its birth at most), n segments, oldest first, ending at the origin: `0.2 6 particletrail stroke` is a streak. Call it before rotating or scaling.
 
 ## Paths: measuring, following, drawing on, morphing
 
@@ -318,6 +418,24 @@ Replace the current path by the open polyline through [x0 y0 x1 y1 ...], in the 
 
 Replace the current path by the closed polygon u of the way from A to B, two arrays from resamplepath with the same n. The points are placed in the current user space, so the transformation in force applies to them as to any path.
 
+### `alignpath`
+
+`arrayA arrayB  alignpath  arrayB2`
+
+B's points (from resamplepath, a closed outline) started from the place that lies closest to A's, as a new array; if B runs the other way round it is also reversed, since a morph between opposite senses collapses on the way. Morph A into the result with `morphpath` and every point travels the least, so a shape melts into the next rather than twisting. Do it once in setup for each pair you will morph, not per frame (it costs n squared).
+
+### `projectpath`
+
+`plane  projectpath  -`
+
+Replace the current path by its projection onto a plane in perspective (the plane dictionary as onplane takes it), in the current user space. Curves are cut into chords about a pixel long on the screen; straight edges stay straight, as they do in perspective; open subpaths stay open, and the part of the path behind the eye is cut away.
+
+### `planepoint`
+
+`x y plane  planepoint  x' y' opacity`
+
+Where the point (x, y) of a plane (as onplane takes it) appears on the screen, and the opacity the plane's /Fade leaves there. For placing a flat thing (a label, a sprite) at a place on the plane. An error if the point is behind the eye.
+
 ### `onpath`
 
 `u proc  onpath  -`
@@ -360,13 +478,13 @@ Finish the layer and composite it with a blend mode: /normal /add /screen /multi
 
 `radius  blurlayer  -`
 
-Blur everything drawn on the current layer so far (Gaussian, radius in canvas units).
+Blur everything drawn on the current layer so far (Gaussian, radius in canvas units). Only inside the current clip: what lies outside it is left as it was.
 
 ### `glowlayer`
 
 `radius strength  glowlayer  -`
 
-Add a soft halo around everything on the current layer: a blurred copy added back, strength 0..2. The halo's light is the shape's own, spread out: a thin line needs a larger radius and a strength above 1 to show.
+Add a soft halo around everything on the current layer: a blurred copy added back, strength 0..2. The halo's light is the shape's own, spread out: a thin line needs a larger radius and a strength above 1 to show. Only inside the current clip, like blurlayer.
 
 ### `faded`
 
@@ -384,13 +502,13 @@ Draw proc as a group composited with a blend mode.
 
 `radius proc  blurred  -`
 
-Draw proc out of focus.
+Draw proc out of focus. The blur stays inside the clip in force when it begins (a within box, a rectclip, any clip path).
 
 ### `glowing`
 
 `radius strength proc  glowing  -`
 
-Draw proc with a halo of light. Try 8 1 for solid shapes, 24 1.6 for thin strokes.
+Draw proc with a halo of light. Try 8 1 for solid shapes, 24 1.6 for thin strokes. The halo stays inside the clip in force when it begins.
 
 ### `crossfade`
 
@@ -424,6 +542,12 @@ Fill the canvas rectangle (0 0 width height) with a colour, in the current coord
 
 Set the transformation so the world point (cx, cy) is at the centre of the frame, magnified by zoom and rotated by angle. Wrap in gsave/grestore.
 
+### `onplane`
+
+`proc plane  onplane  -`
+
+Run proc with its painting laid on a plane in 3D and seen in perspective: fill, eofill, stroke, rectfill, rectstroke, clip, eoclip, rectclip and the show family (show, ashow, widthshow, awidthshow) are projected when proc calls them. Procedures bind-ed before (the prelude's, the pk libraries') hold the built-ins and paint flat. The plane's coordinates are the user space onplane was called in; proc's own translate, scale and rotate move things on the plane. plane is a dictionary: /Tilt degrees the plane is tipped back about the x axis through the origin (0 faces you, 90 is a floor seen edge-on; +y goes away), /Turn degrees then turned about the vertical axis, /Depth how far the origin is pushed behind the screen, /Eye [x y] the point the eye is straight in front of (default [0 0]), /Distance how far the eye is from the screen (default the view's width), /Fade [z0 z1] the depth behind the screen over which ink fades out (each painted path takes one opacity, from the depth of its middle). Strokes go through strokepath, so line widths lie on the plane and shrink with distance. Ink behind the eye is cut away. image, shfill, kshow, xshow and glyphshow are not projected.
+
 ## Text
 
 ### `typed`
@@ -431,6 +555,42 @@ Set the transformation so the world point (cx, cy) is at the centre of the frame
 `string u  typed  string`
 
 The first u (0..1) of the string, by characters: a typewriter reveal.
+
+### `typingplan`
+
+`(text) seed opts  typingplan  plan`
+
+Plan how a person would type a string, from a seed: a key every ~0.1 s with jitter, bursts and slow words, longer gaps after a space, a thinking pause now and then, and an occasional slip to a neighbouring key that is noticed a character or two later, backspaced and retyped. opts: << /Speed 1 (keys-rate multiplier) /Typos 0.02 (chance of a slip per letter) /Slips [4] (letters that always slip) /Pauses 1 /Think 0 (seconds before the first key) >>. Make the plan in setup; `plan t typedat` then gives the text typed by time t, a pure function of t. Same text and seed always type the same way.
+
+### `sessionplan`
+
+`[ item ... ] seed opts  sessionplan  plan`
+
+Plan a terminal session, from a seed. Items: [/type (cmd)] or [/type (cmd) << /Speed 1.4 /Slips [3] /Think 1 >>] (prompt, human typing, Enter); [/out (text\nmore)] (lines appear at once); [/lines (text) gap] (one line every ~gap s, a little uneven); [/progress (frame1\nframe2 ...) gap] (a line redrawn in place); [/wait s]; [/clear]; [/prompt (> )]; [/mark /name] (note the time: `plan /name planmark`). opts: << /Prompt ($ ) /Speed /Typos /Think 0.6 /Latency 0.18 (Enter to output) /Gap 0.07 /Start 0 /FinalPrompt true /Tail 0 >>. Output follows its command after the latency. The plan is data: `plan t rows cols screenat` is the grid at any time.
+
+### `planlength`
+
+`plan  planlength  seconds`
+
+The time of the last thing a typing or session plan does (plus the session's /Tail): how long to give it.
+
+### `planmark`
+
+`plan /name  planmark  seconds`
+
+The time a session plan reached `[/mark /name]`, or -1 if it has no such mark: to start something else (a progress bar, a flash) when the session gets there.
+
+### `typedat`
+
+`plan t  typedat  (string)`
+
+The line under the cursor at time t: for a `typingplan`, what has been typed so far, backspaces and all. `(text) 7 << >> typingplan` in setup; `plan now typedat show` in the scene.
+
+### `screenat`
+
+`plan t rows cols  screenat  [ (row) ... ] col last`
+
+What a character grid shows at time t: its rows (at most `rows`, top to bottom; long lines wrap at `cols`; the screen scrolls when full), the cursor's column in the last row, and the time of the latest keystroke or line before t (-1 if none), for a cursor that stays solid while typing and blinks at rest. Pure in t, so the screen a moment ago (`t 0.1 sub screenat`) is phosphor persistence.
 
 ### `showcenter`
 
@@ -473,6 +633,12 @@ Join two strings.
 `num decimals  fmtnum  string`
 
 The number as text with that many decimal places and commas between thousands: 1234567.8 1 fmtnum is (1,234,567.8). For counters: `1 3 /cubic-out tween 0 48213 between 0 fmtnum show`.
+
+### `fmtshort`
+
+`num decimals  fmtshort  string`
+
+The number in a dashboard's short form: 950, 12.4k, 3.2M, 1.1B, 4.0T, with that many decimal places (below a thousand too, so a tween keeps its width). A value that rounds up takes the next unit: 999.96 1 fmtshort is (1.0k).
 
 ### `fmtfixed`
 
@@ -528,13 +694,13 @@ Play clips in order with transitions between them. A transition overlaps the end
 
 `[ ... ]  reelduration  seconds`
 
-The total length of a reel array: the clips' durations added up, minus the transitions' (a transition overlaps the clips on both sides, so a clip's own duration includes the transitions into and out of it). Use it for /Duration: define the reel array first, then `<< /Duration film reelduration ... >> animation`.
+The total length of a reel array: the clips' durations added up, minus the transitions' (a transition overlaps the clips on both sides, so a clip's own duration includes the transitions into and out of it). Use it for /Duration: define the reel array first, then `<< /Duration film reelduration ... >> animation`. It runs before the clips and your own transitions exist, so it takes the built-in transitions and any name starting `t-` for transitions and every other name for a clip; once the program has loaded, a measurement that a custom transition (any other name) would have changed is an error naming it, not a longer film.
 
 ### `transitions`
 
 `-  transitions  dict`
 
-The dictionary of transitions. To define your own, put a procedure there: `transitions /t-shutter { ... } put`, then use `[dur /t-shutter]` in a reel. Name it with a `t-` prefix, or define it before the reel is measured with reelduration: otherwise the entry is taken for a clip. It is called with `procA procB u`: draw the frame that is u (0 to 1, linear) of the way from A to B. A and B are ready-made procedures that draw each clip with its own clock still running; call them inside gsave/grestore with whatever clip, transform or layer the transition needs.
+The dictionary of transitions. To define your own, put a procedure there: `transitions /t-shutter { ... } put`, then use `[dur /t-shutter]` in a reel. Name it with a `t-` prefix, or define it before the reel is measured with reelduration: otherwise reelduration counts the entry as a clip, and loading the movie fails, naming it. It is called with `procA procB u`: draw the frame that is u (0 to 1, linear) of the way from A to B. A and B are ready-made procedures that draw each clip with its own clock still running; call them inside gsave/grestore with whatever clip, transform or layer the transition needs.
 
 ## Parameters, signals and events
 
@@ -556,11 +722,47 @@ The value of the host's signal name at the current movie time; 0 if there is non
 
 Seconds since the most recent event on track name; a million if there has been none.
 
+### `sincelast`
+
+`[t ...]  sincelast  seconds`
+
+Seconds since the most recent of the times that has passed, in the current scope; a million if none has. An array of times is an event track you own: `bursts sincelast 6 mul neg exp 0.1 mul 1 add` is a scale that kicks on each one and settles.
+
 ### `eventcount`
 
 `/name  eventcount  int`
 
 How many events on track name have happened so far.
+
+### `signalago`
+
+`/name dt  signalago  num`
+
+The host's signal name as it was dt seconds ago, interpolated between readings: the recent past of a recording, or of a live signal its host records (`Movie::record_signal`). `/cpu 0.5 signalago` reads half a second late, so a value updated once a second glides instead of stepping.
+
+### `signalseries`
+
+`/name span n  signalseries  [ v ... ]`
+
+n readings of signal name spread over the last span seconds, oldest first, the last one now: the history for a sparkline. The readings move with now; for a window that must not shimmer use `signalbetween` on a grid.
+
+### `signalbetween`
+
+`/name t0 t1 n  signalbetween  [ v ... ]`
+
+n readings of signal name evenly spaced from movie time t0 to t1, both included: a fixed stretch of a recording (a day replayed behind a cursor), or a window aligned to a grid so samples do not slide.
+
+### `signaltime`
+
+`-  signaltime  t`
+
+The movie time signals are read at: the movie's own clock, also inside a component (whose `globaltime` starts at its /At).
+
+### `hassignal`
+
+`/name  hassignal  bool`
+
+Whether the host gave a signal of that name: to draw a "no data" state instead of a row of zeros.
 
 ## Viewports and libraries
 
@@ -580,7 +782,59 @@ Run proc, which draws for a canvas w by h, scaled to fit inside the box and cent
 
 `/library  use  -`
 
-Load one of psanim's libraries, once: /pkstage /pkmotion /pktype /pkdiagram /pkcode /pkchart /pkink. Call it in setup, after `animation`. A library loads the ones it needs. `psanim api --libs` lists them; `psanim api --lib pkmotion` lists one's words.
+Load one of psanim's libraries, once: /pkstage /pkmotion /pktype /pkdiagram /pkcode /pkchart /pkink /pkfigure. Call it in setup, after `animation`. A library loads the ones it needs. `psanim api --libs` lists them; `psanim api --lib pkmotion` lists one's words.
+
+## Components: movies placed inside movies
+
+### `component`
+
+`/name dict-or-(file.ps)-or-/entry  component  -`
+
+Define a component and set up its first instance under the same name. A name is an entry of the catalog of ready-made elements (`psanim catalog` lists them: /busy /spinner component). A component is written like a movie: from a file, the file's own `animation` declaration, setup and `scene`; inline, a dictionary with the declaration's keys (/Size, /Duration, /Loop, /Seed, /Background) and /Setup { } and /Scene { }. Its setup runs once, in a dictionary of its own, so its names do not reach the movie or another instance; inside it `width`, `height`, `duration`, `globaltime`, `movieseed` and `param` are the component's. A file name is read from the movie's own directory. Call it in setup.
+
+### `instance`
+
+`/new /name << /Seed s /Params << ... >> >>  instance  -`
+
+Another instance of a component or a catalog entry, set up again: /Seed for its randomness, /Params for its `param` lookups (a name not given gets the default the component wrote). Inside a component, `param` reads only these, never the host's --param values. Call it in setup.
+
+### `place`
+
+`/name opts  place  -`
+
+Draw an instance into the scene. opts (all optional): /At the movie time it starts (0), /Speed (1), /Box [x y w h] its declared size is fitted into (the whole view), /Before /hide or /hold (its first frame), /After /hide /hold (its last frame) or /loop (default /loop if it declared /Loop true, else /hide). Inside, `now` and `globaltime` run from 0 at /At. It paints its /Background only if it declares one. Blur and glow radii inside it are in its own units, so they scale with its box. Place the same instance as often as you like: each placement is drawn from its own time.
+
+### `componentduration`
+
+`/name  componentduration  seconds`
+
+The /Duration an instance declared, for timing the movie around it.
+
+### `componentsize`
+
+`/name  componentsize  w h`
+
+The /Size an instance declared, for choosing a box with its aspect.
+
+## Playlists: scenes that cycle, for signage
+
+### `playlist`
+
+`/name entries-or-(file) opts  playlist  -`
+
+Define a playlist, in setup (before `animation` too, to use `playlistduration` for /Duration). It is a component: `/name << /Box [x y w h] >> place` draws it, and it loops for ever, the last scene handing over to the first. entries is an array of [hold scene] and [seconds /transition], or the name of a file holding that array (read from the movie's directory, like a component file; it is data: write the array and nothing else). A scene is a catalog entry or component (/spinner), a component file ((events.ps)), a component dictionary, or a procedure (a name, or { }) that draws for `width` by `height`; [hold scene << options >>] adds /Params and /Seed (as for `instance`), /Fill true (the component is laid out for the whole box instead of its declared /Size), /Background (this scene's ground), /Days and /From /To (see below) and /Orientation /landscape or /portrait. hold is seconds fully on screen; the transition after a scene (any in `transitions`; [0 /cut] or none is a plain cut; none written gets /Transition) is extra, so a round takes the sum of both for every scene. Every scene is drawn over its own ground, full bleed, so transitions work as in a reel. opts, all optional: /Size [w h] (the playlist's canvas; default the movie's), /Safe 0.05 (the fraction of each edge kept clear, for a TV that crops; scenes are placed inside it, grounds and transitions are not), /Background [r g b] or a procedure (default a dark blue-black), /Transition [1 /dissolve] (the default), /Guides true (draw the safe area), /Seed. Schedule: a scene on the list only /Days (/mon .. /sun, /weekdays, /weekend, /daily, 0 Monday to 6, or an array) and between /From and /To (hours 9.5, or (9:30), crossing midnight allowed). The set is chosen when a round starts, so a scene is never cut off, and for a scheduled playlist the loop is one week (/Duration to change). The playlist knows the time of day from /Day (default /mon) and /Time (hours or (H:MM), default 0): the time at its own time 0, which the movie takes from `param`, never the wall clock. /Clock /signal makes `weektime` inside the scenes read the host's `weektime` signal instead of /Day and /Time plus the clock, for a live display whose page sets it every frame (the schedule still follows /Day and /Time).
+
+### `playlistduration`
+
+`/name  playlistduration  seconds`
+
+The length of one round of a playlist at its start time: the holds and transitions of the scenes on the list added up. For a playlist with no schedule that is the loop, and `<< /Duration /name playlistduration /Loop true >> animation` makes a movie that loops without a seam. For a scheduled one it is the round the movie opens with (0 if nothing is scheduled then); the set can change later in a longer run. A scheduled playlist's own loop is a week: `componentduration` says so.
+
+### `weektime`
+
+`-  weektime  seconds`
+
+The time the schedule is at, as seconds since Monday 00:00. Inside a scene of a playlist: its /Day and /Time plus its own clock, so a clock tile can read the time without owning one (`weektime 86400 fmod` is the time of day). Outside a playlist: the host's `weektime` signal, 0 if there is none.
 
 ## Storyboards, scripts and cascades
 

@@ -1,0 +1,138 @@
+%!PS
+% Catalog entry: crawl. Text on a tilted plane, scrolling away from the
+% viewer towards a vanishing point and fading as it goes, over a starfield.
+% In a movie:  /intro /crawl << /Params << /Title [..] /Text [..] >> >> instance
+%              then  /intro << /Box [x y w h] >> place
+% The text is laid out once, in setup: title lines centred, paragraphs
+% justified. Each frame draws every line that is in view as one path on
+% the plane with `onplane`, which projects it and fades it by its depth.
+<< /Size [1280 720] /Duration 40 /Background /transparent
+   /Title (Crawl)
+   /Description (Text receding on a tilted plane towards a vanishing point, justified and fading with distance, over an optional starfield: an opening crawl.)
+>> animation
+
+/Title [(EPISODE ZERO) (THE QUIET ENGINE)] param /title exch def                  % title lines, centred; [] for none
+% the default text, five paragraphs
+/.text [(Across the outer reaches, the beacons have gone dark one by one. Nobody on the inner worlds noticed until the grain ships stopped coming.)
+       (The Council of Ports has sent letters, then inspectors, then warships. None of them have come back, and the letters have stopped being answered.)
+       (Now a single surveyor, her ship held together with wire and stubbornness, follows the last signal into the drift, where the old maps end.)
+       (She carries a crate of spare lamps, a chart drawn by her grandmother, and a passenger who has not yet said why he wanted to come.)
+       (What she finds there will either light the beacons again or explain why somebody wanted them out....)] def
+/Text .text param /paras exch def                      % paragraphs, justified
+/Font /Helvetica-Bold param /fontname exch def        % the font of the text and the title
+/Size 46 param /tsize exch def                         % type size where the plane meets the bottom edge
+/TitleSize 0 param /ttsize exch def                    % title size; 0 means 1.3 times /Size
+/Width 900 param /colw exch def                        % column width where the plane meets the bottom edge
+/Leading 1.3 param /leading exch def                   % line spacing, in multiples of /Size
+/Color [0.98 0.84 0.46] param /col exch def            % text colour
+/TitleColor [1 0.93 0.72] param /tcol exch def         % title colour
+/Speed 0 param /speed exch def                         % units a second along the plane; 0 fits the whole text into the entry's 40 s
+/Tilt 58 param /tilt exch def                          % degrees the plane leans back: 0 faces you, 90 is a floor
+/Horizon 0.95 param /horizon exch def                  % height of the vanishing point, as a fraction of the frame
+/Fade [0.38 0.6] param /fade exch def                  % fractions of the way up to the vanishing point where the text starts to fade and where it is gone
+/Stars 350 param /nstars exch def                      % stars behind the text; 0 for none
+/Sky [0.008 0.01 0.03] param /sky exch def             % the colour behind the stars, or /none for a transparent ground
+
+ttsize 0 le { /ttsize tsize 1.3 mul def } if
+title type /stringtype eq { /title [ title ] def } if
+paras type /stringtype eq { /paras [ paras ] def } if
+
+% --- the camera ------------------------------------------------------------
+% The plane is hinged on the bottom edge of the frame, at its centre, and
+% the eye is level with that edge. Seen that way, the plane's far end runs
+% up to a height of distance * cot(tilt): pick the distance that puts it at
+% /Horizon. A point a fraction f of the way up to it is at depth
+% distance * f / (1 - f).
+/dist height horizon mul tilt sin mul tilt cos div def
+/fdepth { dup 1 exch sub div dist mul } bind def           % f -> depth
+/plane << /Tilt tilt /Distance dist
+          /Fade [ fade 0 get fdepth  fade 1 get fdepth ] >> def
+% how far along the plane a line can be and still be seen at all
+/vgone fade 1 get fdepth tilt sin div def
+
+% --- layout, once --------------------------------------------------------
+% lines: [ [baseline size [ x (word) x (word) ... ] colour] ... ], baselines
+% running down from 0 at the top of the text.
+/font fontname findfont def
+/lines [] def
+/addline { lines length 1 add array dup 0 lines putinterval dup dup length 1 sub 4 -1 roll put /lines exch def } bind def
+/y 0 def
+title {
+  /t exch def
+  font ttsize scalefont setfont
+  /y y ttsize sub def
+  [ y ttsize [ t stringwidth pop -2 div t ] tcol ] addline
+  /y y ttsize leading 1 sub mul sub def
+} forall
+title length 0 gt { /y y tsize leading mul sub def } if
+% words of a string, split at spaces
+/words { [ exch { ( ) search { exch pop dup length 0 eq { pop } { exch } ifelse } { dup length 0 eq { pop } if exit } ifelse } loop ] } bind def
+paras {
+  font tsize scalefont setfont
+  /space ( ) stringwidth pop def
+  words /ws exch def
+  /i 0 def
+  { i ws length ge { exit } if
+    % as many words as fit
+    /j i def /w 0 def
+    { j ws length ge { exit } if
+      ws j get stringwidth pop
+      j i gt { space add } if
+      dup w add colw gt j i gt and { pop exit } if
+      w add /w exch def /j j 1 add def
+    } loop
+    /n j i sub def
+    /last j ws length ge def
+    % justified, except the paragraph's last line
+    /gap last n 1 le or { space } { colw w sub n 1 sub div space add } ifelse def
+    /x colw -2 div def
+    /y y tsize leading mul sub def
+    [ y tsize [ i 1 j 1 sub { ws exch get dup x exch stringwidth pop gap add x add /x exch def exch } for ] col ] addline
+    /i j def
+  } loop
+  /y y tsize leading mul sub def
+} forall
+/textheight y neg def
+
+% --- motion -------------------------------------------------------------
+% At time 0 the first line is just below the bottom edge; it travels up the
+% plane at /Speed, or so the last line is gone as the entry ends.
+/travel textheight vgone add def
+/speed speed 0 le { travel duration div } { speed } ifelse def
+
+% --- stars --------------------------------------------------------------
+/stars [ 0 1 nstars 1 sub { /k exch def
+  [ [k 1] hash01 width mul  [k 2] hash01 height mul
+    [k 3] hash01 dup mul dup mul 1.6 mul 0.5 add      % radius: mostly small
+    [k 4] hash01 0.6 mul 0.25 add                       % brightness
+    [k 5] hash01 6.283 mul ] } for ] def               % twinkle phase
+
+/drawstars {
+  stars { aload pop /ph exch def /b exch def /r exch def
+    b now 1.3 mul ph add sin 0.18 mul 1 add mul dup dup setrgbcolor
+    newpath r 0 360 arc fill
+  } forall
+} bind def
+
+/scene {
+  0 0 width height rectclip
+  sky /none ne { sky aload pop setrgbcolor 0 0 width height rectfill } if
+  nstars 0 gt { drawstars } if
+  /scroll now speed mul def
+  width 2 div 0 translate
+  {
+    lines { aload pop /c exch def /ws exch def /sz exch def
+      /v exch scroll add def
+      % below the bottom edge, or gone in the distance: skip it
+      v sz neg gt v vgone lt and {
+        font sz scalefont setfont
+        c aload pop setrgbcolor
+        newpath
+        0 2 ws length 2 sub { /k exch def
+          ws k get v moveto ws k 1 add get false charpath
+        } for
+        fill
+      } if
+    } forall
+  } plane onplane
+} def

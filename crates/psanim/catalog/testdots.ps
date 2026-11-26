@@ -1,0 +1,99 @@
+%!PS
+% Catalog entry: testdots. A grid of test results coming in: dots that fill in green or red.
+% A run happens once: place it with /After /hold to keep the result on screen.
+% In a movie:  /tests /testdots component   then   /tests << /Box [x y w h] >> place
+% Which fail is data:  /Fails [3 17]   (or a seeded /FailRate 0.1)
+% How they arrive:     /Mode /time, a few seconds for all of them, each at its own uneven pace;
+%                      /Mode /value /Value .5, the first half in, still;  or /Signal (done), a
+%                      host signal 0 to 1, frame by frame.
+
+/Count 24 param /count exch def                 % how many tests
+/Cols 12 param /cols exch def                   % dots per row
+/Fails [7 18] param /fails exch def             % which tests fail, by position from 0
+/FailRate 0 param /failrate exch def            % or: the chance that each of the others fails, by seed
+/Mode /time param /mode exch def                % /time (they arrive over /Seconds) or /value (shows /Value, a still)
+/Value 0.5 param /value exch def                % 0 to 1, how many are in, in /value mode
+/Signal () param /signame exch def              % the name of a movie signal (0 to 1) to show instead
+/Seconds 3 param /secs exch def                 % how long the run takes in /time mode
+/Label true param /label exch def               % the tally under the dots
+/Pass [0.3 0.85 0.5] param /okc exch def        % a passing test
+/FailColor [1 0.36 0.36] param /failc exch def  % a failing test
+/Idle [1 1 1] param /idle exch def              % a test not run yet, faint
+
+/lead 0.3 def  /rest 1.2 def
+/rows count cols 1 sub add cols idiv def
+/cell 40 def
+/timed signame length 0 eq mode /time eq and def                  % on its own clock: a signal or a value is not
+/dur timed { lead secs add rest add } { 1 } ifelse def
+
+<< /Size [ cols cell mul rows cell mul label { 52 } { 0 } ifelse add ] /Duration dur /Loop timed not /Background /transparent
+   /Title (Test dots)
+   /Description (A grid of test results arriving: dots fill in green or red, each at its own pace, with a failure ringing out and a tally underneath.)
+>> animation
+
+% ---- which tests fail, and when each comes in: worked out once --------------------------
+/isfail count array def
+0 1 count 1 sub { /i exch def
+  /f false def
+  fails { i eq { /f true def } if } forall
+  f not failrate 0 gt and { [ i 99 ] hash01 failrate lt { /f true def } if } if
+  isfail i f put
+} for
+/ws count array def  /tot 0 def
+0 1 count 1 sub { /i exch def ws i [ i 7 ] hash01 0.35 add put /tot tot ws i get add def } for
+/rt count array def  /acc 0 def                          % the time each test finishes: uneven, like real ones
+0 1 count 1 sub { /i exch def /acc acc ws i get add def rt i lead acc tot div secs mul add put } for
+
+% ---- the picture -----------------------------------------------------------------------
+/lh label { 52 } { 0 } ifelse def
+/spot { % i : the dot's centre
+  /ii exch def
+  ii cols mod 0.5 add cell mul
+  rows ii cols idiv sub 0.5 sub cell mul lh add
+} def
+/dot { % x y r : a filled circle
+  newpath 0 360 arc fill
+} def
+
+/scene {
+  /ga 1 def
+  /v signame length 0 gt { signame cvn signal } { value } ifelse 0 1 clamp def
+  % how many are in
+  /nres 0 def
+  mode /time eq signame length 0 eq and {
+    0 1 count 1 sub { /i exch def now rt i get ge { /nres i 1 add def } if } for
+  } { /nres v count mul 0.0001 add cvi def } ifelse
+  /passed 0 def /failed 0 def
+  0 1 count 1 sub { /i exch def
+    i spot /y exch def /x exch def
+    i nres lt {
+      /age mode /time eq signame length 0 eq and { now rt i get sub } { 10 } ifelse def
+      /u age 0.35 div 0 1 clamp /back-out ease def
+      isfail i get { /failed failed 1 add def failc } { /passed passed 1 add def okc } ifelse aload pop setrgbcolor
+      /rad cell 0.1 mul u cell 0.23 mul mul add def
+      [ [2.4 0.05] [1.7 0.08] [1.3 0.14] ] { aload pop ga mul setalpha rad mul x y 3 -1 roll dot } forall
+      ga setalpha x y rad dot
+      isfail i get age 0.6 lt and {                      % a failure rings out
+        age 0.6 div /quad-out ease /ring exch def
+        2.5 setlinewidth 1 ring sub 0.55 mul ga mul setalpha
+        newpath x y cell 0.3 mul ring cell 0.7 mul mul add 0 360 arc stroke
+      } if
+    } {
+      i nres eq {                                          % the one being run
+        0.55 ga mul setalpha 0.36 0.78 0.98 setrgbcolor
+        x y cell 0.16 mul now 6 mul 360 mul sin 0.04 mul cell mul add dot
+      } {
+        idle aload pop setrgbcolor 0.16 ga mul setalpha x y cell 0.15 mul dot
+      } ifelse
+    } ifelse
+  } for
+  label {
+    /Helvetica-Bold findfont 26 scalefont setfont
+    /ps passed 0 fmtfixed ( passed) strcat def
+    /fs failed 0 fmtfixed ( failed) strcat def
+    /tw ps stringwidth pop failed 0 gt { 24 fs stringwidth pop add add } if def
+    width tw sub 2 div 16 moveto
+    okc aload pop setrgbcolor ga setalpha ps show
+    failed 0 gt { 24 0 rmoveto failc aload pop setrgbcolor ga setalpha fs show } if
+  } if
+} def

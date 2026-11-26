@@ -1,0 +1,75 @@
+%!PS
+% Catalog entry: counter. A vanity metric: a number that counts up to its
+% total, formatted the way people read it (12,431 or 12.4k), and settles.
+% In a movie:  /stars /counter << /Params << /To 12431 /Label (stars) >> >> instance
+%              then  /stars << /Box [x y w h] /At 2 /After /hold >> place
+/Width 420 param /cw0 exch def                   % its width in units: give it the shape of the box it is placed in
+/Height 200 param /ch0 exch def                  % its height in units
+<< /Size [cw0 ch0] /Duration 5 /Background /transparent
+   /Title (Counter)
+   /Description (A vanity metric that counts up: stars, commits, requests served, days without an incident. Grouped or short numbers, an icon, a settle at the end; or follows a host signal.)
+>> animation
+/pkchart use
+
+/Label (stars on GitHub) param /lbl exch def     % the words under the number
+/From 0 param /n0 exch def                       % where the count starts
+/To 12431 param /n1 exch def                     % where it ends
+/Signal null param dup type /stringtype eq { cvn } if /sig exch def                 % follow this host signal instead of counting from /From to /To
+/Lag 0 param /lag exch def                       % with /Signal: read it this many seconds late, so it glides between updates
+/Count 0.75 param /cfrac exch def                % the part of the duration spent counting; then it settles and holds
+/Ease /expo-out param /eas exch def              % how the count runs: fast and slowing is the convention
+/Short false param /short exch def               % true: 12.4k instead of 12,431
+/Decimals 0 param /dec exch def                  % decimal places
+/Prefix () param /pre exch def                   % before the number, e.g. ($)
+/Suffix () param /suf exch def                   % after it, e.g. (+)
+/Icon /star param /icon exch def                 % /star /commit /check /bolt /flame, or /none
+/Role /accent param /role exch def               % the number's colour (and the icon's)
+/Card true param /card exch def                  % draw the panel's card behind it
+/Theme null param /thm exch def                  % a theme name, or null for the movie's own
+
+thm null ne { thm usetheme } if
+
+% the icons, drawn in a unit circle about the origin
+/icons <<
+  /star { newpath 0 1 9 { /si exch def si 2 mod 0 eq { 1 } { 0.42 } ifelse si 36 mul 90 add
+          2 copy cos mul 3 1 roll sin mul si 0 eq { moveto } { lineto } ifelse } for closepath fill }
+  /commit { 0.17 setlinewidth newpath -1 0 moveto -0.42 0 lineto 0.42 0 moveto 1 0 lineto stroke
+            newpath 0 0 0.36 0 360 arc stroke }
+  /check { 0.24 setlinewidth 1 setlinecap 1 setlinejoin newpath -0.6 0 moveto -0.18 -0.45 lineto 0.66 0.5 lineto stroke }
+  /bolt { newpath 0.15 1 moveto -0.55 -0.1 lineto -0.02 -0.1 lineto -0.15 -1 lineto 0.55 0.15 lineto 0.02 0.15 lineto closepath fill }
+  /flame { newpath 0 -0.9 moveto -0.7 -0.6 -0.6 0.3 0 1 curveto 0.15 0.4 0.55 0.35 0.45 -0.05 curveto
+           0.75 -0.5 0.5 -0.9 0 -0.9 curveto closepath fill }
+>> def
+
+/scene {
+  canvasbox 3 inset
+  card { << >> panel } if
+  aload pop /bh exch def /bw exch def /by exch def /bx exch def
+  % the count
+  /u 0 cfrac duration mul eas tween def
+  /v sig null ne { sig lag signalago } { u n0 n1 between } ifelse def
+  /txt pre v dec short { fmtshort } { fmtnum } ifelse strcat suf strcat def
+  % a settle when it arrives: a small swell and back
+  /swell cfrac duration mul dup 0.5 add /sine-inout tween 180 mul sin 0.06 mul 1 add def
+  sig null ne { /swell 1 def } if
+  % the icon, in a soft disc
+  /ir bh 0.26 mul bw 0.1 mul min def
+  /icx icon /none eq { bx } { bx ir add } ifelse def
+  icon /none ne {
+    gsave role ink 0.16 setalpha icx by bh 2 div add ir disc grestore
+    gsave icx by bh 2 div add translate ir 0.55 mul dup scale role ink
+      icons icon get exec grestore
+  } if
+  % the number, as large as fits beside the icon, left aligned so it grows to the right
+  /tx icon /none eq { bx } { icx ir add bh 0.12 mul add } ifelse def
+  /tw bx bw add tx sub def
+  /title 100 face
+  /fsz bh 0.44 mul  tw 0.98 mul pre n1 dec short { fmtshort } { fmtnum } ifelse strcat suf strcat
+      stringwidth pop 0.01 max div 100 mul min def
+  gsave
+    tx by bh 0.36 mul add translate swell dup scale
+    role ink /title fsz face 0 0 moveto txt show
+  grestore
+  /muted ink /body fsz 0.3 mul bh 0.13 mul min face
+  tx by bh 0.14 mul add moveto lbl show
+} def

@@ -242,10 +242,78 @@ pub fn resample(polys: &[Poly], n: usize) -> Vec<f64> {
     out
 }
 
+/// Twice the signed area of the polygon `[x0, y0, x1, y1, ...]`: positive
+/// when it runs counter-clockwise (y up).
+fn signed_area2(p: &[f64]) -> f64 {
+    let n = p.len() / 2;
+    (0..n)
+        .map(|k| {
+            let j = (k + 1) % n;
+            p[2 * k] * p[2 * j + 1] - p[2 * j] * p[2 * k + 1]
+        })
+        .sum()
+}
+
+/// The points `b` (`[x0, y0, x1, y1, ...]`, a closed outline) started from
+/// the place that lies closest to the points of `a`, by the sum of squared
+/// distances between pairs. Morphing `a` into the result moves every point
+/// the least, so the shape melts rather than twists. If the two outlines run
+/// in opposite senses, `b` is also walked backward so that they agree (a
+/// morph between opposite senses collapses to nothing on the way). `a` and
+/// `b` must have the same length.
+pub fn align_outline(a: &[f64], b: &[f64]) -> Vec<f64> {
+    let n = a.len() / 2;
+    if n == 0 || a.len() != b.len() {
+        return b.to_vec();
+    }
+    let reversed = signed_area2(a) * signed_area2(b) < 0.0;
+    let at = |shift: usize, k: usize| {
+        if reversed {
+            (shift + n - k) % n
+        } else {
+            (shift + k) % n
+        }
+    };
+    let cost = |shift: usize| -> f64 {
+        (0..n)
+            .map(|k| {
+                let j = at(shift, k);
+                let (dx, dy) = (a[2 * k] - b[2 * j], a[2 * k + 1] - b[2 * j + 1]);
+                dx * dx + dy * dy
+            })
+            .sum()
+    };
+    let shift = (0..n)
+        .map(|s| (cost(s), s))
+        .fold(
+            (f64::INFINITY, 0),
+            |best, c| if c.0 < best.0 { c } else { best },
+        )
+        .1;
+    let mut out = Vec::with_capacity(b.len());
+    for k in 0..n {
+        let j = at(shift, k);
+        out.extend([b[2 * j], b[2 * j + 1]]);
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use PathSegment::*;
+
+    #[test]
+    fn align_finds_the_start_and_direction() {
+        let a = [0.0, 0.0, 10.0, 0.0, 10.0, 10.0, 0.0, 10.0];
+        // The same square started at (10, 10) and walked the other way round.
+        let b = [10.0, 10.0, 10.0, 0.0, 0.0, 0.0, 0.0, 10.0];
+        assert_eq!(align_outline(&a, &b), a);
+        assert_eq!(align_outline(&a, &a), a);
+        // Started elsewhere but walked the same way: only the start moves.
+        let c = [10.0, 10.0, 0.0, 10.0, 0.0, 0.0, 10.0, 0.0];
+        assert_eq!(align_outline(&a, &c), a);
+    }
 
     fn square() -> Vec<PathSegment> {
         vec![

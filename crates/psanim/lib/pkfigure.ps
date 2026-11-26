@@ -1,0 +1,237 @@
+%!PS
+% pkfigure: a small rig for cartoon characters that dance.
+%
+% A character is two procedures the caller writes: a pose (numbers,
+% computed from the clock or a beat) and a drawing that reads them. The
+% library gives the parts every such character needs and the one hard
+% part, the dance itself, as numbers; it draws nothing on its own and
+% reads no clock.
+%
+%   hop squash lean proc squashed      the body's bounce, about the ground
+%   x y angle len r limb -> ex ey      an arm or a leg; where it ends
+%   x y r opts eye                     an eye: /open /blink /grin /sleep
+%   x y w opts mouth                   a smile, or open and singing
+%   t freq damp spring -> u            a bobble, ear or tail lagging behind
+%   beat dancepose -> pose             a dance step, from the beat
+%   restpose -> pose                   standing still, eyes shut
+%   a b u blendpose -> pose            from one pose toward another
+/pkstage use
+
+% hop squash lean proc squashed -
+%   Run proc with the origin on the ground under the figure, lifted by
+%   hop, squashed (squash < 1) or stretched (> 1) keeping its area, and
+%   leaned (x moves lean times y). No dictionary is open around proc.
+/squashed {
+  gsave
+  4 dict begin
+    /fg-p exch def /fg-l exch def /fg-s exch def /fg-h exch def
+    0 fg-h translate
+    [ 1 0 fg-l 1 0 0 ] concat
+    1 fg-s sqrt div fg-s scale
+    /fg-p load
+  end
+  exec
+  grestore
+} bind def
+
+% x y angle len r limb ex ey
+%   Fill a stubby limb from the joint (x, y), len long and 2r thick with
+%   round ends, in the current colour. angle is from straight down,
+%   counter-clockwise: 90 points right, -90 left, 180 straight up.
+%   Leaves the end, for a hand or a foot.
+/limb {
+  6 dict begin
+    /fg-r exch def /fg-len exch def /fg-a exch def /fg-y exch def /fg-x exch def
+    /fg-ex fg-x fg-a sin fg-len mul add def
+    /fg-ey fg-y fg-a cos fg-len mul sub def
+    gsave
+      fg-r 2 mul setlinewidth 1 setlinecap
+      newpath fg-x fg-y moveto fg-ex fg-ey lineto stroke
+    grestore
+    fg-ex fg-ey
+  end
+} bind def
+
+% x y r opts eye -
+%   An eye about r wide either side of x and taller than wide, drawn in
+%   /Ink with two highlights in /Shine. opts (all optional):
+%   /State  /open (default), /blink (a line), /grin (shut tight: ^),
+%           /sleep (shut softly: a lid curved down)
+%   /Look   how far the pupil has turned right (-1..1, in eye widths)
+%   /Ink    the eye [0.11 0.07 0.05]     /Shine  [1 0.96 0.91]
+/eye {
+  12 dict begin
+    /fg-o exch def /fg-r exch def /fg-y exch def /fg-x exch def
+    /fg-get { fg-o 2 index known { pop fg-o exch get } { exch pop } ifelse } def
+    /fg-st /State /open fg-get def
+    /fg-lk /Look 0 fg-get def
+    /Ink [0.11 0.07 0.05] fg-get rgbof setrgbcolor
+    /fg-sh [ /Shine [1 0.96 0.91] fg-get rgbof ] def
+    /fg-x fg-x fg-lk fg-r mul add def
+    gsave
+      fg-r 0.38 mul setlinewidth 1 setlinecap 1 setlinejoin
+      fg-st /open eq {
+        gsave fg-x fg-y translate 1 1.45 scale 0 0 fg-r 0 360 arc fill grestore
+        fg-sh aload pop setrgbcolor
+        fg-x fg-r 0.34 mul sub fg-y fg-r 0.55 mul add fg-r 0.4 mul 0 360 arc fill
+        fg-x fg-r 0.34 mul add fg-y fg-r 0.55 mul sub fg-r 0.2 mul 0 360 arc fill
+      } if
+      fg-st /blink eq {
+        fg-x fg-r 0.9 mul sub fg-y moveto fg-r 1.8 mul 0 rlineto stroke
+      } if
+      fg-st /grin eq {
+        fg-x fg-y fg-r 0.35 mul sub fg-r 0.8 mul 20 160 arc stroke
+      } if
+      fg-st /sleep eq {
+        fg-x fg-y fg-r 0.35 mul add fg-r 0.75 mul 200 340 arc stroke
+      } if
+    grestore
+  end
+} bind def
+
+% x y w opts mouth -
+%   A mouth centred at x, its top edge at y, w wide either side. Shut it
+%   is a smile; /Open (0..1) opens it downward into a D with a tongue.
+%   opts: /Open 0  /Ink [0.11 0.07 0.05]  /Tongue [1 0.56 0.66]
+/mouth {
+  12 dict begin
+    /fg-o exch def /fg-w exch def /fg-y exch def /fg-x exch def
+    /fg-get { fg-o 2 index known { pop fg-o exch get } { exch pop } ifelse } def
+    /fg-op /Open 0 fg-get 0 max 1 min def
+    /Ink [0.11 0.07 0.05] fg-get rgbof setrgbcolor
+    /fg-tg [ /Tongue [1 0.56 0.66] fg-get rgbof ] def
+    gsave
+      fg-op 0.12 lt {
+        fg-w 0.3 mul setlinewidth 1 setlinecap
+        newpath fg-x fg-y fg-w 0.35 mul add fg-w 205 335 arc stroke
+      } {
+        /fg-h fg-w 0.4 mul fg-op fg-w 1.4 mul mul add def    % depth
+        newpath
+        matrix currentmatrix
+        fg-x fg-y translate 1 fg-h fg-w div scale
+        0 0 fg-w 180 360 arc closepath
+        setmatrix
+        gsave fill grestore
+        clip newpath
+        fg-tg aload pop setrgbcolor
+        gsave fg-x fg-y fg-h 0.98 mul sub translate 1 0.6 scale
+          0 0 fg-w 0.62 mul 0 360 arc fill
+        grestore
+      } ifelse
+    grestore
+  end
+} bind def
+
+% t freq damp spring u
+%   1 at t = 0, swinging about 0 at freq Hz and dying away at rate damp:
+%   multiply by how far a part was left behind by a jolt t seconds ago
+%   (an antenna's bobble, an ear, a tail). 0 for t < 0.
+/spring {
+  3 -1 roll dup 0 lt { pop pop pop 0 } {
+    dup 4 -1 roll mul 360 mul cos        % damp t cos
+    3 1 roll mul neg 2.718281828 exch exp mul
+  } ifelse
+} bind def
+
+% --- the dance ---------------------------------------------------------------
+% Eight moves, one per beat: arms as degrees raised (0 hanging, 180 up),
+% left then right, and a wiggle kind. From Twiddle's own (twiddle's
+% `viz/modes/h_buddy.py`).
+/.fgmoves [
+  [ 149 149 /up ]  [ 83 83 /out ]  [ 23 140 /point ]  [ 140 23 /point ]
+  [ 29 135 /wave ] [ 135 29 /wave ] [ 63 63 /flap ]   [ 160 160 /up ]
+] def
+
+% beat dancepose pose
+%   The step a dancer is in, as numbers. beat is a dictionary the caller
+%   fills from its clock or its signals:
+%     /Beat    the index of the current beat (0, 1, 2 ...)
+%     /Since   seconds since it
+%     /Length  seconds a beat lasts (60 / bpm)
+%     /Loud    how loud this beat is, 0..1: higher hops, and a grin at 0.75
+%     /Sing    0..1, how far the mouth opens over the beat (optional)
+%   The pose, in units of the body's half-width (about 1):
+%     /Hop /Squash /Lean   operands for `squashed`
+%     /ArmL /ArmR          degrees raised; /LiftL /LiftR feet raised;
+%     /Spread              feet apart (added each side)
+%     /Eyes /Look          /open /grin /wink; how far they follow the lean
+%     /Mouth               0..1 open
+%     /BobX /BobY          how far a bobble on top is left behind
+/dancepose {
+  24 dict begin
+    /fg-b exch def
+    /fg-get { fg-b 2 index known { pop fg-b exch get } { exch pop } ifelse } def
+    /n /Beat 0 fg-get cvi def
+    /s /Since 0 fg-get 0 max def
+    /bl /Length 0.5 fg-get 0.05 max def
+    /ld /Loud 0.5 fg-get 0 max 1 min def
+    /sg /Sing 0 fg-get 0 max 1 min def
+    /hd 0.38 bl 0.8 mul min def                         % time in the air
+    /lnd 0.17 bl 0.35 mul min def                       % squash on landing
+    /mv .fgmoves n 8 mod get def
+    /pmv .fgmoves n 7 add 8 mod get def
+    /k 1 2.718281828 s -14 mul exp sub def               % 0 -> 1 into the move
+    /wg s 687.5 mul sin def                              % sin(12 s), radians
+    /side n 2 mod 1 eq { 1 } { -1 } ifelse def
+    /hopping s hd lt def
+    /arc1 hopping { s hd div 180 mul sin } { 0 } ifelse def
+    % arms, eased from the last move, with this move's wiggle
+    /al pmv 0 get mv 0 get pmv 0 get sub k mul add def
+    /ar pmv 1 get mv 1 get pmv 1 get sub k mul add def
+    mv 2 get /wave eq {
+      al ar gt { /al al 20 wg mul add def } { /ar ar 20 wg mul add def } ifelse
+    } if
+    mv 2 get /flap eq { /al al 29 wg mul add def /ar ar 29 wg mul add def } if
+    mv 2 get /up eq { /al al 7 wg mul add def /ar ar 7 wg mul sub def } if
+    /tl side 0.06 0.1 ld mul add mul def               % lean target
+    /lnow tl neg tl tl neg sub k mul add def
+    <<
+      /Hop 0.12 0.3 ld mul add arc1 mul
+      /Squash
+        hopping { 1 0.08 arc1 mul add }
+        { s hd lnd add lt { 1 0.12 s hd sub lnd div 180 mul sin mul sub } { 1 } ifelse } ifelse
+      /Lean lnow
+      /ArmL al /ArmR ar
+      /LiftL n 2 mod 1 eq { 0.16 s hd min hd div 180 mul sin mul } { 0 } ifelse
+      /LiftR n 2 mod 0 eq { 0.16 s hd min hd div 180 mul sin mul } { 0 } ifelse
+      /Spread mv 2 get /up eq { 0.08 } { 0 } ifelse
+      /Eyes
+        ld 0.75 ge s 0.35 lt and { /grin }
+        { n 8 mod 6 eq s 0.45 lt and { /wink } { /open } ifelse } ifelse
+      /Look lnow 1.33 mul
+      /Mouth ld 0.75 ge s 0.35 lt and { 0.8 } { 0 } ifelse
+             sg s bl div 1 min 180 mul sin mul max
+      /BobX tl -4.6 mul s 1.735 4.5 spring mul 0.35 min -0.35 max
+      /BobY 0.12 0.3 ld mul add -0.8 mul s 1.735 4.5 spring mul
+    >>
+  end
+} bind def
+
+% restpose pose      standing still with the eyes shut softly: asleep
+/restpose {
+  << /Hop 0 /Squash 0.97 /Lean 0 /ArmL 14 /ArmR 14 /LiftL 0 /LiftR 0
+     /Spread 0 /Eyes /sleep /Look 0 /Mouth 0 /BobX 0 /BobY 0 >>
+} bind def
+
+% a b u blendpose pose
+%   A pose u of the way from a to b: numbers in between, anything else
+%   (the eyes' state) a's until halfway and b's after. Keys only b has
+%   are b's. For settling from a dance into rest, or from move to move.
+/.fgnum { type dup /realtype eq exch /integertype eq or } bind def
+/blendpose {
+  8 dict begin
+    /fg-u exch def /fg-b exch def /fg-a exch def
+    /fg-r fg-b length dict def
+    fg-b {
+      /fg-v exch def /fg-k exch def
+      fg-a fg-k known {
+        fg-a fg-k get
+        dup .fgnum fg-v .fgnum and
+        { fg-v 1 index sub fg-u mul add }
+        { fg-u 0.5 ge { pop fg-v } if } ifelse
+      } { fg-v } ifelse
+      fg-r fg-k 3 -1 roll put
+    } forall
+    fg-r
+  end
+} bind def

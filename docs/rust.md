@@ -69,11 +69,29 @@ before each frame:
 ```rust
 movie.set_signal("mousex", pointer.x);
 movie.set_signal("level", audio.rms());
+if clicked { movie.push_event("click", clock.seconds()); }
 let frame = movie.render_at(clock.seconds())?;
 ```
 
-The program reads them with `/mousex signal`. The same program renders
+The program reads them with `/mousex signal` and `/click sinceevent`.
+A live event track keeps every event, so `eventcount` and `sinceevent`
+answer exactly at any time; `clear_events` forgets a track, for a host
+whose clock starts over. The same program renders
 offline with those signals loaded from a file.
+
+`set_signal` replaces the signal with a constant. A dashboard wants the
+signal's past as well (a sparkline, a horizon row) and values that glide
+between readings, so record each reading at the movie time it arrives
+instead; the track keeps the most recent 100,000:
+
+```rust
+movie.record_signal("cpu", clock.seconds(), sample.cpu);
+```
+
+The program then reads `/cpu signal`, `/cpu 0.5 signalago` (half a
+second late, interpolated between readings) or `/cpu 60 120
+signalseries` (the last minute), exactly as it reads a recording passed
+with `--signals`. In the browser the same call is `engine.recordSignal(name, t, value)` (see wasm.md).
 
 ## Errors
 
@@ -89,8 +107,11 @@ checkpoint.
 ## Debugging a program from the host
 
 `Movie::take_output()` returns what the program printed with `=`, `==`,
-`print` and `pstack` since the last call. `Movie::last_frame_steps()` is
-the interpreter's step count for the last frame when a step budget is set.
+`print` and `pstack` since the last call. Output is kept to 64 KB per
+call; past that the text ends with a line `[output truncated at 64 KB]`.
+`Movie::take_printed()` returns the same text with a `truncated` flag.
+`Movie::last_frame_steps()` is the interpreter's step count for the last
+frame when a step budget is set.
 
 ## Building blocks
 

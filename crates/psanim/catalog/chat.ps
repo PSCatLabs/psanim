@@ -1,0 +1,458 @@
+%!PS
+% Catalog entry: chat. A phone conversation of text messages.
+% In a movie:  /talk /chat component   then   /talk << /Box [x y w h] >> place
+%
+% The script is a list of messages, in order: [ sender (text) when ]
+%   sender   /me (a bubble on the right, typed into the field at the bottom)
+%            or /them (on the left, with three bouncing dots before it)
+%   (text)   wrapped to fit; `:heart:` `:laugh:` ... draw an emoji (`emojinames`)
+%   when     optional. A number: seconds to wait after the last message arrived
+%            (the default follows how long that message was). Or a dictionary:
+%              /Delay s     as the number above
+%              /Typing s    how long the dots (or the typing) last; 0 for none.
+%                           The default follows the message's length.
+%              /At t        arrive at exactly t seconds, whatever came before
+%              /Time (Tue 9:41)   a timestamp above the message
+%              /React /heart    the other person reacts with an emoji
+%                               (or [ /heart /laugh ]), /ReactAt s after it arrived
+%              /Read s      seconds after sending that "Read" shows (a /me message)
+% e.g.  [ [ /them (Dinner?) ] [ /me (Yes! :party:) 1.2 ] [ /them (Eight?) << /Typing 0.5 /React /heart >> ] ]
+%
+% The times need no fonts, so they are worked out before the declaration and
+% give the movie its duration.
+
+/chatdemo [
+  [ /them (hey, are you around tonight?) << /Time (Today 6:12 PM) >> ]
+  [ /me (always! what's the plan?) ]
+  [ /them (new ramen place on 5th. I'm buying :party:) ]
+  [ /me (say less :fire:) << /React /heart >> ]
+  [ /me (7:30?) 0.4 ]
+  [ /them (perfect, see you there :thumbsup:) << /React /laugh >> ]
+] def
+
+/Script [] param /cscript exch def     % [ sender (text) when ] per message: see the top of this file; empty shows a demo
+/Pace 1 param /cpace exch def          % speed of the default typing and pauses: 2 is twice as quick
+/Lead 0.8 param /clead exch def        % seconds before the first message starts
+/Hold 2.5 param /chold exch def        % seconds to rest on the finished conversation
+cscript length 0 eq { /cscript chatdemo def } if
+
+% [ sender (text) when ] -> a dictionary with /From, /Text and whatever when gave
+/cnorm {
+  16 dict begin
+    /n-e exch def
+    /n-o n-e length 2 gt { n-e 2 get } { 0 } ifelse def
+    n-o type /dicttype ne {
+      n-o type dup /integertype eq exch /realtype eq or { << /Delay n-o >> } { << >> } ifelse /n-o exch def
+    } if
+    32 dict n-o { 3 copy put pop pop } forall
+    dup /From n-e 0 get put
+    dup /Text n-e 1 get put
+  end
+} bind def
+
+% The times. [ entries ] -> [ message dictionaries, with /T0 (typing starts) /T1 (it
+% arrives) /Typ /Reacts /RT (reaction times) /DelT /ReadT /SupT ]  and the film's length.
+/cplan {
+  24 dict begin
+    [ exch { cnorm } forall ] /p-a exch def
+    /p-n p-a length def
+    /p-end clead def /p-prevfrom /none def /p-prevlen 0 def /p-last 0 def
+    0 1 p-n 1 sub {
+      /p-i exch def /p-m p-a p-i get def
+      /p-len p-m /Text get length def
+      /p-typ p-m /Typing known { p-m /Typing get } {
+        p-len 0.04 mul 0.45 add 0.8 max 3.2 min
+        p-m /From get /me eq { 0.85 mul } if cpace div
+      } ifelse def
+      /p-gap p-m /Delay known { p-m /Delay get } {
+        p-i 0 eq { 0 } {
+          p-prevfrom p-m /From get eq { 0.3 } { p-prevlen 0.012 mul 0.45 add 1.5 min } ifelse cpace div
+        } ifelse
+      } ifelse def
+      p-m /At known {
+        p-m /At get /p-t1 exch def
+        p-t1 p-typ sub 0 max /p-t0 exch def
+      } {
+        p-end p-gap add /p-t0 exch def
+        p-t0 p-typ add /p-t1 exch def
+      } ifelse
+      p-m /T0 p-t0 put p-m /T1 p-t1 put p-m /Typ p-typ put
+      /p-end p-t1 def
+      p-m /React known {
+        p-m /React get dup type /nametype eq { 1 array astore } if /p-rs exch def
+        p-m /ReactAt known { p-m /ReactAt get } { 0.9 cpace div } ifelse /p-ra exch def
+        p-m /Reacts p-rs put
+        p-m /RT [ 0 1 p-rs length 1 sub { 0.8 mul p-t1 add p-ra add } for ] put
+        /p-lr p-m /RT get dup length 1 sub get def
+        /p-end p-lr 0.5 add p-t1 max def
+        /p-last p-lr 0.8 add p-last max def
+      } if
+      /p-last p-t1 p-last max def
+      /p-prevfrom p-m /From get def /p-prevlen p-len def
+    } for
+    % delivered and read, for what I sent
+    0 1 p-n 1 sub {
+      /p-i exch def /p-m p-a p-i get def
+      p-m /DelT p-m /T1 get 0.7 add put
+      p-m /ReadT p-m /T1 get 2.4 add put
+      p-m /SupT 1e9 put
+      p-i 1 add 1 p-n 1 sub {
+        p-a exch get dup /From get /them eq {
+          /T0 get p-m /T1 get 1.5 add max p-m exch /ReadT exch put exit
+        } { pop } ifelse
+      } for
+      p-m /Read known { p-m /ReadT p-m /T1 get p-m /Read get add put } if
+      p-i 1 add 1 p-n 1 sub {
+        p-a exch get dup /From get /me eq {
+          /T1 get p-m exch /SupT exch put exit
+        } { pop } ifelse
+      } for
+      p-m /From get /me eq { /p-last p-m /ReadT get 0.8 add p-last max def } if
+    } for
+    p-a p-last chold add
+  end
+} bind def
+
+cscript cplan 100 mul round 100 div /cend exch def /cmsgs exch def
+
+<< /Size [400 800] /Duration cend /FPS 30 /Background /transparent
+   /Title (Chat)
+   /Description (A phone conversation of text messages: bubbles in two colours with tails, bouncing dots before each message, timestamps, delivered and read marks, reactions, emoji, and the list scrolling up as messages arrive. Its /Script is a list of [ sender (text) when ]: sender /me or /them, when a pause in seconds or a dictionary (/Typing /At /Time /React ...); the length of the movie follows it.)
+>> animation
+
+/Theme /light param /ctheme exch def   % /light /dark /mint /sunset, or a dictionary of colours changing one of them: << /me [0.9 0.3 0.5] >>
+/Contact (Sam) param /ccontact exch def % the name in the header
+/Subtitle (online) param /csub exch def % under the name; "typing..." takes its place while they type
+/Frame true param /cframe exch def      % true: a phone around it (bezel, status bar, home bar); false: the screen alone
+/Header true param /cheader exch def    % show the contact's name bar
+/Composer true param /ccomposer exch def % show the field at the bottom where what I send is typed
+/Receipts true param /creceipts exch def % Delivered, then Read, under my last message
+/Clock (9:41) param /cclock exch def    % the status bar's time
+/pktype use
+
+% ---- colours -----------------------------------------------------------------
+/cthemes <<
+  /light <<
+    /bg [1 1 1] /bar [0.975 0.975 0.985] /line [0.86 0.87 0.9]
+    /me [0.16 0.52 1] /meText [1 1 1] /them [0.91 0.92 0.94] /themText [0.08 0.09 0.11]
+    /muted [0.5 0.53 0.6] /accent [0.16 0.52 1] /input [0.93 0.94 0.96] /bezel [0.07 0.07 0.09]
+  >>
+  /dark <<
+    /bg [0.06 0.07 0.1] /bar [0.1 0.11 0.15] /line [0.2 0.22 0.28]
+    /me [0.36 0.42 0.98] /meText [1 1 1] /them [0.19 0.21 0.27] /themText [0.93 0.94 0.97]
+    /muted [0.55 0.59 0.68] /accent [0.55 0.64 1] /input [0.15 0.17 0.22] /bezel [0.02 0.02 0.03]
+  >>
+  /mint <<
+    /bg [0.95 0.98 0.96] /bar [0.99 1 0.99] /line [0.8 0.89 0.84]
+    /me [0.1 0.64 0.46] /meText [1 1 1] /them [0.85 0.92 0.88] /themText [0.07 0.2 0.14]
+    /muted [0.4 0.55 0.47] /accent [0.1 0.64 0.46] /input [0.9 0.95 0.92] /bezel [0.09 0.13 0.11]
+  >>
+  /sunset <<
+    /bg [0.11 0.07 0.13] /bar [0.16 0.1 0.18] /line [0.3 0.2 0.32]
+    /me [0.97 0.44 0.32] /meText [1 1 1] /them [0.27 0.18 0.3] /themText [0.98 0.92 0.9]
+    /muted [0.7 0.58 0.7] /accent [1 0.62 0.4] /input [0.2 0.13 0.23] /bezel [0.04 0.02 0.05]
+  >>
+>> def
+/cth 24 dict def
+ctheme type /nametype eq { cthemes ctheme get } { cthemes /light get } ifelse { cth 3 1 roll put } forall
+ctheme type /dicttype eq { ctheme { cth 3 1 roll put } forall } if
+% /key cc -      set the colour
+/cc { cth exch get aload pop setrgbcolor } bind def
+% /key u cca -   the colour, at alpha u
+/cca { exch cc setalpha } bind def
+
+% ---- sizes, in the component's 400 x 800 units -------------------------------------
+/cfs 17 def /clh 22 def /cpx 14 def /cpy 8 def
+/cbez cframe { 12 } { 0 } ifelse def
+/csw width cbez 2 mul sub def /csh height cbez 2 mul sub def
+/crad cframe { 42 } { 0 } ifelse def
+/cstat cframe { 46 } { 0 } ifelse def
+/chead cheader { 64 } { 0 } ifelse def
+/ccomp ccomposer { 60 } { 0 } ifelse def
+/chome cframe { 24 } { 0 } ifelse def
+/clistt cbez csh add cstat sub chead sub def         % y of the top of the list
+/clistb cbez chome add ccomp add def                 % y of the bottom of the list
+/clistl cbez 14 add def /clistr cbez csw add 14 sub def
+/cmaxw clistr clistl sub 0.74 mul def
+/cdw 58 def /cdh clh cpy 2 mul add def               % the typing bubble
+
+% (text) cbig -> bool    nothing but one to three emoji: shown big, without a bubble
+/cbig {
+  .emosplit dup length dup 1 ge exch 3 le and exch
+  true exch { type /nametype eq and } forall and
+} bind def
+
+% the rest, measured with the font: lines, size, gaps, tails
+/cbfont { /Helvetica findfont cfs scalefont setfont } bind def
+cbfont
+/cn cmsgs length def
+0 1 cn 1 sub {
+  /i exch def /m cmsgs i get def
+  m /Text get cmaxw cpx 2 mul sub emojilines /ls exch def
+  m /Lines ls put
+  m /W 0 ls { emojitextwidth max } forall cpx 2 mul add 44 max put
+  m /H ls length clh mul cpy 2 mul add put
+  m /Dots m /Typ get 0 gt  m /From get /them eq ccomposer not or  and put
+  /nx i cn 1 sub lt { cmsgs i 1 add get } { null } ifelse def
+  m /Tail nx null eq { true } { nx /From get m /From get ne nx /Time known or } ifelse put
+  m /Ex creceipts m /From get /me eq and nx null eq { true } { nx /From get /them eq } ifelse and { 17 } { 0 } ifelse put
+  m /G
+    i 0 eq { 12 } { cmsgs i 1 sub get /From get m /From get eq m /Time known not and { 3 } { 11 } ifelse } ifelse
+    m /Time known { 30 add } if
+    m /Reacts known { 22 add } if
+  put
+  m /Big m /Text get cbig put
+  m /Big get {
+    m /W m /Text get .emosplit length 48 mul 8 add put
+    m /H 54 put
+    m /Tail false put
+  } if
+} for
+
+% ---- drawing ------------------------------------------------------------------
+% box tail-side  cbubblepath -    the bubble and, if side is 1 or -1, its tail
+/cbubblepath {
+  8 dict begin
+    /b-s exch def aload pop /b-h exch def /b-w exch def /b-y exch def /b-x exch def
+    newpath
+    [ b-x b-y b-w b-h ] b-h 2 div 18 min roundpath
+    b-s 0 ne {
+      b-s 0 gt { b-x b-w add } { b-x } ifelse /b-e exch def
+      % drawn the way round the bubble goes, so the two shapes add up and do not cancel
+      b-s 0 gt {
+        b-e 15 sub b-y 7 add moveto
+        b-e 12 sub b-y 1 add  b-e 5 sub b-y  b-e 2 add b-y 0.5 sub curveto
+        b-e 6 add b-y 1 sub  b-e 8 add b-y 4 sub  b-e 9 add b-y 5 sub curveto
+        b-e 4 add b-y 2.5 add  b-e 0.5 add b-y 8 add  b-e 2 sub b-y 14 add curveto
+      } {
+        b-e 2 add b-y 14 add moveto
+        b-e 0.5 sub b-y 8 add  b-e 4 sub b-y 2.5 add  b-e 9 sub b-y 5 sub curveto
+        b-e 8 sub b-y 4 sub  b-e 6 sub b-y 1 sub  b-e 2 sub b-y 0.5 sub curveto
+        b-e 5 add b-y  b-e 12 add b-y 1 add  b-e 15 add b-y 7 add curveto
+      } ifelse
+      closepath
+    } if
+  end
+} bind def
+% x y cdots -    three bouncing dots centred on x y, the clock being the movie's
+/cdots {
+  4 dict begin
+    /d-y exch def /d-x exch def
+    0 1 2 {
+      /d-j exch def
+      now 1.5 mul d-j 0.17 mul sub 360 mul sin 0 max /d-b exch def
+      d-x d-j 1 sub 14 mul add d-y d-b 5 mul add 4.4 disc
+    } for
+  end
+} bind def
+% x y cdone -    a tick, 12 wide, from its left end
+/ctick { moveto 2.6 -3.2 rlineto 6.4 8 rlineto stroke } bind def
+
+% msg frame cmessage -   one bubble, its words, its reactions, its timestamp
+/cmessage {
+  24 dict begin
+    /f-f exch def /f-m exch def
+    f-f aload pop /f-vh exch def /f-vw exch def /f-a1 exch def /f-a0 exch def /f-p exch def /f-top exch def
+    /f-me f-m /From get /me eq def
+    cy0 f-top sub /f-y exch def              % top edge of the bubble, in y up
+    f-me { clistr f-vw sub } { clistl } ifelse /f-x exch def
+    [ f-x f-y f-vh sub f-vw f-vh ] /f-box exch def
+    f-m /Tail get { f-me { 1 } { -1 } ifelse } { 0 } ifelse /f-side exch def
+    f-m /Big get { 1 f-a1 3 mul sub 0 max } { 1 } ifelse /f-ba exch def
+    f-ba 0 gt {
+      gsave
+        f-me { /me } { /them } ifelse f-ba cca
+        f-box f-side cbubblepath fill
+        f-box f-side cbubblepath clip newpath
+        % its dots, until it fills with the words
+        f-m /Dots get f-a1 0.35 lt and {
+          f-me { /meText } { /themText } ifelse 1 f-a1 0.35 div sub f-a0 mul 0.55 mul cca
+          f-x f-vw 2 div add f-y f-vh 2 div sub cdots
+        } if
+        f-a1 0.35 gt f-m /Big get not and {
+          cbfont f-me { /meText } { /themText } ifelse f-a1 0.35 sub 0.5 div 1 min cca
+          f-me { clistr f-m /W get sub cpx add } { clistl cpx add } ifelse /f-tx exch def
+          /f-k 0 def
+          f-m /Lines get {
+            f-tx f-y cpy sub clh f-k 0.5 add mul sub cfs 0.3 mul sub moveto emojitext
+            /f-k f-k 1 add def
+          } forall
+        } if
+      grestore
+    } if
+    % a few emoji and nothing else: big, no bubble
+    f-m /Big get f-a1 0.3 gt and {
+      f-m /T1 get 0.15 add dup 0.5 add /back-out tween /f-bs exch def
+      0 1 f-m /Text get .emosplit length 1 sub {
+        /f-n exch def
+        f-m /Text get .emosplit f-n get
+        f-me { clistr f-m /W get sub } { clistl } ifelse f-n 48 mul add 28 add
+        f-y f-m /H get 2 div sub f-bs 44 mul emojiat
+      } for
+    } if
+    % reactions: a badge each, in the corner away from the tail
+    f-m /Reacts known {
+      0 1 f-m /Reacts get length 1 sub {
+        /f-j exch def
+        f-m /RT get f-j get dup 0.45 add /back-out tween /f-s exch def
+        f-s 0.05 gt {
+          f-me { f-x 10 add f-j 26 mul add } { f-x f-vw add 10 sub f-j 26 mul sub } ifelse f-y 8 add
+          gsave translate f-s dup scale
+            /bg cc 0 0 17 disc
+            /input cc 0 0 14.5 disc
+            f-m /Reacts get f-j get 0 0 20 emojiat
+          grestore
+        } if
+      } for
+    } if
+    % the timestamp, at the top of the slot
+    f-m /Time known {
+      /Helvetica-Bold findfont 12 scalefont setfont
+      /muted f-p dup mul cca
+      f-m /Time get dup stringwidth pop 2 div clistl clistr add 2 div exch sub
+      cy0 f-top f-p f-m /G get mul sub sub 21 sub moveto show
+    } if
+    % delivered, then read
+    f-m /Ex get 0 gt f-a1 0.99 gt and {
+      /Helvetica findfont 12 scalefont setfont
+      f-m /DelT get dup 0.3 add /cubic-out tween /f-ad exch def
+      f-m /ReadT get dup 0.3 add /cubic-out tween /f-ar exch def
+      1 f-m /SupT get dup 0.3 add /cubic-out tween sub /f-ao exch def
+      /f-sy f-y f-vh sub 14 sub def
+      f-ad 1 f-ar sub mul f-ao mul 0 gt {
+        /muted f-ad 1 f-ar sub mul f-ao mul cca
+        (Delivered) dup stringwidth pop clistr 2 sub exch sub f-sy moveto show
+      } if
+      f-ar f-ao mul 0 gt {
+        /accent f-ar f-ao mul cca
+        (Read) dup stringwidth pop clistr 2 sub exch sub /f-rx exch def
+        f-rx f-sy moveto show
+        1.4 setlinewidth 1 setlinecap 1 setlinejoin
+        f-rx 18 sub f-sy 4 add ctick f-rx 13 sub f-sy 4 add ctick
+      } if
+    } if
+  end
+} bind def
+
+% msg -> [ top p a0 a1 vw vh ]     where it is and how far it has come, now.
+% The slot a message takes grows as it appears, so everything below it, and
+% the scroll, move smoothly: the list is a pure function of the clock.
+/cstate {
+  16 dict begin
+    /f-m exch def
+    f-m /T1 get dup 0.45 add /cubic-inout tween /f-a1 exch def
+    f-m /Dots get { f-m /T0 get dup 0.35 add /cubic-inout tween } { f-a1 } ifelse /f-a0 exch def
+    f-m /Dots get { cdh cdw } { 0 0 } ifelse /f-dw exch def /f-dh exch def
+    /f-vh f-a0 f-dh mul f-a1 f-m /H get f-dh sub mul add def
+    /f-vw f-m /Dots get { f-a0 f-dw mul f-a1 f-m /W get f-dw sub mul add } { f-m /W get 0.6 0.4 f-a1 mul add mul } ifelse def
+    /f-p f-a0 f-a1 max def
+    [ ccur f-p f-m /G get mul add  f-p  f-a0  f-a1  f-vw  f-vh ]
+    /ccur ccur f-p f-m /G get mul add f-vh add f-a1 f-m /Ex get mul add store
+  end
+} bind def
+
+% ---- the phone ---------------------------------------------------------------------
+% x y cbattery -    a small full battery
+/cbattery {
+  gsave translate
+    /themText 0.5 cca 1 setlinewidth newpath [ 0.5 0.5 23 11 ] 3.5 roundpath stroke
+    /themText 1 cca [ 2.5 2.5 19 6 ] 2 roundpath fill
+    /themText 0.5 cca 25.5 4 1.8 4 rectfill
+  grestore
+} bind def
+% x y csignal -     four rising bars
+/csignal {
+  gsave translate /themText cc
+    0 1 3 { dup 6 mul 0 4 4 -1 roll 3 mul 5 add rectfill } for
+  grestore
+} bind def
+/cstatusbar {
+  /themText cc /Helvetica-Bold findfont 15 scalefont setfont
+  cclock dup stringwidth pop 2 div cbez 70 add exch sub cbez csh add 31 sub moveto show
+  cbez 258 add cbez csh add 33 sub csignal
+  cbez 296 add cbez csh add 32 sub cbattery
+  /bezel cc [ width 2 div 56 sub cbez csh add 40 sub 112 29 ] 14.5 roundpath fill
+} bind def
+/cheaderbar {
+  /bar cc [ cbez clistt csw chead ] boxpath fill
+  /line cc [ cbez clistt csw 1 ] boxpath fill
+  chead 2 div clistt add /h-c exch def
+  /accent cc 2.6 setlinewidth 1 setlinecap 1 setlinejoin
+  newpath cbez 29 add h-c 9 add moveto cbez 20 add h-c lineto cbez 29 add h-c 9 sub lineto stroke
+  /accent cc cbez 62 add h-c 19 disc
+  /meText cc /Helvetica-Bold findfont 19 scalefont setfont
+  ccontact 0 1 getinterval dup stringwidth pop 2 div cbez 62 add exch sub h-c 6.5 sub moveto show
+  /themText cc /Helvetica-Bold findfont 17 scalefont setfont
+  ccontact cbez 91 add h-c 1 add moveto show
+  /Helvetica findfont 12 scalefont setfont
+  ctyping { /accent cc (typing...) } { /muted cc csub } ifelse cbez 91 add h-c 15 sub moveto show
+} bind def
+/ccomposebar {
+  /bar cc [ cbez cbez chome add csw ccomp ] boxpath fill
+  /line cc [ cbez cbez chome add ccomp add 1 sub csw 1 ] boxpath fill
+  /cp-y cbez chome add 11 add def
+  /cp-w csw 14 sub 14 sub 40 sub 8 sub def
+  /input cc [ cbez 14 add cp-y cp-w 38 ] 19 roundpath fill
+  % what is being typed, if anything: the first part of the message, with a caret
+  /cp-msg null def
+  cmsgs { dup /From get /me eq 1 index /Dots get not and 1 index /Typ get 0 gt and
+          1 index /T0 get now le and 1 index /T1 get now gt and { /cp-msg exch def } { pop } ifelse } forall
+  gsave [ cbez 14 add 8 add cp-y cp-w 16 sub 38 ] boxpath clip
+    /Helvetica findfont 16 scalefont setfont
+    cp-msg null ne {
+      cp-msg /Text get now cp-msg /T0 get sub cp-msg /T1 get cp-msg /T0 get sub 0.85 mul div 1 min typed /cp-s exch def
+      /themText cc
+      cp-s emojitextwidth cp-w 36 sub sub 0 max neg cbez 14 add 14 add add cp-y 12 add moveto
+      cp-s emojitext
+      now 1.6 mul 360 mul cos 0 gt { currentpoint 1 add exch 1.5 add exch 2 20 rectfill } if
+    } {
+      /muted cc (Message) cbez 14 add 14 add cp-y 12 add moveto show
+    } ifelse
+  grestore
+  % the send button, lit while there is something to send
+  /cp-lit cp-msg null ne { 1 } { 0 } ifelse def
+  cmsgs { dup /From get /me eq { /T1 get dup 0.35 add /cubic-out tween 1 exch sub /cp-flash exch def
+          cp-flash 0 gt cp-flash 1 lt and { /cp-lit cp-flash cp-lit max def } if } { pop } ifelse } forall
+  gsave
+    /accent 0.3 0.7 cp-lit mul add cca cbez csw add 14 sub 20 sub cp-y 19 add 18 disc
+    /meText cc 2.6 setlinewidth 1 setlinecap 1 setlinejoin
+    cbez csw add 34 sub cp-y 19 add moveto 0 -10 rlineto stroke
+    newpath cbez csw add 34 sub 6 sub cp-y 19 add 3 add moveto 6 7 rlineto 6 -7 rlineto stroke
+  grestore
+} bind def
+/chomebar {
+  /themText 0.7 cca [ width 2 div 65 sub cbez 8 add 130 5 ] 2.5 roundpath fill
+} bind def
+
+/scene {
+  gsave
+    cframe {
+      /bezel cc [ 0 0 width height ] crad cbez add roundpath fill
+      [ cbez cbez csw csh ] crad roundpath clip
+    } if
+    /bg cc [ cbez cbez csw csh ] boxpath fill
+
+    % where everything is
+    /ccur 12 def
+    /cfr [ cmsgs { cstate } forall ] def
+    /coff ccur 16 add clistt clistb sub sub 0 max def
+    /cy0 clistt coff add def
+    /ctyping false def
+    cmsgs { dup /From get /them eq 1 index /Dots get and 1 index /T0 get now le and 1 index /T1 get now gt and
+            { /ctyping true def } if pop } forall
+
+    gsave
+      [ cbez clistb csw clistt clistb sub ] boxpath clip newpath
+      0 1 cn 1 sub {
+        /i exch def /fr cfr i get def
+        fr 1 get 0.001 gt cy0 fr 0 get sub fr 5 get sub clistt 60 add lt and cy0 fr 0 get sub clistb 80 sub gt and {
+          cmsgs i get fr cmessage
+        } if
+      } for
+    grestore
+
+    cheader { cheaderbar } if
+    ccomposer { ccomposebar } if
+    cframe { cstatusbar chomebar } if
+  grestore
+} bind def

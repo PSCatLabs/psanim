@@ -1,0 +1,61 @@
+%!PS
+% A signage scene: the welcome card. It greets by the time of day (`weektime`),
+% so it says "Good morning" until noon whatever the playlist's loop. The
+% playlist gives it /Fill true: it is laid out for the whole screen, either way up.
+<< /Size [1280 720] /Duration 9 /Title (Welcome) >> animation
+/pkmotion use  /pktype use
+<< /bg [0.035 0.05 0.085] /surface [0.085 0.11 0.17] /line [0.17 0.21 0.3]
+   /fg [0.95 0.95 0.92] /muted [0.62 0.68 0.78]
+   /accent [1.0 0.72 0.27] /accent2 [0.35 0.82 0.86] >> usetheme
+
+/Place (Larkfield Works) param /place exch def
+/Cards [ [(Sign in) (at the front desk)]
+         [(Guest Wi-Fi) (larkfield-guest)]
+         [(Lifts) (left of the desk)] ] param /cards exch def
+
+/greeting {
+  weektime 86400 fmod 3600 div
+  dup 12 lt { pop (Good morning) } { 18 lt { (Good afternoon) } { (Good evening) } ifelse } ifelse
+} def
+
+% Slow drifting discs behind the type: a function of time only.
+/drift {
+  0 1 5 { /i exch def
+    gsave
+      i 0.37 add 7 mul hash01 width mul  i 0.61 add 3 mul hash01 height mul translate
+      now 0.09 mul i 1.7 mul add 360 mul sin  height 0.04 mul mul
+      now 0.07 mul i 2.3 mul add 360 mul cos  height 0.04 mul mul translate
+      /bg /surface 0.55 mixink ink 0 0 14 vmin i 0.2 mul 1 add mul 0 360 arc fill
+    grestore
+  } for
+} def
+
+/scene {
+  drift
+  /tall height width gt def
+  /page canvasbox 7 vmin inset def
+  page tall { 0.64 } { 0.6 } ifelse splity /low exch def /high exch def
+  high 0 0.38 1 0.62 subbox /hello exch def          % the greeting's box
+  high 0 0 1 0.38 subbox 0 -2.2 vmin shifted /where exch def             % and the line under it
+
+  /fg ink /title 12 vmin face greeting hello /title fitface
+  0.15 { greeting hello /sw placetext greeting /glyphs 0.045 /mask-up kinetic } after
+  /accent2 ink /title 5.4 vmin face
+  0.9 { (Welcome to ) place strcat where /nw showin } after
+
+  % an accent bar draws on between the two halves
+  /accent ink
+  0.5 1.6 /cubic-out tween 0 page 2 get tall { 0.5 } { 0.3 } ifelse mul between
+  page 0 get exch low 1 get low 3 get add 1.2 vmin add 0.9 vmin rectfill
+
+  low cards length 3 vmin tall { rows } { cols } ifelse /boxes exch def
+  0 1 cards length 1 sub { /i exch def
+    boxes i get /b exch def
+    cards i get aload pop /v exch def /l exch def
+    1.2 i 0.3 mul add /rise {
+      /surface ink b 2 vmin roundpath fill
+      /muted ink /body 3.3 vmin face l b 3 vmin inset /nw showin
+      /fg ink /title 4.8 vmin face v b 3 vmin inset /sw showin
+    } enters
+  } for
+} def

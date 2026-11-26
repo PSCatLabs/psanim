@@ -1,0 +1,21 @@
+% The lobby loop. Edit this file to change what plays and when; the movie does not
+% change. One array, in the order the scenes play:
+%   [ seconds-held  scene  << options >> ]    a scene, held fully on screen that long
+%   [ seconds  /transition ]                  how the scene before it hands over
+% A scene is a catalog entry (/spinner), a file here ((events.ps)) or a procedure.
+% /Fill true lays a scene out for the whole screen, either way up. /Days, /From and /To
+% put a scene on the list only at those times; the set is chosen as each round starts.
+[
+  [8.8 (welcome.ps) << /Fill true /Params << /Place (Larkfield Works) >> >>]
+  [1.2 /wipe-left]
+  [8.8 (events.ps)  << /Fill true >>]
+  [1.2 /push-left]
+  [8.8 (clock.ps)   << /Fill true >>]
+  [1.2 /dissolve]
+  [8.8 (lunch.ps)   << /Fill true /Days /weekdays /From (11:30) /To (14:00) >>]
+  [1.2 /dissolve]
+  [8.8 (weather.ps) << /Fill true >>]
+  [1.2 /iris]
+  [8.8 (status.ps)  << /Fill true >>]
+  [1.2 /zoom]
+]

@@ -35,7 +35,23 @@ const meta = engine.open(source, { scale: 0.5, maxSteps: 50_000_000 });
 const frame = engine.render(1.25);           // { width, height, data: Uint8ClampedArray }
 ctx.putImageData(new ImageData(frame.data, frame.width, frame.height), 0, 0);
 engine.setSignal("mousex", 320);             // read in the program with /mousex signal
+engine.event("click", 1.25);                 // an event at movie time 1.25: /click sinceevent
+
+// A catalog entry by name, with parameters at open (as --param gives them):
+engine.open(engine.catalog("clock-digital"), { params: { Signal: "clock", Theme: "amber" } });
+engine.catalogNames();                       // ["clock-analog", "clock-digital", ...]
+engine.recordSignal("cpu", 12.5, 73.0);      // a reading at movie time 12.5, keeping the earlier ones
 ```
+
+`setSignal` replaces a signal with a constant; `recordSignal` adds a
+reading and keeps the earlier ones, so a live dashboard can draw the
+signal's recent past (`signalseries`) and read it a little late to glide
+between readings (`signalago`). `scripts/wasm_smoke.mjs` exercises it in
+Node; it has not yet been run in a browser page.
+
+For a movie that keeps running in a page, with live inputs and no
+controls, use `<psanim-widget>` (`web/widget.js`); `docs/widgets.md` says
+what it does and `web/widgets.html` is a demo.
 
 Errors throw `PsAnimError` with `.info`, the same structured error the
 CLI prints with `--json`.
@@ -44,6 +60,17 @@ The player sets three signals from the pointer before every frame:
 `mousex`, `mousey` (canvas units, y up) and `mousedown`. A program that
 reads them is interactive in the page and still renders offline (with the
 signals from a file, or zero).
+
+A live clock is the same mechanism: the catalog's clocks take a `Signal`
+parameter naming a signal that carries seconds since midnight, and a page
+that embeds the engine sets it before each frame, fractions included
+(`const d = new Date(); engine.setSignal("clock", d.getHours() * 3600 +
+d.getMinutes() * 60 + d.getSeconds() + d.getMilliseconds() / 1000)`),
+and opens the clock with `{ params: { Signal: "clock" } }`.
+`<psanim-widget>` sets `clock` before every frame; `<psanim-player>` does
+not. Offline the same
+movie takes a start time instead, so a render is still a pure function of
+its own time.
 
 ## Measured
 

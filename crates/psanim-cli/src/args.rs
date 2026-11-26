@@ -2,7 +2,7 @@
 //! flag is an error that names the flag, not something silently ignored.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use psanim::{Budget, Limits, MotionBlur, Options, Param, Scale, Signals};
 
@@ -41,6 +41,7 @@ const SWITCHES: &[&str] = &[
     "no-blur",
     "keep-frames",
     "all",
+    "sheet",
 ];
 
 impl Common {
@@ -220,9 +221,26 @@ impl Common {
             budget,
             motion_blur,
             read_roots,
+            base_dir: self
+                .file
+                .as_ref()
+                .and_then(|f| f.parent())
+                .filter(|d| !d.as_os_str().is_empty())
+                .map(Path::to_path_buf),
             interrupt: None,
+            clock: Some(clock),
         })
     }
+}
+
+/// Seconds since the first call: the clock the engine times a program's
+/// code before `animation` with.
+fn clock() -> f64 {
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    START
+        .get_or_init(std::time::Instant::now)
+        .elapsed()
+        .as_secs_f64()
 }
 
 /// Parse a list like `0,1.5,3` or a single number.

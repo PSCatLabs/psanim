@@ -14,6 +14,26 @@ use crate::signals::Signals;
 pub(crate) struct TimeScope {
     pub t: f64,
     pub dur: f64,
+    /// The period that `turns` and `loopnoise` close over. It is the window
+    /// except under `delayed`, which only shifts the clock: there the
+    /// window shortens but the loop stays the loop it was.
+    pub cycle: f64,
+}
+
+impl TimeScope {
+    /// A scope whose loop is its window.
+    pub fn window(t: f64, dur: f64) -> Self {
+        TimeScope { t, dur, cycle: dur }
+    }
+
+    /// Local time as a fraction of the loop: 1 is one whole period.
+    pub fn cycle_fraction(&self) -> f64 {
+        if self.cycle > 0.0 && self.cycle.is_finite() {
+            self.t / self.cycle
+        } else {
+            0.0
+        }
+    }
 }
 
 /// What the engine is running, for error reports.
@@ -63,19 +83,76 @@ pub(crate) struct Ctx {
     /// the interpreter for a moment.
     pub spare: Option<Page>,
     pub scratch: Vec<u8>,
+    /// The clip `.clipmask` just captured, for the effect that asked for
+    /// it: `Some(None)` when nothing is clipped away.
+    pub clip_taken: Option<Option<ClipMask>>,
+    /// Alpha buffers of finished clip masks, kept to be reused.
+    pub mask_pool: Vec<Vec<u8>>,
 
     pub params: BTreeMap<String, Value>,
     pub signals: Signals,
     /// Names `param` was asked for and the defaults given, for `info`.
     pub params_seen: BTreeMap<String, String>,
+    /// Reels `reelduration` measured while the program's top level ran, with
+    /// the length it reported. Checked once the program is fully defined: a
+    /// custom transition defined after the measurement was counted as a clip.
+    pub measured_reels: Vec<(Vec<Value>, f64)>,
+
+    /// Components being set up or drawn, innermost last. Inside one, the
+    /// movie-level facts (`globaltime`, `duration`, `movieseed`, `param`)
+    /// are the component's own.
+    pub comps: Vec<Comp>,
+    /// Gust cells integrated so far this moment, across every particle and
+    /// trail: native work the interpreter's budgets cannot see, so it is
+    /// capped here (see `particles::charge_gust`).
+    pub gust_work: f64,
+    /// The particles of each open `particles` call, innermost last.
+    pub particles: Vec<crate::particles::ParticleSet>,
+    /// Planes opened by `onplane`, innermost last: where the plane is, and
+    /// the CTM (as `currentmatrix` gives it) the plane's coordinates are in.
+    pub planes: Vec<(crate::plane::Plane, [f64; 6])>,
+    /// The directory relative component paths are read from: the movie
+    /// file's own, when the host knows it.
+    pub base_dir: Option<std::path::PathBuf>,
 
     /// A plain-language explanation an operator leaves before it fails,
     /// picked up by the engine for the error report.
     pub hint: Option<String>,
 }
 
+/// One open component: its own clock, length, seed and parameters.
+#[derive(Clone, Debug)]
+pub(crate) struct Comp {
+    /// The component's own movie time, seconds from its start.
+    pub t: f64,
+    pub dur: f64,
+    pub seed: i64,
+    /// The values its `param` lookups get; a name not here gets the default.
+    pub params: Vec<(String, Value)>,
+    /// How many of the movie's units one of its units is where it is
+    /// drawn: blur and glow radii, given in its units, are scaled by this.
+    pub scale: f64,
+    /// Its box on the canvas, in pixels (x0, y0, x1, y1), when it is placed:
+    /// blur, glow, grain and vignette inside it stay inside it.
+    pub rect: Option<[usize; 4]>,
+}
+
+pub(crate) const MAX_COMPS: usize = 16;
+
+/// The clip in force when a blur or glow began, as coverage: what the
+/// spread of the effect is confined to. Captured by painting through the
+/// interpreter's own clip, so a rotated, curved or nested clip and its
+/// anti-aliased edge are honoured exactly.
+#[derive(Clone, Debug)]
+pub(crate) struct ClipMask {
+    /// One byte of coverage per canvas pixel, 0 (clipped away) to 255.
+    pub alpha: Vec<u8>,
+    /// The pixels with any coverage (x0, y0, x1, y1); outside it, nothing.
+    pub support: [usize; 4],
+}
+
 /// How a layer combinator finishes its layer.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct LayerEnd {
     pub opacity: f64,
     pub blend: crate::raster::Blend,
@@ -83,6 +160,8 @@ pub(crate) struct LayerEnd {
     pub blur: f64,
     /// Glow radius and strength, strength 0 for none.
     pub glow: (f64, f64),
+    /// For a blur or glow, the clip in force when it began, if it clips.
+    pub clip: Option<ClipMask>,
 }
 
 pub(crate) const MAX_SCOPES: usize = 256;
@@ -110,19 +189,79 @@ impl Ctx {
             views: Vec::new(),
             spare: None,
             scratch: Vec::new(),
+            clip_taken: None,
+            mask_pool: Vec::new(),
             params: BTreeMap::new(),
             signals: Signals::default(),
             params_seen: BTreeMap::new(),
+            comps: Vec::new(),
+            particles: Vec::new(),
+            gust_work: 0.0,
+            planes: Vec::new(),
+            base_dir: None,
+            measured_reels: Vec::new(),
             hint: None,
         }
     }
 
+    /// The seed randomness draws from: the innermost component's, or the
+    /// movie's.
+    pub fn seed(&self) -> i64 {
+        self.comps.last().map_or(self.seed, |c| c.seed)
+    }
+
+    /// The size of the running program's unit in the movie's units: 1,
+    /// or inside a component, its placed scale.
+    pub fn unit_scale(&self) -> f64 {
+        self.comps.last().map_or(1.0, |c| c.scale)
+    }
+
+    /// The pixels effects may touch: the innermost component's box, or
+    /// the whole canvas.
+    pub fn effect_rect(&self, w: usize, h: usize) -> [usize; 4] {
+        let mut r = [0, 0, w, h];
+        for c in &self.comps {
+            if let Some(b) = c.rect {
+                r = [
+                    r[0].max(b[0]),
+                    r[1].max(b[1]),
+                    r[2].min(b[2]),
+                    r[3].min(b[3]),
+                ];
+            }
+        }
+        if r[2] < r[0] {
+            r[2] = r[0];
+        }
+        if r[3] < r[1] {
+            r[3] = r[1];
+        }
+        r
+    }
+
+    /// Keep a finished mask's buffer for the next one (a few at most).
+    pub fn recycle_mask(&mut self, m: ClipMask) {
+        if self.mask_pool.len() <= MAX_LAYERS {
+            self.mask_pool.push(m.alpha);
+        }
+    }
+
+    /// Movie time and length as the running program sees them: inside a
+    /// component, its own.
+    pub fn movie_clock(&self) -> TimeScope {
+        self.comps
+            .last()
+            .map_or(TimeScope::window(self.global_t, self.duration), |c| {
+                TimeScope::window(c.t, c.dur)
+            })
+    }
+
     /// The innermost time scope: local time and window.
     pub fn scope(&self) -> TimeScope {
-        self.scopes.last().copied().unwrap_or(TimeScope {
-            t: self.global_t,
-            dur: self.duration,
-        })
+        self.scopes
+            .last()
+            .copied()
+            .unwrap_or(TimeScope::window(self.global_t, self.duration))
     }
 
     /// Start a moment: global time `t`, the scope stack holding just the
@@ -132,13 +271,20 @@ impl Ctx {
         self.global_t = t;
         self.dt = dt;
         self.scopes.clear();
-        self.scopes.push(TimeScope {
-            t,
-            dur: self.duration,
-        });
-        self.pending.clear();
+        self.scopes.push(TimeScope::window(t, self.duration));
+        if let Some(m) = self.clip_taken.take().flatten() {
+            self.recycle_mask(m);
+        }
+        let ends: Vec<LayerEnd> = self.pending.drain(..).collect();
+        for m in ends.into_iter().filter_map(|e| e.clip) {
+            self.recycle_mask(m);
+        }
         self.poses.clear();
         self.views.clear();
+        self.comps.clear();
+        self.particles.clear();
+        self.gust_work = 0.0;
+        self.planes.clear();
         self.hint = None;
     }
 }

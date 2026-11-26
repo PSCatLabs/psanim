@@ -53,6 +53,11 @@ pub const LIBRARIES: &[(&str, &str, &str)] = &[
         include_str!("../lib/pkink.ps"),
         "tapered strokes, strokes that draw themselves in any medium, gradients, radial repetition",
     ),
+    (
+        "pkfigure",
+        include_str!("../lib/pkfigure.ps"),
+        "a rig for cartoon characters: bounce, limbs, eyes, mouths, springs, and a dance step from the beat",
+    ),
 ];
 
 fn spec_from(i: &mut Interp, ctx: &Shared) -> Result<Spec, PsError> {
@@ -108,6 +113,119 @@ pub fn format_number(value: f64, decimals: i64, grouped: bool) -> String {
     }
 }
 
+/// `value` in a short form for a dashboard: 950, 12.4k, 3.2M, 1.1B, 4.0T,
+/// with `decimals` places once it is scaled (below a thousand, `decimals`
+/// places too, so a tween does not change width). A value that rounds up to
+/// the next unit takes it: 999.96 with one place is 1.0k.
+pub fn format_short(value: f64, decimals: i64) -> String {
+    let d = decimals.clamp(0, 9);
+    let units = ["", "k", "M", "B", "T"];
+    let mut scaled = value.abs();
+    let mut u = 0;
+    while u + 1 < units.len() {
+        let shown: f64 = format_number(scaled, d, false).parse().unwrap_or(scaled);
+        if shown < 1000.0 {
+            break;
+        }
+        scaled /= 1000.0;
+        u += 1;
+    }
+    let signed = if value < 0.0 { -scaled } else { scaled };
+    format!("{}{}", format_number(signed, d, false), units[u])
+}
+
+/// Ticks for an axis whose range is moving: about `n` round numbers over
+/// `lo..hi`, from the two nice steps either side of the ideal one, each
+/// with an opacity. A tick both steps share stays at 1; the others fade as
+/// the range moves from one step to the next, so labels cross-fade instead
+/// of jumping.
+pub fn fade_ticks(lo: f64, hi: f64, n: f64) -> Vec<(f64, f64)> {
+    let (lo, hi) = if lo <= hi { (lo, hi) } else { (hi, lo) };
+    let range = hi - lo;
+    if !(range.is_finite() && range > 0.0) {
+        return vec![(lo, 1.0)];
+    }
+    // About n ticks, and never more than a few hundred: the loops below
+    // are native and do not see the interpreter's budgets.
+    let raw = range / n.clamp(1.0, 200.0);
+    let mag = 10f64.powf(raw.log10().floor());
+    // The nice steps 1, 2, 5 (x 10^k) below and above the ideal step.
+    let ladder = [0.5, 1.0, 2.0, 5.0, 10.0, 20.0];
+    let mut fine = mag;
+    let mut coarse = 2.0 * mag;
+    for w in ladder.windows(2) {
+        if w[0] * mag <= raw && raw < w[1] * mag {
+            fine = w[0] * mag;
+            coarse = w[1] * mag;
+            break;
+        }
+    }
+    // Where the ideal step sits between them, on a log scale, eased so each
+    // set is fully shown for most of the way.
+    let f = ((raw / fine).ln() / (coarse / fine).ln()).clamp(0.0, 1.0);
+    let s = ((f - 0.3) / 0.4).clamp(0.0, 1.0);
+    let s = s * s * (3.0 - 2.0 * s);
+    let on = |v: f64, step: f64| ((v / step).round() * step - v).abs() < step * 1e-6;
+    let mut out = Vec::new();
+    // Tick indices are counted in floating point: far from zero, adding
+    // one stops moving, so such a range gets a single tick instead.
+    if (lo / fine).abs() > 1.0e15 || (hi / fine).abs() > 1.0e15 {
+        return vec![(lo, 1.0)];
+    }
+    const MAX_TICK_STEPS: u32 = 1000;
+    let k0 = (lo / fine - 1e-9).ceil();
+    for i in 0..MAX_TICK_STEPS {
+        let k = k0 + f64::from(i);
+        if k * fine > hi + fine * 1e-9 {
+            break;
+        }
+        let v = (k * fine / fine).round() * fine;
+        let a = if on(v, coarse) { 1.0 } else { 1.0 - s };
+        if a > 0.0 {
+            out.push((v, a));
+        }
+    }
+    // Coarse ticks that are not on the fine grid (5 when fine is 2); none
+    // at all while the coarse set is invisible.
+    if s > 0.0 {
+        let k0 = (lo / coarse - 1e-9).ceil();
+        for i in 0..MAX_TICK_STEPS {
+            let k = k0 + f64::from(i);
+            if k * coarse > hi + coarse * 1e-9 {
+                break;
+            }
+            let v = (k * coarse / coarse).round() * coarse;
+            if !on(v, fine) {
+                out.push((v, s));
+            }
+        }
+    }
+    out.sort_by(|a, b| a.0.total_cmp(&b.0));
+    out
+}
+
+/// The points of a series drawn evenly across a box: `values[k]` at
+/// `x + w k/(n-1)`, `lo` at the box's bottom and `hi` at its top, clamped
+/// to the box. Flat `[x0 y0 x1 y1 ...]`, for `polypath`.
+pub fn series_points(values: &[f64], bx: [f64; 4], lo: f64, hi: f64) -> Vec<f64> {
+    let [x, y, w, h] = bx;
+    let n = values.len();
+    let span = if hi == lo { 1.0 } else { hi - lo };
+    let mut out = Vec::with_capacity(n * 2);
+    for (k, v) in values.iter().enumerate() {
+        let fx = if n > 1 {
+            k as f64 / (n - 1) as f64
+        } else {
+            0.5
+        };
+        let fy = ((v - lo) / span).clamp(0.0, 1.0);
+        let fy = if fy.is_finite() { fy } else { 0.0 };
+        out.push(x + w * fx);
+        out.push(y + h * fy);
+    }
+    out
+}
+
 /// Round tick positions covering `lo..hi`, about `n` of them.
 pub fn nice_ticks(lo: f64, hi: f64, n: f64) -> Vec<f64> {
     let (lo, hi) = if lo <= hi { (lo, hi) } else { (hi, lo) };
@@ -115,7 +233,9 @@ pub fn nice_ticks(lo: f64, hi: f64, n: f64) -> Vec<f64> {
     if !(range.is_finite() && range > 0.0) {
         return vec![lo];
     }
-    let raw = range / n.max(1.0);
+    // About n ticks, and never more than a few hundred: the loops below
+    // are native and do not see the interpreter's budgets.
+    let raw = range / n.clamp(1.0, 200.0);
     let mag = 10f64.powf(raw.log10().floor());
     let step = [1.0, 2.0, 2.5, 5.0, 10.0]
         .iter()
@@ -642,6 +762,12 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         i.push_string(format_number(v, d, true).as_bytes());
         Ok(())
     });
+    reg(interp, ctx, "fmtshort", |i, _| {
+        let d = i.pop_int()?;
+        let v = i.pop_f64()?;
+        i.push_string(format_short(v, d).as_bytes());
+        Ok(())
+    });
     reg(interp, ctx, "fmtfixed", |i, _| {
         let d = i.pop_int()?;
         let v = i.pop_f64()?;
@@ -725,6 +851,32 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         i.push_numbers(&nice_ticks(lo, hi, n));
         Ok(())
     });
+    // lo hi n fadeticks -> [ v alpha v alpha ... ]
+    reg(interp, ctx, "fadeticks", |i, _| {
+        let (n, hi, lo) = (i.pop_f64()?, i.pop_f64()?, i.pop_f64()?);
+        let flat: Vec<f64> = fade_ticks(lo, hi, n)
+            .into_iter()
+            .flat_map(|(v, a)| [v, a])
+            .collect();
+        i.push_numbers(&flat);
+        Ok(())
+    });
+    // [v ...] box [lo hi] seriespoints -> [x0 y0 x1 y1 ...]
+    reg(interp, ctx, "seriespoints", |i, ctx| {
+        let range = i.pop_numbers()?;
+        let bx = i.pop_numbers()?;
+        let values = i.pop_numbers()?;
+        if range.len() != 2 || bx.len() != 4 || values.is_empty() {
+            return fail(
+                ctx,
+                PsError::Rangecheck,
+                "seriespoints takes values, a box and a range: [3 1 4] [0 0 200 50] [0 5] seriespoints",
+            );
+        }
+        let pts = series_points(&values, [bx[0], bx[1], bx[2], bx[3]], range[0], range[1]);
+        i.push_numbers(&pts);
+        Ok(())
+    });
     // [v ...] ranks -> [rank ...]   0 for the largest; ties in input order.
     reg(interp, ctx, "ranks", |i, _| {
         let v = i.pop_numbers()?;
@@ -746,6 +898,47 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let width = i.pop_int()?.clamp(0, 32) as usize;
         let v = i.pop_f64()?.round() as i64;
         i.push_string(format!("{v:0width$}").as_bytes());
+        Ok(())
+    });
+    // seconds | (H:MM[:SS[.fff]]) parseclock -> seconds
+    reg(interp, ctx, "parseclock", |i, ctx| {
+        match i.pop_value()? {
+            Value::String(s) => match parse_clock(&String::from_utf8_lossy(&s)) {
+                Some(secs) => i.push_real(secs),
+                None => {
+                    return fail(
+                        ctx,
+                        PsError::Rangecheck,
+                        format!(
+                            "parseclock: ({}) is not a time of day. Write (HH:MM), (HH:MM:SS) or (HH:MM:SS.fff), or give seconds since midnight",
+                            String::from_utf8_lossy(&s)
+                        ),
+                    );
+                }
+            },
+            v => match v.as_f64() {
+                Some(x) => i.push_real(x),
+                None => return Err(PsError::Typecheck),
+            },
+        }
+        Ok(())
+    });
+    // seconds clockparts -> hours minutes seconds fraction
+    reg(interp, ctx, "clockparts", |i, _| {
+        let t = i.pop_f64()?.rem_euclid(86400.0);
+        let whole = t.floor();
+        let n = whole as i64;
+        i.push_int(n / 3600);
+        i.push_int(n / 60 % 60);
+        i.push_int(n % 60);
+        i.push_real(t - whole);
+        Ok(())
+    });
+    // seconds fmtday -> (HH:MM:SS), the time of day on the 24 hour clock
+    reg(interp, ctx, "fmtday", |i, _| {
+        let n = i.pop_f64()?.rem_euclid(86400.0).floor() as i64;
+        let text = format!("{:02}:{:02}:{:02}", n / 3600, n / 60 % 60, n % 60);
+        i.push_string(text.as_bytes());
         Ok(())
     });
     reg(interp, ctx, "fmtclock", |i, _| {
@@ -791,9 +984,46 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     });
 }
 
+/// A time of day as seconds since midnight: `H:MM`, `H:MM:SS` or
+/// `H:MM:SS.fff`. Hours 0..=24 (24:00:00 is allowed), minutes and seconds
+/// below 60.
+fn parse_clock(text: &str) -> Option<f64> {
+    let mut parts = text.trim().split(':');
+    let h: u32 = parts.next()?.trim().parse().ok()?;
+    let m: u32 = parts.next()?.trim().parse().ok()?;
+    let s: f64 = match parts.next() {
+        Some(s) => s.trim().parse().ok()?,
+        None => 0.0,
+    };
+    if parts.next().is_some() || h > 24 || m > 59 || !(0.0..60.0).contains(&s) {
+        return None;
+    }
+    Some(f64::from(h) * 3600.0 + f64::from(m) * 60.0 + s)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fade_ticks_is_bounded_whatever_it_is_asked() {
+        // A trillion ticks asked for, or a range far from zero: a few
+        // hundred at most, at once.
+        assert!(fade_ticks(0.0, 100.0, 1.0e12).len() <= 800);
+        assert!(!fade_ticks(1.0e300, 1.0e300 + 1.0e290, 5.0).is_empty());
+        assert_eq!(fade_ticks(1.0e18, 1.0e18 + 10.0, 5.0).len(), 1);
+    }
+
+    #[test]
+    fn times_of_day_parse() {
+        assert_eq!(parse_clock("12:34:56"), Some(45296.0));
+        assert_eq!(parse_clock("7:05"), Some(25500.0));
+        assert_eq!(parse_clock("23:59:59.5"), Some(86399.5));
+        assert_eq!(parse_clock("25:00"), None);
+        assert_eq!(parse_clock("12:60"), None);
+        assert_eq!(parse_clock("noon"), None);
+        assert_eq!(parse_clock("1:2:3:4"), None);
+    }
 
     #[test]
     fn straightening_keeps_length_and_the_anchor() {
@@ -839,6 +1069,67 @@ mod tests {
         assert_eq!(format_number(-12.5, 1, true), "-12.5");
         assert_eq!(format_number(999.0, 0, true), "999");
         assert_eq!(format_number(1000.0, 0, true), "1,000");
+    }
+
+    #[test]
+    fn short_numbers_scale_and_carry() {
+        assert_eq!(format_short(950.0, 0), "950");
+        assert_eq!(format_short(12_400.0, 1), "12.4k");
+        assert_eq!(format_short(999.96, 1), "1.0k");
+        assert_eq!(format_short(999_960.0, 1), "1.0M");
+        assert_eq!(format_short(3_210_000.0, 2), "3.21M");
+        assert_eq!(format_short(-4_500.0, 1), "-4.5k");
+        assert_eq!(format_short(2.5e12, 1), "2.5T");
+        assert_eq!(format_short(0.42, 2), "0.42");
+    }
+
+    #[test]
+    fn fading_ticks_keep_shared_ticks_and_swap_the_rest_smoothly() {
+        // Exactly on a step: one set, fully shown.
+        let t = fade_ticks(0.0, 100.0, 5.0);
+        assert!(t.iter().all(|(_, a)| *a == 1.0), "{t:?}");
+        assert_eq!(
+            t.iter().map(|p| p.0).collect::<Vec<_>>(),
+            nice_ticks(0.0, 100.0, 5.0)
+        );
+        // Half way (on a log scale) between steps 20 and 50: 40 fades, 50 fades in, 0 and 100 stay.
+        let raw = (20.0f64 * 50.0).sqrt();
+        let t = fade_ticks(0.0, raw * 5.0, 5.0);
+        let a = |v: f64| {
+            t.iter()
+                .find(|p| (p.0 - v).abs() < 1e-9)
+                .map_or(0.0, |p| p.1)
+        };
+        assert_eq!(a(0.0), 1.0);
+        assert_eq!(a(100.0), 1.0);
+        assert!(
+            (a(40.0) - 0.5).abs() < 1e-9 && (a(50.0) - 0.5).abs() < 1e-9,
+            "{t:?}"
+        );
+        // Small moves of the range change the opacities a little (a tick
+        // entering at the edge aside), never a tick's place.
+        let mut last = fade_ticks(0.0, 60.0, 5.0);
+        for k in 1..200 {
+            let hi = 60.0 + k as f64 * 0.5;
+            let now = fade_ticks(0.0, hi, 5.0);
+            for (v, a) in now.iter().filter(|p| p.0 <= hi - 0.5) {
+                let before = last
+                    .iter()
+                    .find(|p| (p.0 - v).abs() < 1e-9)
+                    .map_or(0.0, |p| p.1);
+                assert!(
+                    (a - before).abs() < 0.2,
+                    "tick {v} jumped {before} -> {a} at hi {hi}"
+                );
+            }
+            last = now;
+        }
+    }
+
+    #[test]
+    fn series_points_span_the_box_and_clamp() {
+        let p = series_points(&[0.0, 5.0, 20.0], [10.0, 0.0, 100.0, 50.0], 0.0, 10.0);
+        assert_eq!(p, vec![10.0, 0.0, 60.0, 25.0, 110.0, 50.0]);
     }
 
     #[test]

@@ -167,6 +167,7 @@ DOCS = [
     ("guide/cli.html", "Command line", "docs/cli.md", "Reference"),
     ("guide/rust.html", "Rust API", "docs/rust.md", "Reference"),
     ("guide/browser.html", "Browser", "docs/wasm.md", "Reference"),
+    ("guide/widgets.html", "Widgets", "docs/widgets.md", "Design"),
     ("guide/architecture.html", "Architecture", "docs/architecture.md", "Design"),
     ("guide/vocabulary-design.html", "The expressive vocabulary", "docs/vocabulary-design.md", "Design"),
     ("guide/vocabulary-evaluation.html", "Evaluating the vocabulary", "docs/vocabulary-evaluation.md", "Design"),
@@ -184,7 +185,7 @@ BY_SOURCE["docs/gallery.md"] = "gallery.html"
 # The library chapters are a visual cookbook: every runnable example in
 # them is rendered and shown, looping, under its code.
 COOKBOOK = {"stage.md", "type.md", "explain.md", "ink.md", "storytelling.md"}
-LIBRARIES = "pkstage pkmotion pktype pkdiagram pkcode pkchart pkink".split()
+LIBRARIES = "pkstage pkmotion pktype pkdiagram pkcode pkchart pkink pkfigure".split()
 
 def with_films(text, stem):
     """Insert a marker after each runnable fence and render its film."""
@@ -412,6 +413,13 @@ def gallery_pieces():
     pieces.sort(key=lambda p: order.index(p["name"]) if p["name"] in order else len(order))
     return pieces
 
+def render_cmd(p):
+    """The command that renders a piece, with the recording it names in a
+    "% Signals: FILE.csv" line, if any."""
+    n = p["name"]
+    sigs = re.findall(r"^% *Signals: *(\S+)", p["src"].read_text(), re.M)
+    return f"psanim render gallery/{n}/{n}.ps" + "".join(f" --signals gallery/{n}/{f}" for f in sigs) + f" -o {n}.mp4"
+
 def build_gallery():
     pieces = gallery_pieces()
     cards, md_rows = [], []
@@ -441,14 +449,14 @@ def build_gallery():
 <p class="lede">{html.escape(desc)}</p>
 {facts}
 <div class="readme">{readme_html}</div>
-<pre class="code cmd"><code>psanim render gallery/{n}/{n}.ps -o {n}.mp4</code></pre>
+<pre class="code cmd"><code>{html.escape(render_cmd(p))}</code></pre>
 <p class="links">{source_link("gallery.html", f"gallery/{n}/{n}.ps", f"gallery/{n}/{n}.ps")} · <a href="gallery/{n}/sheet.png">contact sheet</a> · <a href="gallery/{n}/poster.png">still</a> · <a href="gallery/{n}/{n}.mp4">mp4</a>{' · <a href="gallery/' + n + '/' + n + '.gif">gif</a>' if (SITE / "gallery" / n / f"{n}.gif").exists() else ''}</p>
 </div>
 <details class="source"><summary>{n}.ps · {lines} lines of PostScript</summary><pre class="code lang-postscript"><code>{source}</code></pre></details>
 </article>""")
         if info:
             still = f"![{title}](img/gallery/{n}.jpg)" if (ROOT / "docs/img/gallery" / f"{n}.jpg").exists() else ""
-            md_rows.append(f"| {still} | [{title}](../gallery/{n}/{n}.ps) | {desc} | {info['duration']:g} s, {info['width']}x{info['height']}, {info['mode']} | `psanim render gallery/{n}/{n}.ps -o {n}.mp4` |")
+            md_rows.append(f"| {still} | [{title}](../gallery/{n}/{n}.ps) | {desc} | {info['duration']:g} s, {info['width']}x{info['height']}, {info['mode']} | `{render_cmd(p)}` |")
     head = ('<section class="page-head"><h1>Gallery</h1><p class="lede">' + str(len(pieces)) + ' films, each one PostScript file. '
             'Every frame you see is the program below it, run by the engine at that moment in time. '
             'Sources, stills and contact sheets are beside each film; the render command reproduces it.</p></section>')
@@ -530,7 +538,7 @@ def build_eval():
 def copy_assets():
     shutil.copy(ROOT / "scripts/site/site.css", SITE / "site.css")
     shutil.copy(ROOT / "scripts/site/source-viewer.js", SITE / "source-viewer.js")
-    for f in ["psanim.js", "player.js"]:
+    for f in ["psanim.js", "player.js", "widget.js", "widgets.html"]:
         shutil.copy(ROOT / "web" / f, SITE / f)
     wasm = ROOT / "web/psanim.wasm"
     if wasm.exists():

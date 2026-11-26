@@ -119,8 +119,17 @@ pub struct Options {
     /// program to the libraries built into the interpreter. Writes are
     /// never allowed.
     pub read_roots: Option<Vec<PathBuf>>,
+    /// The directory relative paths in `loadcomponent` are read from:
+    /// normally the movie file's own. `None` reads them from the current
+    /// directory.
+    pub base_dir: Option<PathBuf>,
     /// A flag another thread raises to stop a render in progress.
     pub interrupt: Option<Arc<AtomicBool>>,
+    /// Seconds from some fixed point, for timing the code before
+    /// `animation` (see [`Meta::preamble_warning`]). The engine keeps no
+    /// clock of its own, so a host that wants the timing passes one; with
+    /// `None` the time is not measured.
+    pub clock: Option<fn() -> f64>,
 }
 
 impl Default for Options {
@@ -135,7 +144,9 @@ impl Default for Options {
             budget: Budget::trusted(),
             motion_blur: None,
             read_roots: None,
+            base_dir: None,
             interrupt: None,
+            clock: None,
         }
     }
 }
@@ -198,9 +209,35 @@ pub struct Meta {
     /// psanim words the program redefined in setup (`/width 300 def`).
     /// Its own code then gets its definition instead of the engine's.
     pub shadowed: Vec<String>,
+    /// Seconds the program's code before `animation` took in the probe
+    /// pass, which runs it a second time. `None` when no clock was given
+    /// in [`Options`] or the program does not call `animation`.
+    pub preamble_seconds: Option<f64>,
+    /// The code before `animation` printed something.
+    pub preamble_printed: bool,
 }
 
+/// A preamble slower than this many seconds is worth a warning: it runs
+/// twice on every load.
+pub const PREAMBLE_WARN_SECONDS: f64 = 0.05;
+
 impl Meta {
+    /// A warning for a program whose code before `animation` prints or
+    /// takes more than [`PREAMBLE_WARN_SECONDS`]: the declaration is read
+    /// by a first pass that runs that code, so it runs twice.
+    pub fn preamble_warning(&self) -> Option<String> {
+        let slow = self.preamble_seconds.filter(|s| *s > PREAMBLE_WARN_SECONDS);
+        let what = match (slow, self.preamble_printed) {
+            (Some(s), true) => format!("prints and takes {:.0} ms", s * 1e3),
+            (Some(s), false) => format!("takes {:.0} ms", s * 1e3),
+            (None, true) => "prints".to_string(),
+            (None, false) => return None,
+        };
+        Some(format!(
+            "the code before `animation` {what}, and it runs twice: the declaration is found by a first pass that runs everything above it. Move that code after `animation`; above it keep only cheap definitions"
+        ))
+    }
+
     /// The time frame `index` shows.
     pub fn time_of(&self, index: u64) -> f64 {
         index as f64 / self.fps
@@ -231,6 +268,8 @@ impl Meta {
             "motion_blur": self.motion_blur.map(|m| serde_json::json!({"samples": m.samples, "shutter": m.shutter})),
             "params": self.params,
             "shadowed": self.shadowed,
+            "preamble_ms": self.preamble_seconds.map(|s| s * 1e3),
+            "preamble_printed": self.preamble_printed,
         })
     }
 }
@@ -278,6 +317,70 @@ struct Checkpoint {
     canvas: Option<Vec<u8>>,
 }
 
+/// A fingerprint of every string that setup left in userdict, directly or
+/// inside the dictionaries and arrays it holds, taken by
+/// [`Movie::string_snapshot`].
+///
+/// PostScript's `restore` does not roll back the contents of a string, so a
+/// scene that `put`s into a string made in setup changes it for every later
+/// frame, and frames stop being functions of their time. Two snapshots of a
+/// pure movie, one after setup and one after frames, tell which strings
+/// changed.
+#[derive(Clone, Debug, Default)]
+pub struct StringSnapshot {
+    /// Path (`buf`, `table/name`, `rows[3]`) to a hash of the bytes.
+    strings: BTreeMap<String, u64>,
+}
+
+impl StringSnapshot {
+    /// How many strings were fingerprinted.
+    pub fn len(&self) -> usize {
+        self.strings.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.strings.is_empty()
+    }
+
+    /// Paths of the strings whose bytes differ from `before`'s, in order.
+    pub fn changed_since(&self, before: &StringSnapshot) -> Vec<String> {
+        self.strings
+            .iter()
+            .filter(|(path, hash)| before.strings.get(*path).is_some_and(|h| h != *hash))
+            .map(|(path, _)| path.clone())
+            .collect()
+    }
+}
+
+/// FNV-1a, 64 bit: deterministic and enough to tell edited bytes.
+fn hash_bytes(bytes: &[u8]) -> u64 {
+    let mut h = 0xcbf2_9ce4_8422_2325u64;
+    for b in bytes {
+        h = (h ^ u64::from(*b)).wrapping_mul(0x0100_0000_01b3);
+    }
+    h ^ (bytes.len() as u64)
+}
+
+/// Record the strings inside `value`, which sits at `path`.
+fn collect_strings(path: &str, value: &Value, depth: usize, out: &mut BTreeMap<String, u64>) {
+    match value {
+        Value::String(bytes) => {
+            out.insert(path.to_string(), hash_bytes(bytes));
+        }
+        Value::Array(items) if depth < 8 => {
+            for (i, v) in items.iter().enumerate() {
+                collect_strings(&format!("{path}[{i}]"), v, depth + 1, out);
+            }
+        }
+        Value::Dict(entries) if depth < 8 => {
+            for (k, v) in entries {
+                collect_strings(&format!("{path}/{k}"), v, depth + 1, out);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// A loaded animation program. See the [crate docs](crate).
 pub struct Movie {
     interp: Interp,
@@ -296,6 +399,8 @@ pub struct Movie {
     last_steps: u64,
     /// What the program printed and nobody has collected yet.
     output: String,
+    /// `output` was cut at [`MAX_OUTPUT`].
+    output_truncated: bool,
     /// The persistent canvas, set aside while a frame's overlay is shown.
     kept: Option<Page>,
     /// The overlay procedure of a persistent movie, if it defines one.
@@ -314,6 +419,42 @@ const NATIVE_WORDS: &[&str] = &[
 
 /// The most printed text a movie keeps between calls of `take_output`.
 const MAX_OUTPUT: usize = 64 * 1024;
+
+/// The line that ends printed text cut at [`MAX_OUTPUT`].
+const TRUNCATION_MARK: &str = "[output truncated at 64 KB]\n";
+
+/// What a program printed since the last collection.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Printed {
+    /// The text. When it was cut at 64 KB it ends with a line saying so.
+    pub text: String,
+    /// More was printed than `text` holds.
+    pub truncated: bool,
+}
+
+/// Add `bytes` to `out`, keeping at most [`MAX_OUTPUT`] bytes and ending
+/// with a line that says so when anything was dropped.
+fn push_output(out: &mut String, truncated: &mut bool, bytes: &[u8]) {
+    if *truncated || bytes.is_empty() {
+        return;
+    }
+    let text = String::from_utf8_lossy(bytes);
+    let room = MAX_OUTPUT.saturating_sub(out.len());
+    if text.len() <= room {
+        out.push_str(&text);
+        return;
+    }
+    let mut cut = room;
+    while !text.is_char_boundary(cut) {
+        cut -= 1;
+    }
+    out.push_str(&text[..cut]);
+    if !out.is_empty() && !out.ends_with('\n') {
+        out.push('\n');
+    }
+    out.push_str(TRUNCATION_MARK);
+    *truncated = true;
+}
 
 fn short_repr(v: &Value) -> String {
     let s = match v {
@@ -399,8 +540,8 @@ impl Movie {
     pub fn load(source: &str, options: &Options) -> Result<Movie, Error> {
         // Pass 1, the probe: run just far enough to read the declaration,
         // which decides the canvas the real interpreter is built with.
-        let decl = probe(source, options)?;
-        let mut decl = Declaration::read(decl.as_ref())?;
+        let probed = probe(source, options)?;
+        let mut decl = Declaration::read(probed.decl.as_ref())?;
         if let Some(fps) = options.fps {
             decl.fps = fps;
         }
@@ -470,6 +611,7 @@ impl Movie {
             c.px_scale = scale;
             c.signals = options.signals.clone();
             c.params = host_params(&options.params);
+            c.base_dir = options.base_dir.clone();
             c.running = Running::Setup;
             c.begin_moment(0, 0.0, 1.0 / decl.fps);
         }
@@ -487,6 +629,13 @@ impl Movie {
         )?;
         run(&mut interp, &ctx, Phase::Setup, PRELUDE)?;
         run(&mut interp, &ctx, Phase::Setup, source)?;
+        // `reelduration` guessed which names were transitions; everything is
+        // defined now, so a wrong guess is an error, not a longer film.
+        crate::ops::check_measured_reels(&interp, &ctx).map_err(|msg| {
+            Error::new(Phase::Setup, "reelduration", msg).hint(
+                "reelduration runs before the reel's clips and transitions are defined, so it takes only the built-in transitions and names starting t- for transitions",
+            )
+        })?;
 
         let is_proc = |interp: &Interp, name: &str| matches!(interp.lookup(name), Some(Value::Other(o)) if o.is_procedure());
         if !is_proc(&interp, &decl.scene) {
@@ -540,7 +689,10 @@ impl Movie {
         let shadowed: Vec<String> = crate::api::API
             .iter()
             .filter(|e| NATIVE_WORDS.contains(&e.name))
-            .filter(|e| !matches!(interp.lookup(e.name), Some(Value::Other(o)) if o.type_name() == "operatortype"))
+            .filter(|e| {
+                !matches!(interp.lookup(e.name), Some(Value::Other(o)) if o.type_name() == "operatortype")
+                    && !is_prelude_word(&mut interp, e.name)
+            })
             .map(|e| e.name.to_string())
             .collect();
 
@@ -558,7 +710,15 @@ impl Movie {
             .pop_value()
             .map_err(|_| Error::new(Phase::Setup, "internal", "no checkpoint was taken"))?;
 
-        let setup_output = String::from_utf8_lossy(interp.captured_stdout()).into_owned();
+        // Only this pass's printing is kept: the probe's interpreter is
+        // gone, so what the code before `animation` prints is shown once.
+        let mut setup_output = String::new();
+        let mut setup_truncated = false;
+        push_output(
+            &mut setup_output,
+            &mut setup_truncated,
+            interp.captured_stdout(),
+        );
         interp.capture_stdout();
         let frames = ((decl.duration * decl.fps - 1e-9).ceil().max(1.0)) as u64;
         // Checkpoints about every two seconds, and never more than 64 deep.
@@ -587,6 +747,8 @@ impl Movie {
                 motion_blur: decl.motion_blur,
                 params,
                 shadowed,
+                preamble_seconds: probed.seconds,
+                preamble_printed: probed.printed,
             },
             scene: decl.scene,
             step,
@@ -602,6 +764,7 @@ impl Movie {
             frame_limits: options.budget.frame,
             last_steps: 0,
             output: setup_output,
+            output_truncated: setup_truncated,
             kept: None,
             overlay,
             last_ticks: 0,
@@ -631,10 +794,65 @@ impl Movie {
         self.last_ticks
     }
 
+    /// Fingerprint the strings reachable from userdict, after rolling a
+    /// pure movie back to its setup checkpoint (so what a frame defined is
+    /// gone and what it wrote into a string is not). `None` for a stateful
+    /// or persistent movie, which keeps state on purpose.
+    ///
+    /// Taken right after [`Movie::load`] and again after some frames, the
+    /// two differ exactly in the strings a scene wrote into: see
+    /// [`StringSnapshot::changed_since`].
+    pub fn string_snapshot(&mut self) -> Result<Option<StringSnapshot>, Error> {
+        if self.meta.mode != Mode::Pure {
+            return Ok(None);
+        }
+        let phase = Phase::Setup;
+        self.rollback(0, phase)?;
+        self.interp.clear_operands();
+        self.exec(phase, "[ userdict { pop } forall ]")?;
+        let keys = self
+            .interp
+            .pop_value()
+            .map_err(|_| Error::new(phase, "internal", "userdict's names could not be read"))?;
+        let mut snap = StringSnapshot::default();
+        for key in keys.as_array().unwrap_or(&[]) {
+            let Some(name) = key.as_text() else { continue };
+            match self.interp.lookup(name) {
+                Some(Value::Other(_)) | None => {
+                    // A procedure, an operator, or a value too large to
+                    // copy out. Only the last matters, and it is rare.
+                }
+                Some(v) => collect_strings(name, &v, 0, &mut snap.strings),
+            }
+        }
+        Ok(Some(snap))
+    }
+
     /// Replace the value of signal `name` from now on: what a live host
     /// calls before each frame with the mouse position or an audio level.
     pub fn set_signal(&mut self, name: &str, value: f64) {
         self.ctx.borrow_mut().signals.set(name, value);
+    }
+
+    /// Add an event at movie time `t` to the track `name`, for
+    /// `sinceevent` and `eventcount`: what a live host calls when the viewer
+    /// clicks or presses a key. See [`Signals::push_event`].
+    pub fn push_event(&mut self, name: &str, t: f64) {
+        self.ctx.borrow_mut().signals.push_event(name, t);
+    }
+
+    /// Forget the events of the track `name`.
+    pub fn clear_events(&mut self, name: &str) {
+        self.ctx.borrow_mut().signals.clear_events(name);
+    }
+
+    /// Add a reading of signal `name` taken at movie time `t`, keeping the
+    /// earlier ones: what a live dashboard host calls with each new value,
+    /// so `signalago` and `signalseries` can read the recent past and the
+    /// movie can draw smoothly between readings (`/name 1 signalago` is the
+    /// value a second ago, interpolated).
+    pub fn record_signal(&mut self, name: &str, t: f64, value: f64) {
+        self.ctx.borrow_mut().signals.record(name, t, value);
     }
 
     /// Render frame `index` (time `index / fps`).
@@ -754,12 +972,7 @@ impl Movie {
         let r = run(&mut self.interp, &self.ctx, phase, program);
         let printed = self.interp.captured_stdout();
         if !printed.is_empty() {
-            if self.output.len() < MAX_OUTPUT {
-                self.output.push_str(&String::from_utf8_lossy(printed));
-                if self.output.len() >= MAX_OUTPUT {
-                    self.output.push_str("\n[output truncated]\n");
-                }
-            }
+            push_output(&mut self.output, &mut self.output_truncated, printed);
             self.interp.capture_stdout();
         }
         if self.frame_limits.max_steps.is_some() {
@@ -801,8 +1014,23 @@ impl Movie {
     /// What the program has printed (`print`, `=`, `==`, `pstack`) since
     /// the last call, as text. Printing is how a program is debugged:
     /// `psanim frame` shows it.
+    ///
+    /// Output is kept to 64 KB between calls; past that it is dropped and
+    /// the text ends with `[output truncated at 64 KB]`. [`take_printed`]
+    /// reports that as a flag too.
+    ///
+    /// [`take_printed`]: Movie::take_printed
     pub fn take_output(&mut self) -> String {
-        std::mem::take(&mut self.output)
+        self.take_printed().text
+    }
+
+    /// Like [`take_output`](Movie::take_output), saying whether the text
+    /// was cut at 64 KB.
+    pub fn take_printed(&mut self) -> Printed {
+        Printed {
+            text: std::mem::take(&mut self.output),
+            truncated: std::mem::take(&mut self.output_truncated),
+        }
     }
 
     fn pop_save(&mut self, phase: Phase) -> Result<Value, Error> {
@@ -1005,6 +1233,21 @@ fn host_params(params: &BTreeMap<String, Param>) -> BTreeMap<String, Value> {
 
 /// Run `program`, turning a PostScript error into an [`Error`] that says
 /// where in the movie it happened.
+/// The word is still the prelude's own procedure (saved by the prelude as
+/// `.prelude-<name>`), not one the program put in its place.
+fn is_prelude_word(interp: &mut Interp, name: &str) -> bool {
+    let saved = format!(".prelude-{name}");
+    if interp.lookup(&saved).is_none() {
+        return false;
+    }
+    // systemdict on top, so the program's own `load` or `eq` are not used.
+    let probe = format!("systemdict begin /{name} load /{saved} load eq end");
+    let same =
+        interp.run_str(&probe).is_ok() && matches!(interp.pop_value(), Ok(Value::Bool(true)));
+    interp.clear_operands();
+    same
+}
+
 fn run(
     interp: &mut Interp,
     ctx: &Rc<RefCell<Ctx>>,
@@ -1073,10 +1316,22 @@ fn describe(interp: &mut Interp, ctx: &Rc<RefCell<Ctx>>, phase: Phase, err: &PsE
     e
 }
 
+/// What the probe pass found out.
+struct Probed {
+    /// The dictionary `animation` was given, if it was called.
+    decl: Option<Value>,
+    /// Seconds the program's code before `animation` took, when a clock
+    /// was given and `animation` was called.
+    seconds: Option<f64>,
+    /// That code printed something. (The text is dropped with the
+    /// probe's interpreter: the real pass prints it again, once.)
+    printed: bool,
+}
+
 /// Run the program in a throwaway interpreter until `animation` is called,
 /// and return the dictionary it was given. A program that never calls it
 /// runs to its end here and gets the defaults.
-fn probe(source: &str, options: &Options) -> Result<Option<Value>, Error> {
+fn probe(source: &str, options: &Options) -> Result<Probed, Error> {
     let mut interp = Interp::with_page(64, 64).expect("a small page");
     let ctx = Rc::new(RefCell::new(Ctx::new()));
     {
@@ -1085,6 +1340,7 @@ fn probe(source: &str, options: &Options) -> Result<Option<Value>, Error> {
         c.running = Running::Probe;
         c.params = host_params(&options.params);
         c.signals = options.signals.clone();
+        c.base_dir = options.base_dir.clone();
         c.begin_moment(0, 0.0, 1.0 / 30.0);
     }
     configure(&mut interp, &ctx, options)?;
@@ -1092,8 +1348,19 @@ fn probe(source: &str, options: &Options) -> Result<Option<Value>, Error> {
         .set_limits(options.budget.setup)
         .map_err(|e| Error::new(Phase::Load, "options", e.to_string()))?;
     run(&mut interp, &ctx, Phase::Setup, PRELUDE)?;
+    let started = options.clock.map(|clock| clock());
     run(&mut interp, &ctx, Phase::Setup, source)?;
-    Ok(ctx.borrow_mut().decl.take())
+    let seconds = options
+        .clock
+        .zip(started)
+        .map(|(clock, started)| clock() - started);
+    let decl = ctx.borrow_mut().decl.take();
+    let called = decl.is_some();
+    Ok(Probed {
+        seconds: seconds.filter(|_| called),
+        printed: called && !interp.captured_stdout().is_empty(),
+        decl,
+    })
 }
 
 /// The `animation` dictionary, read and checked.

@@ -234,6 +234,150 @@ fn what_a_program_prints_is_collected() {
 }
 
 #[test]
+fn printed_output_cut_at_64_kb_says_so() {
+    // 3000 lines of 41 bytes: about 120 KB, twice what is kept.
+    let mut m =
+        load("/scene { 1 1 3000 { pop (0123456789012345678901234567890123456789) = } for } def");
+    assert_eq!(
+        m.take_printed(),
+        psanim::Printed::default(),
+        "setup printed nothing"
+    );
+    m.render_frame(0).unwrap();
+    let p = m.take_printed();
+    assert!(p.truncated);
+    assert!(p.text.ends_with("[output truncated at 64 KB]\n"));
+    let marker = "\n[output truncated at 64 KB]\n".len();
+    assert!(
+        p.text.len() <= 64 * 1024 + marker,
+        "{} bytes kept",
+        p.text.len()
+    );
+    assert!(p.text.len() > 64 * 1024 - 64, "most of the 64 KB is kept");
+    // Each collection starts fresh: a short print afterwards is whole.
+    m.render_frame(1).unwrap();
+    let p = m.take_printed();
+    assert!(p.truncated, "the second frame prints as much again");
+    let mut quiet = load("/scene { frame 1 eq { (short) = } if } def");
+    quiet.render_frame(0).unwrap();
+    assert!(!quiet.take_printed().truncated);
+    quiet.render_frame(1).unwrap();
+    assert_eq!(
+        quiet.take_printed(),
+        psanim::Printed {
+            text: "short\n".into(),
+            truncated: false
+        }
+    );
+}
+
+#[test]
+fn printed_output_under_the_limit_is_whole() {
+    let mut m =
+        load("/scene { 1 1 1000 { pop (0123456789012345678901234567890123456789) = } for } def");
+    m.render_frame(0).unwrap();
+    let p = m.take_printed();
+    assert!(!p.truncated);
+    assert_eq!(p.text.len(), 1000 * 41);
+    assert!(!p.text.contains("truncated"));
+}
+
+#[test]
+fn printed_output_in_setup_is_cut_too() {
+    let mut m =
+        load("1 1 3000 { pop (0123456789012345678901234567890123456789) = } for /scene { } def");
+    let p = m.take_printed();
+    assert!(p.truncated);
+    assert!(p.text.ends_with("[output truncated at 64 KB]\n"));
+    assert!(p.text.len() <= 64 * 1024 + 40);
+    // `take_output` gives the same text.
+    let mut m2 =
+        load("1 1 3000 { pop (0123456789012345678901234567890123456789) = } for /scene { } def");
+    assert_eq!(m2.take_output(), p.text);
+}
+
+/// A clock that advances 0.1 s each time it is read: whatever it times
+/// looks like it took 0.1 s.
+fn slow_clock() -> f64 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static TICKS: AtomicU64 = AtomicU64::new(0);
+    TICKS.fetch_add(1, Ordering::SeqCst) as f64 * 0.1
+}
+
+/// A clock that advances a millisecond each time it is read.
+fn fast_clock() -> f64 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static TICKS: AtomicU64 = AtomicU64::new(0);
+    TICKS.fetch_add(1, Ordering::SeqCst) as f64 * 0.001
+}
+
+fn meta_with_clock(source: &str, clock: Option<fn() -> f64>) -> psanim::Meta {
+    let options = Options {
+        clock,
+        ..Options::default()
+    };
+    Movie::load(source, &options)
+        .unwrap_or_else(|e| panic!("{e}"))
+        .meta()
+        .clone()
+}
+
+#[test]
+fn a_slow_preamble_is_measured_and_warned_about() {
+    let src = format!("/helper {{ 1 add }} def\n{HEAD}/scene {{ }} def");
+    let slow = meta_with_clock(&src, Some(slow_clock));
+    assert!(slow.preamble_seconds.unwrap() > psanim::PREAMBLE_WARN_SECONDS);
+    assert!(!slow.preamble_printed);
+    let w = slow.preamble_warning().expect("a warning");
+    assert!(
+        w.contains("before `animation`") && w.contains("runs twice"),
+        "{w}"
+    );
+    assert!(w.contains("after `animation`"), "{w}");
+    // The meta JSON carries both facts.
+    assert!(slow.to_json()["preamble_ms"].as_f64().unwrap() > 50.0);
+    assert_eq!(slow.to_json()["preamble_printed"], false);
+}
+
+#[test]
+fn a_quick_quiet_preamble_is_not_warned_about() {
+    let src = format!("/helper {{ 1 add }} def\n{HEAD}/scene {{ }} def");
+    let m = meta_with_clock(&src, Some(fast_clock));
+    assert!(m.preamble_seconds.unwrap() < psanim::PREAMBLE_WARN_SECONDS);
+    assert_eq!(m.preamble_warning(), None);
+    // Without a clock nothing is measured, and nothing is warned about.
+    let m = meta_with_clock(&src, None);
+    assert_eq!(m.preamble_seconds, None);
+    assert_eq!(m.preamble_warning(), None);
+    // A program with no `animation` has no preamble.
+    let m = meta_with_clock("/scene { } def", Some(slow_clock));
+    assert_eq!(m.preamble_seconds, None);
+    assert_eq!(m.preamble_warning(), None);
+    // Code after `animation` is not the preamble, however slow.
+    let m = meta_with_clock(
+        &format!("{HEAD}1 1 100000 {{ pop }} for /scene {{ }} def"),
+        None,
+    );
+    assert_eq!(m.preamble_warning(), None);
+}
+
+#[test]
+fn a_printing_preamble_is_warned_about_and_printed_once() {
+    let src = format!("(preamble) =\n{HEAD}(setup) =\n/scene {{ }} def");
+    let mut m = Movie::load(&src, &Options::default()).unwrap();
+    assert!(m.meta().preamble_printed);
+    let w = m.meta().preamble_warning().expect("a warning");
+    assert!(w.contains("prints") && w.contains("runs twice"), "{w}");
+    // The probe pass printed it too; only the real pass's output is shown.
+    assert_eq!(m.take_output(), "preamble\nsetup\n");
+    // Printing after `animation` alone is no reason to warn.
+    let src = format!("{HEAD}(setup) =\n/scene {{ }} def");
+    let m = Movie::load(&src, &Options::default()).unwrap();
+    assert!(!m.meta().preamble_printed);
+    assert_eq!(m.meta().preamble_warning(), None);
+}
+
+#[test]
 fn globally_reads_movie_time_inside_a_scope() {
     assert_eq!(
         eval_at("", "-1 0.5 2 { pop { now } globally } during", 9),
@@ -324,6 +468,46 @@ fn sequence_gap_and_wiggle_array_key() {
     assert!((-50.0..=50.0).contains(&w));
     assert_ne!(w, eval_at("", "[3 8] 2 50 wiggle", 4));
     assert_eq!(w, eval_at("", "[3 7] 2 50 wiggle", 4));
+}
+
+/// `delayed` only shifts the clock: `turns` and `loopnoise` inside it are
+/// the undelayed value from `d` seconds earlier, so a loop still closes
+/// (issue 40). `progress` and `span` still see the shortened window.
+#[test]
+fn delayed_is_a_pure_shift_for_turns_and_loopnoise() {
+    // The film is 2 s at 10 fps: frame 5 is t = 0.5, frame 3 is t = 0.3.
+    assert_eq!(eval_at("", "0.2 { 2 turns } delayed", 5), 108.0);
+    assert_eq!(
+        eval_at("", "0.2 { 2 turns } delayed", 5),
+        eval_at("", "2 turns", 3)
+    );
+    assert_eq!(
+        eval_at("", "0.2 { 4 0.8 loopnoise } delayed", 5),
+        eval_at("", "4 0.8 loopnoise", 3)
+    );
+    // Through the words built on it.
+    assert_eq!(
+        eval_at("", "3 0.1 { 2 turns } staggered", 5),
+        eval_at("", "2 turns", 2)
+    );
+    assert_eq!(
+        eval_at("", "[ 0 0 ] 0.1 { pop pop 2 turns } cascade add", 5),
+        eval_at("", "2 turns", 5) + eval_at("", "2 turns", 4)
+    );
+    // The loop closes: a delayed turn gains whole turns over the film.
+    let gain =
+        eval_at("", "0.3 { 3 turns } delayed", 19) - eval_at("", "0.3 { 3 turns } delayed", 0);
+    let step =
+        eval_at("", "0.3 { 3 turns } delayed", 1) - eval_at("", "0.3 { 3 turns } delayed", 0);
+    assert!((gain + step - 1080.0).abs() < 0.01, "{gain} {step}");
+    // Inside a window the loop is the window, delayed or not.
+    assert_eq!(
+        eval_at("", "0 1 { 0.1 { 3 turns } delayed } during", 5),
+        432.0
+    );
+    // progress and span keep the shortened window, as they always did.
+    assert!((eval_at("", "0.2 { progress } delayed", 5) - 0.3 / 1.8).abs() < 0.001);
+    assert!((eval_at("", "0.2 { span } delayed", 5) - 1.8).abs() < 0.001);
 }
 
 #[test]
@@ -545,6 +729,21 @@ fn path_operators() {
 }
 
 #[test]
+fn alignpath_turns_an_outline_to_its_best_start_and_sense() {
+    // The same square, started at another corner and walked the other way:
+    // aligned, the morph does not move a point at all.
+    let a = "newpath 0 0 moveto 20 0 lineto 20 20 lineto 0 20 lineto closepath 8 resamplepath";
+    let b = "newpath 20 20 moveto 20 0 lineto 0 0 lineto 0 20 lineto closepath 8 resamplepath";
+    let still = format!(
+        "{a} dup {b} alignpath 0.5 morphpath pathlength {a} {a} 0.5 morphpath pathlength sub"
+    );
+    assert_eq!(eval_at("", &still, 0), 0.0);
+    // Unaligned, the halfway shape is smaller (the points cross the middle).
+    let raw = format!("{a} {b} 0.5 morphpath pathlength");
+    assert!(eval_at("", &raw, 0) < 79.0);
+}
+
+#[test]
 fn trimpath_draws_on() {
     let mut m = load(
         "/scene { 0 24 moveto 64 24 lineto 0 progress 2 mul trimpath 1 setgray 8 setlinewidth stroke } def",
@@ -617,6 +816,77 @@ fn blur_and_glow_spread_light() {
     let g = glow.render_frame(0).unwrap().premultiplied.to_vec();
     assert_eq!(at(&g, 32, 24), 255, "glow keeps the core");
     assert!(at(&g, 24, 24) > 0, "and adds a halo");
+}
+
+#[test]
+fn blur_and_glow_stay_inside_a_within_box() {
+    // The box is x 16..48, rows 12..36. The blur and the glow are drawn
+    // inside it and must not spread past it; the backdrop is kept.
+    for effect in [
+        "4 { 1 setgray 0 0 32 24 rectfill } blurred",
+        "4 1.5 { 1 setgray 0 0 32 24 rectfill } glowing",
+        "beginlayer 1 setgray 0 0 32 24 rectfill 4 blurlayer 1 endlayer",
+        "beginlayer 1 setgray 0 0 32 24 rectfill 4 1.5 glowlayer 1 endlayer",
+        "1 setgray 0 0 32 24 rectfill 4 blurlayer",
+    ] {
+        let mut m = load(&format!(
+            "/scene {{ 0 0 0.5 setrgbcolor 0 0 64 48 rectfill [16 12 32 24] {{ {effect} }} within }} def"
+        ));
+        let f = m.render_frame(0).unwrap();
+        for y in 0..48 {
+            for x in 0..64 {
+                if !((16..48).contains(&x) && (12..36).contains(&y)) {
+                    assert_eq!(px(&f, x, y), [0, 0, 128, 255], "{effect}: {x},{y}");
+                }
+            }
+        }
+        assert_eq!(px(&f, 32, 24)[0], 255, "{effect}: the middle is lit");
+    }
+}
+
+#[test]
+fn a_glow_follows_a_rotated_clip_exactly() {
+    // A square clip turned 45 degrees: a diamond about (50, 50) reaching
+    // 28 pixels each way. (30, 30) lies inside the diamond's bounding box
+    // but outside the diamond, within the glow's reach: it must stay dark.
+    let mut m = Movie::load(
+        "<< /Size [100 100] /Duration 1 /FPS 10 /Background [0 0 0] >> animation
+         /scene { gsave 50 50 translate 45 rotate -20 -20 40 40 rectclip
+                  6 1.5 { 0.5 setgray -50 -50 100 100 rectfill } glowing grestore } def",
+        &Options::default(),
+    )
+    .unwrap();
+    let f = m.render_frame(0).unwrap();
+    assert!(px(&f, 50, 50)[0] > 128, "the glow brightens the inside");
+    for (x, y) in [(30, 30), (70, 70), (30, 70), (70, 30)] {
+        assert_eq!(
+            px(&f, x, y),
+            [0, 0, 0, 255],
+            "{x},{y} is outside the diamond"
+        );
+    }
+}
+
+#[test]
+fn a_blur_ends_inside_the_clip_it_began_in() {
+    // Not the clip in force where it ends: a clip set and kept by the
+    // body does not decide where the blur may spread...
+    let mut m = load(
+        "/scene { [16 12 32 24] { 4 { 1 setgray 0 0 32 24 rectfill } blurred } within
+                  8 { 0 0 4 4 rectclip 1 setgray 0 0 4 4 rectfill } blurred } def",
+    );
+    let f = m.render_frame(0).unwrap();
+    // ...but the clip it began under (none here) does: the corner square's
+    // blur reaches past its own clip.
+    assert!(
+        px(&f, 6, 47 - 2)[0] > 0,
+        "the blur spreads past the body's own clip"
+    );
+    assert_eq!(
+        px(&f, 14, 24),
+        [0, 0, 0, 255],
+        "and the within box still holds"
+    );
 }
 
 #[test]
@@ -802,6 +1072,86 @@ fn a_program_can_add_a_transition_and_bad_names_fail_early() {
     );
 }
 
+/// A reel measured by `reelduration` in the declaration, with a custom
+/// transition named `name` put in `transitions` either `before` the
+/// declaration or after it.
+fn measured_reel(name: &str, before: bool) -> Result<Movie, Box<psanim::Error>> {
+    let define = format!("transitions /{name} {{ pop exch pop exec }} put\n");
+    let (early, late) = if before {
+        (define, String::new())
+    } else {
+        (String::new(), define)
+    };
+    Movie::load(
+        &format!(
+            "/a {{ 1 0 0 backdrop }} def /b {{ 0 0 1 backdrop }} def
+             {early}/film [ [1.5 /a] [1 /{name}] [1.5 /b] ] def
+             << /Size [40 20] /Duration film reelduration /FPS 10 >> animation
+             {late}/scene {{ film reel }} def"
+        ),
+        &Options::default(),
+    )
+    .map_err(Box::new)
+}
+
+#[test]
+fn reelduration_before_a_custom_transition_is_defined_is_an_error() {
+    // `shutter` is not built in and does not start with `t-`, and it is put
+    // in `transitions` after `reelduration` measured the reel: it was
+    // counted as a clip (4 s, not 2 s). That must be loud.
+    let e = measured_reel("shutter", false).err().expect("an error");
+    assert_eq!(e.kind, "reelduration");
+    assert!(
+        e.message.contains("/shutter"),
+        "names the entry: {}",
+        e.message
+    );
+    assert!(e.message.contains("4 s"), "{}", e.message);
+    assert!(e.message.contains("2 s"), "{}", e.message);
+    assert!(e.message.contains("name it t-shutter"), "{}", e.message);
+    assert!(e.message.contains("before `reelduration`"), "{}", e.message);
+}
+
+#[test]
+fn reelduration_with_the_right_order_or_a_t_name_still_works() {
+    // Defined before the measurement, with any name.
+    let m = measured_reel("shutter", true).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(m.meta().duration, 2.0);
+    // Defined after, but named `t-...`: recognised before it exists.
+    let mut m = measured_reel("t-shutter", false).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(m.meta().duration, 2.0);
+    assert_eq!(px(&m.render_frame(2).unwrap(), 5, 5), [255, 0, 0, 255]);
+    // Built-in transitions, with clips defined after the measurement.
+    let m = Movie::load(
+        "/film [ [1.5 /a] [1 /dissolve] [1.5 /b] ] def
+         << /Size [40 20] /Duration film reelduration /FPS 10 >> animation
+         /a { 1 0 0 backdrop } def /b { 0 0 1 backdrop } def
+         /scene { film reel } def",
+        &Options::default(),
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(m.meta().duration, 2.0);
+}
+
+#[test]
+fn a_t_name_that_is_never_defined_fails_when_the_reel_plays() {
+    let mut m = Movie::load(
+        "/a { 1 0 0 backdrop } def /b { 0 0 1 backdrop } def
+         /film [ [1.5 /a] [1 /t-missing] [1.5 /b] ] def
+         << /Size [40 20] /Duration film reelduration /FPS 10 >> animation
+         /scene { film reel } def",
+        &Options::default(),
+    )
+    .unwrap();
+    let e = m.render_frame(0).unwrap_err();
+    assert!(
+        e.hint
+            .unwrap()
+            .contains("/t-missing is neither a transition"),
+        "names it"
+    );
+}
+
 #[test]
 fn directional_transitions_move_the_right_way() {
     // wipe-right: the reveal travels rightward, so B appears at the left first.
@@ -882,6 +1232,45 @@ fn params_signals_and_events_reach_the_program() {
     // Defaults when the host supplies nothing.
     let mut m = Movie::load(&src, &Options::default()).unwrap();
     assert_eq!(px(&m.render_frame(5).unwrap(), 0, 0), [0, 0, 0, 255]);
+}
+
+#[test]
+fn a_signal_has_a_past_that_a_movie_can_read() {
+    // 10 FPS; level rises 0 -> 10 over the first second, then holds.
+    let src = format!(
+        "{HEAD}/scene {{ /level 0.5 signalago == /level 1 3 signalseries == /level 0 1 3 signalbetween ==
+                  signaltime == /level hassignal == /nope hassignal == /nope 1 signalago == }} def"
+    );
+    let opts = Options {
+        signals: psanim::Signals::from_csv("t,level\n0,0\n1,10\n").unwrap(),
+        ..Options::default()
+    };
+    let mut m = Movie::load(&src, &opts).unwrap();
+    m.take_output();
+    m.render_frame(10).unwrap(); // t = 1
+    let out = m.take_output();
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(lines[0], "5.0", "{out}");
+    assert_eq!(lines[1], "[0.0 5.0 10.0]", "{out}");
+    assert_eq!(lines[2], "[0.0 5.0 10.0]", "{out}");
+    assert_eq!(lines[3], "1.0", "{out}");
+    assert_eq!(&lines[4..], ["true", "false", "0.0"], "{out}");
+    // A live host records readings as they come; the movie reads between them.
+    let mut m = Movie::load(&src, &Options::default()).unwrap();
+    m.record_signal("level", 0.0, 0.0);
+    m.record_signal("level", 1.0, 10.0);
+    m.take_output();
+    m.render_at(1.0).unwrap();
+    assert!(m.take_output().starts_with("5.0\n[0.0 5.0 10.0]"));
+    // signaltime is the movie's clock inside a component too.
+    let src = format!(
+        "{HEAD}/c << /Size [10 10] /Duration 9 /Scene {{ globaltime == signaltime == }} >> component
+         /scene {{ /c << /At 0.5 >> place }} def"
+    );
+    let mut m = Movie::load(&src, &Options::default()).unwrap();
+    m.take_output();
+    m.render_at(2.0).unwrap();
+    assert_eq!(m.take_output(), "1.5\n2.0\n");
 }
 
 const BOUNCE: &str = "<< /Size [64 48] /Duration 4 /FPS 10 /StepRate 50 >> animation
@@ -995,6 +1384,9 @@ fn redefining_a_psanim_word_is_reported() {
     assert_eq!(m.meta().shadowed, ["frame", "width"]);
     let m = load("/scene { 1 setgray 0 0 8 8 rectfill } def");
     assert!(m.meta().shadowed.is_empty());
+    // A word the prelude defines is reported only when the program replaces it.
+    let m = load("/vignette { pop } def /scene { } def");
+    assert_eq!(m.meta().shadowed, ["vignette"]);
 }
 
 #[test]
@@ -1277,4 +1669,147 @@ fn pscat_libraries_work_inside_a_movie() {
         "a star was drawn"
     );
     assert_ne!(m.render_frame(3).unwrap().premultiplied, &a[..]);
+}
+
+/// How many pixels of row `y` have any ink.
+fn lit_in_row(frame: &psanim::Frame, y: u32) -> usize {
+    (0..frame.width)
+        .filter(|&x| px(frame, x, y)[0] > 40)
+        .count()
+}
+
+#[test]
+fn onplane_facing_the_eye_is_plain_drawing() {
+    let draw = "1 setgray 8 8 40 30 rectfill 2 setlinewidth newpath 32 24 10 0 360 arc stroke";
+    let mut a = load(&format!("/scene {{ {draw} }} def"));
+    let mut b = load(&format!("/scene {{ {{ {draw} }} << >> onplane }} def"));
+    let (fa, fb) = (a.render_frame(0).unwrap(), b.render_frame(0).unwrap());
+    let differ = fa
+        .premultiplied
+        .iter()
+        .zip(fb.premultiplied)
+        .filter(|(p, q)| p.abs_diff(**q) > 24)
+        .count();
+    // The stroke is outlined by strokepath and filled, so its edge pixels
+    // may round differently; the shapes are the same.
+    assert!(differ < 40, "{differ} channels differ");
+}
+
+#[test]
+fn onplane_foreshortens_what_is_far() {
+    // A square on a floor tilted away: its far edge is narrower and it is
+    // squashed vertically. Rows are counted from the top of the frame.
+    let mut m = load(
+        "/scene { 32 4 translate
+           { 1 setgray -20 0 40 40 rectfill } << /Tilt 70 /Distance 60 >> onplane } def",
+    );
+    let f = m.render_frame(0).unwrap();
+    let near = lit_in_row(&f, 43);
+    let far = (0..43)
+        .rev()
+        .map(|y| (y, lit_in_row(&f, y)))
+        .take_while(|r| r.1 > 0)
+        .last()
+        .unwrap();
+    assert!(near >= 38, "near edge {near}");
+    assert!(far.1 * 3 < near * 2, "far edge {} vs near {near}", far.1);
+    assert!(far.0 > 30, "squashed: the top is at row {}", far.0);
+}
+
+#[test]
+fn onplane_leaves_defs_where_they_belong_and_the_built_ins_alone() {
+    // A def inside lands in the caller's dictionary; afterwards fill is the
+    // built-in again, even after nested planes.
+    let v = eval_at(
+        "",
+        "{ /q 7 def { } << >> onplane userdict /fill known { /q q 100 add def } if } << >> onplane
+         userdict /fill known { 1000 } { q } ifelse",
+        0,
+    );
+    assert_eq!(v, 107.0);
+}
+
+#[test]
+fn onplane_projects_text_strokes_and_clips() {
+    let mut m = load(
+        "/scene { 32 2 translate 1 setgray
+           { /Helvetica-Bold findfont 14 scalefont setfont
+             -28 0 moveto (AB) show (CD) show 2 0 (EF) ashow
+             3 setlinewidth newpath -25 30 moveto 25 30 lineto stroke
+             newpath -30 20 moveto 30 20 lineto 30 25 lineto -30 25 lineto closepath clip -30 0 60 60 rectfill
+           } << /Tilt 50 /Distance 120 >> onplane } def",
+    );
+    let f = m.render_frame(0).unwrap_or_else(|e| panic!("{e}"));
+    assert!(lit_in_row(&f, 40) > 20, "the text is drawn");
+}
+
+#[test]
+fn onplane_cuts_away_what_is_behind_the_eye_and_fades_the_distance() {
+    // The plane tipped flat: -y runs towards and past the eye.
+    let mut m = load(
+        "/scene { 32 24 translate 1 setgray
+           { -20 -5000 40 5010 rectfill } << /Tilt 90 /Distance 50 /Eye [0 20] >> onplane } def",
+    );
+    let f = m.render_frame(0).unwrap_or_else(|e| panic!("{e}"));
+    assert!(lit_in_row(&f, 47) > 0);
+    // Past the end of the fade, nothing is drawn.
+    let mut m = load(
+        "/scene { 1 setgray { 0 0 64 48 rectfill } << /Depth 500 /Fade [100 200] >> onplane } def",
+    );
+    let f = m.render_frame(0).unwrap();
+    assert!(f.premultiplied.chunks_exact(4).all(|p| p[0] < 10));
+}
+
+#[test]
+fn planepoint_and_projectpath() {
+    // Twice as far from the eye: half the size, about the eye point.
+    let v = eval_at(
+        "",
+        "40 20 << /Depth 100 /Distance 100 >> planepoint pop exch pop",
+        0,
+    );
+    assert_eq!(v, 10.0);
+    let v = eval_at(
+        "",
+        "newpath 0 0 moveto 40 0 lineto 40 20 lineto closepath
+         << /Depth 100 /Distance 100 >> projectpath pathbbox pop exch pop exch pop",
+        0,
+    );
+    assert_eq!(v, 20.0);
+}
+
+#[test]
+fn strings_written_by_a_scene_survive_the_rollback_and_are_found() {
+    // `restore` does not roll string contents back: a scene that writes into
+    // a string made in setup changes it for every later frame.
+    let mut m = load(
+        "/buf 4 string def buf 0 65 put
+         /table << /name (abc) /rows [ (xy) (zw) ] /note (read only) >> def
+         /scene { buf 0 buf 0 get 1 add put
+                  table /rows get 1 get 0 66 put
+                  /local 4 string def local 0 7 put } def",
+    );
+    let before = m.string_snapshot().unwrap().expect("a pure movie");
+    assert!(
+        before.len() >= 5,
+        "buf, name, two rows, note: {}",
+        before.len()
+    );
+    assert!(
+        m.string_snapshot()
+            .unwrap()
+            .unwrap()
+            .changed_since(&before)
+            .is_empty()
+    );
+    m.render_frame(0).unwrap();
+    m.render_frame(1).unwrap();
+    let after = m.string_snapshot().unwrap().unwrap();
+    assert_eq!(after.changed_since(&before), vec!["buf", "table/rows[1]"]);
+}
+
+#[test]
+fn only_a_pure_movie_has_a_string_snapshot() {
+    let mut m = load("/step { } def /scene { } def");
+    assert!(m.string_snapshot().unwrap().is_none());
 }

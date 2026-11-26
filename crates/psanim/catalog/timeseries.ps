@@ -1,0 +1,124 @@
+%!PS
+% Catalog entry: timeseries. A time series panel that scrolls: the last
+% /Window seconds of up to four series, newest at the right. The y range
+% follows the data and its ticks cross-fade instead of jumping.
+% In a movie:  /q /timeseries << /Params << /Signals [/queue] /Title (Queue) >> >> instance
+%              then  /q << /Box [x y w h] >> place
+/Width 640 param /cw0 exch def                    % its width in units: give it the shape of the box it is placed in
+/Height 300 param /ch0 exch def                   % its height in units
+<< /Size [cw0 ch0] /Duration 12 /Loop true /Background /transparent
+   /Title (Time series)
+   /Description (A scrolling line chart of up to four series with a legend; the y range follows the data and its ticks cross-fade as it moves. From host signals or arrays.)
+>> animation
+/pkchart use
+
+/Title (Requests / s) param /ttl exch def         % the panel's title; () for none
+/Signals null param /sigs exch def                % the host signals, one line each; null plays /Values
+/Values null param /vals exch def                 % without signals: one array per line, a recording that loops over the duration (null: a demo)
+/Labels null param /labels exch def               % a legend entry per line; null: the signal names
+/Roles [/accent2 /accent /accent3 /good] param /roles exch def   % the lines' colours
+/Window 4 param /window exch def                  % seconds shown
+/Points 120 param /npts exch def                  % readings per line
+/Range null param /rng exch def                   % [lo hi] fixed; null: 0 to just above the largest value shown
+/Least 1 param /least exch def                    % with no /Range: the lowest the top of the range goes, so a quiet signal is not magnified
+/Unit () param /unit exch def                     % after the y labels
+/Decimals 0 param /dec exch def                   % decimal places of the y labels
+/Clock null param /clock exch def                 % [c0 rate]: label times as a clock (see the horizon entry)
+/Tick 3600 param /tick exch def                   % with /Clock: clock seconds between time labels
+/Fill true param /shade exch def                  % shade under the first line
+/Card true param /card exch def                   % draw the panel's card behind it
+/Theme null param /thm exch def                   % a theme name, or null for the movie's own
+
+thm null ne { thm usetheme } if
+sigs null eq vals null eq and {
+  /labels [ (web) (api) ] def
+  /vals [ 0 1 1 { /r exch def
+    [ 0 1 96 { 96 div 360 mul /a exch def
+      a r 90 mul add sin 300 mul a 3 mul sin 120 mul add a 2 mul cos 0 max 4 exp 900 mul add 700 add r 0.55 mul 1 r sub add mul
+    } for ]
+  } for ] def
+} if
+/n sigs null ne { sigs length } { vals length } ifelse 4 min def
+labels null eq {
+  /labels sigs null ne { [ sigs { 32 string cvs } forall ] } { [ 1 1 n { 3 string cvs (series ) exch strcat } for ] } ifelse def
+} if
+
+/tnow { sigs null ne { signaltime } { globaltime } ifelse } def
+% i ta tb k readings -> [v ...]
+/readings {
+  sigs null ne { 4 -1 roll sigs exch get 4 1 roll signalbetween } {
+    4 dict begin /rk exch def /rb exch def /ra exch def /ri exch def
+      [ 0 1 rk 1 sub { rk 1 sub div rb ra sub mul ra add duration div 1 fmod 1 add 1 fmod
+        vals ri get dup length 1 sub 3 -1 roll mul valueat } for ]
+    end
+  } ifelse
+} def
+/clocktext {
+  clock aload pop 3 -1 roll mul add 86400 fmod 60 div floor cvi
+  dup 60 idiv 2 zeropad (:) strcat exch 60 mod 2 zeropad strcat
+} def
+
+/scene {
+  canvasbox 3 inset
+  card { << /Size height 0.07 mul ttl () ne { /Title ttl } if >> panel } if
+  aload pop /bh exch def /bw exch def /by exch def /bx exch def
+  /fs bh 0.075 mul def
+  % readings on a grid fixed in time, one step past now, so nothing shimmers
+  /tc tnow def
+  /dt window npts 1 sub div def
+  /tq tc dt div ceiling dt mul def
+  % and a quarter window more on the left, out of view, for the range to fade over
+  /nf npts 4 idiv def /fz nf dt mul def
+  /ta tq window sub dt sub fz sub def
+  /nk npts nf add def
+  /series [ 0 1 n 1 sub { ta tq nk 1 add readings } for ] def
+  % the range: fixed, or 0 to the largest value in view and, weighed down
+  % the further out they are, the readings just gone; none from past now.
+  % So the scale glides; /Fade keeps its ticks from jumping as it moves
+  rng null ne { rng aload pop } {
+    /top 0 def
+    0 1 n 1 sub { /i exch def
+      i tc tc 2 readings 0 get top max /top exch def
+      0 1 nk { /k exch def /tk ta k dt mul add def
+        tk tc le {
+          series i get k get tk tc sub window add fz add fz div 0 1 clamp mul top max /top exch def
+        } if
+      } for
+    } for
+    0 top 1.15 mul least max
+  } ifelse
+  /hi exch def /lo exch def
+  /mono fs face /yl hi dec fmtnum unit strcat stringwidth pop fs 1.2 mul add def
+  /plot [ bx yl add by fs 2.4 mul add bw yl sub bh fs 2.4 mul sub fs 1.6 mul sub ] def
+  plot [ tc window sub tc ] [ lo hi ] plotframe
+  << /YTicks 4 /XTicks 0 /Fade true /Decimals dec /Suffix unit /Size fs >> plotaxes
+  % the lines
+  { 0 1 n 1 sub { /i exch def
+      [ 0 1 nk { /k exch def [ ta k dt mul add series i get k get ] } for ] plotline
+      i 0 eq shade and {
+        gsave plotarea roles 0 get ink 0.16 setalpha fill grestore
+        [ 0 1 nk { /k exch def [ ta k dt mul add series i get k get ] } for ] plotline
+      } if
+      roles i get ink 2 setlinewidth 1 setlinejoin stroke
+    } for } inplot
+  % the legend, under the plot
+  /body fs face
+  /lx plot 0 get def
+  0 1 n 1 sub { /i exch def
+    roles i get ink lx by fs 0.3 mul add fs 0.7 mul fs 0.25 mul rectfill
+    /muted ink lx fs add by moveto labels i get show
+    /lx currentpoint pop fs 1.5 mul add def
+  } for
+  % the times, under the right of the plot
+  clock null ne {
+    /muted ink /body fs 0.9 mul face
+    /c0 tc window sub clock 1 get mul clock 0 get add def /c1 tc clock 1 get mul clock 0 get add def
+    c0 tick div ceiling tick mul tick c1 {
+      /ct exch def /tt ct clock 0 get sub clock 1 get div def
+      tt lo plotpoint pop
+      dup plot 0 get fs 1.5 mul add gt 1 index plot 0 get plot 2 get add fs 1.5 mul sub lt and {
+        plot 1 get fs 1.3 mul sub moveto tt clocktext showcenter
+      } { pop } ifelse
+    } for
+  } if
+} def

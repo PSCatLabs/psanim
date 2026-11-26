@@ -95,6 +95,22 @@ fn every_entry_is_complete_and_categories_are_known() {
     assert_eq!(psanim::api::lookup("now").unwrap().category, "clock");
 }
 
+/// The built-ins the prelude redefines so `onplane` can project them.
+const PAINTERS: &[&str] = &[
+    "fill",
+    "eofill",
+    "stroke",
+    "show",
+    "ashow",
+    "widthshow",
+    "awidthshow",
+    "rectfill",
+    "rectstroke",
+    "clip",
+    "eoclip",
+    "rectclip",
+];
+
 #[test]
 fn every_public_name_the_prelude_defines_is_documented() {
     // The prelude's public names are the `/name { ... } bind def` lines
@@ -110,6 +126,11 @@ fn every_public_name_the_prelude_defines_is_documented() {
             let name = rest.split_whitespace().next().unwrap();
             // Transition names live in their own dictionary.
             if psanim::TRANSITIONS.contains(&name) {
+                continue;
+            }
+            // Built-in painting operators the prelude wraps for `onplane`:
+            // PostScript's own, documented there.
+            if PAINTERS.contains(&name) {
                 continue;
             }
             assert!(
@@ -207,7 +228,7 @@ fn each_library_alone_can_run_its_own_words() {
         ("pkmotion", "0 /pop { 1 setgray 1 1 3 3 rectfill } enters"),
         (
             "pktype",
-            "/body 2 face /fg ink (a) canvasbox /c showin [ (a) /pi [/sup (2)] ] showruns",
+            "/body 2 face /fg ink (a) canvasbox /c showin [ (a) /pi [/sup (2)] ] showruns 1 1 moveto /heart emoji (a:heart:) emojitext",
         ),
         (
             "pkdiagram",
@@ -224,6 +245,10 @@ fn each_library_alone_can_run_its_own_words() {
         (
             "pkink",
             "newpath 0 0 moveto 8 8 lineto 1 2 { 1 setgray 0 0 8 8 rectfill } revealalong canvasbox /bg /accent 0 boxgradient",
+        ),
+        (
+            "pkfigure",
+            "<< /Beat 3 /Since 0.1 /Length 0.5 /Loud 0.9 >> dancepose restpose exch 0.5 blendpose begin Hop Squash Lean { 0 1 ArmR 1 0.2 limb pop pop 0 2 0.3 << /State Eyes >> eye 0 1 0.3 << /Open Mouth >> mouth } squashed end 0.2 1.7 3 spring pop",
         ),
     ];
     assert_eq!(uses.len(), psanim::LIBRARIES.len());

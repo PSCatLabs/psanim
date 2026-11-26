@@ -16,6 +16,7 @@ starts with `%!PS` is a whole movie; any other block is the body of a
 - [Follow a path](#follow-a-path)
 - [Morph one shape into another](#morph-one-shape-into-another)
 - [A camera](#a-camera)
+- [Perspective: drawing on a plane](#perspective-drawing-on-a-plane)
 - [Glow, blur, depth](#glow-blur-depth)
 - [Particles without state](#particles-without-state)
 - [A seamless loop](#a-seamless-loop)
@@ -198,6 +199,17 @@ gsave 320 180 translate
 grestore
 ```
 
+`morphpath` carries point *i* of one outline to point *i* of the other, so
+where the two start decides whether the shape melts or twists. For a pair
+you will morph, `alignpath` turns the second array to start where it moves
+least (and walks it the same way round); do it once in setup. A shape with
+a hole is two contours, which `morphpath` cannot match; draw it as one
+outline instead: a thick pen stroke turned into an outline with
+`strokepath` is a single contour even for a 0 or an 8 (the pen path of a
+0 starts and ends at one point, so the outline is cut by a slit of zero
+width and fills as a ring). The `/clock-morph` catalog entry does exactly
+this for its ten digits.
+
 Both arrays are plain `[x y x y ...]` in the user space that was current
 when they were sampled (y up, like everything). `morphpath` and `polypath`
 place points in the user space current when *they* run, so an array made
@@ -219,6 +231,61 @@ gsave
     [i 2] hash01 1800 mul  [i 3] hash01 800 mul  8 [i 4] hash01 22 mul add 0 360 arc fill } for
 grestore
 ```
+
+## Perspective: drawing on a plane
+
+The CTM is affine: it can slant and squash, but it cannot make the far
+end of a thing smaller than the near end. `proc plane onplane` can: it
+runs proc and lays what it paints (fills, strokes, `show`, clips)
+on a plane in 3D, seen through a camera. The plane's coordinates are the
+user space onplane was called in, so draw as you would flat and let
+`translate` inside proc move things along the plane.
+
+```postscript
+% a floor hinged on the bottom edge, leaning back 65 degrees
+320 0 translate
+{
+  0.3 0.8 1 setrgbcolor 2 setlinewidth
+  -300 0 600 900 rectstroke                               % its edges
+  -300 60 300 { 0 moveto 0 900 rlineto } for stroke       % lines running away
+  0 now 60 mul translate                                  % slide along it
+  1 0.85 0.4 setrgbcolor
+  /Helvetica-Bold findfont 64 scalefont setfont
+  0 1 6 { /i exch def -190 i 130 mul moveto (ON A PLANE) show } for
+} << /Tilt 65 /Distance 700 /Fade [500 1600] >> onplane
+```
+
+The plane dictionary: `/Tilt` (degrees about the x axis through the
+origin; 90 is a floor seen edge-on), `/Turn` (degrees about the vertical
+axis, after the tilt), `/Depth` (push the whole plane back), `/Eye [x y]`
+(the point the eye looks straight at, default the origin), `/Distance`
+(eye to screen; smaller is a wider lens and stronger perspective,
+default the view's width), `/Fade [z0 z1]` (depth behind the screen over
+which ink fades out). With the eye level with the hinge, as here, the
+plane runs up to a horizon at `Distance` times the cotangent of `Tilt`.
+
+What to know:
+
+- **Each painted path takes one opacity** from `/Fade`, from the depth of
+  its middle. A line of text on a tilted plane is all at one depth, so
+  paint a line at a time (several `charpath`s, one `fill`), not a whole
+  paragraph as one path.
+- **Strokes are outlined first** (`strokepath`), so a line's width lies on
+  the plane and narrows with distance, as paint on a floor would.
+- **Only what proc paints directly is projected.** Words that were
+  `bind`-ed before onplane ran (the prelude's, the pk libraries', and
+  yours if you `bind` them) hold the built-in painting operators and draw
+  flat. `image`, `shfill`, `kshow`, `xshow` and `glyphshow` are not
+  projected.
+- **Behind the eye is cut away**, and nothing comes closer than a
+  twentieth of `Distance`, so a plane can run under the camera.
+- `x y plane planepoint` gives where a point of the plane lands (and its
+  fade), to place a flat thing on it; `plane projectpath` projects the
+  current path without painting.
+
+For an opening crawl, text receding over stars, place the catalog's
+`/crawl` entry (`psanim catalog crawl`) with your own words: see
+[type.md](type.md#an-opening-crawl).
 
 ## Glow, blur, depth
 
@@ -242,28 +309,98 @@ small thumbnails; judge them with `psanim frame`.)
 
 ## Particles without state
 
-Give each particle a birth time and properties from `hash01`; its position
-is then a formula in its age. No simulation, any frame on its own.
+`spec proc particles` draws `proc` once for every particle alive now.
+The spec says where particles are born, how many, how fast and under
+which forces; `proc` draws one at the origin (it is already moved to the
+particle) and reads it with `particleu` (0 at birth, 1 at death),
+`particleage`, `particlevel`, `particlekey`. Nothing is simulated from
+frame to frame: each particle's state is worked out from its birth and
+the time, so any frame renders on its own.
 
 ```postscript
-0 1 119 {
-  /i exch def
-  /born  i 0.03 mul def
-  /life  1.2 [i 1] hash01 1.0 mul add def
-  /age   now born sub life sub 0 lt { now born sub } { -1 } ifelse def
-  age 0 ge {
-    /u age life div def                              % 0..1 through its life
-    /ang [i 2] hash01 360 mul def
-    /spd 60 [i 3] hash01 140 mul add def
-    1 u sub setalpha
-    [i 4] hash01 0.15 mul 0.05 add 0.8 1 sethsbcolor
-    320 ang cos spd mul age mul add
-    120 ang sin spd mul age mul add  age age mul 90 mul sub      % gravity
-    4 1 u sub mul 1 add 0 360 arc fill
-  } if
-} for
-1 setalpha
+/sparks << /At [320 60] /Rate 90 /Life [1 1.8] /Speed [220 320]
+           /Angle 90 /Spread 35 /Gravity 300 /Drag 0.4 >> def
+sparks {
+  1 particleu sub setalpha                       % fade out over its life
+  [particlekey 1] hash01 0.12 mul 0.05 add 0.9 1 sethsbcolor
+  0 0 3 1 particleu sub mul 1 add 0 360 arc fill
+} particles
 ```
+
+- **Bursts**: `/Bursts [0.5 2.1] /Count 120` emits 120 at each time.
+  `/Shape /sphere` spreads them like a 3-D shell seen from the side,
+  `/even` spaces them evenly round the circle.
+- **Forces**: `/Gravity` pulls down (units/s/s), `/Drag` slows (per
+  second, so speeds settle at gravity / drag: stars hang, then drift
+  down), `/Wind [x y]` pushes steadily, `/Gust [x y]` pushes with a force
+  that wanders over time (`/GustFreq`), and `/Sway [dx dy]` gives each
+  particle its own wandering offset (snow, leaves, confetti).
+- **Per-particle constants** come from `[particlekey i] hash01`: a size, a
+  hue, a spin rate. They are the same on every frame.
+- **Streaks**: `0.15 6 particletrail stroke` strokes the particle's own
+  track over the last 0.15 s, so fast sparks read as lines.
+- **Several emitters**: give an array of specs; `particleemitter` says
+  which one a particle came from, and a spec's own `/Draw { }` draws its
+  particles instead of `proc`.
+- **A moving emitter**: `/At` takes keyframes, `[0 [100 80] /quad-out 1.2
+  [500 600]]`; `/Inherit 0.3` gives particles some of its velocity.
+- **Glow** goes around the whole call, never inside the procedure (one
+  layer, not one per particle): `14 1.3 { spec { ... } particles } glowing`.
+
+A firework: a burst at 0.4 s, stars streaking, glowing, falling slowly.
+
+```postscript
+14 1.4 {
+  << /At [320 260] /Bursts [0.4] /Count 140 /Life [1.4 2.2] /Speed [140 220]
+     /Shape /sphere /Gravity 70 /Drag 1.5 >> {
+    1 0.75 0.35 setrgbcolor
+    1 particleu sub dup mul setalpha                % fades late
+    0.12 5 particletrail 2 setlinewidth 1 setlinecap stroke
+  } particles
+} glowing
+```
+
+Confetti: flat pieces that tumble. A spin is a rotation, a flip is a
+scale whose sign changes (`cos`), which is what makes a piece flash as
+it turns over.
+
+```postscript
+<< /At [320 0] /Bursts [0] /Count 90 /Life [3.5 4] /Speed [450 700] /Angle 90 /Spread 50
+   /Gravity 160 /Drag 2.2 /Sway [25 0] /SwayFreq 0.8 >> {
+  [particlekey 1] hash01 6 mul cvi
+  [[0.95 0.3 0.4] [1 0.8 0.2] [0.3 0.7 1] [0.4 0.9 0.5] [0.8 0.4 1] [1 0.55 0.2]]
+  exch get aload pop setrgbcolor
+  particleage [particlekey 2] hash01 400 mul 100 add mul rotate
+  1 particleage [particlekey 3] hash01 600 mul 300 add mul cos scale
+  -5 -3 10 6 rectfill
+} particles
+```
+
+Snow that loops: give `/Period` the movie's length and the emission
+(and the wandering forces) repeat exactly, so the last frame leads into
+the first. `/From` is ignored: the sky is already full at t = 0.
+
+```postscript
+%!PS
+<< /Size [640 360] /Duration 6 /FPS 30 /Loop true /Background [0.08 0.1 0.16] >> animation
+/snow << /At [320 380] /Area [700 0] /Rate 40 /Period 6 /Life 11 /Speed [35 55] /Angle -90
+         /Spread 20 /Sway [18 6] /SwayFreq 0.4 /Gust [8 0] >> def
+/scene {
+  snow { 1 setgray 0 0 [particlekey 1] hash01 2 mul 1 add 0 360 arc fill } particles
+} def
+```
+
+For a finished celebration, place `/fireworks` or `/confetti` from the
+catalog ([catalog.md](catalog.md)): shells, stars, tumbling paper and a
+message that pulses on each burst, already tuned; `psanim catalog
+fireworks` prints the source to learn from.
+
+Under the hood a particle is born at a time fixed by its emitter (a
+burst, or a slot of the continuous rate) with properties from `hash01`
+of its key, and only the live ones are visited, so a long film costs no
+more late on. To do it by hand (a particle that follows a path, say),
+the same idea is a few lines: a birth time, properties from `hash01`,
+position as a formula in the age.
 
 ## A seamless loop
 
@@ -352,7 +489,9 @@ transform or fade them as you like:
 ```postscript
 %!PS
 % B appears through horizontal slats that open. The `t-` prefix tells
-% `reelduration` this entry is a transition even if it is defined later.
+% `reelduration` this entry is a transition even if it is defined later;
+% any other name must be defined before `reelduration` is called, or the
+% movie fails to load, naming the entry.
 transitions /t-shutter {
   /cubic-inout ease /u exch def /b exch def /a exch def
   a

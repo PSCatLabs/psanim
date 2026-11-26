@@ -311,6 +311,50 @@ pub fn blur(buf: &mut [u8], w: usize, h: usize, sigma: f64, scratch: &mut Vec<u8
     }
 }
 
+/// Confine `buf` to a clip: scale every pixel by its coverage in `alpha`
+/// (one byte a pixel), zero outside `support` (x0, y0, x1, y1).
+pub fn mask_multiply(buf: &mut [u8], w: usize, h: usize, alpha: &[u8], support: [usize; 4]) {
+    let [x0, y0, x1, y1] = support;
+    for y in 0..h {
+        let row = &mut buf[y * w * 4..(y + 1) * w * 4];
+        if y < y0 || y >= y1 || x1 <= x0 {
+            row.fill(0);
+            continue;
+        }
+        row[..x0 * 4].fill(0);
+        row[x1 * 4..].fill(0);
+        let a = &alpha[y * w..(y + 1) * w];
+        for x in x0..x1 {
+            let k = u32::from(a[x]);
+            if k == 255 {
+                continue;
+            }
+            for c in &mut row[x * 4..x * 4 + 4] {
+                *c = mul255(u32::from(*c), k) as u8;
+            }
+        }
+    }
+}
+
+/// Where a clip covers a pixel, the effect's result; where it does not,
+/// the pixel as it was (`orig`); in between, a mix by coverage. For an
+/// effect run on a canvas that has things outside the clip to keep.
+pub fn mask_mix(buf: &mut [u8], orig: &[u8], alpha: &[u8]) {
+    for ((p, o), a) in buf.chunks_exact_mut(4).zip(orig.chunks_exact(4)).zip(alpha) {
+        match *a {
+            255 => {}
+            0 => p.copy_from_slice(o),
+            k => {
+                let k = u32::from(k);
+                for (c, oc) in p.iter_mut().zip(o) {
+                    let v = mul255(u32::from(*c), k) + mul255(u32::from(*oc), 255 - k);
+                    *c = v.min(255) as u8;
+                }
+            }
+        }
+    }
+}
+
 /// Add a blurred copy of `buf` back onto itself, `strength` times: a glow
 /// around everything bright. `strength` 1 is a full-strength halo.
 pub fn glow(buf: &mut [u8], w: usize, h: usize, sigma: f64, strength: f64, scratch: &mut Vec<u8>) {
@@ -491,6 +535,74 @@ pub fn difference(a: &[u8], b: &[u8]) -> f64 {
         .map(|(x, y)| u64::from(x.abs_diff(*y)))
         .sum();
     total as f64 / (a.len() as f64 * 255.0)
+}
+
+/// Tiles of `tile` pixels across a `w` by `h` frame, row by row; the last
+/// column and row are partial when `tile` does not divide the size.
+/// Returns (columns, rows).
+pub fn tile_grid(w: usize, h: usize, tile: usize) -> (usize, usize) {
+    let tile = tile.max(1);
+    (w.div_ceil(tile), h.div_ceil(tile))
+}
+
+/// [`difference`] per tile: the mean absolute difference per channel of
+/// each `tile`-pixel square between two RGBA frames of `w` by `h`, in the
+/// order [`tile_grid`] describes. Empty if the frames do not match the size.
+pub fn tile_differences(a: &[u8], b: &[u8], w: usize, h: usize, tile: usize) -> Vec<f32> {
+    if a.len() != w * h * 4 || b.len() != a.len() || a.is_empty() {
+        return Vec::new();
+    }
+    let tile = tile.max(1);
+    let (cols, rows) = tile_grid(w, h, tile);
+    let mut sums = vec![0u64; cols * rows];
+    for y in 0..h {
+        let row = (y / tile) * cols;
+        for tx in 0..cols {
+            let (x0, x1) = (tx * tile, ((tx + 1) * tile).min(w));
+            let span = (y * w + x0) * 4..(y * w + x1) * 4;
+            let d: u32 = a[span.clone()]
+                .iter()
+                .zip(&b[span])
+                .map(|(p, q)| u32::from(p.abs_diff(*q)))
+                .sum();
+            sums[row + tx] += u64::from(d);
+        }
+    }
+    sums.iter()
+        .enumerate()
+        .map(|(i, s)| {
+            let (cx, cy) = (i % cols, i / cols);
+            let px = ((cx + 1) * tile).min(w) - cx * tile;
+            let py = ((cy + 1) * tile).min(h) - cy * tile;
+            (*s as f64 / ((px * py) as f64 * 4.0 * 255.0)) as f32
+        })
+        .collect()
+}
+
+/// A pop is a spike in time: a tile whose change between two frames is far
+/// above the same tile's change in the pairs either side. `before`, `at`
+/// and `after` are [`tile_differences`] of three consecutive frame pairs;
+/// the result lists the tiles of `at` that spike.
+///
+/// A tile spikes when its change is at least `MIN_CHANGE` and exceeds
+/// `RATIO` times the larger of its two neighbours' changes, by at least
+/// `MIN_CHANGE` again. Steady motion changes a tile about as much in every
+/// pair, so it never spikes; a fast object that crosses a tile within a
+/// frame changes it in two adjacent pairs, each the other's neighbour; and
+/// a fade grows from pair to pair. Only a change that is there for one
+/// pair, and not the next or the last, is a pop.
+pub fn pop_tiles(before: &[f32], at: &[f32], after: &[f32]) -> Vec<usize> {
+    const MIN_CHANGE: f32 = 0.04;
+    const RATIO: f32 = 4.0;
+    if before.len() != at.len() || after.len() != at.len() {
+        return Vec::new();
+    }
+    (0..at.len())
+        .filter(|&i| {
+            let around = before[i].max(after[i]);
+            at[i] >= MIN_CHANGE && at[i] >= RATIO * around && at[i] - around >= MIN_CHANGE
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -681,5 +793,52 @@ mod tests {
         assert_eq!(difference(&[0, 0, 0, 255], &[0, 0, 0, 255]), 0.0);
         assert_eq!(difference(&[0, 0, 0, 0], &[255, 255, 255, 255]), 1.0);
         assert_eq!(difference(&[0], &[0, 0]), 1.0);
+    }
+
+    /// A 32 by 16 frame, black, with a white square of `side` at (x, y).
+    fn square(x: usize, y: usize, side: usize) -> Vec<u8> {
+        let (w, h) = (32, 16);
+        let mut img = vec![0u8; w * h * 4];
+        for p in img.chunks_exact_mut(4) {
+            p[3] = 255;
+        }
+        for yy in y..y + side {
+            for xx in x..x + side {
+                img[(yy * w + xx) * 4..(yy * w + xx) * 4 + 3].copy_from_slice(&[255, 255, 255]);
+            }
+        }
+        img
+    }
+
+    #[test]
+    fn tile_differences_are_per_tile() {
+        // Tiles of 8: a 4 by 4 square appears in the second tile of four.
+        let (a, b) = (square(0, 0, 0), square(9, 1, 4));
+        assert_eq!(tile_grid(32, 16, 8), (4, 2));
+        let d = tile_differences(&a, &b, 32, 16, 8);
+        assert_eq!(d.len(), 8);
+        // 16 of 64 pixels flip, in three of four channels.
+        assert!((d[1] - 16.0 / 64.0 * 0.75).abs() < 1e-6, "{d:?}");
+        assert!(d.iter().enumerate().all(|(i, v)| i == 1 || *v == 0.0));
+        assert!(tile_differences(&a, &b[1..], 32, 16, 8).is_empty());
+    }
+
+    #[test]
+    fn a_pop_is_a_spike_in_time_not_a_big_change() {
+        let spike = [0.0, 0.2, 0.0];
+        let quiet = [0.0, 0.0, 0.0];
+        // Nothing before, a jump, nothing after: a pop in tile 1.
+        assert_eq!(pop_tiles(&quiet, &spike, &quiet), vec![1]);
+        // The same change every pair is steady motion.
+        assert!(pop_tiles(&spike, &spike, &spike).is_empty());
+        // A change that grows (a fade) or dies away (the tail of a pop).
+        assert!(pop_tiles(&quiet, &spike, &[0.0, 0.3, 0.0]).is_empty());
+        assert!(pop_tiles(&[0.0, 0.3, 0.0], &spike, &quiet).is_empty());
+        // Too small to matter, however sudden.
+        assert!(pop_tiles(&quiet, &[0.0, 0.03, 0.0], &quiet).is_empty());
+        // Beside a busy tile, a tile that jumps well clear of it still pops.
+        let busy = [0.1, 0.0, 0.1];
+        assert_eq!(pop_tiles(&busy, &[0.1, 0.5, 0.1], &busy), vec![1]);
+        assert!(pop_tiles(&busy, &[0.1, 0.0, 0.1], &busy).is_empty());
     }
 }

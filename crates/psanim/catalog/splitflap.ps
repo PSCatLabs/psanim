@@ -1,0 +1,215 @@
+%!PS
+% Catalog entry: splitflap. An arrivals board of split-flap cells: rows of text
+% that change on a schedule, each character a pair of flaps that fall through the
+% drum's characters to the next one.
+% In a movie:  /board /splitflap << ... >> instance   then   /board << /Box [x y w h] >> place
+%
+% The board is declared in /States, a list of [ time [ row row ... ] ]. At each
+% time every cell whose character changes flips forward through the drum, one
+% flap at a time, to the new one: the distance is how far along the drum it is,
+% so changing 9 to 0 is one flap and A to Z twenty-five. Each cell starts a
+% little late, by its own random share of /Scatter seconds. Before the first
+% state the board is blank; a first state at time 0 is simply there.
+%
+% Drawn from the state of each cell at time t alone (nothing carries over), so
+% every frame renders on its own. The top flap falls forward over the next
+% character's top half (with a shadow cast on the lower half), the back of the
+% flap shows the new bottom half, and the last flap lands with a small bounce.
+
+% ---- the board at rest: what to show and when --------------------------------
+/demo [
+  [ 0.3 [ (0915 ALDERBURY 2) (0932 FENWICK   4) (0950 STONEBAY  1) (1008 MARSHGATE 3) ] ]
+  [ 4.5 [ (0932 FENWICK   4) (0950 STONEBAY  1) (1008 MARSHGATE 3) (1025 HOLLOWAY  2) ] ]
+] def
+/States demo param /states exch def                                % [ [time [row row ...]] ... ]: the board from that time on
+/Cols 0 param /cols0 exch def                                      % characters across; 0 for as many as the longest row
+/Cell [44 64] param aload pop /sfh exch def /sfw exch def          % one flap pair, width and height in canvas units
+/Gap 4 param /gap exch def                                         % between cells
+/Pad 10 param /pad exch def                                        % round the board
+/Drum ( ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:.-/) param /drum0 exch def  % the characters on a cell's drum, in order, the first blank; or an array of such strings, one per column (the last repeats)
+/Rate 14 param /rate exch def                                      % flaps a second
+/Scatter 0.35 param /scatter exch def                              % seconds: each cell starts late by up to this
+/Tail 1.5 param /tail exch def                                     % seconds to hold after the last flap lands
+/Ink [0.96 0.93 0.82] param /ink exch def                          % the characters
+/Flap [0.125 0.125 0.135] param /flap exch def                     % the flaps
+/Plate [0.035 0.035 0.04] param /plate exch def                    % the board behind them
+
+% ---- sizes and the plan: before the declaration, because they decide it ------
+/ncols cols0 0 gt { cols0 } { 0 states { 1 get { length max } forall } forall } ifelse def
+/nrows 0 states { 1 get length max } forall def
+/bw ncols sfw gap add mul gap add pad 2 mul add ceiling cvi def
+/bh nrows sfh gap add mul gap add pad 2 mul add ceiling cvi def
+
+% the drum of each column, and the index of each character on it (lower case
+% falls back to upper)
+/druml drum0 type /stringtype eq { [ drum0 ] } { drum0 } ifelse def
+/mklut { % drum -> 256 array of indices
+  /md exch def /ml 256 array def
+  0 1 255 { ml exch 0 put } for
+  0 1 md length 1 sub { /k exch def ml md k get k put } for
+  97 1 122 { /k exch def ml k get 0 eq { ml k ml k 32 sub get put } if } for
+  ml
+} def
+/drums [ 0 1 ncols 1 sub { druml length 1 sub min druml exch get } for ] def
+/luts [ drums { mklut } forall ] def
+
+% the character of a state's row r at column c, as a drum index
+/idxat { % state r c -> idx
+  /sc exch def /sr exch def 1 get /rows exch def
+  sr rows length lt { rows sr get dup length sc gt { sc get lut exch get } { pop 0 } ifelse } { 0 } ifelse
+} def
+
+% real -> cells : for every cell [ first-index [ [start flaps] ... ] ]. The flaps
+% of a change start at the state's time plus the cell's own delay; false gives
+% the longest delay, which is what the duration needs.
+/plan {
+  /real exch def
+  /last 0 def
+  [ 0 1 nrows 1 sub { /sr exch def
+      0 1 ncols 1 sub { /sc exch def
+        /lut luts sc get def /dlen drums sc get length def
+        /prev 0 def /k0 0 def
+        states 0 get 0 get 0 le { /prev states 0 get sr sc idxat def /k0 1 def } if
+        [ prev [
+          k0 1 states length 1 sub { /sk exch def
+            states sk get sr sc idxat /nx exch def
+            nx prev sub dlen add dlen mod /nn exch def
+            /prev nx def
+            nn 0 gt {
+              states sk get 0 get real { [ sr sc sk ] hash01 scatter mul } { scatter } ifelse add /ss exch def
+              /last last ss nn rate div add max def
+              [ ss nn ]
+            } if
+          } for
+        ] ]
+      } for
+    } for
+  ]
+} def
+/cells false plan def
+<< /Size [ bw bh ] /Duration last tail add 10 mul ceiling 10 div 1 max /FPS 30 /Loop false
+   /Title (Split-flap board)
+   /Description (An arrivals board of split-flap cells: rows of text that change on a schedule, each character flipping through the drum to the next, with the bounce and the shadow under the falling flap.)
+>> animation
+/cells true plan def                                  % again, with the seed the movie ended up with
+
+% ---- one cell ---------------------------------------------------------------------
+/sfrad 5 def
+/sfh2 sfh 2 div def
+/ftopc flap aload pop 3 { 1.18 mul 3 1 roll } repeat 3 array astore def  % the top flap catches more light
+/pathtop {
+  newpath cx hy moveto cx sfw add hy lineto
+  cx sfw add cy sfh add  cx cy sfh add  sfrad arcto 4 { pop } repeat
+  cx cy sfh add  cx hy  sfrad arcto 4 { pop } repeat closepath
+} def
+/pathbot {
+  newpath cx hy moveto cx sfw add hy lineto
+  cx sfw add cy  cx cy  sfrad arcto 4 { pop } repeat
+  cx cy  cx hy  sfrad arcto 4 { pop } repeat closepath
+} def
+/glyph { % idx -> its character, centred on the cell
+  dup 0 eq { pop } {
+    drums sc get exch get 1 string dup 0 4 -1 roll put
+    dup stringwidth pop 2 div cx sfw 2 div add exch sub cy sfh 0.2 mul add moveto
+    ink aload pop setrgbcolor show
+  } ifelse
+} def
+/halfface { % idx istop -> that half of a cell: the flap and its character, clipped
+  /ist exch def /hi exch def
+  gsave
+    ist { pathtop } { pathbot } ifelse
+    gsave ist { ftopc } { flap } ifelse aload pop setrgbcolor fill grestore
+    clip newpath hi glyph
+  grestore
+} def
+/slit {
+  gsave
+  0 setgray 0.7 setalpha cx hy 0.9 sub sfw 1.8 rectfill
+  1 setgray 0.07 setalpha cx hy 0.9 sub 1.8 sub sfw 1 rectfill
+  0 setgray 0.9 setalpha cx hy 1.6 sub 2 3.2 rectfill cx sfw add 2 sub hy 1.6 sub 2 3.2 rectfill
+  grestore
+} def
+/restcell { % idx
+  /hi exch def
+  pathtop ftopc aload pop setrgbcolor fill
+  pathbot flap aload pop setrgbcolor fill
+  hi glyph
+  slit
+} def
+/shadeband { % depth alpha: darken below the hinge, fading with depth
+  /sa exch def /sd exch def
+  0 1 3 { /sj exch def
+    0 setgray sa 1 sj 4 div sub mul setalpha
+    cx hy sd sj 1 add mul 4 div sub sfw sd 4 div 0.6 add rectfill
+  } for
+} def
+/flipcell { % from to u
+  /fu exch def /fto exch def /ffr exch def
+  fu 1.5 exp 180 mul /fa exch def
+  fto true halfface                                     % the next character's top half, behind
+  ffr false halfface                                    % the old bottom half, in front of it
+  fa 90 lt {
+    gsave pathbot clip newpath sfh2 0.8 mul fa sin mul fa sin 0.62 mul shadeband grestore   % shadow under the falling flap
+    gsave                                               % the top flap, foreshortened about the hinge
+      0 hy translate 1 fa cos scale 0 hy neg translate
+      ffr true halfface
+      pathtop clip newpath 0 setgray fa sin 0.4 mul setalpha cx cy sfw sfh rectfill
+    grestore
+  } {
+    gsave                                               % the back of the flap: the new bottom half, opening downward
+      0 hy translate 1 fa cos neg scale 0 hy neg translate
+      fto false halfface
+      pathbot clip newpath 0 setgray fa 90 sub 90 div neg 1 add 0.35 mul setalpha cx cy sfw sfh rectfill
+    grestore
+  } ifelse
+  slit
+} def
+/bumpcell { % idx t: the flap that has just landed, lifted a little and falling back
+  /bt exch def /hi exch def
+  bt 1776 mul sin abs 2.718 bt 14 mul neg exp mul 24 mul /bump exch def
+  hi true halfface
+  gsave pathbot clip newpath 0.02 setgray cx cy sfw sfh rectfill grestore     % the stack under the flap
+  gsave
+    0 hy translate 1 bump cos scale 0 hy neg translate
+    hi false halfface
+  grestore
+  slit
+} def
+
+% ---- where a cell is at the moment: from, to, how far through a flap, time since landing
+/cellat { % [idx0 trans] -> -
+  /cr exch def
+  /pos cr 0 get def /tr cr 1 get def /ntr tr length def
+  /fu -1 def /fs 99 def
+  0 1 ntr 1 sub { /ti exch def
+    tr ti get aload pop /nn exch def /ss exch def
+    now ss lt { exit } if
+    now ss sub rate mul /fp exch def
+    /done fp nn ge def
+    ti 1 add ntr lt { tr ti 1 add get 0 get now le { /done true def } if } if
+    done {
+      /pos pos nn add def /fs now ss nn rate div add sub def
+    } {
+      fp cvi /kk exch def
+      /pos pos kk add def /fu fp kk sub def /fs 99 def exit
+    } ifelse
+  } for
+  /dlen drums sc get length def
+  /pa pos dlen mod def
+  /pb pos 1 add dlen mod def
+} def
+
+/scene {
+  plate aload pop setrgbcolor
+  newpath 12 0 moveto bw 0 bw bh 12 arcto 4 { pop } repeat bw bh 0 bh 12 arcto 4 { pop } repeat 0 bh 0 0 12 arcto 4 { pop } repeat 0 0 bw 0 12 arcto 4 { pop } repeat closepath fill
+  /Helvetica-Narrow-Bold findfont sfh 0.84 mul scalefont setfont
+  0 1 nrows 1 sub { /sr exch def
+    0 1 ncols 1 sub { /sc exch def
+      /cx pad gap add sc sfw gap add mul add def
+      /cy bh pad sub gap sub sr 1 add sfh mul sub sr gap mul sub def
+      /hy cy sfh2 add def
+      cells sr ncols mul sc add get cellat
+      fu 0 ge { pa pb fu flipcell } { fs 0.3 lt { pa fs bumpcell } { pa restcell } ifelse } ifelse
+    } for
+  } for
+} def

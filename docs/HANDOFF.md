@@ -1,8 +1,9 @@
 # Handoff: where psanim stands
 
 Written 2026-11-23 at the end of the first build; updated 2026-11-24 at
-the end of the second, which added the expressive libraries. For the next
-person or agent.
+the end of the second, which added the expressive libraries, and
+2026-11-25 at the end of the third (milestone 0.2: components, the
+catalog, and the pieces built from them). For the next person or agent.
 
 ## State
 
@@ -24,10 +25,24 @@ Working and tested on macOS (Apple silicon):
   promise and that they compose. Read `docs/vocabulary-design.md` before
   changing them and `docs/vocabulary-evaluation.md` for what agents did
   with them.
-- `gallery/`: twenty-one pieces. `skills/psanim/`: the agent skill, now
+- `gallery/`: thirty-five pieces. `skills/psanim/`: the agent skill, now
   with a chapter per kind of film (`stage`, `type`, `explain`, `ink`,
   `storytelling`). `docs/` + `scripts/build_site.py`: Markdown docs and
   the HTML site, which renders every library example as a looping film.
+- **Components and the catalog** (third build, epic #43): `component`,
+  `instance`, `place` make any movie a part of another, each instance
+  with its own names, clock, seed, parameters and box (blur, glow,
+  grain and vignette stay inside it; operators and library words mean
+  what it was written against). `crates/psanim/catalog/*.ps` holds 26
+  ready-made entries compiled in (`psanim catalog`): spinner, progress,
+  testdots, pipeline, terminal, fire, fireworks, confetti, clocks,
+  credits, crawl, chat, twiddle, splitflap, odometer, ledmatrix,
+  dotmatrix, stat, gauge, horizon, timeseries, status, counter. New core
+  words: particles, onplane (perspective), playlist, typing and session
+  plans, time of day, signals with a past. New library: pkfigure
+  (character rigs). `<psanim-widget>` runs a movie live in a page
+  (`docs/widgets.md`). Each piece of this was built on its own branch and
+  merged in `integration-0.2`; the merge commits say what met what.
 - PSCat branch `feature/psanim-library-api` in `../pscat-psanim-api`:
   on top of `feature/0.7.1` @ `72a2c4e`. Full PSCat suite green (3688
   passed). **Pushed, with a draft PR (PSCatLabs/pscat#1410, issue
@@ -52,7 +67,13 @@ Full reasoning in `docs/architecture.md`.
    (`.fadebegin` and friends), so a body sees its caller's stack.
 5. **The declaration is found by a probe pass**: the program runs in a
    throwaway interpreter until `animation`, which `quit`s. Code before
-   `animation` therefore runs twice; keep it to definitions.
+   `animation` therefore runs twice; keep it to definitions. The probe's
+   printing is dropped (the real pass prints once), and `check` warns when
+   that code prints or takes over 50 ms (`Meta::preamble_warning`; the
+   host passes `Options::clock` because the engine keeps no clock). Not
+   removed: letting `animation` size the canvas in place would also have
+   to rebuild the interpreter's scale, seed and the `width` / `height`
+   the preamble sees, which is a larger change than the warning.
 6. **`backdrop` respects the CTM and clip** so reels can wipe and push
    clips that start with one.
 7. **PSCat changes are general.** Nothing in `pscat::host` knows about
@@ -73,6 +94,28 @@ Full reasoning in `docs/architecture.md`.
     box.
 11. **Libraries are opt-in** (`use`), to keep a movie's namespace small;
     an unloaded library's word fails with a hint naming the library.
+12. **A time scope has a window and a cycle.** `progress` and `span` use
+    the window; `turns` and `loopnoise` use the cycle, which equals the
+    window except under `delayed` (and `staggered`, `cascade`, `echoed`),
+    a pure shift that shortens the window but leaves the cycle, so a loop
+    closes in a late copy too. `after` and `enters` restart the clock and
+    keep the shortened window as the cycle.
+13. **Blur and glow stay inside the clip they began under** (#66).
+    `.clipmask` in the prelude paints through the interpreter's own clip,
+    in device space, on a scratch layer, over the newest clip's box
+    (`clippath`), and the engine keeps the coverage; `.layerend`,
+    `blurlayer` and `glowlayer` confine what they spread to it. That is
+    exact for any clip (rotated, curved, even-odd, nested, anti-aliased)
+    with no PSCat change. `faded` and `blended` take none: their body was
+    drawn under the clip already. It is the clip in force when the effect
+    begins; one the body sets and leaves does not confine it. Cost at
+    1280x720 on an Apple M4, median frame, one `blurred`: +0.3 ms
+    unclipped, +0.6 ms inside a `within`. A read-only PSCat accessor for
+    the current clip's coverage (`None` when nothing is clipped) would
+    save the fill and the scan. pkmotion's moving layers still ignore the
+    clip (a slide or /focus inside a `within` shows past its edge). The
+    same mask fixes them, but a 12-item cascade then measured +3.9 ms a
+    frame inside a `within` (+1.0 ms unclipped), so that is a follow-up.
 
 ## How the gallery was made, and what it taught
 
@@ -122,20 +165,32 @@ built; `docs/roadmap.md` ranks it.
 
 - Motions rasterize what moves (soft at large scale-ups) and cost a
   layer each, about 1 to 1.5 ms at 720p.
-- `delayed` shortens `span` as well as shifting `now`, so `turns` drifts
-  under a delay (Canon defines its own `laps`). Changing that would
-  change existing films; it is documented instead.
 - Cuts between storyboard beats leave single blank frames unless
   something persists across them; only `check --all` sees them.
 - The round-two films' hand-built helpers duplicate words added after
   them. Porting them is optional tidying, not a fix.
 
 - `reelduration` cannot tell an undefined clip from an undefined
-  transition when called before they are defined; a transition must be
-  named `t-...` or defined first. Wrong order silently lengthens the film.
-- `check`'s abrupt-change detector is a threshold on mean difference;
-  it misses small pops in busy frames.
-- `MAX_OUTPUT` truncates printed text at 64 KB per collection.
+  transition when called before they are defined, so it takes built-in
+  names and `t-...` for transitions. A custom transition with another name,
+  defined later, used to lengthen the film silently (#19); load now
+  re-plans every measured reel once the program has run and fails with
+  the entry's name if the length differs. The fix for the author is still
+  to define the transition first or name it `t-...`; a declared
+  `/name deftransition` was not needed.
+- `check`'s pop detector (per tile, against the same tile in the pairs
+  either side; docs/cli.md) is tuned on the gallery and test movies, not
+  proven. It flags intended discrete changes too (cuts between clips, a
+  stepped value) and there is no way to mark a cut as intended. It scans
+  a fixed set of about 230 frames of a pure movie, so a pop elsewhere in a
+  long movie is found only by `check --all`; a movie with state is scanned
+  only around its sampled frames. Rendering a pure movie's frames is cheap
+  enough that `--all` costs seconds; for the slowest pieces it is minutes.
+- Code before `animation` still runs twice (see decision 5); `check`
+  warns when it prints or takes over 50 ms, but nothing prevents it.
+- `MAX_OUTPUT` truncates printed text at 64 KB per collection. The text
+  then ends with `[output truncated at 64 KB]` and `--json` says
+  `"output_truncated": true`.
 - The browser player renders on the main thread and has no way to show
   `print` output.
 - Dropping a `Movie` from thread-local teardown panics (a PSCat interner

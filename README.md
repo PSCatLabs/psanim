@@ -85,14 +85,16 @@ when it arrives and by what motion.
   `render` (MP4, WebM, GIF, PNG sequence), `bench`, `api`. Everything has
   `--json`.
 - **A browser build** (`crates/psanim-wasm`, `web/`): the same engine in
-  WebAssembly, a `<psanim-player>` element, a playground.
+  WebAssembly, a `<psanim-player>` element, a playground, and
+  `<psanim-widget>` for movies that keep running in a page with live
+  inputs ([widgets](docs/widgets.md)).
 - **Libraries for saying what you mean** (`/pkmotion use` ...): boxes and
   themes, named motions that work on any drawing (`2 /pop { ... }
   enters`), kinetic type, diagrams with flowing edges, code panels and
   animated diffs, charts that move between datasets, brush marks. About
   105 more words in seven libraries, written in PostScript.
   [Design](docs/vocabulary-design.md), [evaluation](docs/vocabulary-evaluation.md).
-- **A gallery** (`gallery/`): twenty-one films, each one file. [Index, with stills](docs/gallery.md).
+- **A gallery** (`gallery/`): thirty-five films, each one file. [Index, with stills](docs/gallery.md).
 - **An agent skill** (`skills/psanim/`) and a documentation site built
   from the same text.
 - **A host API for PSCat**, on a feature branch: what PSCat needed to
@@ -129,7 +131,7 @@ standard library of Python 3 (for the site).
 | [Staging](skills/psanim/references/stage.md), [type](skills/psanim/references/type.md), [diagrams, code, charts](skills/psanim/references/explain.md), [ink](skills/psanim/references/ink.md), [storytelling](skills/psanim/references/storytelling.md) | the libraries, by what you want to make; every example is run by the tests and rendered on the site |
 | [Patterns](skills/psanim/references/patterns.md), [craft](skills/psanim/references/craft.md), [pitfalls](skills/psanim/references/pitfalls.md), [modes](skills/psanim/references/modes.md) | the chapters, shared with the agent skill; every example is run by the tests |
 | [Vocabulary](skills/psanim/references/vocabulary.md), [library vocabulary](skills/psanim/references/vocabulary-libraries.md) | every word (generated) |
-| [Command line](docs/cli.md) · [Rust API](docs/rust.md) · [Browser](docs/wasm.md) | reference |
+| [Command line](docs/cli.md) · [Rust API](docs/rust.md) · [Browser](docs/wasm.md) · [Widgets](docs/widgets.md) | reference |
 | [Architecture](docs/architecture.md) | the model, the decisions, what was rejected |
 | [The expressive vocabulary](docs/vocabulary-design.md) · [its evaluation](docs/vocabulary-evaluation.md) | the five ideas behind the libraries, and what fresh agents did with them |
 | [psanim and PSCat](docs/pscat-integration.md) | the branch, the API, building both |

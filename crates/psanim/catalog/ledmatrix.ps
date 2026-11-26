@@ -1,0 +1,510 @@
+%!PS
+% Catalog entry: ledmatrix. A grid of round LEDs that shows text, pictures and
+% effects: a scrolling marquee, a ticker, a sign that cycles through headlines
+% with entry effects, or any pattern a procedure computes for each LED.
+% In a movie:  /sign /ledmatrix << /Params << /Text (HELLO) /Grid [32 7] >> >> instance
+%              then   /sign << /Box [x y w h] >> place
+%
+% What it shows, three ways:
+%   /Text   a string (or a picture: an array of row strings of # and .), shown with
+%           /Effect; as a /marquee it scrolls round for ever, which makes the entry a
+%           seamless loop with the exact period of the text.
+%   /Items  a list of [ text effect hold colour ] shown one after another, repeating:
+%           the news sign. The text may also be /time or /temp, which show the clock
+%           and the temperature (set with /Clock, /ClockRate, /Temp). Effects: /scroll
+%           (right to left, as long as it takes), /static, /drop (falls in with a
+%           bounce, falls out), /wipe (a bright bar sweeps across), /sparkle (pixels
+%           twinkle on), /flash (blinks on), /fade.
+%   /Cell   a procedure { col row -- level } called for every LED each frame (level 0
+%           to 1; `now` is the time): a plasma, a wipe, a spectrum. It is drawn under
+%           any text, so a pattern can run behind a message.
+%
+% Pixels, not paths: the text is set from a small pixel font of our own (below),
+% 7 rows high for grids of 7 rows or more and 5 for lower grids (lower case is set as
+% capitals there), and drawn by testing each LED against a column bitmap. That is
+% exact (no anti-aliasing to threshold), costs a few operations an LED and needs no
+% rendering to a small layer and reading it back. A picture is the same bitmap
+% data; a pattern is a function of (col, row, time).
+%
+% /Raw true makes the movie the grid itself: its /Size is [cols rows] and every
+% canvas unit is one LED, plain colour, no glow. Rendered with --scale 1 to a
+% directory it is a PNG sequence of cols x rows pixels, for driving a real LED
+% strip or a small sign.
+
+/Grid [48 7] param aload pop cvi /nr0 exch def cvi /nc0 exch def   % LEDs across and down
+/Cols 0 param cvi /ovc exch def                                     % LEDs across, instead of /Grid's (for --param, which cannot give an array)
+/Rows 0 param cvi /ovr exch def                                     % LEDs down, likewise
+/Pitch 12 param /pitch exch def                                     % canvas units from one LED to the next
+/Colour /amber param dup type /stringtype eq { cvn } if /colour exch def  % /red /amber /green /white /blue, or [r g b]
+/Look /panel param dup type /stringtype eq { cvn } if /look exch def % /panel (a lit panel), /sign (smoked glass in a housing) or /bare (the lit LEDs only, to lay over a picture)
+/Raw false param dup type /booleantype ne { 0 ne } if /raw exch def % true: the movie is the grid itself, one canvas unit an LED, no glow
+/Text null param /text0 exch def                                    % what to show: a string, or a picture (array of row strings of # and .); a demo message if none and no /Cell
+/Effect /marquee param dup type /stringtype eq { cvn } if /effect exch def  % /scroll /marquee /static /drop /wipe /sparkle /flash /fade
+/Length 0 param /length0 exch def                                   % seconds the entry lasts; 0 follows the messages (4 for a pattern with no text)
+/Hold 2 param /hold exch def                                        % seconds a message stays before it leaves (not for /scroll or /marquee)
+/Speed 30 param /speed exch def                                     % LEDs a second for /scroll and /marquee: a divisor of the frame rate keeps it even
+/Gap 16 param cvi /mgap exch def                                    % blank LEDs between one marquee round and the next
+/Items null param /items0 exch def                                  % instead of Text: [ [ text effect hold colour ] ... ], shown in turn (text may be /time or /temp)
+/Between 0.4 param /bgap exch def                                % seconds of dark between messages
+/Repeat true param dup type /booleantype ne { 0 ne } if /dorepeat exch def  % start the list again at the end
+/Cell null param dup null ne /hascell exch def /cellp exch def                                    % a procedure { col row -- level }: a pattern drawn under the text
+/text text0 null eq { hascell { () } { (PSANIM LED MATRIX) } ifelse } { text0 } ifelse def
+/Font 0 param cvi /fontov exch def                                  % rows of the pixel font, 5 or 7 (0: by the grid)
+/Clock [9 41] param aload pop cvi /cmin exch def cvi /chour exch def % the time /time shows when the sign starts: hour minute
+/ClockRate 4 param /crate exch def                                 % seconds for the /time clock to advance a minute
+/Temp 68 param cvi /temp exch def                                   % degrees for /temp
+/Glow 1 param /glow exch def                                        % halo round lit LEDs, 0 for none
+/Unlit 0.1 param /unlit exch def                                    % how bright an unlit LED is
+
+% ---- the pixel font ------------------------------------------------------------
+% One glyph a line: the character, then its rows top to bottom, # lit and . dark.
+% Glyphs are as wide as they need to be; a column is left between them. Both fonts are
+% original designs: 7 rows has capitals, digits, a-z with real descenders held to the
+% last row, and punctuation; 5 rows has capitals, digits and punctuation.
+/glyphs7 [
+  [ ( ) (...) (...) (...) (...) (...) (...) (...) ]
+  [ (!) (#) (#) (#) (#) (#) (.) (#) ]
+  [ (") (#.#) (#.#) (#.#) (...) (...) (...) (...) ]
+  [ (#) (.#.#.) (.#.#.) (#####) (.#.#.) (#####) (.#.#.) (.#.#.) ]
+  [ ($) (..#..) (.####) (#.#..) (.###.) (..#.#) (####.) (..#..) ]
+  [ (%) (##..#) (##.#.) (...#.) (..#..) (.#...) (.#.##) (#..##) ]
+  [ (&) (.##..) (#..#.) (#.#..) (.#...) (#.#.#) (#..#.) (.##.#) ]
+  [ (') (#) (#) (#) (.) (.) (.) (.) ]
+  [ (\() (..#) (.#.) (#..) (#..) (#..) (.#.) (..#) ]
+  [ (\)) (#..) (.#.) (..#) (..#) (..#) (.#.) (#..) ]
+  [ (*) (.....) (#.#.#) (.###.) (#####) (.###.) (#.#.#) (.....) ]
+  [ (+) (.....) (..#..) (..#..) (#####) (..#..) (..#..) (.....) ]
+  [ (,) (..) (..) (..) (..) (..) (.#) (#.) ]
+  [ (-) (.....) (.....) (.....) (#####) (.....) (.....) (.....) ]
+  [ (.) (.) (.) (.) (.) (.) (.) (#) ]
+  [ (/) (....#) (....#) (...#.) (..#..) (.#...) (#....) (#....) ]
+  [ (0) (.###.) (#...#) (#..##) (#.#.#) (##..#) (#...#) (.###.) ]
+  [ (1) (..#..) (.##..) (..#..) (..#..) (..#..) (..#..) (.###.) ]
+  [ (2) (.###.) (#...#) (....#) (...#.) (..#..) (.#...) (#####) ]
+  [ (3) (.###.) (#...#) (....#) (..##.) (....#) (#...#) (.###.) ]
+  [ (4) (...#.) (..##.) (.#.#.) (#..#.) (#####) (...#.) (...#.) ]
+  [ (5) (#####) (#....) (####.) (....#) (....#) (#...#) (.###.) ]
+  [ (6) (..##.) (.#...) (#....) (####.) (#...#) (#...#) (.###.) ]
+  [ (7) (#####) (....#) (...#.) (..#..) (.#...) (.#...) (.#...) ]
+  [ (8) (.###.) (#...#) (#...#) (.###.) (#...#) (#...#) (.###.) ]
+  [ (9) (.###.) (#...#) (#...#) (.####) (....#) (...#.) (.##..) ]
+  [ (:) (.) (.) (#) (.) (.) (#) (.) ]
+  [ (;) (..) (..) (.#) (..) (.#) (.#) (#.) ]
+  [ (<) (...#.) (..#..) (.#...) (#....) (.#...) (..#..) (...#.) ]
+  [ (=) (.....) (.....) (#####) (.....) (#####) (.....) (.....) ]
+  [ (>) (.#...) (..#..) (...#.) (....#) (...#.) (..#..) (.#...) ]
+  [ (?) (.###.) (#...#) (....#) (...#.) (..#..) (.....) (..#..) ]
+  [ (@) (.###.) (#...#) (#.###) (#.#.#) (#.###) (#....) (.####) ]
+  [ (A) (.###.) (#...#) (#...#) (#####) (#...#) (#...#) (#...#) ]
+  [ (B) (####.) (#...#) (#...#) (####.) (#...#) (#...#) (####.) ]
+  [ (C) (.###.) (#...#) (#....) (#....) (#....) (#...#) (.###.) ]
+  [ (D) (####.) (#...#) (#...#) (#...#) (#...#) (#...#) (####.) ]
+  [ (E) (#####) (#....) (#....) (####.) (#....) (#....) (#####) ]
+  [ (F) (#####) (#....) (#....) (####.) (#....) (#....) (#....) ]
+  [ (G) (.###.) (#...#) (#....) (#.###) (#...#) (#...#) (.###.) ]
+  [ (H) (#...#) (#...#) (#...#) (#####) (#...#) (#...#) (#...#) ]
+  [ (I) (###) (.#.) (.#.) (.#.) (.#.) (.#.) (###) ]
+  [ (J) (..###) (...#.) (...#.) (...#.) (...#.) (#..#.) (.##..) ]
+  [ (K) (#...#) (#..#.) (#.#..) (##...) (#.#..) (#..#.) (#...#) ]
+  [ (L) (#....) (#....) (#....) (#....) (#....) (#....) (#####) ]
+  [ (M) (#...#) (##.##) (#.#.#) (#.#.#) (#...#) (#...#) (#...#) ]
+  [ (N) (#...#) (##..#) (#.#.#) (#.#.#) (#..##) (#...#) (#...#) ]
+  [ (O) (.###.) (#...#) (#...#) (#...#) (#...#) (#...#) (.###.) ]
+  [ (P) (####.) (#...#) (#...#) (####.) (#....) (#....) (#....) ]
+  [ (Q) (.###.) (#...#) (#...#) (#...#) (#.#.#) (#..#.) (.##.#) ]
+  [ (R) (####.) (#...#) (#...#) (####.) (#.#..) (#..#.) (#...#) ]
+  [ (S) (.####) (#....) (#....) (.###.) (....#) (....#) (####.) ]
+  [ (T) (#####) (..#..) (..#..) (..#..) (..#..) (..#..) (..#..) ]
+  [ (U) (#...#) (#...#) (#...#) (#...#) (#...#) (#...#) (.###.) ]
+  [ (V) (#...#) (#...#) (#...#) (#...#) (#...#) (.#.#.) (..#..) ]
+  [ (W) (#...#) (#...#) (#...#) (#.#.#) (#.#.#) (##.##) (#...#) ]
+  [ (X) (#...#) (#...#) (.#.#.) (..#..) (.#.#.) (#...#) (#...#) ]
+  [ (Y) (#...#) (#...#) (.#.#.) (..#..) (..#..) (..#..) (..#..) ]
+  [ (Z) (#####) (....#) (...#.) (..#..) (.#...) (#....) (#####) ]
+  [ ([) (###) (#..) (#..) (#..) (#..) (#..) (###) ]
+  [ (\\) (#....) (#....) (.#...) (..#..) (...#.) (....#) (....#) ]
+  [ (]) (###) (..#) (..#) (..#) (..#) (..#) (###) ]
+  [ (^) (..#..) (.#.#.) (#...#) (.....) (.....) (.....) (.....) ]
+  [ (_) (.....) (.....) (.....) (.....) (.....) (.....) (#####) ]
+  [ (`) (#.) (.#) (..) (..) (..) (..) (..) ]
+  [ (a) (.....) (.....) (.###.) (....#) (.####) (#...#) (.####) ]
+  [ (b) (#....) (#....) (#.##.) (##..#) (#...#) (##..#) (#.##.) ]
+  [ (c) (.....) (.....) (.###.) (#...#) (#....) (#...#) (.###.) ]
+  [ (d) (....#) (....#) (.##.#) (#..##) (#...#) (#..##) (.##.#) ]
+  [ (e) (.....) (.....) (.###.) (#...#) (#####) (#....) (.###.) ]
+  [ (f) (.##.) (#..#) (#...) (###.) (#...) (#...) (#...) ]
+  [ (g) (.....) (.###.) (#...#) (#...#) (.####) (....#) (.###.) ]
+  [ (h) (#....) (#....) (#.##.) (##..#) (#...#) (#...#) (#...#) ]
+  [ (i) (.#.) (...) (##.) (.#.) (.#.) (.#.) (.##) ]
+  [ (j) (..#.) (....) (.##.) (..#.) (..#.) (#.#.) (.#..) ]
+  [ (k) (#....) (#....) (#..#.) (#.#..) (##...) (#.#..) (#..#.) ]
+  [ (l) (##.) (.#.) (.#.) (.#.) (.#.) (.#.) (.##) ]
+  [ (m) (.....) (.....) (##.#.) (#.#.#) (#.#.#) (#.#.#) (#.#.#) ]
+  [ (n) (.....) (.....) (#.##.) (##..#) (#...#) (#...#) (#...#) ]
+  [ (o) (.....) (.....) (.###.) (#...#) (#...#) (#...#) (.###.) ]
+  [ (p) (.....) (#.##.) (##..#) (#...#) (##..#) (#.##.) (#....) ]
+  [ (q) (.....) (.##.#) (#..##) (#...#) (#..##) (.##.#) (....#) ]
+  [ (r) (.....) (.....) (#.##.) (##..#) (#....) (#....) (#....) ]
+  [ (s) (.....) (.....) (.####) (#....) (.###.) (....#) (####.) ]
+  [ (t) (.#..) (.#..) (###.) (.#..) (.#..) (.#..) (..##) ]
+  [ (u) (.....) (.....) (#...#) (#...#) (#...#) (#..##) (.##.#) ]
+  [ (v) (.....) (.....) (#...#) (#...#) (#...#) (.#.#.) (..#..) ]
+  [ (w) (.....) (.....) (#...#) (#...#) (#.#.#) (#.#.#) (.#.#.) ]
+  [ (x) (.....) (.....) (#...#) (.#.#.) (..#..) (.#.#.) (#...#) ]
+  [ (y) (.....) (#...#) (#...#) (#...#) (.####) (....#) (.###.) ]
+  [ (z) (.....) (.....) (#####) (...#.) (..#..) (.#...) (#####) ]
+  [ ({) (.##) (.#.) (.#.) (#..) (.#.) (.#.) (.##) ]
+  [ (|) (#) (#) (#) (#) (#) (#) (#) ]
+  [ (}) (##.) (.#.) (.#.) (..#) (.#.) (.#.) (##.) ]
+  [ (~) (.....) (.##.#) (#.##.) (.....) (.....) (.....) (.....) ]
+  [ (\260) (.#.) (#.#) (.#.) (...) (...) (...) (...) ]
+] def
+/glyphs5 [
+  [ ( ) (..) (..) (..) (..) (..) ]
+  [ (!) (#) (#) (#) (.) (#) ]
+  [ (") (#.#) (#.#) (...) (...) (...) ]
+  [ (#) (.#.#.) (#####) (.#.#.) (#####) (.#.#.) ]
+  [ ($) (.###.) (#.#..) (.###.) (..#.#) (.###.) ]
+  [ (%) (#..#) (...#) (.##.) (#...) (#..#) ]
+  [ (&) (.#..) (#.#.) (.#..) (#.#.) (.#.#) ]
+  [ (') (#) (#) (.) (.) (.) ]
+  [ (\() (.#) (#.) (#.) (#.) (.#) ]
+  [ (\)) (#.) (.#) (.#) (.#) (#.) ]
+  [ (*) (...) (#.#) (.#.) (#.#) (...) ]
+  [ (+) (...) (.#.) (###) (.#.) (...) ]
+  [ (,) (..) (..) (..) (.#) (#.) ]
+  [ (-) (...) (...) (###) (...) (...) ]
+  [ (.) (.) (.) (.) (.) (#) ]
+  [ (/) (..#) (..#) (.#.) (#..) (#..) ]
+  [ (0) (###) (#.#) (#.#) (#.#) (###) ]
+  [ (1) (.#.) (##.) (.#.) (.#.) (###) ]
+  [ (2) (###) (..#) (###) (#..) (###) ]
+  [ (3) (###) (..#) (###) (..#) (###) ]
+  [ (4) (#.#) (#.#) (###) (..#) (..#) ]
+  [ (5) (###) (#..) (###) (..#) (###) ]
+  [ (6) (###) (#..) (###) (#.#) (###) ]
+  [ (7) (###) (..#) (.#.) (.#.) (.#.) ]
+  [ (8) (###) (#.#) (###) (#.#) (###) ]
+  [ (9) (###) (#.#) (###) (..#) (###) ]
+  [ (:) (.) (#) (.) (#) (.) ]
+  [ (;) (.) (#) (.) (#) (#) ]
+  [ (<) (..#) (.#.) (#..) (.#.) (..#) ]
+  [ (=) (...) (###) (...) (###) (...) ]
+  [ (>) (#..) (.#.) (..#) (.#.) (#..) ]
+  [ (?) (###) (..#) (.##) (...) (.#.) ]
+  [ (@) (.###.) (#.#.#) (#.###) (#....) (.####) ]
+  [ (A) (.##.) (#..#) (####) (#..#) (#..#) ]
+  [ (B) (##.) (#.#) (##.) (#.#) (##.) ]
+  [ (C) (.###) (#...) (#...) (#...) (.###) ]
+  [ (D) (##.) (#.#) (#.#) (#.#) (##.) ]
+  [ (E) (####) (#...) (###.) (#...) (####) ]
+  [ (F) (####) (#...) (###.) (#...) (#...) ]
+  [ (G) (.###) (#...) (#.##) (#..#) (.###) ]
+  [ (H) (#..#) (#..#) (####) (#..#) (#..#) ]
+  [ (I) (###) (.#.) (.#.) (.#.) (###) ]
+  [ (J) (..#) (..#) (..#) (#.#) (##.) ]
+  [ (K) (#..#) (#.#.) (##..) (#.#.) (#..#) ]
+  [ (L) (#..) (#..) (#..) (#..) (###) ]
+  [ (M) (#...#) (##.##) (#.#.#) (#...#) (#...#) ]
+  [ (N) (#..#) (##.#) (#.##) (#..#) (#..#) ]
+  [ (O) (.##.) (#..#) (#..#) (#..#) (.##.) ]
+  [ (P) (##.) (#.#) (##.) (#..) (#..) ]
+  [ (Q) (.##.) (#..#) (#..#) (#.##) (.###) ]
+  [ (R) (##.) (#.#) (##.) (#.#) (#.#) ]
+  [ (S) (.###) (#...) (.##.) (...#) (###.) ]
+  [ (T) (###) (.#.) (.#.) (.#.) (.#.) ]
+  [ (U) (#..#) (#..#) (#..#) (#..#) (.##.) ]
+  [ (V) (#.#) (#.#) (#.#) (#.#) (.#.) ]
+  [ (W) (#...#) (#...#) (#.#.#) (##.##) (#...#) ]
+  [ (X) (#.#) (#.#) (.#.) (#.#) (#.#) ]
+  [ (Y) (#.#) (#.#) (.#.) (.#.) (.#.) ]
+  [ (Z) (####) (...#) (.##.) (#...) (####) ]
+  [ ([) (##) (#.) (#.) (#.) (##) ]
+  [ (\\) (#..) (#..) (.#.) (..#) (..#) ]
+  [ (]) (##) (.#) (.#) (.#) (##) ]
+  [ (^) (.#.) (#.#) (...) (...) (...) ]
+  [ (_) (...) (...) (...) (...) (###) ]
+  [ (`) (#.) (.#) (..) (..) (..) ]
+  [ ({) (.##) (.#.) (#..) (.#.) (.##) ]
+  [ (|) (#) (#) (#) (#) (#) ]
+  [ (}) (##.) (.#.) (..#) (.#.) (##.) ]
+  [ (~) (....) (.#.#) (#.#.) (....) (....) ]
+  [ (\260) (##) (##) (..) (..) (..) ]
+] def
+
+% ---- text as columns -----------------------------------------------------------
+% array-of-row-strings first -> its columns as bit masks (row 0 the lowest bit)
+/rowscols {
+  /rs0 exch def /rarr exch def
+  rarr rs0 get length /rw exch def
+  rw array /rc exch def
+  0 1 rw 1 sub { /ci exch def
+    0 /rm exch def
+    rs0 1 rarr length 1 sub { /ri exch def
+      rarr ri get dup length ci gt { ci get 35 eq } { pop false } ifelse
+      { /rm rm 1 ri rs0 sub bitshift add def } if
+    } for
+    rc ci rm put
+  } for
+  rc
+} def
+/mkfont { /fl exch def 300 dict /fd exch def
+  fl { /g exch def fd g 0 get 0 get g 1 rowscols put } forall fd } def
+/fh fontov 0 gt { fontov } { nr0 ovr 0 gt { pop ovr } if 7 ge { 7 } { 5 } ifelse } ifelse def
+/fnt fh 7 ge { glyphs7 } { glyphs5 } ifelse mkfont def
+/gcols { % character code -> its columns
+  dup fnt exch known not { dup 97 ge 1 index 122 le and { 32 sub } { pop 63 } ifelse } if
+  dup fnt exch known not { pop 63 } if
+  fnt exch get
+} def
+/layout { % string -> columns, a blank one between letters
+  /ls exch def
+  0 /lw exch def
+  ls { gcols length 1 add lw add /lw exch def } forall
+  lw 1 sub 0 max /lw exch def
+  lw array /lr exch def
+  0 /lp exch def
+  ls { gcols /gc exch def
+    gc { lr lp 3 -1 roll put /lp lp 1 add def } forall
+    lp lw lt { lr lp 0 put /lp lp 1 add def } if
+  } forall
+  lr
+} def
+
+% ---- the grid, the items and their timeline: before the declaration -------------
+/ncols ovc 0 gt { ovc } { nc0 } ifelse def
+/nrows ovr 0 gt { ovr } { nr0 } ifelse def
+/margin raw { 0 } { look /sign eq { pitch 2.2 mul } { look /bare eq { pitch 1.2 mul } { pitch 1.0 mul } ifelse } ifelse } ifelse def
+/bw raw { ncols } { ncols pitch mul margin 2 mul add ceiling cvi } ifelse def
+/bh raw { nrows } { nrows pitch mul margin 2 mul add ceiling cvi } ifelse def
+/colours << /red [1 0.12 0.06] /amber [1 0.58 0.08] /green [0.25 1 0.3] /white [1 0.96 0.88] /blue [0.25 0.55 1] >> def
+/rgbof { dup type /nametype eq { colours exch get } if } def
+/fxdur << /cut 0 /static 0 /drop 0.9 /wipe 0.9 /sparkle 1.2 /flash 1.2 /fade 0.8 >> def
+/mkitem { % text | [ text effect hold colour ] -> item
+  /isp exch def
+  isp type /stringtype eq { [ isp ] /isp exch def } if
+  12 dict /it exch def
+  isp 0 get /tx exch def
+  it /fx isp length 1 gt { isp 1 get dup type /stringtype eq { cvn } if } { effect items0 null ne { dup /marquee eq { pop /scroll } if } if } ifelse put
+  it /hold isp length 2 gt { isp 2 get } { hold } ifelse put
+  it /col isp length 3 gt { isp 3 get rgbof } { null } ifelse put
+  tx type /nametype eq {
+    it /dyn tx put it /R null put
+    tx /time eq { (12:00 AM) } { (100\260F) } ifelse layout /rr exch def
+  } {
+    it /dyn null put
+    tx type /stringtype eq { tx layout } { tx 0 rowscols } ifelse dup /rr exch def
+    it exch /R exch put
+  } ifelse
+  it /W rr length put
+  it /fx get /scroll eq {
+    it /in rr length ncols add speed div put it /hold 0 put it /out 0 put
+  } {
+    it /fx get /marquee eq {
+      it /in rr length mgap add speed div put it /hold 0 put it /out 0 put
+    } {
+      fxdur it /fx get known { fxdur it /fx get get } { 0 } ifelse
+      dup it exch /in exch put 0.7 mul it exch /out exch put
+    } ifelse
+  } ifelse
+  it
+} def
+/items items0 null eq { [ [ text text type /stringtype eq text length 0 eq and { /static } { effect } ifelse ] mkitem ] } { [ items0 { mkitem } forall ] } ifelse def
+/marq items length 1 eq items 0 get /fx get /marquee eq and def
+/gapt marq { 0 } { bgap } ifelse def
+/total 0 def
+items { /it exch def
+  it /t0 total put
+  it /len it /in get it /hold get add it /out get add put
+  /total total it /len get add gapt add def
+} forall
+/islooped dorepeat marq or def
+/endtime marq { items 0 get /len get } { total islooped { 0 } { 0.5 } ifelse add } ifelse def
+/patternonly items0 null eq text type /stringtype eq and text length 0 eq and def
+<< /Size [ bw bh ] /Duration length0 0 gt { length0 } { patternonly { 4 } { islooped { endtime } { endtime 10 mul ceiling 10 div 0.5 max } ifelse } ifelse } ifelse /FPS 30 /Loop islooped length0 0 le and patternonly not and
+   /Background raw { [0 0 0] } { /transparent } ifelse
+   /Title (LED matrix)
+   /Description (A grid of round LEDs with a pixel font of its own: a scrolling marquee, a ticker, a news sign with entry effects and a clock, or any pattern a procedure computes. Raw mode gives the grid at true size for driving real LEDs.)
+>> animation
+
+% ---- the time and the temperature, as text ---------------------------------------
+/clocktext { % -> string
+  chour 60 mul cmin add globaltime crate div floor cvi add 1440 mod /ct exch def
+  ct 60 idiv /hh exch def ct 60 mod /mm exch def
+  hh 12 mod /h12 exch def h12 0 eq { /h12 12 def } if
+  h12 3 string cvs (:) strcat mm 10 lt { (0) strcat } if mm 3 string cvs strcat
+  ( ) strcat hh 12 lt { (AM) } { (PM) } ifelse strcat
+} def
+/temptext { temp 5 string cvs (\260F) strcat } def
+
+% ---- one frame --------------------------------------------------------------------
+/bit { % column row -> 1 if the text has a lit pixel there
+  /br exch def /bc exch def
+  mq { bc mshift add mperiod mod } { bc xo sub } ifelse /bi exch def
+  br yo sub /bj exch def
+  bi 0 ge bi rw lt and bj 0 ge and bj fh lt and { R bi get bj neg bitshift 1 and } { 0 } ifelse
+} def
+/level { % column row -> how lit, 0 to 1, with the item's effect
+  /lr exch def /lc exch def
+  lc lr bit /bt exch def
+  fxk 1 eq {                                                  % wipe in: a bar leads the text
+    lc wk lt { bt } { lc wk eq { 1 } { 0 } ifelse } ifelse
+  } {
+  fxk 2 eq {                                                  % wipe out
+    lc wk lt { 0 } { lc wk eq { 1 } { bt } ifelse } ifelse
+  } {
+  fxk 3 eq {                                                  % sparkle: lit pixels arrive in random order, with decoys
+    bt 1 eq {
+      su [ lc lr 1 ] hash01 0.75 mul 0.1 add ge { 1 } { [ lc lr tick ] hash01 0.35 su mul lt { 0.55 } { 0 } ifelse } ifelse
+    } {
+      su 1 lt su 0 gt and { [ lc lr tick 7 add ] hash01 0.07 lt { 0.8 } { 0 } ifelse } { 0 } ifelse
+    } ifelse
+  } { bt } ifelse } ifelse } ifelse
+  lgain mul
+  hascell { lc lr cellp max } if
+} def
+
+/setitem { % the item shown now: its raster, offsets and effect state
+  /tt islooped { now total fmod } { now } ifelse def
+  /cit null def
+  items { /it exch def
+    tt it /t0 get ge tt it /t0 get it /len get add lt and { /cit it def /ltm tt it /t0 get sub def } if
+  } forall
+  /fxk 0 def /lgain 1 def /mq false def /xo 0 def /y0 nrows fh sub 2 idiv def /yo y0 def /su 1 def
+  /R [] def /rw 0 def
+  /tick now 14 mul floor cvi def
+  cit null ne {
+    cit /dyn get dup null ne { /time eq { clocktext } { temptext } ifelse layout } { pop cit /R get } ifelse /R exch def
+    /rw R length def
+    /xo ncols rw sub 2 idiv 0 max def
+    /fx cit /fx get def
+    /din cit /in get def /dho cit /hold get def /dout cit /out get def
+    fx /scroll eq { /xo ncols ltm speed mul floor cvi sub def }
+    { fx /marquee eq { /mq true def /mshift ltm speed mul floor cvi def /mperiod rw mgap add def }
+    { ltm din lt {                                              % entering
+        din 0 gt { ltm din div } { 1 } ifelse /u exch def
+        fx /drop eq { /yo y0 fh add neg 1 u /bounce-out ease sub mul round cvi y0 add def } if
+        fx /wipe eq { /fxk 1 def /wk u ncols 1 add mul floor cvi def } if
+        fx /sparkle eq { /fxk 3 def /su u def } if
+        fx /flash eq { /lgain u 7 mul floor cvi 2 mod def } if
+        fx /fade eq { /lgain u u mul def } if
+      } {
+        ltm din dho add ge {                                    % leaving
+          dout 0 gt { ltm din sub dho sub dout div } { 1 } ifelse /u exch def
+          fx /drop eq { /yo nrows y0 sub u /quad-in ease mul round cvi y0 add def } if
+          fx /wipe eq { /fxk 2 def /wk u ncols 1 add mul floor cvi def } if
+          fx /sparkle eq { /fxk 3 def /su 1 u sub def } if
+          fx /flash eq { /lgain 1 u sub 7 mul floor cvi 2 mod def } if
+          fx /fade eq { /lgain 1 u sub dup mul def } if
+        } if
+      } ifelse
+    } ifelse } ifelse
+  } if
+} def
+
+% ---- drawing ----------------------------------------------------------------------
+/rrect { % x y w h r: a rounded rectangle path
+  /rra exch def /rrh exch def /rrw exch def /rry exch def /rrx exch def
+  newpath rrx rra add rry moveto
+  rrx rrw add rry rrx rrw add rry rrh add rra arcto 4 { pop } repeat
+  rrx rrw add rry rrh add rrx rry rrh add rra arcto 4 { pop } repeat
+  rrx rry rrh add rrx rry rra arcto 4 { pop } repeat
+  rrx rry rrx rrw add rry rra arcto 4 { pop } repeat closepath
+} def
+/ledx { margin exch 0.5 add pitch mul add } def               % column -> x
+/ledy { nrows exch sub 0.5 sub pitch mul margin add } def     % row -> y
+/mixrgb { /mf exch def [ exch { mf mul } forall ] } def   % [r g b] f -> [r g b] scaled
+/rgbm { mixrgb aload pop } def                     % [r g b] f -> r g b scaled
+
+/scene {
+  setitem
+  cit null ne { cit /col get dup null eq { pop colour rgbof } if } { colour rgbof } ifelse /ledc exch def
+  /lvls ncols nrows mul array def
+  0 1 nrows 1 sub { /sr exch def
+    0 1 ncols 1 sub { /sc exch def lvls ncols sr mul sc add sc sr level put } for
+  } for
+  raw {
+    0 1 nrows 1 sub { /sr exch def
+      0 1 ncols 1 sub { /sc exch def
+        lvls ncols sr mul sc add get /lv exch def
+        lv 0.004 gt {
+          ledc lv rgbm setrgbcolor
+          sc nrows 1 sub sr sub 1 1 rectfill
+        } if
+      } for
+    } for
+  } {
+    /lit ledc 0.85 mixrgb def
+    /hot [ ledc { dup 1 exch sub 0.55 mul add } forall ] def
+    look /bare ne {
+      look /sign eq {
+        0.115 0.118 0.128 setrgbcolor 0 0 bw bh pitch rrect fill                  % the housing
+        1 setgray 0.09 setalpha 1 1 bw 2 sub bh 2 sub pitch rrect 1 setlinewidth stroke 1 setalpha
+        0.01 0.008 0.008 setrgbcolor margin 0.5 mul dup bw margin sub bh margin sub pitch 0.3 mul rrect fill  % the recess the LEDs sit in
+        0.22 0.22 0.24 setrgbcolor
+        [ margin 0.25 mul dup ] [ bw margin 0.25 mul sub margin 0.25 mul ] [ margin 0.25 mul bh margin 0.25 mul sub ] [ bw margin 0.25 mul sub bh margin 0.25 mul sub ]
+        4 array astore { aload pop pitch 0.28 mul 0 360 arc fill } forall
+      } {
+        0.012 0.012 0.016 setrgbcolor 0 0 bw bh pitch 0.8 mul rrect fill          % the panel
+        1 setgray 0.07 setalpha 0.5 0.5 bw 1 sub bh 1 sub pitch 0.8 mul rrect 1 setlinewidth stroke 1 setalpha
+      } ifelse
+      ledc unlit rgbm setrgbcolor newpath                              % every unlit LED, one path
+      0 1 nrows 1 sub { /sr exch def
+        0 1 ncols 1 sub { /sc exch def
+          lvls ncols sr mul sc add get 0.02 lt {
+            sc ledx pitch 0.37 mul add sr ledy moveto sc ledx sr ledy pitch 0.37 mul 0 360 arc
+          } if
+        } for
+      } for
+      fill
+    } if
+    /bodies {                                                                      % the lit LEDs
+      0 1 nrows 1 sub { /sr exch def
+        0 1 ncols 1 sub { /sc exch def
+          lvls ncols sr mul sc add get /lv exch def
+          lv 0.02 ge {
+            lit lv 0.3 mul 0.7 add rgbm setrgbcolor
+            sc ledx sr ledy pitch 0.43 mul 0 360 arc fill
+          } if
+        } for
+      } for
+    } def
+    /cores {                                                                       % the hot centres
+      0 1 nrows 1 sub { /sr exch def
+        0 1 ncols 1 sub { /sc exch def
+          lvls ncols sr mul sc add get /lv exch def
+          lv 0.02 ge { hot aload pop setrgbcolor lv 0.85 mul setalpha sc ledx sr ledy pitch 0.2 mul 0 360 arc fill } if
+        } for
+      } for
+      1 setalpha
+    } def
+    /gl glow look /sign eq { 1.9 mul } if def
+    /halos {                                                                       % light spread round each lit LED
+      0 1 nrows 1 sub { /sr exch def
+        0 1 ncols 1 sub { /sc exch def
+          lvls ncols sr mul sc add get /lv exch def
+          lv 0.02 ge {
+            ledc aload pop setrgbcolor
+            lv gl mul 0.07 mul setalpha sc ledx sr ledy pitch 1.7 mul 0 360 arc fill
+            lv gl mul 0.09 mul setalpha sc ledx sr ledy pitch 1.15 mul 0 360 arc fill
+            lv gl mul 0.12 mul setalpha sc ledx sr ledy pitch 0.75 mul 0 360 arc fill
+          } if
+        } for
+      } for
+      1 setalpha
+    } def
+    glow 0 gt { halos } if
+    bodies cores
+    look /sign eq {                                                                % smoked glass over them
+      gsave
+        0.02 0.015 0.02 setrgbcolor 0.30 setalpha
+        margin 0.5 mul dup bw margin sub bh margin sub pitch 0.3 mul rrect fill
+        margin 0.5 mul dup bw margin sub bh margin sub pitch 0.3 mul rrect clip newpath
+        1 setgray 0.035 setalpha                                                   % a reflection across it
+        bw 0.18 mul bh moveto bw 0.36 mul bh lineto bw 0.14 mul 0 lineto bw 0.04 mul neg 0 lineto closepath fill
+        bw 0.5 mul bh moveto bw 0.56 mul bh lineto bw 0.4 mul 0 lineto bw 0.34 mul 0 lineto closepath fill
+      grestore
+      cores                                                                        % the LEDs show through it
+    } if
+  } ifelse
+} def

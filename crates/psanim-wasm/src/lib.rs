@@ -16,7 +16,9 @@
 
 use std::cell::RefCell;
 
-use psanim::{Budget, Limits, Movie, Options, Scale};
+use std::collections::BTreeMap;
+
+use psanim::{Budget, Limits, Movie, Options, Param, Scale};
 
 #[derive(Default)]
 struct State {
@@ -27,6 +29,10 @@ struct State {
     error: String,
     meta: String,
     text: String,
+    /// Parameters for the next [`pa_load`], from [`pa_param`].
+    params: BTreeMap<String, Param>,
+    /// The result of [`pa_catalog`] or [`pa_catalog_names`].
+    out: String,
 }
 
 thread_local! {
@@ -71,6 +77,69 @@ pub unsafe extern "C" fn pa_free(ptr: *mut u8, len: usize) {
     }
 }
 
+/// Give the next [`pa_load`] a value for the program's `/name default
+/// param`, read as the command line reads `--param name=value`: a number if
+/// it parses as one, else text. The values apply to one load and are then
+/// cleared.
+///
+/// # Safety
+/// `name` and `value` must point to `nlen` and `vlen` readable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pa_param(name: *const u8, nlen: usize, value: *const u8, vlen: usize) {
+    // SAFETY: the caller's contract.
+    let (name, value) = unsafe { (text(name, nlen), text(value, vlen)) };
+    with(|s| {
+        s.params.insert(name.to_string(), Param::parse(value));
+    });
+}
+
+/// Put the source of the catalog entry `name` where [`pa_out_ptr`] reads
+/// it. Returns its length, or -1 when there is no such entry. A catalog
+/// entry is a whole movie: load it with [`pa_load`], with parameters from
+/// [`pa_param`].
+///
+/// # Safety
+/// `name` must point to `len` readable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pa_catalog(name: *const u8, len: usize) -> i32 {
+    // SAFETY: the caller's contract.
+    let name = unsafe { text(name, len) };
+    with(|s| match psanim::catalog::source(name) {
+        Some(src) => {
+            s.out = src.to_string();
+            src.len() as i32
+        }
+        None => {
+            s.out.clear();
+            -1
+        }
+    })
+}
+
+/// Put the catalog's entry names, one per line, where [`pa_out_ptr`]
+/// reads them. Returns the length.
+#[unsafe(no_mangle)]
+pub extern "C" fn pa_catalog_names() -> i32 {
+    with(|s| {
+        s.out = psanim::CATALOG
+            .iter()
+            .map(|e| e.0)
+            .collect::<Vec<_>>()
+            .join("\n");
+        s.out.len() as i32
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pa_out_ptr() -> *const u8 {
+    with(|s| s.out.as_ptr())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pa_out_len() -> usize {
+    with(|s| s.out.len())
+}
+
 /// Load a program. `scale` is pixels per canvas unit (0 for 1.0);
 /// `max_steps` caps the interpreter steps of setup and of each frame (0 for
 /// no cap). Returns 0 on success; on failure [`pa_error_ptr`] has the
@@ -87,7 +156,9 @@ pub unsafe extern "C" fn pa_load(src: *const u8, len: usize, scale: f64, max_ste
     } else {
         Limits::none()
     };
+    let params = with(|s| std::mem::take(&mut s.params));
     let options = Options {
+        params,
         scale: Scale::Factor(if scale > 0.0 { scale } else { 1.0 }),
         budget: Budget {
             setup: limits,
@@ -163,6 +234,54 @@ pub unsafe extern "C" fn pa_set_signal(name: *const u8, len: usize, value: f64) 
     with(|s| {
         if let Some(m) = s.movie.as_mut() {
             m.set_signal(name, value);
+        }
+    });
+}
+
+/// Add an event at movie time `time` to the track `name`, for the
+/// program's `sinceevent` and `eventcount`: a click, a key.
+///
+/// # Safety
+/// `name` must point to `len` readable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pa_event(name: *const u8, len: usize, time: f64) {
+    // SAFETY: the caller's contract.
+    let name = unsafe { text(name, len) };
+    with(|s| {
+        if let Some(m) = s.movie.as_mut() {
+            m.push_event(name, time);
+        }
+    });
+}
+
+/// Forget the events of the track `name` (a looping host's clock wrapped).
+///
+/// # Safety
+/// `name` must point to `len` readable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pa_clear_events(name: *const u8, len: usize) {
+    // SAFETY: the caller's contract.
+    let name = unsafe { text(name, len) };
+    with(|s| {
+        if let Some(m) = s.movie.as_mut() {
+            m.clear_events(name);
+        }
+    });
+}
+
+/// Add a reading of signal `name` taken at movie time `t`, keeping the
+/// earlier ones, so the movie can read its recent past (`signalago`,
+/// `signalseries`): what a live dashboard calls with each new value.
+///
+/// # Safety
+/// `name` must point to `len` readable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn pa_record_signal(name: *const u8, len: usize, t: f64, value: f64) {
+    // SAFETY: the caller's contract.
+    let name = unsafe { text(name, len) };
+    with(|s| {
+        if let Some(m) = s.movie.as_mut() {
+            m.record_signal(name, t, value);
         }
     });
 }
@@ -268,6 +387,23 @@ mod tests {
         );
         assert!(pa_last_steps() > 0.0);
 
+        // A recorded signal keeps its past: 0 at t=0, 1 at t=1, read half a
+        // second late at t=1 is 0.5, a half-red bar.
+        let rec = "<< /Size [32 16] /Duration 2 /FPS 10 >> animation
+                   /scene { /cpu 0.5 signalago 0 0 setrgbcolor 0 0 32 16 rectfill } def";
+        // SAFETY: `rec` is a live string.
+        assert_eq!(unsafe { pa_load(rec.as_ptr(), rec.len(), 1.0, 1e6) }, 0);
+        let cpu = "cpu";
+        // SAFETY: `cpu` is a live string.
+        unsafe {
+            pa_record_signal(cpu.as_ptr(), cpu.len(), 0.0, 0.0);
+            pa_record_signal(cpu.as_ptr(), cpu.len(), 1.0, 1.0);
+        }
+        assert_eq!(pa_render(1.0), 0);
+        // SAFETY: the pixel buffer is width*height*4 bytes.
+        let px = unsafe { std::slice::from_raw_parts(pa_pixels_ptr(), 32 * 16 * 4) };
+        assert!((126..=129).contains(&px[0]), "{}", px[0]);
+
         let bad = "<< /Size [32 16] >> animation /scene { nosuchword } def";
         // SAFETY: `bad` is a live string.
         assert_eq!(unsafe { pa_load(bad.as_ptr(), bad.len(), 0.0, 0.0) }, 0);
@@ -278,6 +414,60 @@ mod tests {
             "{err}"
         );
         assert!(string(pa_error_text_ptr(), pa_error_text_len()).contains("frame 0"));
+        // Parameters at load, a catalog entry by name, events from the host.
+        let set = |k: &str, v: &str| {
+            // SAFETY: both are live strings.
+            unsafe { pa_param(k.as_ptr(), k.len(), v.as_ptr(), v.len()) }
+        };
+        let prog = "<< /Size [8 8] /Duration 1 >> animation
+                    /Level 0 param /level exch def /Name () param /nm exch def
+                    /scene { level nm length 10 div add /tap sinceevent 1 lt { 1 } { 0 } ifelse
+                             /tap eventcount 4 div setrgbcolor 0 0 8 8 rectfill } def";
+        set("Level", "0.5");
+        set("Name", "abc");
+        // SAFETY: `prog` is a live string.
+        assert_eq!(unsafe { pa_load(prog.as_ptr(), prog.len(), 1.0, 1e6) }, 0);
+        let tap = "tap";
+        // SAFETY: `tap` is a live string.
+        unsafe { pa_event(tap.as_ptr(), tap.len(), 2.0) };
+        assert_eq!(pa_render(1.5), 0);
+        // SAFETY: 8x8 RGBA.
+        let px = unsafe { std::slice::from_raw_parts(pa_pixels_ptr(), 4) };
+        assert_eq!(&px[..3], &[204, 0, 0], "params at load, no event yet");
+        assert_eq!(pa_render(2.5), 0);
+        // SAFETY: 8x8 RGBA.
+        let px = unsafe { std::slice::from_raw_parts(pa_pixels_ptr(), 4) };
+        assert_eq!(&px[..3], &[204, 255, 64], "the event landed at 2.0");
+        // SAFETY: `tap` is a live string.
+        unsafe { pa_clear_events(tap.as_ptr(), tap.len()) };
+        assert_eq!(pa_render(2.5), 0);
+        // SAFETY: 8x8 RGBA.
+        let px = unsafe { std::slice::from_raw_parts(pa_pixels_ptr(), 4) };
+        assert_eq!(&px[..3], &[204, 0, 0], "events cleared");
+        // The values were for one load: the next load has the defaults.
+        // SAFETY: `prog` is a live string.
+        assert_eq!(unsafe { pa_load(prog.as_ptr(), prog.len(), 1.0, 1e6) }, 0);
+        assert_eq!(pa_render(0.0), 0);
+        // SAFETY: 8x8 RGBA.
+        let px = unsafe { std::slice::from_raw_parts(pa_pixels_ptr(), 4) };
+        assert_eq!(px[0], 0);
+
+        let name = "spinner";
+        // SAFETY: `name` is a live string.
+        let n = unsafe { pa_catalog(name.as_ptr(), name.len()) };
+        assert!(n > 0);
+        let src = string(pa_out_ptr(), pa_out_len());
+        assert!(src.contains("/Title"), "{src}");
+        let missing = "no-such-entry";
+        // SAFETY: a live string.
+        assert_eq!(unsafe { pa_catalog(missing.as_ptr(), missing.len()) }, -1);
+        assert!(pa_catalog_names() > 0);
+        assert!(
+            string(pa_out_ptr(), pa_out_len())
+                .lines()
+                .any(|l| l == "clock-digital")
+        );
+
         // A native thread must not leave an interpreter for thread-local
         // teardown to drop (the interpreter's own thread-locals may go
         // first); the browser has no such teardown.

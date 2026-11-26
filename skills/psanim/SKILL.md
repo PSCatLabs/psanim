@@ -140,11 +140,15 @@ is too low: an entrance is three tweens, a diagram is arithmetic. The
 | `pkstage` | boxes (`[x y w h]`) and layout, themes (`/accent ink`, `/title 40 face`), `lookat` (camera by box), `spotlight` | [stage.md](references/stage.md) |
 | `pkmotion` | `2 /pop { ... } enters`: entrances, exits and emphasis for any drawing, by name | [stage.md](references/stage.md) |
 | (core) | `script` / `then` (one thing after another), `storyboard` (named beats), `cascade`, `within` | [stage.md](references/stage.md) |
-| `pktype` | text in boxes, wrapping, `kinetic` type, counters, captions | [type.md](references/type.md) |
+| (core) | `component`, `instance`, `place`: a movie written on its own, placed in another in a box at a time | [components.md](references/components.md) |
+| (core) | `spec { ... } particles`: sparks, fireworks, confetti, snow; bursts and streams under gravity, drag and wind, every particle a function of time | [patterns.md](references/patterns.md#particles-without-state) |
+| (core) | `playlist`, `playlistduration`, `weektime`: a screen that cycles through scenes for ever, with transitions, a schedule and a safe area | [signage.md](references/signage.md) |
+| `pktype` | text in boxes, wrapping, `kinetic` type, counters, captions, end credits | [type.md](references/type.md) |
 | `pkdiagram` | `node`, `edge` (with flowing pulses), `group`, `note`, `circled` | [explain.md](references/explain.md) |
 | `pkcode` | `codeblock` (typing, focus), `codediff` | [explain.md](references/explain.md) |
-| `pkchart` | `plotframe`, `plotaxes`, `bars`, `hbars`, `plotline`, `donut` | [explain.md](references/explain.md) |
+| `pkchart` | `plotframe`, `plotaxes`, `bars`, `hbars`, `plotline`, `donut`; dashboards: `stattile`, `dial`, `horizon`, `sparkline`, `heatmap`, `statuslight` | [explain.md](references/explain.md) |
 | `pkink` | tapered strokes, `revealalong`, `around`, gradients | [ink.md](references/ink.md) |
+| `pkfigure` | a rig for characters that dance: `dancepose` from a beat, `squashed`, `limb`, `eye`, `mouth`, `spring` | [figure.md](references/figure.md) |
 
 The way of working they assume: **draw each thing at rest, in a box, in
 theme colours; then say when it arrives and by what motion.** Start from
@@ -234,8 +238,10 @@ number still passes `check`). So:
 | type that moves | `(TEXT) box /c placetext (TEXT) /glyphs 0.05 /mask-up kinetic` |
 | a diagram | `(label) box /surface node`, `boxA boxB << /Draw u /Label (x) /Pulse u >> edge` |
 | a chart | `box [x0 x1] [y0 y1] plotframe`, `<< >> plotaxes`, `[v ...] << /Grow u >> bars`, `pts plotline 0 u trimpath stroke`, `x y << /Label (x) >> plotmark` |
+| a dashboard | catalog panels `/stat` `/gauge` `/horizon` `/timeseries` `/status` `/counter` reading `/Signal /cpu` from `--signals day.csv`; by hand `v box << /Thresholds [/good 70 /warn 90 /bad] >> stattile`, `/cpu 3 60 signalseries` |
 | code | `/src (...) /rust codetokens def` in setup, `src box << /Reveal u /Focus [2] >> codeblock` |
 | a sign | `/arrow sym`, `/neq sym`, `/pi sym` (a non-ASCII character in a string is a silent blank) |
+| particles | `<< /At [x y] /Bursts [1.2] /Count 120 /Gravity 80 /Drag 1.5 >> { 1 particleu sub setalpha 0 0 3 0 360 arc fill } particles` |
 
 ### What reviewers mark down
 
@@ -278,16 +284,20 @@ detail) is in [storytelling.md](references/storytelling.md).
 | You want | Read |
 |---|---|
 | Boxes, themes, motions, scripts, storyboards, camera by box | [references/stage.md](references/stage.md) |
-| Text: fitting, wrapping, kinetic type, counters, captions | [references/type.md](references/type.md) |
+| Text: fitting, wrapping, kinetic type, counters, captions, end credits | [references/type.md](references/type.md) |
 | Diagrams, code, charts | [references/explain.md](references/explain.md) |
 | Brush marks, self-drawing textured strokes, PSCat media in motion | [references/ink.md](references/ink.md) |
+| A character that dances to a beat (Twiddle, and your own) | [references/figure.md](references/figure.md) |
 | How to structure an explanation or a story | [references/storytelling.md](references/storytelling.md) |
 | Every core word, stack effect and meaning | [references/vocabulary.md](references/vocabulary.md) (generated; same as `psanim api --markdown`) |
 | Every library word | [references/vocabulary-libraries.md](references/vocabulary-libraries.md) (generated) |
-| Low-level recipes: write-on, cameras, particles, loops, reels, keyframes | [references/patterns.md](references/patterns.md) |
+| Building a movie from parts: components, instances, placing them | [references/components.md](references/components.md) |
+| Signage: a looping playlist of scenes, loaded from a file, with a schedule, live tiles, safe areas | [references/signage.md](references/signage.md) |
+| Ready-made elements to place (spinners, clocks, an opening crawl, and more) | [references/catalog.md](references/catalog.md) (generated; `psanim catalog`) |
+| Low-level recipes: write-on, cameras, perspective (`onplane`), particles, loops, reels, keyframes | [references/patterns.md](references/patterns.md) |
 | What goes wrong and why | [references/pitfalls.md](references/pitfalls.md) |
 | Making it good: timing, easing, composition, colour, how to review motion | [references/craft.md](references/craft.md) |
-| Stateful simulations, persistent canvases, signals, parameters, motion blur | [references/modes.md](references/modes.md) |
+| Stateful simulations, persistent canvases, signals, parameters, the time of day for clocks, motion blur | [references/modes.md](references/modes.md) |
 | Complete small movies to start from | [examples/](examples/) |
 
 For drawing itself (brushes, palettes, L-systems, text layout, charts),
