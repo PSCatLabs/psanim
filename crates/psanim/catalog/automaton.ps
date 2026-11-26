@@ -1,0 +1,179 @@
+%!PS
+% Catalog entry: automaton. A cellular automaton that really runs: Conway's Life (or
+% another Life-like rule, or Brian's Brain) on a grid, or an elementary automaton such
+% as Rule 30 growing a row at a time. Dying cells fade, so the motion reads at film speed.
+% In a movie:  /life /automaton << /Params << /Pattern /gun /Grid [80 50] >> >> instance
+%              then   /life << /Box [x y w h] >> place
+%
+% The cells come from applying the rule, natively (`cellsteps`, `cellrows`): generation n
+% is a pure function of the starting grid, so the entry is a pure movie that seeks
+% anywhere, and a different /Pattern or /Seed gives a different, still correct film.
+%
+% Two kinds, by /Rule:
+%   a name or B/S text   /life (B3/S23), /highlife, /seeds, /daynight, /maze, /replicator,
+%                        /brain (Brian's Brain), or (B36/S23): a two-dimensional grid that
+%                        runs /Rate generations a second, from /Pattern.
+%   a number 0 to 255    an elementary automaton (30, 90, 110): row 0 is /Pattern (by
+%                        default one live cell in the middle), and a new row arrives /Rate
+%                        times a second below the last; once the grid is full the rows
+%                        scroll up.
+%
+% /Clock, a procedure { t -- generation } from the entry's time in seconds, replaces
+% /Rate: an accelerating film, a pause, a run backward to the start.
+%
+% Cost, measured with `psanim bench` at full size on an Apple M4: /square is one image,
+% 3.3 ms a frame at 96 x 60 cells, 5.4 ms at 200 x 120, 12 ms at 400 x 300. /round and
+% /led draw cell by cell in PostScript: 17 and 34 ms at 96 x 60, 55 and 92 ms at 200 x 120.
+
+/Rule /life param dup type /stringtype eq { dup length 0 gt { dup 0 get 48 ge 1 index 0 get 57 le and { cvi } if } if } if /rule exch def  % /life /highlife /seeds /daynight /maze /replicator /brain, (B3/S23) text, or an elementary rule 0..255 (30, 110)
+/Grid [96 60] param aload pop cvi /nr0 exch def cvi /nc0 exch def   % cells across and down
+/Cols 0 param cvi /ovc exch def                                     % cells across, instead of /Grid's (for --param, which cannot give an array)
+/Rows 0 param cvi /ovr exch def                                     % cells down, likewise
+/Pitch 8 param /pitch exch def                                      % canvas units from one cell to the next
+/Length 20 param /len exch def                                      % seconds the entry lasts
+
+/ncols ovc 0 gt { ovc } { nc0 } ifelse def
+/nrows ovr 0 gt { ovr } { nr0 } ifelse def
+/elem rule type /integertype eq rule type /realtype eq or def
+
+<< /Size [ ncols pitch mul nrows pitch mul ] /Duration len /FPS 30
+   /Background /transparent
+   /Title (Cellular automaton)
+   /Description (A cellular automaton that really runs: the Game of Life or another Life-like rule, Brian's Brain, or an elementary rule such as Rule 30 growing a row at a time, from a named pattern, a picture, RLE or a random soup. Dying cells fade. Square, round or LED cells.)
+>> animation
+
+/Pattern elem { /single } { /random } ifelse param dup type /stringtype eq { dup (!) search { pop pop pop } { pop cvn } ifelse } if /pattern exch def  % /random, /gun /glider /rpentomino /acorn /diehard /pulsar /lwss ..., a picture (array of strings, O alive), RLE text, or [ [pattern x y] ... ]
+/Density 0.3 param /density exch def                                % for /random: the share of cells alive at the start
+/Edge pattern /random eq { /wrap } { /open } ifelse param dup type /stringtype eq { cvn } if /edge exch def  % /wrap (a torus; the default for /random), /open (gliders fly off; the default for a pattern) or /dead (dead cells beyond the edge)
+/Rate 8 param /rate exch def                                        % generations (or rows) a second
+/Clock null param /clockp exch def                                  % a procedure { t -- generation } instead of /Rate
+/Look /square param dup type /stringtype eq { cvn } if /look exch def  % /square, /round, or /led (round cells, unlit ones shown, with a glow); /round and /led draw cell by cell: keep them to about 100 x 60
+/Gap 0.12 param /gap exch def                                       % the space between cells, as a share of /Pitch
+/Palette /ember param dup type /stringtype eq { cvn } if /palname exch def  % /ember /phosphor /ice /paper: the colours below, unless they are given
+/Alive null param /alive0 exch def                                  % a live cell [r g b]
+/Born null param /born0 exch def                                    % a cell just born [r g b]; it takes /Mature generations to become /Alive
+/Trail null param /trail0 exch def                                  % a cell that has just died [r g b]; it fades over /Fade generations
+/Ghost null param /ghost0 exch def                                  % where a cell once lived [r g b]
+/Ground null param /ground0 exch def                                % the ground [r g b], or /none for a transparent one
+/Fade 6 param /fade exch def                                        % generations a dead cell takes to fade (at most 126)
+/Mature 3 param /mature exch def                                    % generations a newborn takes to reach /Alive (at most 127)
+/MaxGeneration 0 param /maxgen0 exch def                             % elementary rules: the most rows a /Clock reaches, if sampling it may miss its peak (0: sampled)
+
+% ---- colours ----------------------------------------------------------------------
+/palettes <<
+  /ember    << /Ground [0.035 0.03 0.05] /Ghost [0.075 0.058 0.085] /Born [1 0.97 0.86] /Alive [1 0.7 0.3] /Trail [0.8 0.2 0.14] >>
+  /phosphor << /Ground [0.01 0.035 0.02] /Ghost [0.025 0.075 0.04] /Born [0.85 1 0.88] /Alive [0.3 1 0.48] /Trail [0.05 0.42 0.2] >>
+  /ice      << /Ground [0.02 0.03 0.07] /Ghost [0.045 0.065 0.13] /Born [1 1 1] /Alive [0.56 0.85 1] /Trail [0.26 0.3 0.85] >>
+  /paper    << /Ground [0.95 0.93 0.88] /Ghost [0.9 0.87 0.8] /Born [0.05 0.05 0.1] /Alive [0.14 0.15 0.22] /Trail [0.8 0.45 0.33] >>
+>> def
+/pal0 palettes palname known { palettes palname get } { palettes /ember get } ifelse def
+/pick { exch dup null eq { pop pal0 exch get } { exch pop } ifelse } def   % given key -> colour
+/noground ground0 /none eq def
+/ground noground { pal0 /Ground get } { ground0 /Ground pick } ifelse def
+/palette <<
+  /Ground ground  /Ghost ghost0 /Ghost pick  /Born born0 /Born pick  /Alive alive0 /Alive pick
+  /Trail trail0 /Trail pick  /Fade fade  /Mature mature
+>> def
+
+% ---- the automaton ----------------------------------------------------------------
+/hasclock /clockp load null ne def
+/genof { hasclock { clockp } { rate mul } ifelse 0 max } def   % t -> generation
+elem {
+  % The whole history, once: every row the entry can show.
+  % The clock need not only go forward (a /Clock may run back to the start), so the
+  % rows needed are the most it reaches: /MaxGeneration, or the largest of 241 samples
+  % across the entry's length. Held to what fits in a grid of 4194304 cells.
+  /maxgen maxgen0 0 gt { maxgen0 } {
+    0 0 1 240 { len mul 240 div genof max } for
+  } ifelse def
+  /total maxgen ceiling cvi nrows add 1 add 4194304 ncols idiv min def
+  /row0 ncols 1 << /Pattern pattern /Density density >> cellgrid def
+  /hist row0 << /Rule rule cvi /Edge edge >> total cellrows def
+  /histrgb hist palette 0 cellcolors def
+} {
+  /g0 ncols nrows << /Pattern pattern /Density density >> cellgrid def
+  /how << /Rule rule /Edge edge >> def
+} ifelse
+
+% ---- drawing ----------------------------------------------------------------------
+/W ncols pitch mul def /H nrows pitch mul def
+/drawimage { % rgb nr: the cells as one image, top row first, filling nr rows of the grid
+  /dnr exch def /drgb exch def
+  gsave 0 H dnr pitch mul sub translate W dnr pitch mul scale
+    noground {
+      % no ground: a stencil leaves every cell of the ground colour unpainted
+      /DeviceRGB setcolorspace
+      << /ImageType 3 /InterleaveType 3
+         /DataDict << /ImageType 1 /Width ncols /Height dnr /BitsPerComponent 8
+                      /Decode [0 1 0 1 0 1] /ImageMatrix [ ncols 0 0 dnr neg 0 dnr ] /DataSource drgb >>
+         /MaskDict << /ImageType 1 /Width ncols /Height dnr /BitsPerComponent 1 /Decode [1 0]
+                      /ImageMatrix [ ncols 0 0 dnr neg 0 dnr ] /DataSource drgb ncols ground cellmask >>
+      >> image
+    } {
+      ncols dnr 8 [ ncols 0 0 dnr neg 0 dnr ] drgb false 3 colorimage
+    } ifelse
+  grestore
+} def
+/gaps { % lines of ground between cells
+  gap 0 gt noground not and {
+    gsave ground aload pop setrgbcolor gap pitch mul setlinewidth 0 setlinecap
+      0 pitch W { 0 moveto 0 H rlineto } for
+      0 pitch H { 0 exch moveto W 0 rlineto } for stroke
+    grestore
+  } if
+} def
+/discs { % cells rgb nr: a disc per cell that is not ground; nr rows from the top
+  /dnr exch def /drgb exch def /dcells exch def
+  /gb [ ground { 255 mul round cvi } forall ] def
+  /rad pitch 1 gap sub mul 0.5 mul def
+  0 1 dnr 1 sub { /dr exch def
+    /yy H dr 0.5 add pitch mul sub def
+    0 1 ncols 1 sub { /dc exch def
+      /k dr ncols mul dc add def
+      dcells k get 0 ne {
+        drgb k 3 mul get drgb k 3 mul 1 add get drgb k 3 mul 2 add get
+        3 copy gb 2 get eq exch gb 1 get eq and exch gb 0 get eq and { pop pop pop } {
+          255 div 3 1 roll 255 div 3 1 roll 255 div 3 1 roll setrgbcolor
+          dc 0.5 add pitch mul yy rad 0 360 arc fill
+        } ifelse
+      } if
+    } for
+  } for
+} def
+/unlit { % a faint disc at every cell
+  ground { 1.6 mul 0.05 add } forall setrgbcolor newpath
+  /rad pitch 1 gap sub mul 0.42 mul def
+  0 1 nrows 1 sub { /dr exch def
+    0 1 ncols 1 sub { /dc exch def
+      dc 0.5 add pitch mul rad add H dr 0.5 add pitch mul sub moveto
+      dc 0.5 add pitch mul H dr 0.5 add pitch mul sub rad 0 360 arc
+    } for
+  } for fill
+} def
+/drawcells { % cells rgb nr
+  noground not { ground aload pop setrgbcolor 0 0 W H rectfill } if
+  look /square eq {
+    3 -1 roll pop drawimage gaps
+  } {
+    look /led eq {
+      unlit
+      3 copy pitch 0.9 mul 1.2 { discs } glowing pop pop pop
+    } { discs } ifelse
+  } ifelse
+} def
+
+/scene {
+  now genof /gen exch def
+  elem {
+    % rows 0..r are shown; the newest arrives as the clock passes it
+    /r gen floor cvi total 1 sub min def
+    /top r nrows sub 1 add 0 max def
+    /nr r top sub 1 add def
+    hist top ncols mul nr ncols mul getinterval
+    histrgb top ncols mul 3 mul nr ncols mul 3 mul getinterval
+    nr drawcells
+  } {
+    /g g0 ncols how gen cellsteps def
+    g g palette gen dup floor sub cellcolors nrows drawcells
+  } ifelse
+} def

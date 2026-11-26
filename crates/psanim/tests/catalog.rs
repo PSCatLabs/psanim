@@ -842,3 +842,128 @@ fn theme_given_as_text_selects_the_theme() {
         m.render_at(0.5).unwrap();
     }
 }
+
+// ---- /automaton -------------------------------------------------------------
+
+fn automaton(params: &str) -> Movie {
+    automaton_seeded(1, params)
+}
+
+fn automaton_seeded(seed: u32, params: &str) -> Movie {
+    let src = format!(
+        "<< /Size [320 200] /Duration 6 /FPS 10 /Background [0 0 0] >> animation
+         /a /automaton << /Seed {seed} /Params << {params} >> >> instance
+         /scene {{ /a << /Box [0 0 320 200] >> place }} def"
+    );
+    Movie::load(&src, &Options::default()).unwrap_or_else(|e| panic!("{e}"))
+}
+
+#[test]
+fn automaton_is_the_same_film_in_any_order() {
+    let params = "/Pattern /rpentomino /Grid [80 50] /Edge /open /Rate 40 /Pitch 4";
+    let mut seq = automaton(params);
+    let mut late = None;
+    for k in 0..=50 {
+        let f = seq.render_at(f64::from(k) * 0.1).unwrap();
+        if k == 50 {
+            late = Some(f.premultiplied.to_vec());
+        }
+    }
+    let mut cold = automaton(params);
+    let at5 = cold.render_at(5.0).unwrap().premultiplied.to_vec();
+    assert_eq!(
+        late.unwrap(),
+        at5,
+        "seeking to 5 s gives the frame playing to it gives"
+    );
+    let back = cold.render_at(1.0).unwrap().premultiplied.to_vec();
+    let fresh = automaton(params)
+        .render_at(1.0)
+        .unwrap()
+        .premultiplied
+        .to_vec();
+    assert_eq!(back, fresh, "and seeking back gives the same again");
+}
+
+#[test]
+fn automaton_pattern_and_seed_change_the_film() {
+    let a = automaton("").render_at(2.0).unwrap().premultiplied.to_vec();
+    let b = automaton_seeded(2, "")
+        .render_at(2.0)
+        .unwrap()
+        .premultiplied
+        .to_vec();
+    assert_ne!(a, b, "two seeds, two soups");
+    let gun = automaton("/Pattern /gun")
+        .render_at(2.0)
+        .unwrap()
+        .premultiplied
+        .to_vec();
+    assert_ne!(a, gun);
+}
+
+#[test]
+fn automaton_clock_replaces_the_rate() {
+    let rate = automaton("/Pattern /acorn /Rate 6")
+        .render_at(2.5)
+        .unwrap()
+        .premultiplied
+        .to_vec();
+    let clock = automaton("/Pattern /acorn /Clock { 6 mul }")
+        .render_at(2.5)
+        .unwrap()
+        .premultiplied
+        .to_vec();
+    assert_eq!(rate, clock, "a /Clock of 6 t is a /Rate of 6");
+    let held = automaton("/Pattern /acorn /Clock { pop 4 }")
+        .render_at(2.5)
+        .unwrap()
+        .premultiplied
+        .to_vec();
+    assert_ne!(rate, held);
+}
+
+#[test]
+fn automaton_with_no_ground_shows_what_is_behind_it() {
+    // A blue movie behind a placed automaton with /Ground /none: the square look
+    // must paint only the cells, so most of its box is still blue.
+    let src = "<< /Size [400 300] /Duration 2 /FPS 10 /Background [0 0 1] >> animation
+         /a /automaton << /Params << /Ground /none /Pattern /gun /Grid [50 30] >> >> instance
+         /scene { /a << /Box [0 0 400 300] >> place } def";
+    let mut m = Movie::load(src, &Options::default()).unwrap();
+    let f = m.render_at(1.0).unwrap();
+    let px = f.premultiplied;
+    let blue = px
+        .chunks_exact(4)
+        .filter(|p| p[2] > 200 && p[0] < 40 && p[1] < 40)
+        .count();
+    let total = px.len() / 4;
+    assert!(
+        blue * 10 > total * 8,
+        "only {blue} of {total} pixels show the blue behind"
+    );
+    assert!(blue < total, "and the cells are drawn");
+}
+
+#[test]
+fn automaton_history_covers_a_clock_that_runs_backward() {
+    // An elementary rule under a clock that starts at generation 200 and runs back
+    // to 0 must show generation 190 at 1 s: the same picture as a forward clock
+    // shows when it reaches 190.
+    let movie = |clock: &str, t: f64| {
+        let src = format!(
+            "<< /Size [384 240] /Duration 20 /FPS 10 /Background [0 0 0] >> animation
+             /a /automaton << /Params << /Rule 30 /Pitch 4 /Length 20 /Clock {{ {clock} }} >> >> instance
+             /scene {{ /a << /Box [0 0 384 240] >> place }} def"
+        );
+        Movie::load(&src, &Options::default())
+            .unwrap()
+            .render_at(t)
+            .unwrap()
+            .premultiplied
+            .to_vec()
+    };
+    let back = movie("20 exch sub 10 mul", 1.0);
+    let fwd = movie("10 mul", 19.0);
+    assert_eq!(back, fwd, "generation 190 either way");
+}

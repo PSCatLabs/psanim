@@ -46,6 +46,7 @@
 #![allow(clippy::result_large_err)] // errors are the cold path; a rich one beats a boxed one
 
 pub mod api;
+pub mod ca;
 pub mod catalog;
 pub mod code;
 mod ctx;

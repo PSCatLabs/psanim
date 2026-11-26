@@ -4,6 +4,37 @@ Generated from `crates/psanim/catalog/` by `scripts/gen_reference.sh`. Do not ed
 
 Ready-made elements, each a movie of its own. Place one as a component (see components.md): `/x /entry component` in setup, then `/x << /Box [x y w h] /At t >> place` in the scene; `/y /entry << /Params << ... >> >> instance` makes another with other parameters. `psanim catalog NAME` prints an entry's source, which is also the way to learn from or adapt it.
 
+## `/automaton`: Cellular automaton
+
+A cellular automaton that really runs: the Game of Life or another Life-like rule, Brian's Brain, or an elementary rule such as Rule 30 growing a row at a time, from a named pattern, a picture, RLE or a random soup. Dying cells fade. Square, round or LED cells.
+
+768x480, 20.0 s. `/x /automaton component`, then `/x << /Box [..] >> place`.
+
+| Param | Default | Meaning |
+|---|---|---|
+| /Alive | `null` | a live cell [r g b] |
+| /Born | `null` | a cell just born [r g b]; it takes /Mature generations to become /Alive |
+| /Clock | `null` | a procedure { t -- generation } instead of /Rate |
+| /Cols | `0` | cells across, instead of /Grid's (for --param, which cannot give an array) |
+| /Density | `0.3` | for /random: the share of cells alive at the start |
+| /Edge | `/wrap` | /wrap (a torus; the default for /random), /open (gliders fly off; the default for a pattern) or /dead (dead cells beyond the edge) |
+| /Fade | `6` | generations a dead cell takes to fade (at most 126) |
+| /Gap | `0.12` | the space between cells, as a share of /Pitch |
+| /Ghost | `null` | where a cell once lived [r g b] |
+| /Grid | `[96 60]` | cells across and down |
+| /Ground | `null` | the ground [r g b], or /none for a transparent one |
+| /Length | `20` | seconds the entry lasts |
+| /Look | `/square` | /square, /round, or /led (round cells, unlit ones shown, with a glow); /round and /led draw cell by cell: keep them to about 100 x 60 |
+| /Mature | `3` | generations a newborn takes to reach /Alive (at most 127) |
+| /MaxGeneration | `0` | elementary rules: the most rows a /Clock reaches, if sampling it may miss its peak (0: sampled) |
+| /Palette | `/ember` | /ember /phosphor /ice /paper: the colours below, unless they are given |
+| /Pattern | `/random` | /random, /gun /glider /rpentomino /acorn /diehard /pulsar /lwss ..., a picture (array of strings, O alive), RLE text, or [ [pattern x y] ... ] |
+| /Pitch | `8` | canvas units from one cell to the next |
+| /Rate | `8` | generations (or rows) a second |
+| /Rows | `0` | cells down, likewise |
+| /Rule | `/life` | /life /highlife /seeds /daynight /maze /replicator /brain, (B3/S23) text, or an elementary rule 0..255 (30, 110) |
+| /Trail | `null` | a cell that has just died [r g b]; it fades over /Fade generations |
+
 ## `/chat`: Chat
 
 A phone conversation of text messages: bubbles in two colours with tails, bouncing dots before each message, timestamps, delivered and read marks, reactions, emoji, and the list scrolling up as messages arrive. Its /Script is a list of [ sender (text) when ]: sender /me or /them, when a pause in seconds or a dictionary (/Typing /At /Time /React ...); the length of the movie follows it.
@@ -548,6 +579,29 @@ A scrolling line chart of up to four series with a legend; the y range follows t
 | /Values | `null` | without signals: one array per line, a recording that loops over the duration (null: a demo) |
 | /Width | `640` | its width in units: give it the shape of the box it is placed in |
 | /Window | `4` | seconds shown |
+
+## `/turing`: Turing machine
+
+A Turing machine at work: a paper tape, a head on a carriage that reads a cell, stamps or erases a mark and moves, a state dial, step and mark counters, and the program card with the rule in use lit. It simulates the table it is given; the busy beaver by default.
+
+1280x640, 28.0 s. `/x /turing component`, then `/x << /Box [..] >> place`.
+
+| Param | Default | Meaning |
+|---|---|---|
+| /Expect | `null` | << /Steps n /Ones n /Tape (1011) >>: setup fails if the run disagrees (/Tape from the first non-blank to the last) |
+| /Fast | `0.14` | seconds a step takes at full speed |
+| /Halt | `/H` | the halting state; a state and symbol with no row halts too |
+| /Head | `0` | the cell the head starts on, counting the first of /Tape as 0 |
+| /Lead | `1.2` | seconds at rest before the first step |
+| /MaxSteps | `1000` | stop after this many steps if it has not halted |
+| /Name | `(Busy beaver: 4 states, 2 symbols)` | the program's name, typed on its card |
+| /Ramp | `0.72` | 0 to 1: each step from either end takes this times the one before, down to /Fast |
+| /Report | `false` | print the result as setup ends |
+| /Slow | `1.6` | seconds the first step and the last step take |
+| /Start | `null` | the state it starts in (null: the first row's) |
+| /Table | `[...]` | the program: rows [state reads writes move next], move /L /R or /N; shown in this order |
+| /Tail | `3.5` | seconds to hold on the stopped machine (the camera pulls back in the first two) |
+| /Tape | `[]` | the cells at the start, left to right: 0 is blank, 1 a mark, 2 and up a digit; blank beyond |
 
 ## `/twiddle`: Twiddle
 
