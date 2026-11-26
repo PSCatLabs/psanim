@@ -23,6 +23,14 @@
 //   fps      the most frames a second to draw (default: the movie's /FPS)
 //   scale    pixels per canvas unit (default: fit the element's width)
 //   wasm     URL of psanim.wasm (default: beside this file)
+//   thread   worker  render in a Worker of its own, off the page's main
+//                    thread (the default where the browser has
+//                    OffscreenCanvas and module Workers)
+//            main    render on the page's main thread
+//   timeout  the longest, in milliseconds, opening the movie or drawing one
+//            frame may take in a Worker before the widget stops it and
+//            shows an error (default 5000). On the main thread only the
+//            engine's step budget stops a frame.
 //
 // Inputs, set before every frame it draws
 //   clock      local seconds since midnight, fractions included (what the
@@ -38,11 +46,13 @@
 //   and any event the page adds with widget.event(name)
 //
 // It draws only when there is something new to draw: when the movie's
-// frame number changes (at `fps`) or an input changed. It stops drawing
-// while it is off screen or the tab is hidden. It dispatches psanim-load
-// (detail: metadata) and psanim-error (detail: the structured error).
+// frame number changes (at `fps`) or an input changed, and one frame at a
+// time. It stops drawing while it is off screen or the tab is hidden. It
+// dispatches psanim-load (detail: metadata) and psanim-error (detail: the
+// structured error).
 
 import { PsAnim, PsAnimError } from "./psanim.js";
+import { openMovie, drawFrame } from "./widget-core.js";
 
 // Compiled engines, one per wasm URL. A failed fetch or compile is
 // forgotten, so a later widget (or a retry) can try again.
@@ -60,6 +70,78 @@ function compiled(url) {
     modules.set(url, p);
   }
   return p;
+}
+
+/** Whether this browser can render a widget in a Worker. */
+function workersWork() {
+  return typeof Worker === "function" && typeof OffscreenCanvas === "function" &&
+    typeof HTMLCanvasElement.prototype.transferControlToOffscreen === "function";
+}
+
+/** A widget's engine on the page's main thread. */
+class PageDriver {
+  constructor(module, canvas) {
+    this.thread = "main";
+    this.canvas = canvas;
+    this.ctx = canvas.getContext("2d");
+    this.ready = WebAssembly.instantiate(module, {}).then((instance) => {
+      this.engine = new PsAnim(instance);
+    });
+  }
+  async open(o) {
+    await this.ready;
+    return openMovie(this.engine, this.canvas, o);
+  }
+  async frame(at, signals) {
+    return drawFrame(this.engine, this.ctx, at, signals);
+  }
+  event(name, t) { this.engine?.event(name, t); }
+  clear(name) { this.engine?.clearEvents(name); }
+  close() { this.engine?.close(); this.engine = null; }
+}
+
+/** A widget's engine in a Worker of its own, drawing into the widget's
+ * canvas through an OffscreenCanvas. */
+class WorkerDriver {
+  constructor(module, canvas) {
+    this.thread = "worker";
+    this.worker = new Worker(new URL("widget-worker.js", import.meta.url), { type: "module" });
+    this.calls = new Map();
+    this.next = 0;
+    this.worker.onmessage = (m) => {
+      const r = m.data;
+      const call = this.calls.get(r.id);
+      if (!call) return;
+      this.calls.delete(r.id);
+      if (r.ok) call.resolve(r.value);
+      else call.reject(r.ps ? new PsAnimError(r.info, r.text) : new Error(r.text));
+    };
+    this.worker.onerror = (e) => {
+      e.preventDefault?.();
+      this.#failAll(new Error(`the widget's worker failed: ${e.message || "it could not start"}`));
+    };
+    const off = canvas.transferControlToOffscreen();
+    this.worker.postMessage({ type: "init", module, canvas: off }, [off]);
+  }
+  #call(msg) {
+    const id = ++this.next;
+    return new Promise((resolve, reject) => {
+      this.calls.set(id, { resolve, reject });
+      this.worker.postMessage({ ...msg, id });
+    });
+  }
+  #failAll(err) {
+    for (const call of this.calls.values()) call.reject(err);
+    this.calls.clear();
+  }
+  open(o) { return this.#call({ type: "open", ...o }); }
+  frame(at, signals) { return this.#call({ type: "frame", at, signals }); }
+  event(name, t) { this.worker.postMessage({ type: "event", name, t }); }
+  clear(name) { this.worker.postMessage({ type: "clear", name }); }
+  close() {
+    this.worker.terminate();
+    this.#failAll(new Error("the widget was closed"));
+  }
 }
 
 /** Local seconds since midnight, with the fraction. */
@@ -89,14 +171,14 @@ export class PsAnimWidget extends HTMLElement {
     const root = this.attachShadow({ mode: "open" });
     root.innerHTML = `<style>${css}</style><canvas part="canvas"></canvas><pre class="err" role="alert"></pre>`;
     this.canvas = root.querySelector("canvas");
-    this.ctx = this.canvas.getContext("2d");
     this.err = root.querySelector(".err");
-    this.engine = null;
+    this.driver = null;             // the engine, in the page or in a Worker
     this.meta = null;
     this.signals = new Map();       // the page's own signals, kept across reopens
     this.eventNames = new Set();    // event tracks used so far
     this.pointer = { x: 0, y: 0, down: 0, hover: 0, key: 0 };
     this.dirty = true;              // an input changed since the last frame
+    this.inflight = false;          // a frame is being drawn
     this.lastFrame = -1;
     this.lastT = 0;
     this.visible = true;
@@ -107,6 +189,13 @@ export class PsAnimWidget extends HTMLElement {
     this.#wire();
   }
 
+  /** Where the engine runs: "worker", "main", or null before it opens. */
+  get thread() {
+    return this.driver?.thread ?? null;
+  }
+
+  // On the host, not the canvas: the canvas is replaced whenever a new
+  // engine is made (an OffscreenCanvas can be taken from a canvas once).
   #wire() {
     const at = (e) => {
       if (!this.meta) return;
@@ -115,15 +204,15 @@ export class PsAnimWidget extends HTMLElement {
       this.pointer.y = (1 - (e.clientY - r.top) / r.height) * this.meta.height;
       this.dirty = true;
     };
-    this.canvas.addEventListener("pointermove", at);
-    this.canvas.addEventListener("pointerenter", (e) => { this.pointer.hover = 1; at(e); });
-    this.canvas.addEventListener("pointerleave", (e) => { this.pointer.hover = 0; this.pointer.down = 0; at(e); });
-    this.canvas.addEventListener("pointerdown", (e) => {
+    this.addEventListener("pointermove", at);
+    this.addEventListener("pointerenter", (e) => { this.pointer.hover = 1; at(e); });
+    this.addEventListener("pointerleave", (e) => { this.pointer.hover = 0; this.pointer.down = 0; at(e); });
+    this.addEventListener("pointerdown", (e) => {
       this.pointer.down = 1;
       at(e);
       this.event("click");
     });
-    this.canvas.addEventListener("pointerup", (e) => { this.pointer.down = 0; at(e); });
+    this.addEventListener("pointerup", (e) => { this.pointer.down = 0; at(e); });
     this.addEventListener("keydown", (e) => {
       this.pointer.key = e.keyCode || 0;
       this.event("keydown");
@@ -144,7 +233,7 @@ export class PsAnimWidget extends HTMLElement {
     this.ro.observe(this);
     // Moved in the document: disconnect closed the engine, so open again
     // (the widget's clock is kept).
-    if (!this.engine && (this._source || this._entry)) this.#open();
+    if (!this.driver && (this._source || this._entry)) this.#open();
   }
 
   disconnectedCallback() {
@@ -158,8 +247,7 @@ export class PsAnimWidget extends HTMLElement {
     this.io?.disconnect();
     this.ro?.disconnect();
     document.removeEventListener("visibilitychange", this.onVisibility);
-    this.engine?.close();
-    this.engine = null;
+    this.#dropDriver();
     this.meta = null;
   }
 
@@ -219,13 +307,13 @@ export class PsAnimWidget extends HTMLElement {
 
   /** Add an event now to the track the program reads with `/name sinceevent`. */
   event(name) {
-    if (!this.meta) return;
+    if (!this.meta || !this.driver) return;
     this.eventNames.add(name);
     // Wrap first, so clearing the last time round cannot take this event.
     const elapsed = this.#elapsed();
     const t = this.#movieTime(elapsed);
     this.#rollover(elapsed, t);
-    this.engine.event(name, t);
+    this.driver.event(name, t);
     this.dirty = true;
   }
 
@@ -236,7 +324,7 @@ export class PsAnimWidget extends HTMLElement {
   #rollover(elapsed, t) {
     const round = this.#timeMode() === "loop" ? Math.floor(elapsed / this.meta.duration) : 0;
     if (this.lastRound != null && round !== this.lastRound) {
-      for (const name of this.eventNames) this.engine.clearEvents(name);
+      for (const name of this.eventNames) this.driver.clear(name);
       // A new round is a new picture even when the frame number is the
       // same (a one-frame loop): the clock signal and the events changed.
       this.dirty = true;
@@ -264,34 +352,73 @@ export class PsAnimWidget extends HTMLElement {
     }
   }
 
+  #timeout() {
+    const ms = Number(this.getAttribute("timeout"));
+    return ms > 0 ? ms : 5000;
+  }
+
+  /** `work`, or an error once it has taken longer than the timeout. Only a
+   * Worker can be stopped: the page's own thread cannot be interrupted. */
+  #guard(work, what) {
+    if (this.driver?.thread !== "worker") return work;
+    const ms = this.#timeout();
+    let timer;
+    const late = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(
+        `${what} took longer than ${ms} ms, so the widget was stopped (its timeout attribute sets the limit)`)), ms);
+    });
+    return Promise.race([work, late]).finally(() => clearTimeout(timer));
+  }
+
+  /** Close the engine and put a fresh canvas in place of the one it had. */
+  #dropDriver() {
+    this.driver?.close();
+    this.driver = null;
+    this.inflight = false;
+  }
+
+  #newDriver(module) {
+    const fresh = document.createElement("canvas");
+    fresh.setAttribute("part", "canvas");
+    this.canvas.replaceWith(fresh);
+    this.canvas = fresh;
+    const want = this.getAttribute("thread");
+    if (want !== "main" && workersWork()) {
+      try {
+        return new WorkerDriver(module, fresh);
+      } catch {
+        // A browser that cannot start a module Worker draws in the page;
+        // the canvas may already be handed over, so take another.
+        const again = document.createElement("canvas");
+        again.setAttribute("part", "canvas");
+        this.canvas.replaceWith(again);
+        this.canvas = again;
+      }
+    }
+    return new PageDriver(module, this.canvas);
+  }
+
   async #open() {
     const generation = (this.generation = (this.generation ?? 0) + 1);
     try {
-      if (!this.engine) {
+      if (!this.driver) {
         const url = this.getAttribute("wasm") ?? new URL("psanim.wasm", import.meta.url).href;
         const module = await compiled(url);
-        const { exports } = await WebAssembly.instantiate(module, {});
         if (generation !== this.generation || !this.isConnected) return;
-        this.engine = new PsAnim({ exports });
+        if (!this.driver) this.driver = this.#newDriver(module);
       }
-      if (generation !== this.generation || !this.isConnected) return;
-      let text = this._source;
-      if (this._entry) {
-        text = this.engine.catalog(this._entry);
-        if (text == null) throw new Error(`no catalog entry named ${this._entry}`);
-      }
-      if (!text) return;
-      const params = this.params;
+      const text = this._entry ? null : this._source;
+      if (!this._entry && !text) return;
       let scale = Number(this.getAttribute("scale"));
-      if (!(scale > 0)) {
-        const probe = this.engine.open(text, { scale: 0.05, params });
-        const want = (this.clientWidth || probe.width) * Math.min(devicePixelRatio || 1, 2);
-        scale = Math.max(0.05, Math.min(2, want / probe.width));
-      }
-      this.scale = scale;
-      this.meta = this.engine.open(text, { scale, params });
-      this.canvas.width = this.meta.pixel_width;
-      this.canvas.height = this.meta.pixel_height;
+      const want = (this.clientWidth || 0) * Math.min(devicePixelRatio || 1, 2);
+      const opened = await this.#guard(this.driver.open({
+        text, entry: this._entry, params: this.params, scale: scale > 0 ? scale : null, want,
+      }), "opening the movie");
+      if (generation !== this.generation || !this.isConnected) return;
+      this.scale = opened.scale;
+      this.meta = opened.meta;
+      // The canvas's pixel size is set where it is drawn; its shape here.
+      this.canvas.style.aspectRatio = `${this.meta.pixel_width} / ${this.meta.pixel_height}`;
       this.err.textContent = "";
       this.t0 ??= performance.now();   // a reopen keeps the widget's clock
       this.lastFrame = -1;
@@ -301,6 +428,7 @@ export class PsAnimWidget extends HTMLElement {
       this.dispatchEvent(new CustomEvent("psanim-load", { detail: this.meta }));
       this.#wake();
     } catch (e) {
+      if (generation !== this.generation) return;
       this.#fail(e);
     }
   }
@@ -315,12 +443,18 @@ export class PsAnimWidget extends HTMLElement {
 
   #fail(e) {
     this.running = false;
+    // A Worker that ran over its time is stopped for good; the next open
+    // (a new src, entry or params) starts another.
+    if (/took longer than/.test(e.message)) {
+      this.#dropDriver();
+      this.meta = null;
+    }
     this.err.textContent = e.message;
     this.dispatchEvent(new CustomEvent("psanim-error", { detail: e instanceof PsAnimError ? e.info : { message: e.message } }));
   }
 
   #awake() {
-    return this.meta && this.visible && document.visibilityState !== "hidden" && this.isConnected;
+    return this.meta && this.driver && this.visible && document.visibilityState !== "hidden" && this.isConnected;
   }
 
   #wake() {
@@ -335,13 +469,18 @@ export class PsAnimWidget extends HTMLElement {
         this.running = false;   // asleep until the observer or the tab wakes it
         return;
       }
-      if (this.#step()) this.frameRequest = requestAnimationFrame(tick);
+      this.#step(loop);
+      if (this.running && loop === this.loop) this.frameRequest = requestAnimationFrame(tick);
     };
     this.frameRequest = requestAnimationFrame(tick);
   }
 
-  /** One animation frame: draw if there is something new. False on error. */
-  #step() {
+  /** One animation frame: start drawing if there is something new and no
+   * frame is being drawn already. */
+  #step(loop) {
+    // A frame still being drawn: wait, leaving what changed meanwhile for
+    // the next one.
+    if (this.inflight) return;
     const meta = this.meta;
     const fps = Math.min(Number(this.getAttribute("fps")) || meta.fps, meta.fps);
     const elapsed = this.#elapsed();
@@ -352,32 +491,38 @@ export class PsAnimWidget extends HTMLElement {
     const index = Math.floor(t * fps + 1e-9);
     if (index === this.lastFrame && !this.dirty) {
       this.frameSkips++;
-      return true;
+      return;
     }
     this.lastFrame = index;
     this.dirty = false;
     // A movie with state exists only at its own ticks; a pure one at any time.
     const at = meta.mode === "pure" ? t : Math.floor(t * meta.fps + 1e-9) / meta.fps;
-    try {
-      const e = this.engine;
-      e.setSignal("clock", secondsSinceMidnight());
-      e.setSignal("mousex", this.pointer.x);
-      e.setSignal("mousey", this.pointer.y);
-      e.setSignal("mousedown", this.pointer.down);
-      e.setSignal("hover", this.pointer.hover);
-      e.setSignal("key", this.pointer.key);
-      for (const [name, value] of this.signals) e.setSignal(name, value);
-      const started = performance.now();
-      const frame = e.render(at);
-      this.frameMs = performance.now() - started;
-      this.framesDrawn++;
-      this.ctx.putImageData(new ImageData(frame.data, frame.width, frame.height), 0, 0);
-      this.err.textContent = "";
-    } catch (e) {
-      this.#fail(e);
-      return false;
-    }
-    return true;
+    const signals = [
+      ["clock", secondsSinceMidnight()],
+      ["mousex", this.pointer.x],
+      ["mousey", this.pointer.y],
+      ["mousedown", this.pointer.down],
+      ["hover", this.pointer.hover],
+      ["key", this.pointer.key],
+      ...this.signals,
+    ];
+    const generation = this.generation;
+    this.inflight = true;
+    const driver = this.driver;
+    this.#guard(driver.frame(at, signals), "a frame")
+      .then((r) => {
+        if (generation !== this.generation) return;
+        this.frameMs = r.ms;
+        this.framesDrawn++;
+        this.err.textContent = "";
+      })
+      .catch((e) => {
+        if (generation !== this.generation || loop !== this.loop) return;
+        this.#fail(e);
+      })
+      .finally(() => {
+        if (this.driver === driver) this.inflight = false;
+      });
   }
 }
 

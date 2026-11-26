@@ -19,12 +19,37 @@ how far the idea could go.
   `catalogNames()`), and events from the page (`event(name, t)`,
   `clearEvents(name)`), backed by `Movie::push_event` /
   `Movie::clear_events` in the engine.
+- **A Worker of its own per widget** (`web/widget-worker.js`, shared code
+  in `web/widget-core.js`): where the browser has `OffscreenCanvas` and
+  module Workers, each widget's engine runs in a Worker and draws into the
+  widget's canvas through an `OffscreenCanvas`, so a heavy frame does not
+  hold up the page. The page keeps the clock, the inputs and the decision
+  to draw; it sends at most one frame at a time. A frame (or an open) that
+  runs past the widget's `timeout` (5000 ms unless set) gets the Worker
+  terminated and an error shown; a new `src`, `entry` or `params` starts
+  another. `thread="main"` keeps the engine in the page, which is also
+  what happens where Workers are missing.
 - **A demo**, `web/widgets.html`: a digital clock and an analog clock
   (the catalog's clocks on the `clock` signal), a pointer toy reacting to
   hover and clicks, three spinners, and a build-status pipeline driven by a
   signal the page sets from JavaScript.
 
-What was run: the wasm crate's native ABI test, `scripts/wasm_smoke.mjs` in
+What was run for the Worker player (headless Chromium through
+Playwright, the page served over HTTP): all seven demo widgets drew in
+Workers, and again with `thread="main"` on each; a widget scrolled off
+screen drew no frames and resumed when it came back; a resize reopened
+the movie at the new width in the same Worker; a widget removed and put
+back opened again in a new Worker and drew; a click reached the program
+(`/click sinceevent`) and its picture changed and changed back. A widget
+whose frames run for about two-thirds of a second, with `timeout="400"`,
+was stopped with its error shown, and the page's own animation frames
+never waited more than 18.5 ms meanwhile; the same widget with
+`thread="main"` held each of the page's animation frames for 668 ms. Not
+run for the Worker player: Firefox, Safari, a hidden tab, a browser
+without `OffscreenCanvas` (the fallback is the same code as
+`thread="main"`), memory per Worker.
+
+What was run for the first step: the wasm crate's native ABI test, `scripts/wasm_smoke.mjs` in
 Node 24, and the demo page in headless Chromium through Playwright (all
 seven widgets drew without errors; a widget scrolled off screen stopped
 drawing and resumed when it came back; a held movie stopped drawing after
@@ -206,8 +231,12 @@ no file writes, no network, no wall clock (the clock comes in as a
 signal), and in the browser no file reads beyond PSCat's built-in
 libraries. Each frame has a step budget (the engine's default of 50 M
 steps from `web/psanim.js`), and a frame over budget is an error shown
-on the widget, not a hung page. A frame within budget still runs on the
-page's main thread, though, so a heavy widget makes the page janky.
+on the widget, not a hung page. Steps do not count the engine's native
+work (drawing, blur, particles), and the browser engine has no clock, so
+the step budget alone can let a frame run for seconds. In a Worker the
+widget's `timeout` covers that: the page terminates the Worker. On the
+main thread (`thread="main"`, or a browser without Workers) a frame
+within budget still holds up the page while it runs.
 
 Each widget instantiates its own copy of the module (the compiled code is
 shared, the memory is not): 12 to 18 MB per widget measured. Seven widgets
@@ -216,12 +245,11 @@ on the demo page cost about 100 MB. Two ways down, neither built:
 - **One engine, many movies.** The wasm state holds one `Movie`; holding
   a table of them by handle would let every widget on a page share one
   instance (and its fonts and libraries, which are most of the memory).
-- **A Worker** (the roadmap's Worker-based player): one Worker rendering
-  every widget on the page, posting frames back as transferable
-  `ImageBitmap`s or drawing into `OffscreenCanvas`es. That takes rendering
-  off the main thread, gives a place to enforce a per-widget time budget
-  with the Worker's own clock, and lets a runaway widget be terminated
-  without touching the page. This first step runs on the main thread.
+- **One Worker for every widget**: rendering all of a page's widgets in
+  one Worker would share the engine as above, but a runaway widget could
+  then only be stopped by terminating the others with it. Built instead:
+  a Worker per widget (above), which keeps that isolation and costs a
+  module instance each, as before.
 
 ## What belongs in PSCat and what in psanim
 
