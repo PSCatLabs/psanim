@@ -570,7 +570,7 @@ def build_eval():
 def copy_assets():
     shutil.copy(ROOT / "scripts/site/site.css", SITE / "site.css")
     shutil.copy(ROOT / "scripts/site/source-viewer.js", SITE / "source-viewer.js")
-    for f in ["psanim.js", "player.js", "widget.js", "widgets.html"]:
+    for f in ["psanim.js", "player.js", "widget.js", "widget-core.js", "widget-worker.js", "widgets.html"]:
         shutil.copy(ROOT / "web" / f, SITE / f)
     wasm = ROOT / "web/psanim.wasm"
     if wasm.exists():

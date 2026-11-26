@@ -50,7 +50,9 @@ between readings (`signalago`). `scripts/wasm_smoke.mjs` exercises it in
 Node; it has not yet been run in a browser page.
 
 For a movie that keeps running in a page, with live inputs and no
-controls, use `<psanim-widget>` (`web/widget.js`); `docs/widgets.md` says
+controls, use `<psanim-widget>` (`web/widget.js`). It renders in a
+Worker of its own where the browser has `OffscreenCanvas`, so serve
+`widget-worker.js` and `widget-core.js` beside it. `docs/widgets.md` says
 what it does and `web/widgets.html` is a demo.
 
 Errors throw `PsAnimError` with `.info`, the same structured error the

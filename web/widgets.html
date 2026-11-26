@@ -124,7 +124,7 @@
     for (const el of document.querySelectorAll(".stats")) {
       const w = document.getElementById(el.dataset.for);
       if (!w.meta) continue;
-      el.textContent = `${w.meta.pixel_width}x${w.meta.pixel_height}  ${w.frameMs.toFixed(1)} ms/frame  ` +
+      el.textContent = `${w.thread}  ${w.meta.pixel_width}x${w.meta.pixel_height}  ${w.frameMs.toFixed(1)} ms/frame  ` +
         `drawn ${w.framesDrawn}  slept ${w.frameSkips}`;
     }
   }, 500);
