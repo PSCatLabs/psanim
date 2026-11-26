@@ -922,3 +922,48 @@ fn automaton_clock_replaces_the_rate() {
         .to_vec();
     assert_ne!(rate, held);
 }
+
+#[test]
+fn automaton_with_no_ground_shows_what_is_behind_it() {
+    // A blue movie behind a placed automaton with /Ground /none: the square look
+    // must paint only the cells, so most of its box is still blue.
+    let src = "<< /Size [400 300] /Duration 2 /FPS 10 /Background [0 0 1] >> animation
+         /a /automaton << /Params << /Ground /none /Pattern /gun /Grid [50 30] >> >> instance
+         /scene { /a << /Box [0 0 400 300] >> place } def";
+    let mut m = Movie::load(src, &Options::default()).unwrap();
+    let f = m.render_at(1.0).unwrap();
+    let px = f.premultiplied;
+    let blue = px
+        .chunks_exact(4)
+        .filter(|p| p[2] > 200 && p[0] < 40 && p[1] < 40)
+        .count();
+    let total = px.len() / 4;
+    assert!(
+        blue * 10 > total * 8,
+        "only {blue} of {total} pixels show the blue behind"
+    );
+    assert!(blue < total, "and the cells are drawn");
+}
+
+#[test]
+fn automaton_history_covers_a_clock_that_runs_backward() {
+    // An elementary rule under a clock that starts at generation 200 and runs back
+    // to 0 must show generation 190 at 1 s: the same picture as a forward clock
+    // shows when it reaches 190.
+    let movie = |clock: &str, t: f64| {
+        let src = format!(
+            "<< /Size [384 240] /Duration 20 /FPS 10 /Background [0 0 0] >> animation
+             /a /automaton << /Params << /Rule 30 /Pitch 4 /Length 20 /Clock {{ {clock} }} >> >> instance
+             /scene {{ /a << /Box [0 0 384 240] >> place }} def"
+        );
+        Movie::load(&src, &Options::default())
+            .unwrap()
+            .render_at(t)
+            .unwrap()
+            .premultiplied
+            .to_vec()
+    };
+    let back = movie("20 exch sub 10 mul", 1.0);
+    let fwd = movie("10 mul", 19.0);
+    assert_eq!(back, fwd, "generation 190 either way");
+}

@@ -33,6 +33,9 @@ use crate::ops::{Shared, fail, reg};
 
 /// The most cells one grid may have (2048 x 2048).
 pub const MAX_CELLS: usize = 1 << 22;
+/// The most cells a grid may have across, or down (except an elementary
+/// history, which may be as many rows as fit in [`MAX_CELLS`]).
+pub const MAX_SIDE: usize = 2048;
 /// The most cell updates the words may do in one moment (a frame, or a
 /// tick): about a second of native work on an Apple M4, where the acorn's
 /// 5206 generations on 300 x 380 cells (593 million updates) took 0.49 s.
@@ -68,9 +71,10 @@ pub enum Edge {
     /// The opposite edge: the grid is a torus.
     Wrap,
     /// An open plane, as near as a finite grid gets: dead cells beyond the
-    /// edge, and a lone glider that comes within three cells of the edge is
-    /// taken off (it would fly on for ever, meeting nothing). Exact while
-    /// nothing else reaches the edge.
+    /// edge, and a lone glider within three cells of an edge it is flying
+    /// out through is taken off (it would fly on for ever, meeting
+    /// nothing). Exact while nothing else reaches the edge. Under a rule
+    /// where gliders do not fly as in Life, the same as `Dead`.
     Open,
 }
 
@@ -80,13 +84,79 @@ pub enum Edge {
 /// it first.
 const OPEN_BAND: usize = 3;
 
-/// Take off the lone gliders near the edge of `g`: a group of exactly five
-/// live cells, joined, in a 3 x 3 box, with no other live cell within two
-/// cells of it. They become cells that died this generation, so they fade.
+/// The glider in each of its four phases and four headings, as 3 x 3 bit
+/// masks (bit `3y + x`, y down) with the way it is heading (dx, dy).
+fn glider_shapes() -> &'static [(u16, i8, i8)] {
+    static SHAPES: std::sync::OnceLock<Vec<(u16, i8, i8)>> = std::sync::OnceLock::new();
+    SHAPES.get_or_init(|| {
+        // The four phases of a glider heading down and right, found by running it.
+        let mut phases = Vec::new();
+        let (w, h) = (12usize, 12usize);
+        let mut g = vec![0u8; w * h];
+        for (x, y) in [(1, 0), (2, 1), (0, 2), (1, 2), (2, 2)] {
+            g[(y + 2) * w + x + 2] = 128;
+        }
+        let life = Rule::LifeLike {
+            born: 1 << 3,
+            survive: (1 << 2) | (1 << 3),
+        };
+        for _ in 0..4 {
+            let live: Vec<(usize, usize)> = (0..w * h)
+                .filter(|k| g[*k] >= 128)
+                .map(|k| (k % w, k / w))
+                .collect();
+            let x0 = live.iter().map(|c| c.0).min().unwrap_or(0);
+            let y0 = live.iter().map(|c| c.1).min().unwrap_or(0);
+            let mask = live
+                .iter()
+                .fold(0u16, |m, (x, y)| m | 1 << (3 * (y - y0) + (x - x0)));
+            phases.push(mask);
+            g = step(&g, w, life, Edge::Dead);
+        }
+        let flip = |m: u16, fx: bool, fy: bool| {
+            let mut out = 0u16;
+            for y in 0..3 {
+                for x in 0..3 {
+                    if m & (1 << (3 * y + x)) != 0 {
+                        let (nx, ny) = (if fx { 2 - x } else { x }, if fy { 2 - y } else { y });
+                        out |= 1 << (3 * ny + nx);
+                    }
+                }
+            }
+            out
+        };
+        let mut all = Vec::new();
+        for (fx, fy) in [(false, false), (true, false), (false, true), (true, true)] {
+            for m in &phases {
+                all.push((
+                    flip(*m, fx, fy),
+                    if fx { -1 } else { 1 },
+                    if fy { -1 } else { 1 },
+                ));
+            }
+        }
+        all
+    })
+}
+
+/// Whether gliders fly under `rule` as they do in Life: a lone glider only
+/// ever meets neighbour counts 0 to 5, so a rule that agrees with B3/S23
+/// on those (HighLife, B36/S23, does) moves it the same way.
+fn gliders_fly(rule: Rule) -> bool {
+    match rule {
+        Rule::LifeLike { born, survive } => {
+            born & 0b11_1111 == 1 << 3 && survive & 0b11_1111 == (1 << 2) | (1 << 3)
+        }
+        Rule::Brain => false,
+    }
+}
+
+/// Take off the gliders near the edge of `g` that are flying out through
+/// it: a lone glider (in any of its phases and headings, with no other live
+/// cell within two cells of it) within [`OPEN_BAND`] of an edge it is
+/// heading toward. They become cells that died this generation, so they
+/// fade.
 fn release_gliders(g: &mut [u8], cols: usize, rows: usize) {
-    let near = |x: usize, y: usize| {
-        x < OPEN_BAND || y < OPEN_BAND || x + OPEN_BAND >= cols || y + OPEN_BAND >= rows
-    };
     let alive = |g: &[u8], x: i64, y: i64| {
         x >= 0
             && y >= 0
@@ -94,62 +164,61 @@ fn release_gliders(g: &mut [u8], cols: usize, rows: usize) {
             && (y as usize) < rows
             && g[y as usize * cols + x as usize] >= 128
     };
-    let mut seen = vec![false; g.len()];
-    let mut edge_cells = Vec::new();
-    for y in 0..rows {
-        for x in 0..cols {
-            if near(x, y) && g[y * cols + x] >= 128 {
-                edge_cells.push((x, y));
-            }
-        }
-    }
-    for (sx, sy) in edge_cells {
-        if seen[sy * cols + sx] || g[sy * cols + sx] < 128 {
-            continue;
-        }
-        // The group: live cells joined to this one (8-neighbours), at most 6 looked at.
-        let mut group = vec![(sx as i64, sy as i64)];
-        seen[sy * cols + sx] = true;
-        let mut k = 0;
-        while k < group.len() && group.len() <= 5 {
-            let (x, y) = group[k];
-            for dy in -1..=1 {
-                for dx in -1..=1 {
-                    let (nx, ny) = (x + dx, y + dy);
-                    if alive(g, nx, ny) && !seen[ny as usize * cols + nx as usize] {
-                        seen[ny as usize * cols + nx as usize] = true;
-                        group.push((nx, ny));
+    let band = OPEN_BAND as i64;
+    let (w, h) = (cols as i64, rows as i64);
+    // Every 3 x 3 box that reaches into the band.
+    let mut found = Vec::new();
+    for y0 in -2..h {
+        let row_near = y0 < band || y0 + 2 >= h - band;
+        // Away from the top and bottom, only the boxes at the two sides.
+        let xs: Vec<i64> = if row_near {
+            (-2..w).collect()
+        } else {
+            (-2..band).chain((w - band - 2).max(band)..w).collect()
+        };
+        for x0 in xs {
+            let mut mask = 0u16;
+            for dy in 0..3 {
+                for dx in 0..3 {
+                    if alive(g, x0 + dx, y0 + dy) {
+                        mask |= 1 << (3 * dy + dx);
                     }
                 }
             }
-            k += 1;
-        }
-        if group.len() != 5 {
-            continue;
-        }
-        let (x0, x1) = (
-            group.iter().map(|c| c.0).min().unwrap_or(0),
-            group.iter().map(|c| c.0).max().unwrap_or(0),
-        );
-        let (y0, y1) = (
-            group.iter().map(|c| c.1).min().unwrap_or(0),
-            group.iter().map(|c| c.1).max().unwrap_or(0),
-        );
-        if x1 - x0 != 2 || y1 - y0 != 2 {
-            continue;
-        }
-        // Alone: nothing else alive within two cells of its box.
-        let mut others = 0;
-        for y in y0 - 2..=y1 + 2 {
-            for x in x0 - 2..=x1 + 2 {
-                if alive(g, x, y) {
-                    others += 1;
+            if mask.count_ones() != 5 {
+                continue;
+            }
+            let Some(&(_, hx, hy)) = glider_shapes().iter().find(|s| s.0 == mask) else {
+                continue;
+            };
+            // Heading out through an edge it is near.
+            let out = (hx < 0 && x0 < band)
+                || (hx > 0 && x0 + 2 >= w - band)
+                || (hy < 0 && y0 < band)
+                || (hy > 0 && y0 + 2 >= h - band);
+            if !out {
+                continue;
+            }
+            // Alone: nothing else alive within two cells of its box.
+            let mut others = 0;
+            for y in y0 - 2..=y0 + 4 {
+                for x in x0 - 2..=x0 + 4 {
+                    if alive(g, x, y) {
+                        others += 1;
+                    }
                 }
             }
+            if others == 5 {
+                found.push((x0, y0, mask));
+            }
         }
-        if others == 5 {
-            for (x, y) in group {
-                g[y as usize * cols + x as usize] = 127;
+    }
+    for (x0, y0, mask) in found {
+        for dy in 0..3 {
+            for dx in 0..3 {
+                if mask & (1 << (3 * dy + dx)) != 0 {
+                    g[(y0 + dy) as usize * cols + (x0 + dx) as usize] = 127;
+                }
             }
         }
     }
@@ -263,7 +332,7 @@ pub fn step(cells: &[u8], cols: usize, rule: Rule, edge: Edge) -> Vec<u8> {
             };
         }
     }
-    if open {
+    if open && gliders_fly(rule) {
         release_gliders(&mut out, cols, rows);
     }
     out
@@ -581,6 +650,22 @@ pub fn lut(p: &Palette, frac: f64) -> [[u8; 3]; 256] {
     t
 }
 
+/// One bit per cell, rows padded to whole bytes, set where the colour is
+/// not `ground`: the stencil of an `ImageType 3` image, so the ground is
+/// left unpainted.
+pub fn mask(rgb: &[u8], cols: usize, ground: [u8; 3]) -> Vec<u8> {
+    let rows = rgb.len() / 3 / cols.max(1);
+    let stride = cols.div_ceil(8);
+    let mut out = vec![0u8; stride * rows];
+    for (k, c) in rgb.chunks_exact(3).enumerate() {
+        if c != ground {
+            let (x, y) = (k % cols, k / cols);
+            out[y * stride + x / 8] |= 0x80 >> (x % 8);
+        }
+    }
+    out
+}
+
 /// Three bytes per cell, for `colorimage`.
 pub fn colors(cells: &[u8], table: &[[u8; 3]; 256]) -> Vec<u8> {
     let mut out = Vec::with_capacity(cells.len() * 3);
@@ -708,15 +793,32 @@ impl Cache {
 
 // ---- the words ----------------------------------------------------------------
 
-fn dim(v: &Value, what: &str, ctx: &Shared) -> Result<usize, PsError> {
+/// A count of cells, 1 to `max`, checked before anything is allocated.
+fn dim(v: &Value, what: &str, max: usize, ctx: &Shared) -> Result<usize, PsError> {
     match v.as_f64() {
-        Some(x) if x >= 1.0 && x.is_finite() => Ok(x as usize),
+        Some(x) if x >= 1.0 && x <= max as f64 => Ok(x as usize),
         _ => fail(
             ctx,
             PsError::Rangecheck,
-            format!("{what} must be a whole number of cells, 1 or more"),
+            format!("{what} must be a whole number of cells, 1 to {max}"),
         ),
     }
+}
+
+/// A grid string `cols` wide: at least one row, a whole number of rows, at
+/// most [`MAX_SIDE`] of them.
+fn check_grid(cells: &[u8], cols: usize, who: &str, ctx: &Shared) -> Result<(), PsError> {
+    if cells.is_empty() || !cells.len().is_multiple_of(cols) || cells.len() / cols > MAX_SIDE {
+        return fail(
+            ctx,
+            PsError::Rangecheck,
+            format!(
+                "{who}: the grid's length ({}) must be a whole number of rows of {cols}, 1 to {MAX_SIDE} rows",
+                cells.len()
+            ),
+        );
+    }
+    Ok(())
 }
 
 fn rgb_of(v: Option<&Value>, default: [f64; 3]) -> [f64; 3] {
@@ -775,8 +877,8 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     // cols rows opts  cellgrid  cells
     reg(interp, ctx, "cellgrid", |i, ctx| {
         let opts = i.pop_value()?;
-        let rows = dim(&i.pop_value()?, "cellgrid: rows", ctx)?;
-        let cols = dim(&i.pop_value()?, "cellgrid: cols", ctx)?;
+        let rows = dim(&i.pop_value()?, "cellgrid: rows", MAX_SIDE, ctx)?;
+        let cols = dim(&i.pop_value()?, "cellgrid: cols", MAX_SIDE, ctx)?;
         if cols.saturating_mul(rows) > MAX_CELLS {
             return fail(
                 ctx,
@@ -817,7 +919,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     reg(interp, ctx, "cellsteps", |i, ctx| {
         let n = i.pop_value()?;
         let opts = i.pop_value()?;
-        let cols = dim(&i.pop_value()?, "cellsteps: cols", ctx)?;
+        let cols = dim(&i.pop_value()?, "cellsteps: cols", MAX_SIDE, ctx)?;
         let cells = i.pop_string()?;
         let n = match n.as_f64() {
             Some(x) if x >= 0.0 && x.is_finite() => x.floor() as u64,
@@ -829,16 +931,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 );
             }
         };
-        if cells.len() % cols != 0 || cells.len() > MAX_CELLS {
-            return fail(
-                ctx,
-                PsError::Rangecheck,
-                format!(
-                    "cellsteps: the grid's length ({}) must be a whole number of rows of {cols}, at most {MAX_CELLS} cells",
-                    cells.len()
-                ),
-            );
-        }
+        check_grid(&cells, cols, "cellsteps", ctx)?;
         let (rule, edge) = rule_edge(&opts, ctx, "cellsteps")?;
         let rule = match rule.as_text().map(parse_rule) {
             Some(Ok(r)) => r,
@@ -860,7 +953,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
 
     // row rule rows  cellrows  cells
     reg(interp, ctx, "cellrows", |i, ctx| {
-        let rows = dim(&i.pop_value()?, "cellrows: rows", ctx)?;
+        let rows = dim(&i.pop_value()?, "cellrows: rows", MAX_CELLS, ctx)?;
         let opts = i.pop_value()?;
         let row = i.pop_string()?;
         let (rule, edge) = rule_edge(&opts, ctx, "cellrows")?;
@@ -874,12 +967,12 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 );
             }
         };
-        if row.len().saturating_mul(rows) > MAX_CELLS || row.is_empty() {
+        if row.len().saturating_mul(rows) > MAX_CELLS || row.is_empty() || row.len() > MAX_SIDE {
             return fail(
                 ctx,
                 PsError::Limitcheck,
                 format!(
-                    "cellrows: the row must not be empty, and rows x its length at most {MAX_CELLS} cells"
+                    "cellrows: the row must be 1 to {MAX_SIDE} cells, and rows x its length at most {MAX_CELLS} cells"
                 ),
             );
         }
@@ -920,6 +1013,13 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             ghost: rgb_of(p.get("Ghost"), ground),
             ground,
         };
+        if cells.len() > MAX_CELLS {
+            return fail(
+                ctx,
+                PsError::Rangecheck,
+                format!("cellcolors: at most {MAX_CELLS} cells"),
+            );
+        }
         charge(i, ctx, cells.len() as u64 / 8)?;
         i.push_string(&colors(&cells, &lut(&pal, frac)));
         Ok(())
@@ -928,19 +1028,34 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     // cells cols share  cellbounds  [x0 y0 x1 y1] | null
     reg(interp, ctx, "cellbounds", |i, ctx| {
         let share = i.pop_value()?.as_f64().unwrap_or(0.0);
-        let cols = dim(&i.pop_value()?, "cellbounds: cols", ctx)?;
+        let cols = dim(&i.pop_value()?, "cellbounds: cols", MAX_SIDE, ctx)?;
         let cells = i.pop_string()?;
-        if cells.len() % cols != 0 {
-            return fail(
-                ctx,
-                PsError::Rangecheck,
-                "cellbounds: the grid's length must be a whole number of rows",
-            );
-        }
+        check_grid(&cells, cols, "cellbounds", ctx)?;
         match bounds(&cells, cols, share) {
             Some(b) => i.push_numbers(&b.map(|v| v as f64)),
             None => i.push_value(&Value::Null)?,
         }
+        Ok(())
+    });
+
+    // rgb cols ground  cellmask  mask
+    reg(interp, ctx, "cellmask", |i, ctx| {
+        let ground = i.pop_numbers()?;
+        let cols = dim(&i.pop_value()?, "cellmask: cols", MAX_SIDE, ctx)?;
+        let rgb = i.pop_string()?;
+        if ground.len() != 3 || rgb.len() % 3 != 0 {
+            return fail(
+                ctx,
+                PsError::Rangecheck,
+                "cellmask: give the colours cellcolors made, the grid's width and the ground [r g b]",
+            );
+        }
+        check_grid(&rgb[..rgb.len() / 3], cols, "cellmask", ctx)?;
+        let g: Vec<u8> = ground
+            .iter()
+            .map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8)
+            .collect();
+        i.push_string(&mask(&rgb, cols, [g[0], g[1], g[2]]));
         Ok(())
     });
 
@@ -1084,6 +1199,31 @@ mod tests {
         assert_eq!(bounds(&g, 30, 0.0), Some([2, 2, 19, 17]));
         assert_eq!(bounds(&g, 30, 0.4), Some([2, 2, 5, 4]));
         assert_eq!(bounds(&[0u8; 9], 3, 0.2), None);
+    }
+
+    #[test]
+    fn an_open_edge_keeps_a_boat_and_takes_only_outgoing_gliders() {
+        // A boat is five cells in a 3 x 3 box, still for ever: not a glider.
+        let boat = from_picture(&["OO.", "O.O", ".O."], 10, 10, (0, 0));
+        let after = step(&boat, 10, life(), Edge::Open);
+        assert_eq!(live(&after, 10), live(&boat, 10), "the boat stays");
+        // A glider by the left edge flying right, into the grid, is kept.
+        let mut g = from_picture(&[".O.", "..O", "OOO"], 20, 20, (0, 8));
+        for _ in 0..8 {
+            g = step(&g, 20, life(), Edge::Open);
+        }
+        assert_eq!(live(&g, 20).len(), 5, "an incoming glider flies on");
+        // Under Brian's Brain nothing is taken off.
+        assert!(!gliders_fly(Rule::Brain));
+        assert!(gliders_fly(parse_rule("highlife").unwrap()));
+        assert!(!gliders_fly(parse_rule("seeds").unwrap()));
+        assert_eq!(glider_shapes().len(), 16);
+    }
+
+    #[test]
+    fn a_mask_marks_what_is_not_ground() {
+        let rgb = [0, 0, 0, 9, 9, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0];
+        assert_eq!(mask(&rgb, 3, [0, 0, 0]), vec![0b0100_0000, 0b0010_0000]);
     }
 
     #[test]
