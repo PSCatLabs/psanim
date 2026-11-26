@@ -1,0 +1,304 @@
+%!PS
+% Poster: 53
+% Simple Rules: cellular automata, from Rule 30 to the Game of Life.
+%
+% Three movements, each a rule that really runs:
+%   1. Rule 30. One live cell; each row below is the rule applied to the row above
+%      (the eight cases are on screen). The camera follows the newest row, then
+%      pulls back to show 360 generations at once.
+%   2. Conway's Life. Gosper's glider gun fires a glider every 30 generations;
+%      cells that die fade from ember to ash.
+%   3. Methuselahs. Diehard, the R-pentomino and the acorn, side by side, each
+%      run to the generation where it is known to end: gone at 130, settled at
+%      1103, settled at 5206. The fields keep a ghost of everywhere life has been.
+%
+% Techniques
+%   - Nothing is keyframed: the cells come from the native words `cellrows`
+%     (Rule 30's whole history, once, in setup) and `cellsteps` (generation n of
+%     a Life grid, a pure function of n). Change a seed pattern and the film is
+%     different and still right. The movie is pure: any frame renders on its own.
+%   - Movements 2 and 3 place the catalog's /automaton entry as a component:
+%     one instance for the gun, three for the methuselahs, each with its own
+%     /Clock (generations as a function of its time) and a camera made by the
+%     box it is placed in.
+%   - Edges are /open: a glider that nears the edge is taken off, so a field of
+%     300 x 380 cells behaves as the open plane (the test suite checks the
+%     acorn's 5206 generations against the plane's known result).
+%   - Rule 30 is drawn as one `colorimage`, cropped to what the camera sees;
+%     its colours, a gradient down the rows, are made once in setup with
+%     `cellcolors`.
+
+<< /Size [1280 720] /Duration 56 /FPS 30
+   /Background [0.027 0.025 0.043]
+   /Title (Simple Rules)
+   /Description (Cellular automata that really run: Rule 30 grows from one cell and pulls back to 360 generations, Gosper's glider gun fires, and diehard, the R-pentomino and the acorn run to their known ends.)
+>> animation
+
+/pkstage use /pktype use /pkmotion use
+<< /bg [0.027 0.025 0.043] /fg [0.95 0.92 0.86] /muted [0.62 0.58 0.6]
+   /accent [1 0.72 0.34] /title /Palatino-Roman /display /Palatino-Roman
+   /body /Palatino-Italic /serif /Palatino-Roman /mono /Courier >> usetheme
+
+% ---- what can be edited ----------------------------------------------------------
+/A0 0 def    /A1 21.5 def       % movement 1: Rule 30
+/B0 21 def   /B1 36 def         % movement 2: the gun
+/C0 35.5 def /Cend 56 def       % movement 3: methuselahs
+/xfade 1.2 def                  % seconds one movement takes to give way to the next
+/bgc [0.027 0.025 0.043] def
+
+/rule 30 def
+/R 360 def                      % rows of Rule 30 shown at the end
+/RC R 2 mul 1 add def           % columns: wide enough that the edge never matters
+
+% ---- 1. Rule 30 -------------------------------------------------------------------
+/hist RC 1 /single cellgrid rule R 1 add cellrows def
+% Colours down the rows: gold at the apex, coral, then violet at row 360.
+/rowcol { % i -> [r g b]
+  R div /u exch def
+  u 0.5 lt { u 2 mul [1 0.8 0.45] [0.97 0.42 0.34] } { u 0.5 sub 2 mul [0.97 0.42 0.34] [0.56 0.34 0.86] } ifelse
+  /cb exch def /ca exch def /cu exch def
+  [ 0 1 2 { /k exch def ca k get cb k get ca k get sub cu mul add } for ]
+} def
+/histrgb RC R 1 add mul 3 mul string def
+0 1 R { /i exch def
+  histrgb i RC mul 3 mul
+  hist i RC mul RC getinterval << /Alive i rowcol /Ground bgc >> 0 cellcolors
+  putinterval
+} for
+
+% rows shown and the camera, as functions of the clock
+/rowsat { % -> r (fractional)
+  [ 1.2 0 6.2 10 /linear 10.5 64 /quad-in 18.2 R /sine-inout ] keyframes
+} def
+/pxat { % -> pixels per cell: held, then a zoom out even in log scale
+  [ 6.2 30 ln 10.5 14 ln /sine-inout 18.2 1.55 ln /sine-inout ] keyframes 2.718281828 exch exp
+} def
+
+/drawrule30 {
+  /r rowsat def /s pxat def
+  /n r floor cvi R min def                          % rows 0..n-1 whole, row n arriving
+  /topy 650 92 r s mul add max def                  % the apex; the newest row stays above y = 92
+  /x0 640 RC 2 div s mul sub def                    % left edge of column 0
+  % what the camera sees: columns c0..c1, rows r0..r1
+  /c0 x0 neg s div floor cvi 0 max def
+  /c1 1280 x0 sub s div ceiling cvi RC 1 sub min def
+  /r0 topy 720 sub s div floor cvi 0 max def
+  /r1 n R min def
+  /nc c1 c0 sub 1 add def
+  /drows { % ra rb: draw rows ra..rb-1, cropped
+    /rb exch def /ra exch def
+    rb ra gt {
+      /nr rb ra sub def
+      nc RC eq {
+        /data histrgb ra RC mul 3 mul nr RC mul 3 mul getinterval def
+      } {
+        /data nr nc mul 3 mul string def
+        0 1 nr 1 sub { /j exch def
+          data j nc mul 3 mul histrgb ra j add RC mul c0 add 3 mul nc 3 mul getinterval putinterval
+        } for
+      } ifelse
+      gsave
+        x0 c0 s mul add topy rb s mul sub translate nc s mul nr s mul scale
+        /DeviceRGB setcolorspace
+        << /ImageType 1 /Width nc /Height nr /BitsPerComponent 8 /Decode [0 1 0 1 0 1]
+           /ImageMatrix [ nc 0 0 nr neg 0 nr ] /DataSource data /Interpolate s 4 lt >> image
+      grestore
+    } if
+  } def
+  r0 n drows
+  n R le {                                           % the newest row, fading in
+    gsave r n sub 0 1 clamp 1.6 mul 1 min setalpha n n 1 add drows grestore
+  } if
+  % the gaps between cells, while they are big enough to see
+  s 5 gt {
+    gsave
+      bgc aload pop setrgbcolor s 5 sub 6 div 1 min setalpha s 0.12 mul setlinewidth
+      c0 1 c1 1 add { s mul x0 add dup topy n 1 add s mul sub 0 max moveto topy 720 min lineto } for
+      r0 1 n 1 add { s mul topy exch sub dup x0 c0 s mul add exch moveto x0 c1 1 add s mul add exch lineto } for
+      stroke
+    grestore
+  } if
+} def
+
+% the eight cases of the rule: three cells above, the one they make below
+/legend { % alpha
+  /la exch def
+  gsave la setalpha
+  /cs 17 def /pitchx 3 cs mul 30 add def
+  /lx 640 8 pitchx mul 30 sub 2 div sub def
+  0 1 7 { /k exch def
+    /pat 7 k sub def                                 % 111 first, as Wolfram draws it
+    /bx lx k pitchx mul add def
+    0 1 2 { /j exch def
+      pat j 2 sub bitshift 1 and 1 eq
+      { 1 0.8 0.45 setrgbcolor bx j cs mul add 1 add 96 cs 2 sub dup rectfill }
+      { 0.36 0.33 0.4 setrgbcolor 1 setlinewidth bx j cs mul add 1.5 add 96.5 cs 3 sub dup rectstroke } ifelse
+    } for
+    rule pat neg bitshift 1 and 1 eq
+    { 1 0.8 0.45 setrgbcolor bx cs add 1 add 96 cs sub cs 2 sub dup rectfill }
+    { 0.36 0.33 0.4 setrgbcolor bx cs add 1.5 add 96.5 cs sub cs 3 sub dup rectstroke } ifelse
+    /mono 13 face /muted ink
+    rule pat neg bitshift 1 and 1 eq { (1) } { (0) } ifelse
+    [ bx cs add 50 cs 20 ] /c showin
+  } for
+  /body 17 face /muted ink
+  (eight cases; their outputs, read as binary, make 30) [ 0 22 1280 20 ] /c showin
+  grestore
+} def
+
+/movement1 {
+  drawrule30
+  % a dusk over the oldest rows, so the words stay legible over the cells
+  /dk 1 16.5 18.2 /sine-inout tween sub 0.85 mul def
+  dk 0 gt {
+    gsave bgc aload pop setrgbcolor
+      0 1 23 { /i exch def i 24 div /v exch def 1 v sub 1.5 exp dk mul setalpha 0 720 i 1 add 7 mul sub 1280 7.5 rectfill } for
+      0 1 9 { /i exch def dk 0.12 mul setalpha 0 560 i 4 mul add 560 i 28 mul sub 160 rectfill } for   % and behind the title
+    grestore
+  } if
+  % the words
+  0 0.8 /quad-out tween { /title 50 face /fg ink (Rule 30) [ 64 628 400 60 ] /w showin } faded
+  /body 26 face [0.82 0.78 0.76] aload pop setrgbcolor
+  0.6 1.4 /quad-out tween { (each cell is made from the three above it) [ 66 590 800 32 ] /w showin } faded
+  0.8 1.6 /quad-out tween 7.8 8.6 /quad-in tween 1 exch sub mul legend
+  17.9 18.8 /quad-out tween {
+    /body 26 face /muted ink
+    (three hundred and sixty generations from a single cell) [ 0 28 1280 34 ] /c showin
+  } faded
+} def
+
+% ---- 2. Life: the glider gun ------------------------------------------------------
+/lifecols << /Born [1 0.96 0.86] /Alive [1 0.7 0.32] /Mature 5 /Trail [0.86 0.26 0.2]
+             /Ghost [0.06 0.05 0.085] /Ground bgc >> def
+/grate 18 def                                       % generations a second
+/gun /automaton << /Params <<
+  /Pattern [ [/gun 25 15] ] /Grid [128 72] /Pitch 10 /Edge /open /Rate grate
+  /Fade 9 /Gap 0.12 /Length B1 B0 sub
+  /Born lifecols /Born get /Alive lifecols /Alive get /Mature 5 /Trail lifecols /Trail get
+  /Ghost lifecols /Ghost get /Ground bgc
+>> >> instance
+
+/movement2 {
+  % a slow pull back over the whole movement
+  B0 B1 /sine-inout tween 1.32 1 between /z exch def
+  /fx 255 def /fy 565 def                            % the gun: the camera pulls back from it
+  /gun << /At B0 /Box [ fx fx z mul sub fy fy z mul sub 1280 z mul 720 z mul ] >> place
+  B0 {
+    /title 44 face /fg ink
+    0.4 1.2 /quad-out tween { (The Game of Life) [ 760 640 460 56 ] /e showin } faded
+    /body 24 face /muted ink
+    0.8 1.6 /quad-out tween { (born with three neighbours, survives with two or three) [ 420 600 800 30 ] /e showin } faded
+    4.0 4.8 /quad-out tween {
+      (Gosper's glider gun: a new glider every thirty generations) [ 420 568 800 30 ] /e showin
+    } faded
+    /mono 20 face /muted ink
+    0.8 1.6 /quad-out tween {
+      (generation ) now grate mul floor cvi 6 string cvs strcat [ 920 24 300 24 ] /e showin
+    } faded
+  } delayed
+} def
+
+% ---- 3. Methuselahs ---------------------------------------------------------------
+% Each runs to its end over the same stretch of the film, starting at `slow`
+% generations a second and gathering speed exponentially: gen = a (e^(b t) - 1), with
+% a b = slow and gen(run) = end. Afterwards it ticks on at `slow`.
+/run0 1.6 def /run1 15.0 def                         % seconds into the movement
+/slow 4 def                                          % generations a second, at the start and after
+/E 2.718281828 def
+/rampb { % end -> b, by bisection
+  /rend exch def /lo 0.0001 def /hi 3 def
+  60 { /mid lo hi add 2 div def
+       slow mid div E mid run1 run0 sub mul exp 1 sub mul rend gt { /hi mid def } { /lo mid def } ifelse } repeat
+  lo hi add 2 div
+} def
+/genfn { % t end b -> generation
+  /gb exch def /gend exch def /gt0 exch def
+  gt0 run1 gt { gt0 run1 sub slow mul gend add }
+              { slow gb div E gb gt0 run0 sub 0 max mul exp 1 sub mul gend min } ifelse
+} def
+/mpal << /Born [1 0.96 0.86] /Alive [1 0.7 0.32] /Mature 5 /Trail [0.86 0.26 0.2] /Ghost [0.085 0.07 0.11] >> def
+/meth { % name pattern cols rows end -> instance
+  5 dict begin /mend exch def /mr exch def /mc exch def /mp exch def /mn exch def
+  mn /automaton << /Params <<
+    /Pattern mp /Grid [ mc mr ] /Pitch 1 /Edge /open /Gap 0 /Fade 14
+    /Length Cend C0 sub /Clock [ mend mend rampb /genfn cvx ] cvx
+    /Born mpal /Born get /Alive mpal /Alive get /Mature 5 /Trail mpal /Trail get
+    /Ghost mpal /Ghost get /Ground bgc
+  >> >> instance
+  end
+} def
+/m-die /diehard 90 90 130 meth
+/m-r /rpentomino 300 380 1103 meth
+/m-acorn /acorn 300 380 5206 meth
+
+% panels: name, instance, cols rows, generations to the end, the pattern (the camera
+% runs the same grid to frame what has lived), and what the end is called
+/panels [
+  [ (Diehard) /m-die 90 90 130 /diehard (gone after 130 generations) ]
+  [ (R-pentomino) /m-r 300 380 1103 /rpentomino (settled at generation 1103) ]
+  [ (Acorn) /m-acorn 300 380 5206 /acorn (settled at generation 5206) ]
+] def
+/panelgrids [ panels { dup 2 get exch dup 3 get exch 5 get cellgrid } forall ] def
+/opengrid << /Rule /life /Edge /open >> def
+/pw 360 def /ph 430 def /pgap 40 def /py 140 def
+/px0 640 pw 1.5 mul sub pgap sub def
+/smax 14 def                                         % pixels a cell, at most
+/fill 0.8 def                                        % of the panel the lived-in box fills
+
+/livedbox { % gen -> [x0 y0 x1 y1]: where life has been, without the gliders' tracks
+  /lg exch def panelgrids pidx get pcols opengrid lg cellsteps pcols 0.3 cellbounds
+  dup null eq { pop [ pcols 2 div prows 2 div 2 copy ] } if
+} def
+
+/panel { % i
+  /pidx exch def
+  panels pidx get aload pop
+  /pfate exch def /ppat exch def /pgen exch def /prows exch def /pcols exch def /pinst exch def /pname exch def
+  /bx px0 pidx pw pgap add mul add def
+  /g now pgen dup rampb genfn def
+  % the camera frames where life has been, between this generation and the next
+  g dup floor sub g floor cvi livedbox g floor cvi 1 add livedbox between aload pop
+  /y1 exch def /x1 exch def /y0 exch def /x0 exch def
+  /s pw fill mul x1 x0 sub 5 add div ph fill mul y1 y0 sub 5 add div min smax min def
+  /cx x0 x1 add 1 add 2 div def
+  /cy y0 y1 add 1 add 2 div def
+  gsave
+    bx py pw ph rectclip
+    bgc aload pop setrgbcolor bx py pw ph rectfill
+    pinst << /Box [ bx pw 2 div add cx s mul sub  py ph 2 div add prows cy sub s mul sub  pcols s mul prows s mul ] >> place
+  grestore
+  0.42 0.36 0.44 setrgbcolor 1 setlinewidth bx 0.5 sub py 0.5 sub pw 1 add ph 1 add rectstroke
+  /title 30 face /fg ink
+  pname [ bx py ph add 14 add pw 34 ] /w showin
+  /mono 19 face /muted ink
+  (generation ) g floor cvi 6 string cvs strcat [ bx py 36 sub pw 22 ] /w showin
+  run1 0.1 sub run1 0.9 add /quad-out tween {
+    /body 23 face /accent ink pfate [ bx py 72 sub pw 28 ] /w showin
+  } faded
+} def
+
+/movement3 {
+  C0 {
+    0 1 2 { /i exch def
+      i 0.25 mul dup 0.9 add /quad-out tween { i panel } faded
+    } for
+    0.3 1.1 /quad-out tween run1 0.4 sub run1 0.6 add /quad-in tween 1 exch sub mul {
+      /body 26 face /muted ink
+      (methuselahs: a few cells that take thousands of generations to settle) [ 0 646 1280 36 ] /c showin
+    } faded
+    run1 1.4 add run1 2.6 add /quad-out tween {
+      /title 36 face /fg ink
+      (Simple rules. Nobody drew this.) [ 0 640 1280 48 ] /c showin
+    } faded
+  } delayed
+} def
+
+% ---- the film ---------------------------------------------------------------------
+/scene {
+  % each movement fades out over the next one's fade in
+  now A1 lt { 1 A1 xfade sub A1 /quad-inout tween sub { movement1 } faded } if
+  now B0 ge now B1 lt and {
+    B0 B0 xfade add /quad-inout tween B1 xfade sub B1 /quad-inout tween 1 exch sub min { movement2 } faded
+  } if
+  now C0 ge { C0 C0 xfade add /quad-inout tween { movement3 } faded } if
+} def

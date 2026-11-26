@@ -402,7 +402,7 @@ GALLERY_ORDER = [
     "tesseract", "lissajous", "halftone", "neon", "ripple", "letter", "epicycles", "one-frame",
     "birthday", "canon", "circle-area", "end-credits", "fresh", "heron", "how-it-works",
     "buildfarm", "morph-clock", "campfire", "ship-it", "salt-roads", "twiddle", "departures",
-    "news-sign", "kayaks", "huzzah", "builds-passed", "signage", "banner",
+    "news-sign", "kayaks", "huzzah", "builds-passed", "signage", "banner", "automata",
 ]
 
 def signals_of(src):
