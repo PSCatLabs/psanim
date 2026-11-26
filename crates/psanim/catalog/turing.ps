@@ -67,6 +67,8 @@
   /tm-n tm-n 1 add def
 } loop
 tm-ST tm-n tm-s put  tm-HP tm-n tm-h put
+% Stopped by /MaxSteps on a configuration with no rule: that is a halt too.
+tm-s tm-halt ne tm-stuck not and { tm-s tm-h tm-sym tm-rule 0 lt { /tm-stuck true def } if } if
 /tm-halted tm-s tm-halt eq tm-stuck or def
 
 % how long step k takes, and when each starts

@@ -135,3 +135,13 @@ fn a_machine_that_travels_far_still_draws_its_tape() {
     let mut m = Movie::load(src, &Options::default()).unwrap_or_else(|e| panic!("{e}"));
     m.render_at(4999.0).unwrap_or_else(|e| panic!("{e}"));
 }
+
+#[test]
+fn a_missing_rule_on_the_last_allowed_step_is_a_halt() {
+    // Two steps erase both marks; then no rule reads a blank. /MaxSteps 2
+    // ends the loop at the same moment: still a halt, not a cut-off run.
+    let runs =
+        entry("/Tape [1 1] /Table [ [/A 1 0 /R /A] ] /MaxSteps 2 /Expect << /Steps 2 /Ones 0 >>")
+            .unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!((runs[0].steps, runs[0].ones, runs[0].halted), (2, 0, true));
+}
