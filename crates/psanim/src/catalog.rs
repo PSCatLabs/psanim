@@ -38,6 +38,7 @@ pub const CATALOG: &[(&str, &str)] = &[
     ("terminal", include_str!("../catalog/terminal.ps")),
     ("testdots", include_str!("../catalog/testdots.ps")),
     ("timeseries", include_str!("../catalog/timeseries.ps")),
+    ("turing", include_str!("../catalog/turing.ps")),
     ("twiddle", include_str!("../catalog/twiddle.ps")),
 ];
 

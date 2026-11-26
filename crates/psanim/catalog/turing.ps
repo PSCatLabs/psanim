@@ -1,0 +1,621 @@
+%!PS
+% Catalog entry: turing. A Turing machine at work: a paper tape on a steel bed, a
+% read/write head on a carriage that reads a cell, stamps or erases a mark and moves
+% one cell, a dial for the state, counters for the steps and the marks, and the
+% program on a card beside it with the rule in use lit up.
+% In a movie:  /bb /turing component   then   /bb << /Box [x y w h] /After /hold >> place
+% With a program of your own (unary addition, 2 + 3):
+%   /add /turing << /Params << /Name (Unary addition) /Tape [1 1 0 1 1 1]
+%      /Table [ [/A 1 1 /R /A] [/A 0 1 /R /B] [/B 1 1 /R /B] [/B 0 0 /L /C] [/C 1 0 /L /H] ] >> >> instance
+%
+% The machine really runs: setup simulates the table (at most /MaxSteps steps) and
+% keeps every configuration; a frame finds the step its time falls in and draws that
+% step from the record, so any frame renders alone. The film is as long as the run:
+% steps are slow at the start and into the halt and fast in between (/Slow, /Fast,
+% /Ramp), and the camera follows the head when the tape is wider than the frame,
+% then pulls back on the halt to show the whole tape. Give /Expect to have setup
+% fail when the run is not what you meant; /Report prints the result.
+
+/tm-bb4 [ [/A 0 1 /R /B] [/A 1 1 /L /B] [/B 0 1 /L /A] [/B 1 0 /L /C]
+          [/C 0 1 /R /H] [/C 1 1 /L /D] [/D 0 1 /R /D] [/D 1 0 /R /A] ] def
+
+/Table tm-bb4 param /tm-table exch def            % the program: rows [state reads writes move next], move /L /R or /N; shown in this order
+/Tape [] param /tm-tape0 exch def                 % the cells at the start, left to right: 0 is blank, 1 a mark, 2 and up a digit; blank beyond
+/Head 0 param cvi /tm-head0 exch def              % the cell the head starts on, counting the first of /Tape as 0
+/Start null param /tm-start exch def              % the state it starts in (null: the first row's)
+/Halt /H param /tm-halt exch def                  % the halting state; a state and symbol with no row halts too
+/Name (Busy beaver: 4 states, 2 symbols) param /tm-name exch def  % the program's name, typed on its card
+/MaxSteps 1000 param cvi /tm-max exch def         % stop after this many steps if it has not halted
+/Slow 1.6 param /tm-slow exch def                 % seconds the first step and the last step take
+/Fast 0.14 param /tm-fast exch def                % seconds a step takes at full speed
+/Ramp 0.72 param /tm-ramp exch def                % 0 to 1: each step from either end takes this times the one before, down to /Fast
+/Lead 1.2 param /tm-lead exch def                 % seconds at rest before the first step
+/Tail 3.5 param /tm-tail exch def                 % seconds to hold on the stopped machine (the camera pulls back in the first two)
+/Expect null param /tm-expect exch def            % << /Steps n /Ones n /Tape (1011) >>: setup fails if the run disagrees (/Tape from the first non-blank to the last)
+/Report false param dup type /booleantype ne { 0 ne } if /tm-report exch def  % print the result as setup ends
+
+% ---- the run: before the declaration, because its length is the film's ----------------
+/tm-start tm-start null eq { tm-table 0 get 0 get } { tm-start } ifelse def
+/tm-rule { % state symbol -> the index of the row for it, or -1
+  /tm-q exch def /tm-p exch def
+  -1 0 1 tm-table length 1 sub { /tm-i exch def
+    tm-table tm-i get dup 0 get tm-p eq exch 1 get tm-q eq and { pop tm-i exit } if
+  } for
+} def
+/tm-cells 256 dict def
+0 1 tm-tape0 length 1 sub { /tm-i exch def tm-cells tm-i tm-tape0 tm-i get cvi put } for
+/tm-sym { tm-cells exch 2 copy known { get } { pop pop 0 } ifelse } def
+/tm-ST tm-max 1 add array def    % the state at the start of step k (and after the last)
+/tm-HP tm-max 1 add array def    % the head's cell at the start of step k
+/tm-RD tm-max array def          % the symbol step k read
+/tm-ROW tm-max array def         % the row step k used
+/tm-WR tm-max array def          % the symbol step k wrote
+/tm-s tm-start def  /tm-h tm-head0 def  /tm-n 0 def  /tm-stuck false def
+/tm-lo 0 tm-h min def  /tm-hi tm-tape0 length 1 sub 0 max tm-h max def
+{ tm-n tm-max ge { exit } if
+  tm-s tm-halt eq { exit } if
+  /tm-r tm-h tm-sym def
+  /tm-ri tm-s tm-r tm-rule def
+  tm-ri 0 lt { /tm-stuck true def exit } if
+  /tm-row tm-table tm-ri get def
+  tm-ST tm-n tm-s put  tm-HP tm-n tm-h put
+  tm-RD tm-n tm-r put  tm-ROW tm-n tm-ri put  tm-WR tm-n tm-row 2 get cvi put
+  tm-cells tm-h tm-row 2 get cvi put
+  /tm-h tm-h tm-row 3 get dup /R eq { pop 1 } { /L eq { -1 } { 0 } ifelse } ifelse add def
+  /tm-s tm-row 4 get def
+  /tm-lo tm-lo tm-h min def  /tm-hi tm-hi tm-h max def
+  /tm-n tm-n 1 add def
+} loop
+tm-ST tm-n tm-s put  tm-HP tm-n tm-h put
+/tm-halted tm-s tm-halt eq tm-stuck or def
+
+% how long step k takes, and when each starts
+/tm-dur { /tm-dk exch def
+  tm-slow tm-ramp tm-dk exp mul  tm-slow tm-ramp tm-n 1 sub tm-dk sub exp mul max tm-fast max
+} def
+/tm-T tm-n 1 add array def
+tm-T 0 tm-lead put
+0 1 tm-n 1 sub { /tm-k exch def tm-T tm-k 1 add tm-T tm-k get tm-k tm-dur add put } for
+/tm-end tm-T tm-n get def        % when it stops
+
+<< /Size [1280 640] /Duration tm-end tm-tail add /FPS 30 /Background [0.07 0.075 0.085]
+   /Title (Turing machine)
+   /Description (A Turing machine at work: a paper tape, a head on a carriage that reads a cell, stamps or erases a mark and moves, a state dial, step and mark counters, and the program card with the rule in use lit. It simulates the table it is given; the busy beaver by default.)
+>> animation
+
+% ---- the result --------------------------------------------------------------------------
+/tm-ones 0 tm-cells { exch pop 0 ne { 1 add } if } forall def
+/tm-first tm-hi 1 add def /tm-last tm-lo 1 sub def
+tm-lo 1 tm-hi { /tm-i exch def tm-i tm-sym 0 ne {
+  tm-i tm-first lt { /tm-first tm-i def } if /tm-last tm-i def } if } for
+/tm-final tm-last tm-first sub 1 add 0 max string def
+tm-first 1 tm-last { /tm-i exch def tm-final tm-i tm-first sub tm-i tm-sym 48 add put } for
+/tm-num { 12 string cvs } def
+tm-report {
+  (turing: ) print tm-name print ( steps ) print tm-n tm-num print ( ones ) print tm-ones tm-num print
+  ( halted ) print tm-halted { (true) } { (false) } ifelse print ( tape ) print tm-final print () =
+} if
+tm-expect null ne {
+  /tm-bad false def
+  tm-expect /Steps known { tm-expect /Steps get tm-n ne { /tm-bad true def } if } if
+  tm-expect /Ones known { tm-expect /Ones get tm-ones ne { /tm-bad true def } if } if
+  tm-expect /Tape known { tm-expect /Tape get tm-final ne { /tm-bad true def } if } if
+  tm-halted not { /tm-bad true def } if
+  tm-bad {
+    (turing: the run does not meet /Expect: ) print tm-n tm-num print ( steps, ) print
+    tm-ones tm-num print ( ones, tape ) print tm-final print tm-halted { () } { (, not halted) } ifelse =
+    turing-run-differs-from-Expect
+  } if
+} if
+
+% ---- the record, for drawing -----------------------------------------------------------
+% each cell's writes, in order, as pairs [step symbol]: a cell's symbol at any moment
+% is the last write before it, or what /Tape gave it
+/tm-W tm-hi tm-lo sub 1 add def
+/tm-nw [ tm-W { 0 } repeat ] def
+0 1 tm-n 1 sub { tm-HP exch get tm-lo sub tm-nw exch 2 copy get 1 add put } for
+/tm-hist [ tm-nw { 2 mul array } forall ] def
+/tm-nw [ tm-W { 0 } repeat ] def
+0 1 tm-n 1 sub { /tm-k exch def tm-HP tm-k get tm-lo sub /tm-c exch def
+  tm-hist tm-c get tm-nw tm-c get [ tm-k tm-WR tm-k get ] putinterval
+  tm-nw tm-c 2 copy get 2 add put
+} for
+/tm-init { % cell -> its symbol at the start
+  dup 0 ge 1 index tm-tape0 length lt and { tm-tape0 exch get cvi } { pop 0 } ifelse
+} def
+% the marks on the tape after k writes
+/tm-ONES tm-n 1 add array def
+/tm-replay [ tm-lo 1 tm-hi { tm-init } for ] def
+/tm-o 0 tm-replay { 0 ne { 1 add } if } forall def
+tm-ONES 0 tm-o put
+0 1 tm-n 1 sub { /tm-k exch def tm-HP tm-k get tm-lo sub /tm-c exch def
+  /tm-o tm-o tm-replay tm-c get 0 ne { 1 sub } if tm-WR tm-k get 0 ne { 1 add } if def
+  tm-replay tm-c tm-WR tm-k get put
+  tm-ONES tm-k 1 add tm-o put
+} for
+
+% the states, in the order the table first names them, for the dial; the halt last
+/tm-states [ tm-table { dup 0 get exch 4 get } forall ] def
+/tm-dial [ tm-start
+  tm-states { /tm-x exch def tm-x tm-halt ne { true counttomark 1 sub -1 1 { index tm-x eq { pop false exit } if } for
+    { tm-x } if } if } forall
+  tm-halt ] def
+/tm-nd tm-dial length def
+/tm-dialat { /tm-x exch def 0 0 1 tm-nd 1 sub { dup tm-dial exch get tm-x eq { exch pop exit } { pop } ifelse } for } def
+
+% ---- layout --------------------------------------------------------------------------
+/tm-cw 96 def                      % a cell's width, at rest
+/tm-ty 450 def                     % the tape's centre line
+/tm-th 92 def                      % and its height
+/tm-half 640 tm-cw div def         % cells from the centre to the edge of the frame
+/tm-dz tm-half 2.4 sub def         % the head may stray this far from the camera's centre
+% the camera's centre, in cells, at the start of each step: it moves only when the head
+% would leave the middle of the frame
+/tm-CAM tm-n 1 add array def
+tm-tape0 length 0 gt { 0 tm-head0 min tm-tape0 length 1 sub tm-head0 max add 2 div } { tm-head0 } ifelse
+dup tm-head0 tm-dz sub lt { pop tm-head0 tm-dz sub } if dup tm-head0 tm-dz add gt { pop tm-head0 tm-dz add } if
+/tm-c exch def
+0 1 tm-n { /tm-k exch def tm-HP tm-k get /tm-x exch def
+  tm-x tm-c tm-dz add gt { /tm-c tm-x tm-dz sub def } if
+  tm-x tm-c tm-dz sub lt { /tm-c tm-x tm-dz add def } if
+  tm-CAM tm-k tm-c put
+} for
+% on the halt it pulls back to the whole tape that was used
+/tm-fitc tm-lo tm-hi add 2 div def
+/tm-fitz 1280 tm-cw 1.2 mul sub tm-W tm-cw mul div 1 min 0.45 max def
+
+% ---- the time ---------------------------------------------------------------------------
+/tm-find { % t -> k: the step t falls in (tm-n once stopped; 0 before the first)
+  /tm-x exch def
+  tm-x tm-T 0 get lt { 0 } {
+    tm-x tm-end ge { tm-n } {
+      0 tm-n { 2 copy exch sub 1 le { exit } if
+        2 copy add 2 idiv dup tm-T exch get tm-x le { 3 -1 roll pop exch } { exch pop } ifelse
+      } loop pop
+    } ifelse
+  } ifelse
+} def
+/tm-phase { % f a b -> 0..1: how far f is through the part a..b of a step
+  1 index sub 3 1 roll sub exch div 0 1 clamp
+} def
+/tm-camat { % t -> the camera's centre then, in cells, before smoothing
+  dup tm-find /tm-ck exch def
+  tm-ck tm-n ge { pop tm-CAM tm-n get } {
+    tm-T tm-ck get sub tm-T tm-ck 1 add get tm-T tm-ck get sub div 0.55 0.95 tm-phase /cubic-inout ease
+    tm-CAM tm-ck get tm-CAM tm-ck 1 add get between
+  } ifelse
+} def
+
+% ---- drawing helpers -------------------------------------------------------------------
+/tm-rgb { aload pop setrgbcolor } def
+/tm-rrect { % x y w h r: a rounded rectangle path
+  5 dict begin /r exch def /h exch def /w exch def /y exch def /x exch def
+  x r add y moveto x w add y x w add y h add r arcto 4 { pop } repeat
+  x w add y h add x y h add r arcto 4 { pop } repeat
+  x y h add x y r arcto 4 { pop } repeat
+  x y x w add y r arcto 4 { pop } repeat closepath end
+} def
+/tm-ctext { % (s) x y: centred on x
+  3 -1 roll dup stringwidth pop 2 div 4 -1 roll exch sub 3 -1 roll moveto show
+} def
+/tm-track { % (s) x y spacing: centred, letter-spaced
+  4 dict begin /sp exch def /y exch def /x exch def /s exch def
+  s stringwidth pop s length 1 sub sp mul add 2 div x exch sub y moveto sp 0 s ashow end
+} def
+/tm-screw { % x y
+  gsave translate 0.09 0.1 0.11 setrgbcolor 0 0 6 0 360 arc fill
+  0.42 0.44 0.45 setrgbcolor 0 0 4.6 0 360 arc fill
+  0.2 0.21 0.22 setrgbcolor 1.4 setlinewidth 35 rotate -4 0 moveto 4 0 lineto stroke grestore
+} def
+/tm-lamp { % x y r colour lit(0..1)
+  5 dict begin /lit exch def /col exch def /r exch def /y exch def /x exch def
+  0.55 0.42 0.2 setrgbcolor x y r 3.5 add 0 360 arc fill                       % bezel
+  0.25 0.19 0.08 setrgbcolor x y r 1 add 0 360 arc fill
+  lit [ 0 1 2 { col exch get 0.22 mul } for ] col between tm-rgb x y r 0 360 arc fill
+  lit 0.02 gt {
+    lit 0.5 mul setalpha col tm-rgb x y r 2.3 mul 0 360 arc fill
+    lit 0.22 mul setalpha x y r 3.6 mul 0 360 arc fill
+    1 setalpha lit 0.6 mul [1 1 1] col between tm-rgb x r 0.25 mul sub y r 0.25 mul add r 0.38 mul 0 360 arc fill
+  } if
+  1 setalpha 1 1 1 setrgbcolor 0.35 setalpha x r 0.35 mul sub y r 0.35 mul add r 0.22 mul 0 360 arc fill 1 setalpha
+  end
+} def
+/tm-glyphfont { /Bookman-Demi findfont exch scalefont setfont } def
+/tm-symtext { % symbol -> (text) for a non-blank symbol
+  dup 1 eq { pop (1) } { 3 string cvs } ifelse
+} def
+
+% ---- the tape and the head (in cell units, under the camera) ---------------------------
+/tm-cellat { % c -> sym lastwrite-step (-1 none) ghost: the cell as the frame shows it
+  /tm-cc exch def
+  /tm-cs tm-cc tm-init def /tm-cj -1 def /tm-cg tm-cs 0 ne def
+  tm-cc tm-lo ge tm-cc tm-hi le and {
+    tm-hist tm-cc tm-lo sub get /tm-hl exch def
+    0 2 tm-hl length 1 sub { /tm-hj exch def
+      tm-hl tm-hj get tm-kv lt { /tm-cj tm-hl tm-hj get def /tm-cs tm-hl tm-hj 1 add get def
+        tm-cs 0 ne { /tm-cg true def } if } { exit } ifelse
+    } for
+  } if
+  tm-cs tm-cj tm-cg tm-cs 0 eq and
+} def
+/tm-impact 0.42 def               % how far through a step the stamp meets the paper
+
+/tm-drawmark { % sym x age(seconds since stamped, or large): one stamped symbol
+  3 dict begin /age exch def /x exch def /sym exch def
+  gsave x tm-ty translate
+  [ x 7.3 mul tm-n ] hash01 0.5 sub 7 mul rotate
+  age 0.5 lt { 1 age 0.5 div sub 0.12 mul 1 add dup scale } if
+  64 tm-glyphfont
+  sym tm-symtext /s exch def
+  % a rubber stamp's ink: a soft edge, then the body, a little uneven
+  0.1 0.12 0.27 setrgbcolor
+  0.25 setalpha s -1.2 -21 tm-ctext s 1.2 -23 tm-ctext
+  age 0.5 lt { age 0.5 div 0.25 mul 0.72 add } { 0.93 } ifelse setalpha
+  s 0 -22 tm-ctext
+  1 setalpha
+  grestore end
+} def
+/tm-drawghost { % x: what is left of a mark rubbed out
+  gsave tm-ty translate 64 tm-glyphfont 0.3 0.28 0.3 setrgbcolor
+  0.07 setalpha (1) -3 -24 tm-ctext (1) 4 -20 tm-ctext 0.05 setalpha (1) 0 -22 tm-ctext 1 setalpha grestore
+} def
+
+/tm-deck { % the bed, the tape, the rails and the carriage, in world units
+  /tm-c0 tm-cam tm-half tm-z div sub floor cvi 2 sub def
+  /tm-c1 tm-cam tm-half tm-z div add ceiling cvi 2 add def
+  /tm-x0 tm-c0 tm-cw mul def /tm-x1 tm-c1 tm-cw mul def
+  % the bed: a steel plate with a lip, and a shadow under it
+  0 setgray 0.35 setalpha tm-x0 340 tm-x1 tm-x0 sub 14 rectfill 1 setalpha
+  0.2 0.215 0.23 setrgbcolor tm-x0 352 tm-x1 tm-x0 sub 196 rectfill
+  0.3 0.32 0.34 setrgbcolor tm-x0 544 tm-x1 tm-x0 sub 4 rectfill
+  0.13 0.14 0.15 setrgbcolor tm-x0 352 tm-x1 tm-x0 sub 3 rectfill
+  % the scale engraved on it, a number under every cell, and its ticks
+  /Helvetica-Bold findfont 13 scalefont setfont
+  tm-c0 1 tm-c1 { /tm-i exch def
+    0.5 0.5 0.47 setrgbcolor tm-i 3 string cvs tm-i tm-cw mul 368 tm-ctext
+    0.36 0.37 0.38 setrgbcolor tm-i tm-cw mul tm-cw 2 div sub 384 1.2 10 rectfill
+  } for
+  % guide blocks along the bed that hold the tape down, every fourth cell
+  tm-c0 1 tm-c1 { /tm-i exch def tm-i 4 mod 0 eq {
+    0.15 0.16 0.17 setrgbcolor tm-i tm-cw mul tm-cw 2 div sub 8 sub 396 16 108 rectfill
+    0.32 0.33 0.35 setrgbcolor tm-i tm-cw mul tm-cw 2 div sub 8 sub 501 16 3 rectfill } if
+  } for
+  % the paper: a shadow, the strip, each cell's own tone, the rules between cells, feed holes
+  0 setgray 0.3 setalpha tm-x0 tm-ty tm-th 2 div sub 5 sub tm-x1 tm-x0 sub 6 rectfill 1 setalpha
+  tm-c0 1 tm-c1 { /tm-i exch def
+    tm-i hash01 0.025 mul 0.915 add /tm-v exch def tm-v tm-v 0.955 mul tm-v 0.85 mul setrgbcolor
+    tm-i tm-cw mul tm-cw 2 div sub tm-ty tm-th 2 div sub tm-cw 0.5 add tm-th rectfill
+  } for
+  0.66 0.6 0.48 setrgbcolor
+  tm-c0 1 tm-c1 { tm-cw mul tm-cw 2 div sub tm-ty tm-th 2 div sub 6 add 1.3 tm-th 12 sub rectfill } for
+  tm-c0 1 tm-c1 { /tm-i exch def
+    0.24 0.25 0.27 setrgbcolor tm-i tm-cw mul tm-ty tm-th 2 div add 11 sub 4.2 0 360 arc fill
+    0.12 0.13 0.14 setrgbcolor tm-i tm-cw mul 0.8 sub tm-ty tm-th 2 div add 10.2 sub 3 0 360 arc fill
+  } for
+  0.8 0.75 0.62 setrgbcolor tm-x0 tm-ty tm-th 2 div add 1.5 sub tm-x1 tm-x0 sub 1.5 rectfill
+  % the light that reads the cell under the head
+  /tm-hx tm-head tm-cw mul def
+  tm-readlit 0.01 gt {
+    1 0.85 0.5 setrgbcolor
+    0 1 5 { /tm-i exch def tm-readlit 0.06 mul setalpha
+      tm-hx tm-cw 0.5 mul tm-i 6 mul sub sub tm-ty tm-th 0.5 mul tm-i 5 mul sub sub
+      tm-cw tm-i 12 mul sub tm-th tm-i 10 mul sub rectfill } for
+    1 setalpha
+  } if
+  % what is written on it
+  tm-c0 1 tm-c1 { /tm-i exch def
+    tm-i tm-cellat /tm-gh exch def /tm-lj exch def /tm-sy exch def
+    tm-gh { tm-i tm-cw mul tm-drawghost } if
+    tm-sy 0 ne {
+      tm-sy tm-i tm-cw mul
+      tm-lj 0 ge { tm-t tm-T tm-lj get sub tm-lj tm-dur tm-impact mul sub } { 99 } ifelse
+      tm-drawmark
+    } if
+  } for
+  % the rails the carriage rides on
+  [ 548 604 ] { /tm-ry exch def
+    0 setgray 0.3 setalpha tm-x0 tm-ry 12 sub tm-x1 tm-x0 sub 5 rectfill 1 setalpha
+    0.34 0.35 0.37 setrgbcolor tm-x0 tm-ry 8 sub tm-x1 tm-x0 sub 16 rectfill
+    0.62 0.64 0.67 setrgbcolor tm-x0 tm-ry 3 sub tm-x1 tm-x0 sub 8 rectfill
+    0.9 0.91 0.92 setrgbcolor tm-x0 tm-ry 3 add tm-x1 tm-x0 sub 2 rectfill
+  } forall
+  tm-carriage
+} def
+
+/tm-carriage { % the head at tm-hx: a reading window over the cell, a stamp, a body on the rails
+  gsave tm-hx 0 translate
+  % the window: a brass frame round the cell
+  0 setgray 0.3 setalpha -58 392 116 4 rectfill 1 setalpha
+  newpath -56 394 112 112 4 tm-rrect -49 401 98 98 2 tm-rrect
+  0.72 0.55 0.27 setrgbcolor eofill
+  0.95 0.8 0.5 setrgbcolor -56 503 112 2 rectfill
+  0.45 0.33 0.14 setrgbcolor -56 394 112 2 rectfill
+  % its two arms up to the carriage
+  0.5 0.38 0.17 setrgbcolor -52 503 9 26 rectfill 43 503 9 26 rectfill
+  % the glass, catching the light
+  1 1 1 setrgbcolor 0.06 setalpha -49 401 98 98 rectfill
+  0.12 setalpha newpath -40 499 moveto -20 499 lineto -49 440 lineto -49 470 lineto closepath fill 1 setalpha
+  0 setgray 0.35 setalpha -94 518 188 120 10 tm-rrect fill 1 setalpha
+  % the stamp: a plunger that comes down through the window onto the paper and back
+  /tm-py 526 tm-press 526 410 sub mul sub def
+  0 setgray tm-press 0.35 mul setalpha -36 tm-py 8 sub 76 6 rectfill 1 setalpha
+  0.55 0.57 0.6 setrgbcolor -6 tm-py 76 add 12 640 tm-py sub 76 sub 0 max rectfill
+  0.8 0.82 0.85 setrgbcolor -3 tm-py 76 add 3 640 tm-py sub 76 sub 0 max rectfill
+  -38 tm-py 76 76 6 tm-rrect
+  tm-erase { 0.62 0.6 0.55 } { 0.38 0.1 0.09 } ifelse setrgbcolor fill
+  -38 tm-py 76 10 2 tm-rrect tm-erase { 0.48 0.47 0.43 } { 0.18 0.06 0.06 } ifelse setrgbcolor fill
+  0.25 0.26 0.28 setrgbcolor -38 tm-py 62 add 76 14 rectfill
+  0.5 0.52 0.55 setrgbcolor -38 tm-py 74 add 76 2 rectfill
+  % the body, over the rails
+  newpath -90 522 180 110 9 tm-rrect -42 522 84 98 3 tm-rrect
+  0.14 0.29 0.27 setrgbcolor eofill
+  0.2 0.38 0.35 setrgbcolor -90 626 180 6 rectfill
+  0.72 0.55 0.27 setrgbcolor -90 520 180 5 rectfill -90 632 180 3 rectfill
+  % the slot the stamp rides in, dark, with the stamp seen inside when it is up
+  % the read lamp, and the state the head is in, on its front
+  -66 602 7.5 [1 0.72 0.3] tm-readlit tm-lamp
+  /Helvetica-Bold findfont 9 scalefont setfont 0.82 0.76 0.6 setrgbcolor (READ) -66 583 1 tm-track
+  0.08 0.09 0.09 setrgbcolor 50 572 34 40 3 tm-rrect fill
+  /Courier-Bold findfont 32 scalefont setfont
+  tm-halt tm-shown eq { 1 0.35 0.25 } { 1 0.78 0.42 } ifelse setrgbcolor
+  tm-shown tm-halt eq { (H) } { tm-shown 8 string cvs } ifelse 67 580 tm-ctext
+  /Helvetica-Bold findfont 9 scalefont setfont 0.82 0.76 0.6 setrgbcolor (STATE) 67 560 1 tm-track
+  -78 536 tm-screw 78 536 tm-screw -78 618 tm-screw 78 618 tm-screw
+  grestore
+} def
+
+% ---- the panel -------------------------------------------------------------------------
+/tm-engrave { % (s) x y size: an engraved label
+  /Helvetica-Bold findfont exch scalefont setfont
+  3 copy 0 setgray 0.5 setalpha exch 0.6 add exch 0.8 sub 1.4 tm-track
+  1 setalpha 0.84 0.79 0.64 setrgbcolor 1.4 tm-track
+} def
+/tm-wheel { % p x y w h: a digit drum at turn p, through its window
+  6 dict begin /wh exch def /ww exch def /wy exch def /wx exch def /wp exch def
+  gsave wx wy ww wh rectclip
+  0.93 0.9 0.82 setrgbcolor wx wy ww wh rectfill
+  /Courier-Bold findfont wh 0.78 mul scalefont setfont 0.1 0.1 0.11 setrgbcolor
+  wp floor cvi /d0 exch def
+  d0 1 d0 1 add { /dd exch def
+    dd 10 mod 10 add 10 mod 1 string cvs wx ww 2 div add wy wh 2 div add wp dd sub wh mul add wh 0.27 mul sub tm-ctext
+  } for
+  0 setgray 0 1 9 { /i exch def 1 i 10 div sub dup mul 0.5 mul setalpha
+    wx wy wh add i 1 add wh 0.025 mul mul sub ww wh 0.025 mul 0.6 add rectfill
+    wx wy i wh 0.025 mul mul add ww wh 0.025 mul 0.6 add rectfill } for
+  1 setgray 0.08 setalpha wx wy wh 0.55 mul add ww wh 0.45 mul rectfill 1 setalpha
+  grestore end
+} def
+/tm-drums { % v n x y: n drums showing v, the units turning and the rest carried
+  6 dict begin /y exch def /x exch def /n exch def /v exch def
+  0.06 0.06 0.07 setrgbcolor x 6 sub y 6 sub n 44 mul 8 add 70 5 tm-rrect fill
+  0 1 n 1 sub { /k exch def
+    k 0 eq { v } { 10 k exp /pw exch def v pw div floor v pw fmod pw 1 sub sub 0 max add } ifelse
+    x n 1 sub k sub 44 mul add y 40 58 tm-wheel
+  } for
+  end
+} def
+
+/tm-panel {
+  % the plate
+  0 setgray 0.45 setalpha 18 6 1244 296 20 tm-rrect fill 1 setalpha
+  0.15 0.19 0.18 setrgbcolor 22 12 1236 284 18 tm-rrect fill
+  0.21 0.26 0.25 setrgbcolor 22 286 1236 10 rectfill
+  0.15 0.19 0.18 setrgbcolor 40 30 1200 254 10 tm-rrect fill
+  [ [36 28] [1244 28] [36 280] [1244 280] ] { aload pop tm-screw } forall
+  % the dial
+  gsave 168 150 translate
+  0 setgray 0.4 setalpha 2 -4 110 0 360 arc fill 1 setalpha
+  0.72 0.55 0.27 setrgbcolor 0 0 108 0 360 arc fill
+  0.45 0.33 0.14 setrgbcolor 0 0 99 0 360 arc fill
+  0.94 0.91 0.82 setrgbcolor 0 0 96 0 360 arc fill
+  0.9 0.86 0.75 setrgbcolor 0 -10 74 0 360 arc fill 0.94 0.91 0.82 setrgbcolor 0 -6 74 0 360 arc fill
+  0 1 tm-nd 1 sub { /tm-i exch def
+    tm-i tm-dang /tm-a exch def
+    gsave tm-a rotate 0.2 0.2 0.2 setrgbcolor 2 setlinewidth 82 0 moveto 94 0 lineto stroke grestore
+    /tm-sn tm-dial tm-i get def
+    tm-sn tm-halt eq { 0.75 0.12 0.08 setrgbcolor /Helvetica-Bold findfont 15 scalefont setfont (HALT) }
+      { 0.12 0.12 0.13 setrgbcolor /Courier-Bold findfont 26 scalefont setfont tm-sn 8 string cvs } ifelse
+    tm-a cos 64 mul tm-a sin 64 mul 9 sub tm-ctext
+  } for
+  0.4 0.38 0.34 setrgbcolor /Helvetica-Bold findfont 11 scalefont setfont (STATE) 0 -52 2 tm-track
+  % the needle, and its hub
+  gsave tm-needle rotate
+  0 setgray 0.25 setalpha newpath -14 -4 moveto 74 -3 lineto 74 -1 lineto -14 2 lineto closepath fill 1 setalpha
+  0.7 0.12 0.08 setrgbcolor newpath -16 3 moveto 76 1 lineto 76 -1 lineto -16 -3 lineto closepath fill
+  grestore
+  0.2 0.2 0.21 setrgbcolor 0 0 9 0 360 arc fill 0.72 0.55 0.27 setrgbcolor 0 0 5 0 360 arc fill
+  % the glass over it
+  1 setgray 0.07 setalpha newpath 0 0 96 100 170 arc 0 0 70 170 100 arcn closepath fill 1 setalpha
+  grestore
+  % the counters
+  (STEPS) 432 226 12 tm-engrave
+  tm-stepv tm-sdig 432 tm-sdig 44 mul 2 div sub 154 tm-drums
+  (MARKS ON TAPE) 432 122 12 tm-engrave
+  tm-onesv tm-odig 432 tm-odig 44 mul 2 div sub 50 tm-drums
+  % the lamps
+  356 262 8 [0.35 1 0.45] tm-runlit tm-lamp (RUN) 386 258 10 tm-engrave
+  480 262 8 [1 0.22 0.12] tm-haltlit tm-lamp (HALT) 514 258 10 tm-engrave
+  tm-card
+} def
+/tm-dang { % i -> the dial angle of state i
+  tm-nd 1 le { pop 90 } { 210 exch 240 tm-nd 1 sub div mul sub } ifelse
+} def
+
+% ---- the program card ----------------------------------------------------------------
+/tm-cx 588 def /tm-cy 26 def /tm-cwid 640 def /tm-chi 254 def
+/tm-cols [ 70 160 0 290 400 530 ] def      % state, reads, (arrow), writes, moves, next: centres from the card's left
+/tm-rowh tm-chi 66 sub tm-table length div 30 min def
+/tm-rowy { % i -> the baseline of row i
+  tm-cy tm-chi add 64 sub tm-rowh 0.72 mul sub exch tm-rowh mul sub
+} def
+/tm-cardsym { % sym x y: a symbol as the card writes it, a blank as an empty cell
+  3 dict begin /y exch def /x exch def /sy exch def
+  sy 0 eq { 0.3 0.28 0.25 setrgbcolor 1.2 setlinewidth x 8 sub y 7 sub 16 18 rectstroke }
+    { tm-rowh 0.95 mul tm-glyphfont 0.1 0.12 0.27 setrgbcolor sy tm-symtext x y 6 sub tm-ctext } ifelse
+  end
+} def
+/tm-arrow { % x y dir: an arrow for a move, a dot for none
+  3 dict begin /dir exch def /y exch def /x exch def
+  0.16 0.15 0.14 setrgbcolor
+  dir 0 eq { x y 3 add 3.5 0 360 arc fill } {
+    gsave x y 3 add translate dir 0 lt { 180 rotate } if
+    2.6 setlinewidth -14 0 moveto 8 0 lineto stroke
+    newpath 15 0 moveto 5 6 lineto 5 -6 lineto closepath fill grestore
+  } ifelse end
+} def
+/tm-movedir { dup /R eq { pop 1 } { /L eq { -1 } { 0 } ifelse } ifelse } def
+/tm-card {
+  % the card, held by two clips, with its shadow
+  0 setgray 0.4 setalpha tm-cx 3 add tm-cy 5 sub tm-cwid tm-chi 4 tm-rrect fill 1 setalpha
+  0.95 0.92 0.83 setrgbcolor tm-cx tm-cy tm-cwid tm-chi 4 tm-rrect fill
+  0.85 0.36 0.3 setrgbcolor tm-cx 14 add tm-cy tm-chi add 40 sub tm-cwid 28 sub 1.2 rectfill
+  0.65 0.75 0.85 setrgbcolor
+  0 1 tm-table length 2 sub { tm-rowy tm-rowh 0.28 mul sub tm-cx 14 add exch tm-cwid 28 sub 0.6 rectfill } for
+  % the program's name, typed, and the column heads
+  /Courier-Bold findfont 19 scalefont setfont 0.16 0.15 0.14 setrgbcolor
+  tm-cx 22 add tm-cy tm-chi add 30 sub moveto tm-name show
+  /Helvetica-Bold findfont 10 scalefont setfont 0.45 0.42 0.38 setrgbcolor
+  [ (IN STATE) (READS) () (WRITES) (MOVES) (GOES TO) ] 0 1 5 { /tm-i exch def
+    dup tm-i get tm-cx tm-cols tm-i get add tm-cy tm-chi add 56 sub 1 tm-track } for pop
+  % the rule in use: lit from behind, the last one fading as the next comes on
+  0 1 tm-table length 1 sub { dup tm-rowlit exch get tm-lightrow } for
+  % the rows
+  0 1 tm-table length 1 sub { /tm-i exch def
+    tm-table tm-i get /tm-rw exch def tm-i tm-rowy /tm-yy exch def
+    /Courier-Bold findfont tm-rowh 0.82 mul scalefont setfont 0.16 0.15 0.14 setrgbcolor
+    tm-rw 0 get 8 string cvs tm-cx tm-cols 0 get add tm-yy tm-ctext
+    tm-rw 1 get tm-cx tm-cols 1 get add tm-yy tm-cardsym
+    tm-rw 2 get tm-cx tm-cols 3 get add tm-yy tm-cardsym
+    tm-cx tm-cols 4 get add tm-yy tm-rw 3 get tm-movedir tm-arrow
+    tm-rw 4 get tm-halt eq {
+      0.72 0.12 0.08 setrgbcolor /Helvetica-Bold findfont tm-rowh 0.62 mul scalefont setfont (HALT)
+    } { /Courier-Bold findfont tm-rowh 0.82 mul scalefont setfont 0.16 0.15 0.14 setrgbcolor tm-rw 4 get 8 string cvs } ifelse
+    tm-cx tm-cols 5 get add tm-yy tm-ctext
+  } for
+  % the clips
+  [ tm-cx 90 add tm-cx tm-cwid add 90 sub ] { /tm-x exch def
+    0 setgray 0.35 setalpha tm-x 26 sub tm-cy tm-chi add 14 sub 56 22 4 tm-rrect fill 1 setalpha
+    0.66 0.67 0.7 setrgbcolor tm-x 28 sub tm-cy tm-chi add 12 sub 56 22 4 tm-rrect fill
+    0.86 0.87 0.89 setrgbcolor tm-x 24 sub tm-cy tm-chi add 2 add 48 3 rectfill } forall
+} def
+/tm-lightrow { % i alpha: a backlit band behind row i, and a pointer
+  2 dict begin /a exch def /i exch def
+  a 0.01 gt {
+    i tm-rowy /y exch def
+    1 0.74 0.3 setrgbcolor a 0.32 mul setalpha tm-cx 8 add y tm-rowh 0.35 mul sub 6 sub tm-cwid 16 sub tm-rowh 12 add 5 tm-rrect fill
+    a 0.75 mul setalpha tm-cx 10 add y tm-rowh 0.35 mul sub 3 sub tm-cwid 20 sub tm-rowh 6 add 4 tm-rrect fill
+    0.75 0.14 0.08 setrgbcolor a setalpha
+    newpath tm-cx 14 add y 12 add moveto tm-cx 26 add y 4 add lineto tm-cx 14 add y 4 sub lineto closepath fill
+    1 setalpha
+  } if end
+} def
+
+% ---- the words: the rule in use, in English ------------------------------------------
+/tm-symword { dup 0 eq { pop (a blank) } { tm-symtext (a ) exch tm-cat } ifelse } def
+/tm-cat { % (a) (b) -> (ab)
+  2 copy length exch length add string dup 4 2 roll 2 index 0 3 index putinterval
+  exch length exch putinterval
+} def
+/tm-words { % row -> (In state B, reading a 1: write a blank, move left, go to C.)
+  tm-table exch get /tm-rw exch def
+  (In state ) tm-rw 0 get 8 string cvs tm-cat (, reading ) tm-cat tm-rw 1 get tm-symword tm-cat
+  (: write ) tm-cat tm-rw 2 get tm-symword tm-cat
+  tm-rw 3 get tm-movedir dup 0 eq { pop (, stay) } { 0 lt { (, move left) } { (, move right) } ifelse } ifelse tm-cat
+  tm-rw 4 get tm-halt eq { ( and halt.) } { (, go to ) tm-rw 4 get 8 string cvs tm-cat (.) tm-cat } ifelse tm-cat
+} def
+
+/tm-sdig tm-n 10 string cvs length 3 max def
+/tm-odig tm-W 10 string cvs length 2 max def
+
+% ---- the frame -------------------------------------------------------------------------
+/tm-lit { % row brightness: light row at least this much in this frame
+  2 copy exch tm-rowlit exch get gt { tm-rowlit 3 1 roll put } { pop pop } ifelse
+} def
+/scene {
+  /tm-rowlit [ tm-table length { 0 } repeat ] def
+  /tm-t now def
+  /tm-k tm-t tm-find def
+  /tm-stopped tm-t tm-end ge def
+  tm-stopped {
+    /tm-f 1 def /tm-s 0 def /tm-d 1 def /tm-kv tm-n def
+  } {
+    /tm-d tm-k tm-dur def
+    /tm-s tm-t tm-T tm-k get sub 0 max def
+    /tm-f tm-s tm-d div def
+    tm-t tm-lead lt { /tm-f 0 def /tm-s 0 def } if
+    /tm-kv tm-k tm-f tm-impact ge { 1 add } if def
+  } ifelse
+  /tm-going tm-t tm-lead ge tm-stopped not and def
+  % where the head is, and what it is doing
+  tm-going {
+    /tm-head tm-f 0.55 0.95 tm-phase /cubic-inout ease tm-HP tm-k get tm-HP tm-k 1 add get between def
+    /tm-press tm-f 0.24 tm-impact tm-phase /quad-in ease tm-f 0.5 0.66 tm-phase /quad-out ease sub def
+    /tm-erase tm-WR tm-k get 0 eq def
+    /tm-readlit tm-f 0 0.08 tm-phase tm-f 0.2 0.34 tm-phase sub def
+    /tm-needle tm-f 0.7 1 tm-phase /back-out ease
+      tm-ST tm-k get tm-dialat tm-dang tm-ST tm-k 1 add get tm-dialat tm-dang between def
+    /tm-shown tm-f 0.85 lt { tm-ST tm-k get } { tm-ST tm-k 1 add get } ifelse def
+    /tm-stepv tm-f 0.82 1 tm-phase /cubic-inout ease tm-k add def
+    /tm-onesv tm-f tm-impact dup 0.12 add tm-phase /cubic-out ease
+      tm-ONES tm-k get tm-ONES tm-k 1 add get between def
+    % the rows: the one in use comes on; the ones before it fade like warm bulbs
+    tm-ROW tm-k get tm-s tm-d 0.5 mul 0.16 min div 0 1 clamp tm-lit
+    tm-k 1 sub -1 tm-k 10 sub 0 max { /tm-j exch def
+      tm-ROW tm-j get 2.71828 tm-T tm-j 1 add get tm-t sub 0.13 div exp tm-lit
+    } for
+  } {
+    /tm-head tm-HP tm-k get def /tm-press 0 def /tm-erase false def /tm-readlit 0 def
+    /tm-needle tm-ST tm-k get tm-dialat tm-dang def
+    /tm-shown tm-ST tm-k get def
+    /tm-stepv tm-k def /tm-onesv tm-ONES tm-k get def
+    tm-stopped tm-n 0 gt and {
+      tm-ROW tm-n 1 sub get tm-t tm-end sub 0.4 0.8 tm-phase 0.6 mul 1 exch sub tm-lit
+    } if
+  } ifelse
+  /tm-runlit tm-t tm-lead 0.45 sub tm-lead 0.15 sub tm-phase tm-t tm-end sub 0 0.12 tm-phase sub def
+  /tm-haltlit tm-t tm-end 0.06 sub dup 0.12 add tm-phase def
+  tm-halted not { /tm-haltlit 0 def } if
+  % the camera: the head's neighbourhood, averaged over the frames either side; on the halt, the whole tape
+  /tm-cam 0 0 1 15 { 7.5 sub 0.024 mul tm-t add tm-camat add } for 16 div def
+  /tm-pull tm-t tm-end 0.5 add sub 1.7 div 0 1 clamp /cubic-inout ease def
+  tm-halted not { /tm-pull 0 def } if
+  /tm-cam tm-pull tm-cam tm-fitc between def
+  /tm-z tm-pull 1 tm-fitz between def
+
+  % the wall behind
+  0 1 15 { /tm-i exch def
+    /tm-v tm-i 15 div 0.035 mul 0.055 add def tm-v tm-v 1.06 mul tm-v 1.2 mul setrgbcolor
+    0 tm-i 40 mul 1280 41 rectfill } for
+  % a warm light over the machine
+  1 0.85 0.6 setrgbcolor 0 1 7 { /tm-i exch def 0.018 setalpha
+    newpath 640 520 tm-i 60 mul 120 add 0 360 arc fill } for 1 setalpha
+
+  % the deck, under the camera
+  gsave
+    0 322 1280 318 rectclip
+    0 -8 translate 640 tm-ty translate tm-z dup scale tm-cam tm-cw mul neg tm-ty neg translate
+    tm-deck
+  grestore
+  % the ends of the bed fade into the dark, as if lit from the middle
+  0.07 0.075 0.085 setrgbcolor
+  0 1 39 { /tm-i exch def 1 tm-i 40 div sub dup mul 0.75 mul setalpha
+    tm-i 3 mul 322 3 318 rectfill 1277 tm-i 3 mul sub 322 3 318 rectfill } for 1 setalpha
+
+  tm-panel
+
+  % the words: the rule in use, in English, while there is time to read it
+  /Palatino-Italic findfont 21 scalefont setfont
+  tm-going {
+    tm-d 0.35 sub 0.4 div 0 1 clamp tm-s 0.15 div 0 1 clamp mul
+    tm-d 0.6 lt { pop 0 } if setalpha
+    0.86 0.81 0.68 setrgbcolor tm-ROW tm-k get tm-words 640 308 tm-ctext 1 setalpha
+  } if
+  tm-stopped {
+    tm-t tm-end sub 0.3 1.0 tm-phase setalpha
+    tm-halted {
+      (Halted after ) tm-n tm-num tm-cat tm-n 1 eq { ( step, with ) } { ( steps, with ) } ifelse tm-cat
+      tm-ones tm-num tm-cat tm-ones 1 eq { ( mark on the tape.) } { ( marks on the tape.) } ifelse tm-cat
+    } { (Stopped after ) tm-n tm-num tm-cat ( steps without halting.) tm-cat } ifelse
+    1 0.7 0.55 setrgbcolor 640 308 tm-ctext 1 setalpha
+  } if
+} def

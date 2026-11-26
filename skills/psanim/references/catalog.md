@@ -549,6 +549,29 @@ A scrolling line chart of up to four series with a legend; the y range follows t
 | /Width | `640` | its width in units: give it the shape of the box it is placed in |
 | /Window | `4` | seconds shown |
 
+## `/turing`: Turing machine
+
+A Turing machine at work: a paper tape, a head on a carriage that reads a cell, stamps or erases a mark and moves, a state dial, step and mark counters, and the program card with the rule in use lit. It simulates the table it is given; the busy beaver by default.
+
+1280x640, 28.0 s. `/x /turing component`, then `/x << /Box [..] >> place`.
+
+| Param | Default | Meaning |
+|---|---|---|
+| /Expect | `null` | << /Steps n /Ones n /Tape (1011) >>: setup fails if the run disagrees (/Tape from the first non-blank to the last) |
+| /Fast | `0.14` | seconds a step takes at full speed |
+| /Halt | `/H` | the halting state; a state and symbol with no row halts too |
+| /Head | `0` | the cell the head starts on, counting the first of /Tape as 0 |
+| /Lead | `1.2` | seconds at rest before the first step |
+| /MaxSteps | `1000` | stop after this many steps if it has not halted |
+| /Name | `(Busy beaver: 4 states, 2 symbols)` | the program's name, typed on its card |
+| /Ramp | `0.72` | 0 to 1: each step from either end takes this times the one before, down to /Fast |
+| /Report | `false` | print the result as setup ends |
+| /Slow | `1.6` | seconds the first step and the last step take |
+| /Start | `null` | the state it starts in (null: the first row's) |
+| /Table | `[...]` | the program: rows [state reads writes move next], move /L /R or /N; shown in this order |
+| /Tail | `3.5` | seconds to hold on the stopped machine (the camera pulls back in the first two) |
+| /Tape | `[]` | the cells at the start, left to right: 0 is blank, 1 a mark, 2 and up a digit; blank beyond |
+
 ## `/twiddle`: Twiddle
 
 Twiddle, the twiddle project's mascot: a round clay-orange staticling who dances to a real beat (a tempo or an event track), grins on a big kick, sings a beat late, waves on a splash and falls asleep when the music stops.
