@@ -406,6 +406,12 @@ Three bytes a cell, for `cols rows 8 [cols 0 0 rows neg 0 rows] rgb false 3 colo
 
 The box, in cells from the top left (inclusive), of the cells that are or once were alive, counting only rows and columns that hold more than `share` of what the fullest one holds (0.2 leaves out the thin tracks of gliders that flew away; 0 counts every one); null if none ever lived. It grows as a pattern spreads, so a camera framed on it pulls back smoothly.
 
+### `cellmask`
+
+`rgb cols ground  cellmask  mask`
+
+A stencil for the colours `cellcolors` made: one bit a cell, rows padded to whole bytes, set where the colour is not the ground [r g b]. As the /MaskDict of an `ImageType 3` image (/BitsPerComponent 1, /Decode [1 0]) it paints the cells and leaves the ground transparent.
+
 ### `cellcount`
 
 `cells  cellcount  n`

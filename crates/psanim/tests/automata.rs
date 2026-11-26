@@ -172,7 +172,16 @@ fn bad_operands_say_what_is_wanted() {
         ("10 10 /nosuch cellgrid", "no pattern /nosuch"),
         ("10 10 /glider cellgrid 10 /conway 1 cellsteps", "B3/S23"),
         ("10 1 /single cellgrid 300 4 cellrows", "0 to 255"),
-        ("4000 4000 /random cellgrid", "at most"),
+        ("4000 4000 /random cellgrid", "1 to 2048"),
+        // Never a panic: sizes are checked before anything is allocated.
+        ("() 1e30 0 cellbounds", "1 to 2048"),
+        ("() 5 0 cellbounds", "rows"),
+        ("() 5 /life 3 cellsteps", "rows"),
+        ("(abc) 1e30 /life 3 cellsteps", "1 to 2048"),
+        ("1e30 1e30 /random cellgrid", "1 to 2048"),
+        ("(.O.) 30 1e30 cellrows", "1 to"),
+        ("(abc) 1e30 [0 0 0] cellmask", "1 to 2048"),
+        ("() 4 [0 0 0] cellmask", "rows"),
     ] {
         let src = format!("{HEAD}/scene {{ {prog} pop }} def");
         let mut m = Movie::load(&src, &Options::default()).unwrap();

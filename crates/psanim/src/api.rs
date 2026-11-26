@@ -402,6 +402,12 @@ pub const API: &[ApiEntry] = &[
     ),
     e(
         "cells",
+        "cellmask",
+        "rgb cols ground  cellmask  mask",
+        "A stencil for the colours `cellcolors` made: one bit a cell, rows padded to whole bytes, set where the colour is not the ground [r g b]. As the /MaskDict of an `ImageType 3` image (/BitsPerComponent 1, /Decode [1 0]) it paints the cells and leaves the ground transparent.",
+    ),
+    e(
+        "cells",
         "cellcount",
         "cells  cellcount  n",
         "How many cells of a grid are alive.",

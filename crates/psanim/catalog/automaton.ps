@@ -57,6 +57,7 @@
 /Ground null param /ground0 exch def                                % the ground [r g b], or /none for a transparent one
 /Fade 6 param /fade exch def                                        % generations a dead cell takes to fade
 /Mature 3 param /mature exch def                                    % generations a newborn takes to reach /Alive
+/MaxGeneration 0 param /maxgen0 exch def                             % elementary rules: the most rows a /Clock reaches, if sampling it may miss its peak (0: sampled)
 
 % ---- colours ----------------------------------------------------------------------
 /palettes <<
@@ -79,7 +80,13 @@
 /genof { hasclock { clockp } { rate mul } ifelse 0 max } def   % t -> generation
 elem {
   % The whole history, once: every row the entry can show.
-  /total len genof ceiling cvi nrows add 1 add def
+  % The clock need not only go forward (a /Clock may run back to the start), so the
+  % rows needed are the most it reaches: /MaxGeneration, or the largest of 241 samples
+  % across the entry's length. Held to what fits in a grid of 4194304 cells.
+  /maxgen maxgen0 0 gt { maxgen0 } {
+    0 0 1 240 { len mul 240 div genof max } for
+  } ifelse def
+  /total maxgen ceiling cvi nrows add 1 add 4194304 ncols idiv min def
   /row0 ncols 1 << /Pattern pattern /Density density >> cellgrid def
   /hist row0 << /Rule rule cvi /Edge edge >> total cellrows def
   /histrgb hist palette 0 cellcolors def
@@ -93,7 +100,18 @@ elem {
 /drawimage { % rgb nr: the cells as one image, top row first, filling nr rows of the grid
   /dnr exch def /drgb exch def
   gsave 0 H dnr pitch mul sub translate W dnr pitch mul scale
-    ncols dnr 8 [ ncols 0 0 dnr neg 0 dnr ] drgb false 3 colorimage
+    noground {
+      % no ground: a stencil leaves every cell of the ground colour unpainted
+      /DeviceRGB setcolorspace
+      << /ImageType 3 /InterleaveType 3
+         /DataDict << /ImageType 1 /Width ncols /Height dnr /BitsPerComponent 8
+                      /Decode [0 1 0 1 0 1] /ImageMatrix [ ncols 0 0 dnr neg 0 dnr ] /DataSource drgb >>
+         /MaskDict << /ImageType 1 /Width ncols /Height dnr /BitsPerComponent 1 /Decode [1 0]
+                      /ImageMatrix [ ncols 0 0 dnr neg 0 dnr ] /DataSource drgb ncols ground cellmask >>
+      >> image
+    } {
+      ncols dnr 8 [ ncols 0 0 dnr neg 0 dnr ] drgb false 3 colorimage
+    } ifelse
   grestore
 } def
 /gaps { % lines of ground between cells
