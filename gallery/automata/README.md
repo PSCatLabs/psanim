@@ -6,10 +6,10 @@ rule that really runs.
 
 1. **Rule 30** (0 to 23 s). One live cell. Each row below is made from
    the three cells above it; the rule's eight cases are on screen while
-   the first ten rows arrive. Then the rows come faster, the camera
-   follows the newest one down through the chaos, and pulls back to show
-   all 300 generations at once: a triangle, regular stripes down its left
-   side, chaos on its right.
+   the first ten rows arrive. Then the rows come faster and the camera
+   pulls back to keep the whole triangle in view, until all 300
+   generations are on screen: regular stripes down its left side, chaos
+   on its right.
 2. **The Game of Life** (23 to 38 s). Gosper's glider gun fires a glider
    every thirty generations, at 18 generations a second; cells that die
    fade from ember to ash, so the motion reads at film speed, and the
@@ -34,9 +34,15 @@ cellular automaton words:
   image is drawn with `/Interpolate true` (bilinear), so a cell 1.85
   pixels wide is blended at its edges instead of being snapped to one or
   two whole pixels.
-- The rows arrive two a second for the first ten, then follow one cubic
-  that leaves at that speed and arrives at row 300 at rest, and the zoom
-  is one ease in log scale: the scroll never stops or jumps.
+- The rows arrive two a second for the first ten; then the log of the
+  row count follows one cubic that leaves at that rate and arrives at
+  row 300 at rest. The camera never scrolls: the apex stays put and the
+  view pulls back to fit the rows, so however fast they come a cell
+  drifts a few pixels a frame (an earlier version followed the newest
+  row down and strobed). Close up, cells are drawn as rectangles, one
+  fill per run of live cells, so the slow zoom moves them smoothly
+  rather than snapping to whole pixels as an image does; from 4 pixels
+  a cell down, one image.
 - Movements 2 and 3 place the catalog's `/automaton` entry: one instance
   for the gun, three for the methuselahs. Each has its own `/Clock`, a
   procedure from its time to its generation (for the methuselahs an
@@ -61,23 +67,17 @@ your own) and the film is different and still right.
 
 ## Things worth knowing
 
-- While the rows rush past (7.4 to 19.7 s) the triangle is drawn four
-  times across half a frame, each over the last with weight 1/(k+1), a
-  motion blur of its own: `/MotionBlur` would also blur the Life films,
-  mixing several generations into one frame.
 - Measured on an Apple M4 with `check --all` (every frame, in order): a
-  mean of 27 ms a frame at full size (slowest 191 ms, in the blurred
-  pull-back) and 2.7 ms at preview size. A frame reached cold costs every
-  generation before it: `psanim frame --at 55` runs the acorn's 5206
-  generations on 114,000 cells first, 0.6 s in all; the default `check`,
-  which samples frames out of order, averages 55 ms a frame at preview
-  size.
-- `check --all` warns of abrupt changes on every frame from 7.9 to 16.9 s.
-  There the camera follows the newest row and pulls back, so a texture of
-  high-contrast cells a few pixels wide moves by about a cell every frame
-  and nearly every pixel changes; the detector reads that as a cut.
-  Nothing appears or vanishes there. (A smooth full-frame move, such as
-  the tilt in `salt-roads`, does not trip it.)
+  mean of 19.8 ms a frame at full size (slowest 76.6 ms) and 2.6 ms at
+  preview size. A frame reached cold costs every generation before it:
+  `psanim frame --at 55` runs the acorn's 5206 generations on 114,000
+  cells first, about 0.6 s in all; the default `check`, which samples
+  frames out of order, averages 32 ms a frame at preview size.
+- `check` is clean, and so is `check --all` at `--scale 1` and
+  `--scale 0.5`. At its default quarter-size preview, `check --all` warns
+  at 15.1 and 18.7 s: there a cell is under half a preview pixel, and
+  PSCat point-samples a shrunk image, so the slow zoom aliases in the
+  preview only.
 
 ## Render
 

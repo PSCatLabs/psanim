@@ -66,28 +66,34 @@
   putinterval
 } for
 
-% rows shown and the camera, as functions of the clock
-/slowend 6.2 def /pullend 20.2 def                 % ten rows one by one, then the rest and the pull back
-/rowsat { % -> r (fractional): two rows a second, then a cubic that leaves at that speed
-  % and arrives at row R at rest, so the scroll never stops or jumps
+% rows shown and the camera, as functions of the clock. The camera never scrolls: the
+% apex stays put and the view pulls back so the whole triangle always fits, so a cell
+% only ever drifts a few pixels a frame however fast the rows come.
+/slowend 6.2 def /pullend 20.2 def                 % ten rows one by one, then the rest
+/span-h 558 def                                     % pixels from the apex to the lowest row
+/rowsat { % -> r (fractional): two rows a second; then ln r follows a cubic that leaves at
+  % that rate (0.2 a second at row 10) and arrives at row R at rest
   now slowend lt { now 1.2 sub 0 max 2 mul } {
     /hu now slowend sub pullend slowend sub div 0 1 clamp def
     /hT pullend slowend sub def
     hu hu mul /hu2 exch def hu2 hu mul /hu3 exch def
-    hu3 2 mul hu2 3 mul sub 1 add 10 mul                % h00 x 10
-    hu3 hu2 2 mul sub hu add hT 2 mul mul add           % h10 x the slope
-    hu3 -2 mul hu2 3 mul add R mul add                  % h01 x R
+    hu3 2 mul hu2 3 mul sub 1 add 10 ln mul             % h00 x ln 10
+    hu3 hu2 2 mul sub hu add hT 0.2 mul mul add         % h10 x the slope
+    hu3 -2 mul hu2 3 mul add R ln mul add               % h01 x ln R
+    2.718281828 exch exp
   } ifelse
 } def
-/pxat { % -> pixels per cell: held, then a zoom out even in log scale, at rest at both ends
-  slowend pullend /sine-inout tween 30 ln 1.85 ln between 2.718281828 exch exp
+/pxat { % -> pixels per cell: 30, or what fits r rows below the apex, whichever is less
+  % (a smooth minimum, so the pull back starts without a jolt)
+  1 30 div 4 exp rowsat 1 add span-h div 4 exp add 0.25 exp 1 exch div
 } def
 
 /drawrule30 {
   /r rowsat def /s pxat def
   /n r floor cvi R min def                          % rows 0..n-1 whole, row n arriving
-  /topy 650 92 r s mul add max def                  % the apex; the newest row stays above y = 92
+  /topy 650 def                                     % the apex
   /x0 640 RC 2 div s mul sub def                    % left edge of column 0
+  /dcell s 0 dtransform dup mul exch dup mul add sqrt def   % a cell's size in device pixels
   % what the camera sees: columns c0..c1, rows r0..r1
   /c0 x0 neg s div floor cvi 0 max def
   /c1 1280 x0 sub s div ceiling cvi RC 1 sub min def
@@ -110,13 +116,32 @@
         x0 c0 s mul add topy rb s mul sub translate nc s mul nr s mul scale
         /DeviceRGB setcolorspace
         << /ImageType 1 /Width nc /Height nr /BitsPerComponent 8 /Decode [0 1 0 1 0 1]
-           /ImageMatrix [ nc 0 0 nr neg 0 nr ] /DataSource data /Interpolate s 4 lt >> image
+           /ImageMatrix [ nc 0 0 nr neg 0 nr ] /DataSource data /Interpolate dcell 4 lt >> image
       grestore
     } if
   } def
-  r0 n drows
+  % Close up, cells are rectangles (runs of live cells, one fill each), so the slow
+  % zoom moves them smoothly instead of snapping to whole pixels as an image would.
+  /vrows { % ra rb   (each run a hair over its cells, so rows meet without seams)
+    /rb exch def /ra exch def
+    ra 1 rb 1 sub { /vi exch def
+      vi rowcol aload pop setrgbcolor
+      /vy topy vi 1 add s mul sub def
+      /va R vi sub c0 max def /vb R vi add c1 min def
+      /run -1 def
+      va 1 vb 1 add { /vc exch def
+        vc vb le { hist vi RC mul vc add get 0 ne } { false } ifelse {
+          run 0 lt { /run vc def } if
+        } {
+          run 0 ge { x0 run s mul add vy 0.3 sub vc run sub s mul 0.3 add s 0.6 add rectfill /run -1 def } if
+        } ifelse
+      } for
+    } for
+  } def
+  /rowsof s 4 ge { /vrows load } { /drows load } ifelse def
+  r0 n rowsof
   n R le {                                           % the newest row, fading in
-    gsave r n sub 0 1 clamp 1.6 mul 1 min setalpha n n 1 add drows grestore
+    gsave r n sub 0 1 clamp setalpha n n 1 add rowsof grestore
   } if
   % the gaps between cells, while they are big enough to see
   s 24 gt {
@@ -155,24 +180,8 @@
   grestore
 } def
 
-/blurn 4 def                                        % samples a frame while the rows rush
 /movement1 {
-  % While the rows rush past, a motion blur of our own: the triangle drawn at four
-  % moments across half a frame, each over the last with weight 1/(k+1), so all
-  % four count the same. (/MotionBlur would blur the Life films too.)
-  now 7.4 gt now pullend 0.5 sub lt and {
-    0 1 blurn 1 sub { /bk exch def
-      1 bk 1 add div { bk blurn div 0.5 mul fps div { drawrule30 } delayed } faded
-    } for
-  } { drawrule30 } ifelse
-  % a dusk over the oldest rows, so the words stay legible over the cells
-  /dk 1 18.5 20.2 /sine-inout tween sub 0.85 mul def
-  dk 0 gt {
-    gsave bgc aload pop setrgbcolor
-      0 1 23 { /i exch def i 24 div /v exch def 1 v sub 1.5 exp dk mul setalpha 0 720 i 1 add 7 mul sub 1280 7.5 rectfill } for
-      0 1 9 { /i exch def dk 0.12 mul setalpha 0 560 i 4 mul add 560 i 28 mul sub 160 rectfill } for   % and behind the title
-    grestore
-  } if
+  drawrule30
   % the words
   0 0.8 /quad-out tween { /title 50 face /fg ink (Rule 30) [ 64 628 400 60 ] /w showin } faded
   /body 26 face [0.82 0.78 0.76] aload pop setrgbcolor
@@ -189,7 +198,7 @@
              /Ghost [0.06 0.05 0.085] /Ground bgc >> def
 /grate 18 def                                       % generations a second
 /gun /automaton << /Params <<
-  /Pattern [ [/gun 25 15] ] /Grid [128 72] /Pitch 10 /Edge /open /Rate grate
+  /Pattern [ [/gun 32 15] ] /Grid [128 72] /Pitch 10 /Edge /open /Rate grate
   /Fade 9 /Gap 0.12 /Length B1 B0 sub
   /Born lifecols /Born get /Alive lifecols /Alive get /Mature 5 /Trail lifecols /Trail get
   /Ghost lifecols /Ghost get /Ground bgc
@@ -198,7 +207,7 @@
 /movement2 {
   % a slow pull back over the whole movement
   B0 B1 /sine-inout tween 1.32 1 between /z exch def
-  /fx 255 def /fy 565 def                            % the gun: the camera pulls back from it
+  /fx 325 def /fy 565 def                            % the gun: the camera pulls back from it
   /gun << /At B0 /Box [ fx fx z mul sub fy fy z mul sub 1280 z mul 720 z mul ] >> place
   B0 {
     /title 44 face /fg ink
