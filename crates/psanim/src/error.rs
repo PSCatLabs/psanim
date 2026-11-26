@@ -68,6 +68,9 @@ pub struct Error {
     /// The program's procedures that were running, innermost first: where
     /// in the program's own code the error happened.
     pub backtrace: Vec<TraceLine>,
+    /// What the frame printed (`==`, `print`) before it failed, when it
+    /// was a frame that failed: often the clue. The movie keeps it too.
+    pub printed: crate::engine::Printed,
 }
 
 /// One procedure that was running when an error happened.
@@ -94,6 +97,7 @@ impl Error {
             hint: None,
             stack: Vec::new(),
             backtrace: Vec::new(),
+            printed: crate::engine::Printed::default(),
         }
     }
 
@@ -148,6 +152,12 @@ impl Error {
                     .collect::<Vec<_>>()
                     .into(),
             );
+        }
+        if !self.printed.text.is_empty() {
+            m.insert("printed".into(), self.printed.text.clone().into());
+            if self.printed.truncated {
+                m.insert("printed_truncated".into(), true.into());
+            }
         }
         o
     }

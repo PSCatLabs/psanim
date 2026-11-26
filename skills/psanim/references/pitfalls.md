@@ -149,14 +149,20 @@ your code that expected the original will not.
 - Two adjacent `during` windows compute a value differently at the
   boundary. Make the end of one equal the start of the next, or use one
   `keyframes` track across both.
-- `check` flags an abrupt change with the frame number and, for a local
+- `check` reports an abrupt change with the frame number and, for a local
   one, where on the canvas (in canvas units). It compares each tile of
   the preview with the same tile in the frame pairs either side, so a
   small element that appears or vanishes in a busy frame is caught, and
   steady fast motion, fades and wipes are not. Counters and typing show up
-  as one note, not many warnings. It scans a fixed set of about 230 frames
-  of a pure movie (`--all` scans every one: do that before a long
-  render). A deliberate cut is fine; ignore the warning for it.
+  as one note, not many. A local pop is a **note** by default (films cut
+  on purpose: a screen clears, a digit ticks) and a warning under
+  `--all`; a change over half the frame (a cut) is always a warning. Look
+  at each note with `sheet --frame F,F+1`: if something simply appears,
+  with no entrance, fix it; if the change is meant, declare it with
+  `/Cuts [t ...]` in the `animation` dictionary and `check --all` is clean.
+  The default scan covers a few runs of consecutive frames of a pure movie
+  (fewer when frames are slow); `--all` scans every one: do that before a
+  long render.
 
 ## It flickers
 

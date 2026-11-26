@@ -53,6 +53,7 @@ pub const CATEGORIES: &[(&str, &str)] = &[
     ("pkchart", "pkchart: data that moves"),
     ("pkink", "pkink: marks with a hand in them"),
     ("pkfigure", "pkfigure: a rig for characters that dance"),
+    ("pkpixel", "pkpixel: a pixel font for signs and printers"),
 ];
 
 /// The library a category's words live in, if they are not always loaded:
@@ -83,7 +84,7 @@ pub const API: &[ApiEntry] = &[
         "declaration",
         "animation",
         "dict  animation  -",
-        "Declare the movie. Put it before anything that takes time or draws (definitions it needs, such as a reel array for `reelduration`, may come first). Keys, all optional: /Size [w h] (canvas units, default [1280 720]), /Duration seconds (5), /FPS (30), /Seed (1), /Background [r g b] or /transparent (black), /Title, /Description, /Loop bool, /Scene /name (scene), /Step /name (step), /StepRate ticks per second (FPS), /Persist bool, /MotionBlur samples, /Shutter 0..1 (0.5).",
+        "Declare the movie. Put it before anything that takes time or draws (definitions it needs, such as a reel array for `reelduration`, may come first). Keys, all optional: /Size [w h] (canvas units, default [1280 720]), /Duration seconds (5), /FPS (30), /Seed (1), /Background [r g b] or /transparent (black), /Title, /Description, /Loop bool, /Cuts [t ...] (seconds where the movie cuts on purpose: `psanim check` does not report an abrupt change there), /Scene /name (scene), /Step /name (step), /StepRate ticks per second (FPS), /Persist bool, /MotionBlur samples, /Shutter 0..1 (0.5).",
     ),
     e(
         "clock",
@@ -312,7 +313,7 @@ pub const API: &[ApiEntry] = &[
         "particles",
         "particles",
         "spec proc  particles  -",
-        "Draw proc once for every particle alive now, with the origin moved to the particle (inside gsave) and the caller's stack; `particleage`, `particleu`, `particlevel`, `particlekey` and the rest read the particle. spec is an emitter dictionary or an array of them, all keys optional: /At [x y] or keyframes [t [x y] /ease t [x y] ...] (a moving emitter; the view's centre), /Area [w h] (scatter births over a box centred on /At), /Rate per second with /From and /To (continuous), /Bursts [t ...] each emitting /Count (50) at once, /Life seconds or [lo hi] (2), /Speed or [lo hi] (100), /Angle degrees (90, up) and /Spread degrees (360), /Shape /random /even (evenly round) /sphere (a 3-D burst seen from the side), /Gravity (downward units/s/s, or [gx gy]), /Drag (per second: speeds settle to (gravity+wind)/drag), /Wind [ax ay] (a steady force), /Gust [ax ay] with /GustFreq (a force that wanders over time, the same for every particle), /Sway [dx dy] with /SwayFreq (each particle's own wandering offset: snow, leaves, confetti), /Inherit (share of a moving emitter's velocity), /Period seconds (continuous emission and noise repeat: give the loop's length in a /Loop movie), /Seed (this emitter's randomness), /Draw proc (draws this emitter's particles instead of proc). A particle's state is computed from its birth and the time alone, so frames render in any order.",
+        "Draw proc once for every particle alive now, with the origin moved to the particle (inside gsave) and the caller's stack; `particleage`, `particleu`, `particlevel`, `particlekey` and the rest read the particle. spec is an emitter dictionary or an array of them, all keys optional: /At [x y] or keyframes [t [x y] /ease t [x y] ...] (a moving emitter; the view's centre), /Area [w h] (scatter births over a box centred on /At), /Rate per second with /From and /To (continuous), /Bursts [t ...] each emitting /Count (50) at once, /Life seconds or [lo hi] (2), /Speed or [lo hi] (100), /Angle degrees (90, up) and /Spread degrees (360), /Shape /random /even (evenly round) /sphere (a 3-D burst seen from the side), /Gravity (downward units/s/s, or [gx gy]), /Drag (per second: speeds settle to (gravity+wind)/drag), /Wind [ax ay] (a steady force), /Gust [ax ay] with /GustFreq (a force that wanders over time, the same for every particle), /Sway [dx dy] with /SwayFreq (each particle's own wandering offset: snow, leaves, confetti), /Inherit (share of a moving emitter's velocity), /Period seconds (continuous emission and noise repeat: give the loop's length in a /Loop movie; with /Life no longer than it every particle has its own key; longer, a particle is the one born a period earlier, same key and flight), /Seed (this emitter's randomness), /Draw proc (draws this emitter's particles instead of proc). A particle's state is computed from its birth and the time alone, so frames render in any order.",
     ),
     e(
         "particles",
@@ -348,7 +349,7 @@ pub const API: &[ApiEntry] = &[
         "particles",
         "particlekey",
         "-  particlekey  n",
-        "Inside a particles procedure: a whole number standing for this particle, the same on every frame: `[particlekey 1] hash01` is its own constant (a size, a colour, a spin).",
+        "Inside a particles procedure: a whole number standing for this particle, the same on every frame: `[particlekey 1] hash01` is its own constant (a size, a colour, a spin). With /Period, keys repeat every period, which is what closes the loop: if /Life is longer than /Period, two live particles can share a key (one is the other, a period older) and fly the same path a period apart.",
     ),
     e(
         "particles",
@@ -366,7 +367,7 @@ pub const API: &[ApiEntry] = &[
         "particles",
         "particletrail",
         "seconds n  particletrail  -",
-        "Inside a particles procedure: replace the current path with the particle's own track over the last seconds (from its birth at most), n segments, oldest first, ending at the origin: `0.2 6 particletrail stroke` is a streak. Call it before rotating or scaling.",
+        "Inside a particles procedure: replace the current path with the particle's own track over the last seconds (from its birth at most), n segments, oldest first, ending at the origin: `0.2 6 particletrail stroke` is a streak. The track is where the particle was on the page, drawn in the space you are in: it stays right after a `rotate` or `scale` inside the procedure.",
     ),
     e(
         "path",
@@ -733,7 +734,7 @@ pub const API: &[ApiEntry] = &[
         "space",
         "use",
         "/library  use  -",
-        "Load one of psanim's libraries, once: /pkstage /pkmotion /pktype /pkdiagram /pkcode /pkchart /pkink /pkfigure. Call it in setup, after `animation`. A library loads the ones it needs. `psanim api --libs` lists them; `psanim api --lib pkmotion` lists one's words.",
+        "Load one of psanim's libraries, once: /pkstage /pkmotion /pktype /pkdiagram /pkcode /pkchart /pkink /pkfigure /pkpixel. Call it in setup, after `animation`. A library loads the ones it needs. `psanim api --libs` lists them; `psanim api --lib pkmotion` lists one's words.",
     ),
     e(
         "story",
@@ -1429,7 +1430,7 @@ pub const API: &[ApiEntry] = &[
         "pktype",
         "credits",
         "sections opts  credits  -",
-        "End credits, rolling upward at a constant rate, on the current scope's clock. sections is an array of entries, each an array that starts with a name: [/heading (Cast)] (or [/heading (THE END) 2.5], larger), [/pair (Director) (Name) (Name2)] (the role right-aligned left of a gutter, its names left-aligned right of it), [/name (Name) ...] (centred, one a line), [/text (a note)], [/space n] (n lines), [/proc { ... } h] (a slot h high: the procedure runs with the origin at its centre, over the column's centre: a logo). opts is a dictionary, all keys optional: /Box [x y w h] it rolls through (the canvas); /Size /HeadingSize /RoleSize /TextSize /Leading /Gutter /HeadingGap (units; sizes follow the box); /HeadingFace /RoleFace /NameFace /TextFace and /HeadingInk /RoleInk /NameInk /TextInk (theme roles or font names and colours); /Speed units a second, or /Duration seconds the roll takes (the speed follows); /Cards [ sections ... ] each held /CardTime seconds (4) before the roll; /Final sections, which the roll stops on, centred, after /FinalGap (half the box's height); /Settle units over which it slows to the stop; /Fade the fraction of the box's height over which lines fade at its top and bottom (0.12); /Snap (true) moves it whole device pixels a frame, so type does not shimmer. The roll starts when the scope's clock does: wrap it in `after` or a scope to place it. Keep the movie /Duration at least `creditsduration`.",
+        "End credits, rolling upward at a constant rate, on the current scope's clock. sections is an array of entries, each an array that starts with a name: [/heading (Cast)] (or [/heading (THE END) 2.5], larger), [/pair (Director) (Name) (Name2)] (the role right-aligned left of a gutter, its names left-aligned right of it), [/name (Name) ...] (centred, one a line), [/text (a note)], [/space n] (n lines), [/proc { ... } h] (a slot h high: the procedure runs with the origin at its centre, over the column's centre: a logo). opts is a dictionary, all keys optional: /Box [x y w h] it rolls through (the canvas); /Size /HeadingSize /RoleSize /TextSize /Leading /Gutter /HeadingGap (units; sizes follow the box); /HeadingFace /RoleFace /NameFace /TextFace and /HeadingInk /RoleInk /NameInk /TextInk (theme roles or font names and colours); /Speed units a second, or /Duration seconds the roll takes (the speed follows); /Cards [ sections ... ] each held /CardTime seconds (4) before the roll; /Final sections, which the roll stops on, centred, after /FinalGap (half the box's height); /Settle units over which it slows to the stop; /Fade the fraction of the box's height over which lines fade at its top and bottom (0.12); /Snap (true) moves it whole device pixels a frame, so type does not shimmer (but not where the roll slows below a pixel a frame, in the /Settle tail, where it glides). The roll starts when the scope's clock does: wrap it in `after` or a scope to place it. Keep the movie /Duration at least `creditsduration`.",
     ),
     e(
         "pktype",
@@ -1784,6 +1785,30 @@ pub const API: &[ApiEntry] = &[
         "blendpose",
         "a b u  blendpose  pose",
         "The pose u of the way from a to b: numbers in between, anything else (the eyes) a's until halfway and b's after. For settling from a dance into rest, or waking.",
+    ),
+    e(
+        "pkpixel",
+        "pixelfont",
+        "rows  pixelfont  font",
+        "A pixel font of 5, 7 or 9 rows, as a dictionary from character code to the character's columns (see `pixelcols`). The 7-row font has capitals, digits, lower case with descenders held to the last row and punctuation; the 5-row font has capitals, digits and punctuation; the 9-row font is the 7-row one with the descenders of g j p q y hanging below the baseline. Build it once, in setup.",
+    ),
+    e(
+        "pkpixel",
+        "pixelcols",
+        "font code  pixelcols  cols",
+        "The columns of one character, left to right, each a bit mask: bit r (value 2^r) is the dot in row r, row 0 at the top. `cols length` is the width. A lower case letter the font lacks is set as its capital, any other character it lacks as a question mark.",
+    ),
+    e(
+        "pkpixel",
+        "pixeltext",
+        "font string  pixeltext  cols",
+        "The columns of a line: each character's columns side by side with one blank column between, none after the last. Light the dots yourself: `cols i get 1 r bitshift and 0 ne`.",
+    ),
+    e(
+        "pkpixel",
+        "pixelpicture",
+        "[ (.#.) (###) ... ]  pixelpicture  cols",
+        "The columns of a picture drawn as an array of row strings, # for a lit dot and anything else dark, top row first. Rows may differ in length; the width is the first row's.",
     ),
     // --- end generated block ---
 ];

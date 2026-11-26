@@ -14,7 +14,7 @@
          [(Lifts) (left of the desk)] ] param /cards exch def
 
 /greeting {
-  weektime 86400 fmod 3600 div
+  weektime clockparts pop pop pop                  % the hour of the day
   dup 12 lt { pop (Good morning) } { 18 lt { (Good afternoon) } { (Good evening) } ifelse } ifelse
 } def
 

@@ -135,6 +135,7 @@ for the common case.
 | `pkchart` | `plotframe`, `plotaxes`, `bars`, `hbars`, `plotline`, `plotmark`, `plotrule`, `dots`, `donut`; for dashboards `stattile`, `dial`, `horizon`, `sparkline`, `heatmap`, `statuslight`, `panel`, `thresholdrole` | pktype |
 | `pkink` | `revealalong`, `revealband`, `around`, `brushstroke`, `boxgradient` | pkstage |
 | `pkfigure` | `squashed`, `limb`, `eye`, `mouth`, `spring`, `dancepose`, `restpose`, `blendpose` | pkstage |
+| `pkpixel` | `pixelfont`, `pixelcols`, `pixeltext`, `pixelpicture` | none |
 
 Libraries are PostScript source compiled into the binary and loaded with
 `/pkmotion use`. They are opt-in so that a movie's namespace holds only
@@ -159,6 +160,16 @@ loudness, so an entry can read the beat from a tempo, an event track or
 a signal. A pose is a plain dictionary of numbers, not an object. The
 lag of an antenna, an ear or a tail is `spring`, a closed form in the
 time since the jolt, so the frames stay pure.
+
+### Why the pixel font is a library
+
+Three catalog entries (the LED matrix, the LED sign clock and the
+dot-matrix printer) each carried a copy of the same 5 by 7 font (#71).
+`pkpixel` is the one place it lives. Like the rest it computes and does
+not draw: `pixelcols` and `pixeltext` return dot columns as bit masks and
+the entry lights them, because what a dot looks like (a glowing LED, an
+ink dot on paper) is the entry's business. The font is a dictionary the
+entry builds once in setup, so the frames stay pure.
 
 ### What is in Rust and what is in PostScript
 
@@ -280,7 +291,18 @@ the particle and the caller's stack; `particleage`, `particleu`,
 way `now` reads the clock. No dictionary is opened around the procedure,
 and no per-particle dictionary is allocated. `particletrail` hands back
 the particle's own recent track as the current path, from the same
-closed form, so streaks and comet tails need no history either.
+closed form, so streaks and comet tails need no history either. The
+prelude records the matrix the procedure starts with (the caller's, moved
+to the particle), and the trail is carried from there into whatever space
+the procedure has made by the time it asks, so a `rotate` or `scale`
+inside the procedure does not bend it.
+
+With `/Period`, a periodic emitter's keys are its slots', the same every
+lap, which is what makes the loop close. A particle whose `/Life` is
+longer than the period is therefore the same particle as the one a period
+older and has its key and its flight; it cannot be both distinct and
+periodic. (Snow that crosses the screen in a short loop is the usual
+case; it is documented, not fixed.)
 
 Rejected: a dictionary per particle passed to the procedure (allocation
 for every particle on every frame, and an invitation to `begin` it);

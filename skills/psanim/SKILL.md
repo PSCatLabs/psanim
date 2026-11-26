@@ -36,8 +36,12 @@ psanim render movie.ps -o movie.mp4    # 5. the film (also .webm, .gif, or a dir
 - `check` is cheap (milliseconds per frame) and catches most mistakes
   before you look at anything: errors with the frame number and a
   backtrace through your own procedures, blank frames, a movie that never
-  moves, abrupt pops, and for a `/Loop true` movie whether the join is
-  as smooth as the steps beside it. Add `--json` for data.
+  moves, cuts, and for a `/Loop true` movie whether the join is
+  as smooth as the steps beside it. Local abrupt changes (something
+  appears or vanishes in one frame) are *notes* by default: look at each
+  with `sheet --frame F,F+1`, fix the ones with no entrance, and declare
+  the intended ones with `/Cuts [t ...]`; `check --all` makes them
+  warnings. Add `--json` for data.
 - `check` samples 16 frames; a single blank frame where one section ends
   and the next has not begun, or an error in a branch taken only at
   t = 31, needs `check --all`.
@@ -149,6 +153,7 @@ is too low: an entrance is three tweens, a diagram is arithmetic. The
 | `pkchart` | `plotframe`, `plotaxes`, `bars`, `hbars`, `plotline`, `donut`; dashboards: `stattile`, `dial`, `horizon`, `sparkline`, `heatmap`, `statuslight` | [explain.md](references/explain.md) |
 | `pkink` | tapered strokes, `revealalong`, `around`, gradients | [ink.md](references/ink.md) |
 | `pkfigure` | a rig for characters that dance: `dancepose` from a beat, `squashed`, `limb`, `eye`, `mouth`, `spring` | [figure.md](references/figure.md) |
+| `pkpixel` | a pixel font for dot-matrix work: `7 pixelfont`, then `pixelcols` and `pixeltext` give a character's or a line's dot columns as bit masks; the LED matrix, LED sign and dot-matrix printer entries share it | [vocabulary-libraries.md](references/vocabulary-libraries.md) |
 
 The way of working they assume: **draw each thing at rest, in a box, in
 theme colours; then say when it arrives and by what motion.** Start from

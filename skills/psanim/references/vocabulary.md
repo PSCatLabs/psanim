@@ -14,7 +14,7 @@ Transitions (for `reel`): cut dissolve dip wipe-left wipe-right wipe-up wipe-dow
 
 `dict  animation  -`
 
-Declare the movie. Put it before anything that takes time or draws (definitions it needs, such as a reel array for `reelduration`, may come first). Keys, all optional: /Size [w h] (canvas units, default [1280 720]), /Duration seconds (5), /FPS (30), /Seed (1), /Background [r g b] or /transparent (black), /Title, /Description, /Loop bool, /Scene /name (scene), /Step /name (step), /StepRate ticks per second (FPS), /Persist bool, /MotionBlur samples, /Shutter 0..1 (0.5).
+Declare the movie. Put it before anything that takes time or draws (definitions it needs, such as a reel array for `reelduration`, may come first). Keys, all optional: /Size [w h] (canvas units, default [1280 720]), /Duration seconds (5), /FPS (30), /Seed (1), /Background [r g b] or /transparent (black), /Title, /Description, /Loop bool, /Cuts [t ...] (seconds where the movie cuts on purpose: `psanim check` does not report an abrupt change there), /Scene /name (scene), /Step /name (step), /StepRate ticks per second (FPS), /Persist bool, /MotionBlur samples, /Shutter 0..1 (0.5).
 
 ## The clock
 
@@ -318,7 +318,7 @@ A series spread evenly across a box, lo at its bottom and hi at its top, clamped
 
 `spec proc  particles  -`
 
-Draw proc once for every particle alive now, with the origin moved to the particle (inside gsave) and the caller's stack; `particleage`, `particleu`, `particlevel`, `particlekey` and the rest read the particle. spec is an emitter dictionary or an array of them, all keys optional: /At [x y] or keyframes [t [x y] /ease t [x y] ...] (a moving emitter; the view's centre), /Area [w h] (scatter births over a box centred on /At), /Rate per second with /From and /To (continuous), /Bursts [t ...] each emitting /Count (50) at once, /Life seconds or [lo hi] (2), /Speed or [lo hi] (100), /Angle degrees (90, up) and /Spread degrees (360), /Shape /random /even (evenly round) /sphere (a 3-D burst seen from the side), /Gravity (downward units/s/s, or [gx gy]), /Drag (per second: speeds settle to (gravity+wind)/drag), /Wind [ax ay] (a steady force), /Gust [ax ay] with /GustFreq (a force that wanders over time, the same for every particle), /Sway [dx dy] with /SwayFreq (each particle's own wandering offset: snow, leaves, confetti), /Inherit (share of a moving emitter's velocity), /Period seconds (continuous emission and noise repeat: give the loop's length in a /Loop movie), /Seed (this emitter's randomness), /Draw proc (draws this emitter's particles instead of proc). A particle's state is computed from its birth and the time alone, so frames render in any order.
+Draw proc once for every particle alive now, with the origin moved to the particle (inside gsave) and the caller's stack; `particleage`, `particleu`, `particlevel`, `particlekey` and the rest read the particle. spec is an emitter dictionary or an array of them, all keys optional: /At [x y] or keyframes [t [x y] /ease t [x y] ...] (a moving emitter; the view's centre), /Area [w h] (scatter births over a box centred on /At), /Rate per second with /From and /To (continuous), /Bursts [t ...] each emitting /Count (50) at once, /Life seconds or [lo hi] (2), /Speed or [lo hi] (100), /Angle degrees (90, up) and /Spread degrees (360), /Shape /random /even (evenly round) /sphere (a 3-D burst seen from the side), /Gravity (downward units/s/s, or [gx gy]), /Drag (per second: speeds settle to (gravity+wind)/drag), /Wind [ax ay] (a steady force), /Gust [ax ay] with /GustFreq (a force that wanders over time, the same for every particle), /Sway [dx dy] with /SwayFreq (each particle's own wandering offset: snow, leaves, confetti), /Inherit (share of a moving emitter's velocity), /Period seconds (continuous emission and noise repeat: give the loop's length in a /Loop movie; with /Life no longer than it every particle has its own key; longer, a particle is the one born a period earlier, same key and flight), /Seed (this emitter's randomness), /Draw proc (draws this emitter's particles instead of proc). A particle's state is computed from its birth and the time alone, so frames render in any order.
 
 ### `particleage`
 
@@ -354,7 +354,7 @@ Inside a particles procedure: the particle's velocity, units a second. `particle
 
 `-  particlekey  n`
 
-Inside a particles procedure: a whole number standing for this particle, the same on every frame: `[particlekey 1] hash01` is its own constant (a size, a colour, a spin).
+Inside a particles procedure: a whole number standing for this particle, the same on every frame: `[particlekey 1] hash01` is its own constant (a size, a colour, a spin). With /Period, keys repeat every period, which is what closes the loop: if /Life is longer than /Period, two live particles can share a key (one is the other, a period older) and fly the same path a period apart.
 
 ### `particleemitter`
 
@@ -372,7 +372,7 @@ Inside a particles procedure: the index in /Bursts of the burst it came from, or
 
 `seconds n  particletrail  -`
 
-Inside a particles procedure: replace the current path with the particle's own track over the last seconds (from its birth at most), n segments, oldest first, ending at the origin: `0.2 6 particletrail stroke` is a streak. Call it before rotating or scaling.
+Inside a particles procedure: replace the current path with the particle's own track over the last seconds (from its birth at most), n segments, oldest first, ending at the origin: `0.2 6 particletrail stroke` is a streak. The track is where the particle was on the page, drawn in the space you are in: it stays right after a `rotate` or `scale` inside the procedure.
 
 ## Paths: measuring, following, drawing on, morphing
 
@@ -782,7 +782,7 @@ Run proc, which draws for a canvas w by h, scaled to fit inside the box and cent
 
 `/library  use  -`
 
-Load one of psanim's libraries, once: /pkstage /pkmotion /pktype /pkdiagram /pkcode /pkchart /pkink /pkfigure. Call it in setup, after `animation`. A library loads the ones it needs. `psanim api --libs` lists them; `psanim api --lib pkmotion` lists one's words.
+Load one of psanim's libraries, once: /pkstage /pkmotion /pktype /pkdiagram /pkcode /pkchart /pkink /pkfigure /pkpixel. Call it in setup, after `animation`. A library loads the ones it needs. `psanim api --libs` lists them; `psanim api --lib pkmotion` lists one's words.
 
 ## Components: movies placed inside movies
 

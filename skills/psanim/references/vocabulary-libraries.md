@@ -474,7 +474,7 @@ Subtitles: show the caption whose time has come, centred at the bottom of the bo
 
 `sections opts  credits  -`
 
-End credits, rolling upward at a constant rate, on the current scope's clock. sections is an array of entries, each an array that starts with a name: [/heading (Cast)] (or [/heading (THE END) 2.5], larger), [/pair (Director) (Name) (Name2)] (the role right-aligned left of a gutter, its names left-aligned right of it), [/name (Name) ...] (centred, one a line), [/text (a note)], [/space n] (n lines), [/proc { ... } h] (a slot h high: the procedure runs with the origin at its centre, over the column's centre: a logo). opts is a dictionary, all keys optional: /Box [x y w h] it rolls through (the canvas); /Size /HeadingSize /RoleSize /TextSize /Leading /Gutter /HeadingGap (units; sizes follow the box); /HeadingFace /RoleFace /NameFace /TextFace and /HeadingInk /RoleInk /NameInk /TextInk (theme roles or font names and colours); /Speed units a second, or /Duration seconds the roll takes (the speed follows); /Cards [ sections ... ] each held /CardTime seconds (4) before the roll; /Final sections, which the roll stops on, centred, after /FinalGap (half the box's height); /Settle units over which it slows to the stop; /Fade the fraction of the box's height over which lines fade at its top and bottom (0.12); /Snap (true) moves it whole device pixels a frame, so type does not shimmer. The roll starts when the scope's clock does: wrap it in `after` or a scope to place it. Keep the movie /Duration at least `creditsduration`.
+End credits, rolling upward at a constant rate, on the current scope's clock. sections is an array of entries, each an array that starts with a name: [/heading (Cast)] (or [/heading (THE END) 2.5], larger), [/pair (Director) (Name) (Name2)] (the role right-aligned left of a gutter, its names left-aligned right of it), [/name (Name) ...] (centred, one a line), [/text (a note)], [/space n] (n lines), [/proc { ... } h] (a slot h high: the procedure runs with the origin at its centre, over the column's centre: a logo). opts is a dictionary, all keys optional: /Box [x y w h] it rolls through (the canvas); /Size /HeadingSize /RoleSize /TextSize /Leading /Gutter /HeadingGap (units; sizes follow the box); /HeadingFace /RoleFace /NameFace /TextFace and /HeadingInk /RoleInk /NameInk /TextInk (theme roles or font names and colours); /Speed units a second, or /Duration seconds the roll takes (the speed follows); /Cards [ sections ... ] each held /CardTime seconds (4) before the roll; /Final sections, which the roll stops on, centred, after /FinalGap (half the box's height); /Settle units over which it slows to the stop; /Fade the fraction of the box's height over which lines fade at its top and bottom (0.12); /Snap (true) moves it whole device pixels a frame, so type does not shimmer (but not where the roll slows below a pixel a frame, in the /Settle tail, where it glides). The roll starts when the scope's clock does: wrap it in `after` or a scope to place it. Keep the movie /Duration at least `creditsduration`.
 
 ### `creditsat`
 
@@ -849,4 +849,32 @@ A pose standing still with the eyes softly shut: asleep, with the same keys as `
 `a b u  blendpose  pose`
 
 The pose u of the way from a to b: numbers in between, anything else (the eyes) a's until halfway and b's after. For settling from a dance into rest, or waking.
+
+## pkpixel: a pixel font for signs and printers
+
+Load with `/pkpixel use`.
+
+### `pixelfont`
+
+`rows  pixelfont  font`
+
+A pixel font of 5, 7 or 9 rows, as a dictionary from character code to the character's columns (see `pixelcols`). The 7-row font has capitals, digits, lower case with descenders held to the last row and punctuation; the 5-row font has capitals, digits and punctuation; the 9-row font is the 7-row one with the descenders of g j p q y hanging below the baseline. Build it once, in setup.
+
+### `pixelcols`
+
+`font code  pixelcols  cols`
+
+The columns of one character, left to right, each a bit mask: bit r (value 2^r) is the dot in row r, row 0 at the top. `cols length` is the width. A lower case letter the font lacks is set as its capital, any other character it lacks as a question mark.
+
+### `pixeltext`
+
+`font string  pixeltext  cols`
+
+The columns of a line: each character's columns side by side with one blank column between, none after the last. Light the dots yourself: `cols i get 1 r bitshift and 0 ne`.
+
+### `pixelpicture`
+
+`[ (.#.) (###) ... ]  pixelpicture  cols`
+
+The columns of a picture drawn as an array of row strings, # for a lit dot and anything else dark, top row first. Rows may differ in length; the width is the first row's.
 

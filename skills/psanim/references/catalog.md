@@ -298,7 +298,7 @@ Many metrics, one row each, folded into bands of colour so a whole fleet fits on
 
 ## `/ledmatrix`: LED matrix
 
-A grid of round LEDs with a pixel font of its own: a scrolling marquee, a ticker, a news sign with entry effects and a clock, or any pattern a procedure computes. Raw mode gives the grid at true size for driving real LEDs.
+A grid of round LEDs with a pixel font: a scrolling marquee, a ticker, a news sign with entry effects and a clock, or any pattern a procedure computes. Raw mode gives the grid at true size for driving real LEDs.
 
 600x108, 3.6 s, loops. `/x /ledmatrix component`, then `/x << /Box [..] >> place`.
 

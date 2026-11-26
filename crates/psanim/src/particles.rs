@@ -122,6 +122,40 @@ pub(crate) struct ParticleSet {
     pub current: Option<usize>,
     pub seed: i64,
     pub t: f64,
+    /// The caller's matrix when `particles` was called: the procedure for a
+    /// particle starts with it moved to the particle, and that is what
+    /// `particletrail`'s offsets are measured in, however the procedure has
+    /// turned or scaled since.
+    pub base: Option<[f64; 6]>,
+}
+
+/// Where `points`, offsets in the space of matrix `base`, are in the space
+/// of matrix `now`. Matrices are `[a b c d e f]`, as PostScript has them:
+/// (x, y) maps to (a x + c y + e, b x + d y + f). A singular `now` leaves
+/// the offsets as they are.
+pub(crate) fn between_spaces(
+    points: Vec<(f64, f64)>,
+    base: [f64; 6],
+    now: [f64; 6],
+) -> Vec<(f64, f64)> {
+    let det = now[0] * now[3] - now[1] * now[2];
+    // The same space (to within the rounding of a matrix product: a thousandth
+    // of a pixel): leave the offsets exactly as they are.
+    let same = base.iter().zip(&now).all(|(b, n)| (b - n).abs() < 1e-3);
+    if same || det.abs() < 1e-12 {
+        return points;
+    }
+    points
+        .into_iter()
+        .map(|(x, y)| {
+            let dx = base[0] * x + base[2] * y + base[4] - now[4];
+            let dy = base[1] * x + base[3] * y + base[5] - now[5];
+            (
+                (now[3] * dx - now[2] * dy) / det,
+                (now[0] * dy - now[1] * dx) / det,
+            )
+        })
+        .collect()
 }
 
 fn num(d: &Value, key: &str, default: f64) -> Result<f64, String> {
@@ -787,6 +821,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             current: None,
             seed,
             t,
+            base: None,
         });
         drop(c);
         i.push_int(n as i64);
@@ -851,8 +886,20 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         i.push_int(current(ctx, "particleburst")?.burst);
         Ok(())
     });
-    // seconds n particletrail -     the particle's track as the current path.
-    reg(interp, ctx, "particletrail", |i, ctx| {
+    // matrix .particlebase -     the caller's space, which the particles' procedures start from.
+    reg(interp, ctx, ".particlebase", |i, ctx| {
+        let m = i.pop_numbers()?;
+        let m: [f64; 6] = m.try_into().map_err(|_| PsError::Rangecheck)?;
+        if let Some(set) = ctx.borrow_mut().particles.last_mut() {
+            set.base = Some(m);
+        }
+        Ok(())
+    });
+    // seconds n matrix .particletrail -     the particle's track as the current
+    // path, in the space of `matrix` (the current one).
+    reg(interp, ctx, ".particletrail", |i, ctx| {
+        let now = i.pop_numbers()?;
+        let now: [f64; 6] = now.try_into().map_err(|_| PsError::Rangecheck)?;
         let n = i.pop_int()?;
         let back = i.pop_f64()?;
         let p = current(ctx, "particletrail")?;
@@ -871,7 +918,14 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let pts = {
             let c = ctx.borrow();
             let set = c.particles.last().expect("current() found a set");
-            trail(set, &p, back, n as usize)
+            let pts = trail(set, &p, back, n as usize);
+            // Where the procedure started: the caller's space moved to the particle.
+            let mut base = set.base.unwrap_or(now);
+            if set.base.is_some() {
+                base[4] += base[0] * p.x + base[2] * p.y;
+                base[5] += base[1] * p.x + base[3] * p.y;
+            }
+            between_spaces(pts, base, now)
         };
         let mut segs = Vec::with_capacity(pts.len());
         for (k, (x, y)) in pts.into_iter().enumerate() {

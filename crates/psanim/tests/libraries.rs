@@ -4,7 +4,7 @@
 use psanim::{Frame, Movie, Options};
 
 const HEAD: &str = "<< /Size [200 120] /Duration 4 /FPS 10 /Background [0 0 0] >> animation
-/pkstage use /pkmotion use /pktype use /pkdiagram use /pkcode use /pkchart use /pkink use /pkfigure use\n";
+/pkstage use /pkmotion use /pktype use /pkdiagram use /pkcode use /pkchart use /pkink use /pkfigure use /pkpixel use\n";
 
 fn load(body: &str) -> Movie {
     Movie::load(&format!("{HEAD}{body}"), &Options::default()).unwrap_or_else(|e| panic!("{e}"))
@@ -646,6 +646,35 @@ fn credits_roll_whole_pixels_so_type_does_not_shimmer() {
         loose_exact < 4,
         "without snapping the type changes shape: {loose_exact}"
     );
+}
+
+#[test]
+fn credits_glide_in_the_settle_tail_instead_of_hopping_a_pixel() {
+    // 73 units a second slowing over 300 units: the last second or so is below a
+    // pixel a frame, where snapping to whole pixels made the roll hold and hop.
+    let names: String = (0..30).map(|i| format!("[/name (Person {i})] ")).collect();
+    let opts = |snap: &str| {
+        format!(
+            "<< /Size 9 /Fade 0 /Speed 73 /Settle 300 /Snap {snap} /Final [ [/heading (END)] ] >>"
+        )
+    };
+    let src = format!(
+        "{}\n/scene {{ [ {names} ] {} credits }} def",
+        HEAD.replace("/Duration 4", "/Duration 20"),
+        opts("true")
+    );
+    let mut m = Movie::load(&src, &Options::default()).unwrap();
+    let end = nums(&eval_at(
+        "",
+        &format!("[ {names} ] {} creditsduration ==", opts("true")),
+        0.0,
+    ))[0];
+    // The tail's last stretch, where it moves less than a pixel a frame, up to the rest.
+    let frames: Vec<Vec<u8>> = (0..8)
+        .map(|k| pixels(&mut m, end - 0.8 + f64::from(k) / 10.0))
+        .collect();
+    let held = frames.windows(2).filter(|w| w[0] == w[1]).count();
+    assert_eq!(held, 0, "the roll held still for {held} frames in its tail");
 }
 
 #[test]
@@ -1402,4 +1431,56 @@ fn an_unknown_emoji_is_a_range_error_not_a_blank() {
     let mut m = load("/scene { /nosuch 10 10 20 emojiat } def");
     let e = m.render_at(0.0).expect_err("an error").to_string();
     assert!(e.contains("rangecheck") || e.contains("emojiat"), "{e}");
+}
+
+// --- pkpixel -------------------------------------------------------------
+
+#[test]
+fn a_pixel_font_gives_the_columns_of_a_character_and_a_line() {
+    // 'I' in the 7-row font is a top bar, a stem and a bottom bar, three columns wide;
+    // bit r of a column is the dot in row r, counting from the top.
+    let out = eval_at("", "7 pixelfont 73 pixelcols { == } forall", 0.0);
+    assert_eq!(nums(&out), vec![65.0, 127.0, 65.0], "{out}");
+    // A line is its characters side by side with one blank column between, none after.
+    let out = eval_at(
+        "",
+        "7 pixelfont (II) pixeltext dup length == { == } forall",
+        0.0,
+    );
+    assert_eq!(
+        nums(&out),
+        vec![7.0, 65.0, 127.0, 65.0, 0.0, 65.0, 127.0, 65.0],
+        "{out}"
+    );
+    let out = eval_at("", "7 pixelfont () pixeltext length ==", 0.0);
+    assert_eq!(nums(&out), vec![0.0], "{out}");
+}
+
+#[test]
+fn a_pixel_font_falls_back_and_the_nine_row_font_has_descenders() {
+    let widths = |font: &str, code: u32| {
+        let out = eval_at(
+            "",
+            &format!("{font} pixelfont {code} pixelcols {{ == }} forall"),
+            0.0,
+        );
+        nums(&out)
+    };
+    // The 5-row font has no lower case: 'a' is 'A', and an unknown character is '?'.
+    assert_eq!(widths("5", 97), widths("5", 65));
+    assert_eq!(widths("7", 1), widths("7", 63));
+    assert_ne!(widths("7", 97), widths("7", 65));
+    // The 9-row 'g' hangs below the baseline: a dot in row 7 or 8 (a bit of 128 or 256).
+    let low = |v: Vec<f64>| v.iter().any(|m| (*m as u32) & 0x180 != 0);
+    assert!(!low(widths("7", 103)));
+    assert!(low(widths("9", 103)));
+}
+
+#[test]
+fn a_pixel_picture_is_its_columns_and_a_bad_font_size_is_an_error() {
+    let out = eval_at("", "[ (#.) (.#) (##) ] pixelpicture { == } forall", 0.0);
+    assert_eq!(nums(&out), vec![5.0, 6.0], "{out}");
+    let mut m = load("/scene { 6 pixelfont pop } def");
+    let e = m.render_at(0.0).expect_err("an error").to_string();
+    assert!(e.contains("rangecheck") || e.contains("pixelfont"), "{e}");
 }

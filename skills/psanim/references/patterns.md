@@ -338,7 +338,14 @@ sparks {
 - **Per-particle constants** come from `[particlekey i] hash01`: a size, a
   hue, a spin rate. They are the same on every frame.
 - **Streaks**: `0.15 6 particletrail stroke` strokes the particle's own
-  track over the last 0.15 s, so fast sparks read as lines.
+  track over the last 0.15 s, so fast sparks read as lines. It is right
+  inside a `rotate` or `scale` too, so spin a spark and keep its tail.
+- **Loops**: `/Period` with a `/Loop` movie makes the stream repeat each
+  lap, so the last frame leads into the first (see below). The price: a
+  particle alive for longer than the period is the one born a period
+  earlier (same key, same flight), so with `/Life` longer than `/Period`
+  two live particles can look alike, a period apart along the same path.
+  `/Life` no longer than `/Period` keeps every key unique.
 - **Several emitters**: give an array of specs; `particleemitter` says
   which one a particle came from, and a spec's own `/Draw { }` draws its
   particles instead of `proc`.

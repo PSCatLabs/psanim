@@ -1809,7 +1809,67 @@ fn strings_written_by_a_scene_survive_the_rollback_and_are_found() {
 }
 
 #[test]
+fn a_literal_string_in_a_procedure_is_found_when_a_scene_writes_into_it() {
+    // A string literal in a procedure body is one string shared by every call:
+    // the write below changes it for every later frame, so it is found, and so
+    // is one in a procedure nested in another. A literal that is only read is not.
+    let mut m = load(
+        "/stamp { (abcd) dup 0 now cvi 65 add put pop } def
+         /outer { { (wxyz) dup 1 90 put pop } exec (read only) pop } def
+         /scene { stamp outer } def",
+    );
+    let before = m.string_snapshot().unwrap().expect("a pure movie");
+    assert!(before.len() >= 3, "{}", before.len());
+    m.render_frame(1).unwrap();
+    let after = m.string_snapshot().unwrap().unwrap();
+    assert_eq!(
+        after.changed_since(&before),
+        vec!["outer{0}{0}", "stamp{0}"]
+    );
+}
+
+#[test]
 fn only_a_pure_movie_has_a_string_snapshot() {
     let mut m = load("/step { } def /scene { } def");
     assert!(m.string_snapshot().unwrap().is_none());
+}
+
+#[test]
+fn a_failing_frame_carries_what_it_printed() {
+    let src = "<< /Size [8 8] /Duration 1 /FPS 4 >> animation
+        /scene { (before the fall) == frame 2 eq { nosuchword } if } def";
+    // Serial and parallel: the error holds frame 2's output.
+    for threads in [1, 4] {
+        let err =
+            psanim::render::render_frames(src, &Options::default(), &[0, 1, 2, 3], threads, |_| {
+                Ok(())
+            })
+            .unwrap_err();
+        assert_eq!(err.kind, "undefined");
+        assert!(
+            err.printed.text.contains("(before the fall)"),
+            "{threads}: {:?}",
+            err.printed
+        );
+        assert_eq!(err.to_json()["printed"], "(before the fall)\n");
+    }
+}
+
+#[test]
+fn setup_output_is_no_frames_whatever_the_thread_count() {
+    let src = "<< /Size [8 8] /Duration 1 /FPS 4 >> animation
+        (from setup) ==
+        /scene { (frame) == } def";
+    let mut outs = Vec::new();
+    for threads in [1, 4] {
+        let mut seen = Vec::new();
+        psanim::render::render_frames(src, &Options::default(), &[0, 1, 2, 3], threads, |f| {
+            seen.push(f.printed.text);
+            Ok(())
+        })
+        .unwrap();
+        outs.push(seen);
+    }
+    assert_eq!(outs[0], outs[1]);
+    assert_eq!(outs[0][0], "(frame)\n");
 }

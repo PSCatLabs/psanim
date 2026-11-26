@@ -238,7 +238,7 @@
     sc-g 2 ge sc-g 5 lt and {
       /accent2 ink (   now = ) sc-g 2 sub 2 fmtfixed strcat show
     } if
-    sc-view { sc-g { 2 5 { demo-len 3 div { demo-ball } timescaled } during } attime } within
+    sc-view { sc-g { 2 5 { 0 0.25 /sine-out tween 2.75 3 /sine-in tween 1 exch sub mul { demo-len 3 div { demo-ball } timescaled } faded } during } attime } within
   } onstage
   [ [0.5 4.0 (translate moves the origin of space: the same drawing, somewhere else.)]
     [4.3 8.6 (A time scope moves the origin of time: inside during, now starts again from 0.)]

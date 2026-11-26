@@ -185,7 +185,7 @@ BY_SOURCE["docs/gallery.md"] = "gallery.html"
 # The library chapters are a visual cookbook: every runnable example in
 # them is rendered and shown, looping, under its code.
 COOKBOOK = {"stage.md", "type.md", "explain.md", "ink.md", "storytelling.md"}
-LIBRARIES = "pkstage pkmotion pktype pkdiagram pkcode pkchart pkink pkfigure".split()
+LIBRARIES = "pkstage pkmotion pktype pkdiagram pkcode pkchart pkink pkfigure pkpixel".split()
 
 def with_films(text, stem):
     """Insert a marker after each runnable fence and render its film."""
@@ -395,29 +395,62 @@ def build_reference():
     toc += [(2, "easings", "Easings"), (2, "transitions", "Transitions")]
     write("reference.html", shell("reference.html", "Vocabulary", "\n".join(body), toc))
 
+# The order of the page: a curated sequence. A piece not named here goes after
+# these, alphabetically, so a new piece shows up at the end until it is placed.
+GALLERY_ORDER = [
+    "orrery", "afterglow", "paper-boat", "tidewater", "murmuration", "taiji", "chalk-proof",
+    "tesseract", "lissajous", "halftone", "neon", "ripple", "letter", "epicycles", "one-frame",
+    "birthday", "canon", "circle-area", "end-credits", "fresh", "heron", "how-it-works",
+    "buildfarm", "morph-clock", "campfire", "ship-it", "salt-roads", "twiddle", "departures",
+    "news-sign", "kayaks", "huzzah", "builds-passed", "signage", "banner",
+]
+
+def signals_of(src):
+    """The recordings a piece names with "% Signals: FILE.csv" lines (beside it)."""
+    return re.findall(r"^% *Signals: *(\S+)", src.read_text(), re.M)
+
+def piece_info(src):
+    """The piece's declaration, from the engine: every piece, rendered or not."""
+    cmd = [str(PSANIM), "info", str(src), "--json"]
+    for f in signals_of(src):
+        cmd += ["--signals", str(src.parent / f)]
+    return json.loads(subprocess.run(cmd, capture_output=True, text=True, check=True).stdout)["movie"]
+
 def gallery_pieces():
     pieces = []
     for d in sorted((ROOT / "gallery").iterdir()):
         src = d / f"{d.name}.ps"
         if not src.exists():
             continue
+        # What was rendered locally (scripts/build_gallery.sh) only adds the film, the timing and the still.
         out = SITE / "gallery" / d.name
-        info = json.loads((out / "info.json").read_text())["movie"] if (out / "info.json").exists() else None
         render = json.loads((out / "render.json").read_text()) if (out / "render.json").exists() else None
         readme = (d / "README.md").read_text() if (d / "README.md").exists() else ""
-        pieces.append({"name": d.name, "src": src, "info": info, "render": render, "readme": readme,
-                       "has_video": (out / f"{d.name}.mp4").exists()})
-    # The order of the page: a curated sequence, then anything new.
-    order = ["orrery", "afterglow", "paper-boat", "tidewater", "murmuration", "taiji", "chalk-proof",
-             "tesseract", "lissajous", "halftone", "neon", "ripple", "letter", "epicycles", "one-frame"]
-    pieces.sort(key=lambda p: order.index(p["name"]) if p["name"] in order else len(order))
+        pieces.append({"name": d.name, "src": src, "info": piece_info(src), "render": render, "readme": readme,
+                       "has_video": (out / f"{d.name}.mp4").exists(), "poster": out / "poster.png"})
+    pieces.sort(key=lambda p: (GALLERY_ORDER.index(p["name"]), "") if p["name"] in GALLERY_ORDER
+                else (len(GALLERY_ORDER), p["name"]))
     return pieces
+
+def duration_text(seconds):
+    """Seconds the way the table shows them: one decimal at most, none if whole ("37.6 s", "41 s")."""
+    return f"{round(seconds, 1):g} s"
+
+def refresh_still(p):
+    """docs/img/gallery/NAME.jpg is kept in git. A poster rendered here, newer than it, replaces it
+    (as scripts/build_gallery.sh would); with no render the committed still stays."""
+    jpg = ROOT / "docs/img/gallery" / f"{p['name']}.jpg"
+    poster = p["poster"]
+    if poster.exists() and (not jpg.exists() or poster.stat().st_mtime > jpg.stat().st_mtime) and shutil.which("ffmpeg"):
+        jpg.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(poster), "-vf", "scale=480:-2", "-q:v", "4", str(jpg)], check=True)
+    return jpg.exists()
 
 def render_cmd(p):
     """The command that renders a piece, with the recording it names in a
     "% Signals: FILE.csv" line, if any."""
     n = p["name"]
-    sigs = re.findall(r"^% *Signals: *(\S+)", p["src"].read_text(), re.M)
+    sigs = signals_of(p["src"])
     return f"psanim render gallery/{n}/{n}.ps" + "".join(f" --signals gallery/{n}/{f}" for f in sigs) + f" -o {n}.mp4"
 
 def build_gallery():
@@ -436,7 +469,7 @@ def build_gallery():
         if info:
             r = p["render"] or {}
             facts = (f'<dl class="facts"><div><dt>Canvas</dt><dd>{info["width"]}×{info["height"]}</dd></div>'
-                     f'<div><dt>Length</dt><dd>{info["duration"]:g} s · {info["frames"]} frames</dd></div>'
+                     f'<div><dt>Length</dt><dd>{duration_text(info["duration"])} · {info["frames"]} frames</dd></div>'
                      f'<div><dt>Mode</dt><dd>{info["mode"]}</dd></div>'
                      + (f'<div><dt>Rendered</dt><dd>{r["total_seconds"]:.1f} s on {r["threads"]} thread{"s" if r["threads"] != 1 else ""}</dd></div>' if r else "")
                      + "</dl>")
@@ -454,9 +487,8 @@ def build_gallery():
 </div>
 <details class="source"><summary>{n}.ps · {lines} lines of PostScript</summary><pre class="code lang-postscript"><code>{source}</code></pre></details>
 </article>""")
-        if info:
-            still = f"![{title}](img/gallery/{n}.jpg)" if (ROOT / "docs/img/gallery" / f"{n}.jpg").exists() else ""
-            md_rows.append(f"| {still} | [{title}](../gallery/{n}/{n}.ps) | {desc} | {info['duration']:g} s, {info['width']}x{info['height']}, {info['mode']} | `{render_cmd(p)}` |")
+        still = f"![{title}](img/gallery/{n}.jpg)" if refresh_still(p) else ""
+        md_rows.append(f"| {still} | [{title}](../gallery/{n}/{n}.ps) | {desc} | {duration_text(info['duration'])}, {info['width']}x{info['height']}, {info['mode']} | `{render_cmd(p)}` |")
     head = ('<section class="page-head"><h1>Gallery</h1><p class="lede">' + str(len(pieces)) + ' films, each one PostScript file. '
             'Every frame you see is the program below it, run by the engine at that moment in time. '
             'Sources, stills and contact sheets are beside each film; the render command reproduces it.</p></section>')

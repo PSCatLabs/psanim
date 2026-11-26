@@ -250,6 +250,10 @@ fn each_library_alone_can_run_its_own_words() {
             "pkfigure",
             "<< /Beat 3 /Since 0.1 /Length 0.5 /Loud 0.9 >> dancepose restpose exch 0.5 blendpose begin Hop Squash Lean { 0 1 ArmR 1 0.2 limb pop pop 0 2 0.3 << /State Eyes >> eye 0 1 0.3 << /Open Mouth >> mouth } squashed end 0.2 1.7 3 spring pop",
         ),
+        (
+            "pkpixel",
+            "7 pixelfont dup 65 pixelcols pop (Hi) pixeltext pop [ (#.) (.#) ] pixelpicture pop 5 pixelfont 9 pixelfont pop pop",
+        ),
     ];
     assert_eq!(uses.len(), psanim::LIBRARIES.len());
     for (lib, body) in uses {

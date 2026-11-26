@@ -569,17 +569,26 @@ fn a_cell_procedure_draws_a_pattern_on_the_grid() {
     assert_eq!(rows, [".#.#", "#.#.", ".#.#"]);
 }
 
-/// Every glyph in the entry is the right height and a rectangle, and the fonts
-/// between them have every printable character.
+/// Every glyph in the pkpixel library is the right height and a rectangle, and
+/// the 5 and 7 row fonts have every printable character (the 9-row table only
+/// replaces the descenders of the 7-row one).
 #[test]
 fn the_pixel_font_is_complete_and_regular() {
-    let src = psanim::catalog::source("ledmatrix").unwrap();
+    let src = psanim::LIBRARIES
+        .iter()
+        .find(|l| l.0 == "pkpixel")
+        .expect("the library")
+        .1;
     let mut fonts: std::collections::BTreeMap<usize, std::collections::BTreeSet<u8>> =
         Default::default();
     let mut height = 0;
     for line in src.lines() {
-        if line.starts_with("/glyphs") {
-            height = if line.starts_with("/glyphs7") { 7 } else { 5 };
+        if line.starts_with("/.pxglyphs") {
+            height = match &line[10..11] {
+                "7" => 7,
+                "5" => 5,
+                _ => 9,
+            };
             continue;
         }
         let Some(rest) = line.strip_prefix("  [ (") else {
@@ -655,6 +664,10 @@ fn the_pixel_font_is_complete_and_regular() {
     assert!(
         fonts[&7].contains(&176) && fonts[&5].contains(&176),
         "no degree sign"
+    );
+    assert!(
+        fonts[&9].is_subset(&fonts[&7]),
+        "a 9-row glyph with no 7-row one to replace"
     );
 }
 

@@ -161,6 +161,29 @@ fn weektime_is_the_playlists_time_inside_it() {
 }
 
 #[test]
+fn a_start_time_is_read_by_parseclock_fractions_and_all() {
+    // The playlist's /Time and a scene's /From and /To use the public time words:
+    // hours as a number or (H:MM[:SS[.fff]]) as text, and a clear error otherwise.
+    let at = |time: &str| {
+        let src = format!(
+            "/clock << /Size [10 10] /Duration 100 /Scene {{ weektime == }} >> component
+            /show [ [10 /clock] ] << /Day /wed /Time {time} >> playlist
+            << /Size [20 10] /Duration 10 >> animation
+            /scene {{ /show << >> place }} def"
+        );
+        let mut m = Movie::load(&src, &Options::default()).unwrap();
+        printed(&mut m, 2.0).lines().next().unwrap().to_string()
+    };
+    // Wednesday is day 2; 2 s into the scene.
+    assert_eq!(at("(1:30:15.5)"), "178217.5");
+    assert_eq!(at("1.5"), "178202.0");
+    assert_eq!(at("(1:30)"), "178202.0");
+    assert_eq!(at("(1.5)"), "178202.0");
+    let e = load_err("/s [ [2 { } << /From (noon) >>] ] << >> playlist");
+    assert!(e.contains("parseclock") && e.contains("noon"), "{e}");
+}
+
+#[test]
 fn the_safe_area_keeps_scenes_inside_and_orientation_filters() {
     let mut m = load(
         "/red << /Size [10 10] /Duration 5 /Scene { 1 0 0 setrgbcolor 0 0 width height rectfill } >> component

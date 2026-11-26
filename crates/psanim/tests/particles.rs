@@ -180,6 +180,49 @@ fn an_emitters_own_draw_and_the_trail() {
 }
 
 #[test]
+fn a_trail_follows_the_track_whatever_the_procedure_has_turned_or_scaled() {
+    // A particle flying right at 100 units/s; its track over the last half second
+    // is 50 units long, behind it. In whatever space the procedure has made, the
+    // trail is where the track was on the page: turning 90 degrees makes it 50
+    // up the page's y in the new space, doubling the scale halves it.
+    let bbox_in = |outer: &str, pre: &str| {
+        let mut m = load(&format!(
+            "/scene {{ {outer} << /Bursts [0] /Count 1 /Speed 100 /Spread 0 /Angle 0 >>
+               {{ {pre} 0.5 5 particletrail pathbbox 4 array astore == }} particles }} def"
+        ));
+        printed(&mut m, 1.0)
+            .trim_matches(|c| c == '[' || c == ']')
+            .split_whitespace()
+            .map(|v| v.parse::<f64>().unwrap())
+            .collect::<Vec<_>>()
+    };
+    let near = |got: Vec<f64>, want: [f64; 4]| {
+        assert!(
+            got.iter().zip(want).all(|(g, w)| (g - w).abs() < 1e-3),
+            "{got:?} is not {want:?}"
+        );
+    };
+    let bbox = |pre: &str| bbox_in("", pre);
+    // The caller's own transformation is the space the particle's units are in.
+    near(
+        bbox_in("100 50 translate 2 2 scale", ""),
+        [-50.0, 0.0, 0.0, 0.0],
+    );
+    near(
+        bbox_in("100 50 translate 2 2 scale", "90 rotate"),
+        [0.0, 0.0, 0.0, 50.0],
+    );
+    near(bbox(""), [-50.0, 0.0, 0.0, 0.0]);
+    near(bbox("90 rotate"), [0.0, 0.0, 0.0, 50.0]);
+    near(bbox("2 2 scale"), [-25.0, 0.0, 0.0, 0.0]);
+    // The origin of the new space is at (10, 20) of the particle's, half as wide in x.
+    near(
+        bbox("10 20 translate 0.5 1 scale"),
+        [-120.0, -20.0, -20.0, -20.0],
+    );
+}
+
+#[test]
 fn reading_a_particle_outside_particles_fails_with_a_hint() {
     let err = match Movie::load(
         &format!("{HEAD}/scene {{ particleage pop }} def"),

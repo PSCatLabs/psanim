@@ -199,6 +199,9 @@ pub struct Meta {
     pub background: Option<[f64; 3]>,
     /// The last frame leads back into the first.
     pub looping: bool,
+    /// Moments (seconds) where the movie cuts on purpose: `check` does not
+    /// report the abrupt change there.
+    pub cuts: Vec<f64>,
     pub mode: Mode,
     /// Simulation ticks per second, for a stateful or persistent movie.
     pub tick_rate: f64,
@@ -263,6 +266,7 @@ impl Meta {
             "seed": self.seed,
             "background": self.background,
             "loop": self.looping,
+            "cuts": self.cuts,
             "mode": self.mode.name(),
             "tick_rate": self.tick_rate,
             "motion_blur": self.motion_blur.map(|m| serde_json::json!({"samples": m.samples, "shutter": m.shutter})),
@@ -361,26 +365,6 @@ fn hash_bytes(bytes: &[u8]) -> u64 {
     h ^ (bytes.len() as u64)
 }
 
-/// Record the strings inside `value`, which sits at `path`.
-fn collect_strings(path: &str, value: &Value, depth: usize, out: &mut BTreeMap<String, u64>) {
-    match value {
-        Value::String(bytes) => {
-            out.insert(path.to_string(), hash_bytes(bytes));
-        }
-        Value::Array(items) if depth < 8 => {
-            for (i, v) in items.iter().enumerate() {
-                collect_strings(&format!("{path}[{i}]"), v, depth + 1, out);
-            }
-        }
-        Value::Dict(entries) if depth < 8 => {
-            for (k, v) in entries {
-                collect_strings(&format!("{path}/{k}"), v, depth + 1, out);
-            }
-        }
-        _ => {}
-    }
-}
-
 /// A loaded animation program. See the [crate docs](crate).
 pub struct Movie {
     interp: Interp,
@@ -430,6 +414,15 @@ pub struct Printed {
     pub text: String,
     /// More was printed than `text` holds.
     pub truncated: bool,
+}
+
+impl Printed {
+    /// Add `more` after this text, keeping the whole within the 64 KB a
+    /// movie keeps: what a render of many frames collects, frame by frame.
+    pub fn append(&mut self, more: &Printed) {
+        push_output(&mut self.text, &mut self.truncated, more.text.as_bytes());
+        self.truncated |= more.truncated;
+    }
 }
 
 /// Add `bytes` to `out`, keeping at most [`MAX_OUTPUT`] bytes and ending
@@ -742,6 +735,7 @@ impl Movie {
                 seed: decl.seed,
                 background: decl.background,
                 looping: decl.looping,
+                cuts: decl.cuts,
                 mode,
                 tick_rate,
                 motion_blur: decl.motion_blur,
@@ -794,6 +788,58 @@ impl Movie {
         self.last_ticks
     }
 
+    /// Record the strings inside `value`, which sits at `path`: those in
+    /// arrays and dictionaries, and the literal strings in the bodies of
+    /// procedures, which are one string object shared by every call (a
+    /// frame that writes into `(    )` in a procedure changes it for good).
+    /// A procedure's elements are written `path{i}`.
+    fn collect_strings(
+        &mut self,
+        path: &str,
+        value: &Value,
+        depth: usize,
+        out: &mut BTreeMap<String, u64>,
+    ) {
+        match value {
+            Value::String(bytes) => {
+                out.insert(path.to_string(), hash_bytes(bytes));
+            }
+            Value::Array(items) if depth < 8 => {
+                for (i, v) in items.iter().enumerate() {
+                    self.collect_strings(&format!("{path}[{i}]"), v, depth + 1, out);
+                }
+            }
+            Value::Dict(entries) if depth < 8 => {
+                for (k, v) in entries {
+                    self.collect_strings(&format!("{path}/{k}"), v, depth + 1, out);
+                }
+            }
+            Value::Other(_) if depth < 8 => {
+                // An operator, a file or the like has no body: only an array
+                // object (a procedure) does, and `aload` opens it.
+                if self.interp.push_value(value).is_err() {
+                    return;
+                }
+                let body = self.exec(
+                    Phase::Setup,
+                    "dup type dup /arraytype eq exch /packedarraytype eq or \
+                     { [ exch aload pop ] } { pop null } ifelse",
+                );
+                let items = match (body, self.interp.pop_value()) {
+                    (Ok(()), Ok(Value::Array(items))) => items,
+                    _ => {
+                        self.interp.clear_operands();
+                        return;
+                    }
+                };
+                for (i, v) in items.iter().enumerate() {
+                    self.collect_strings(&format!("{path}{{{i}}}"), v, depth + 1, out);
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// Fingerprint the strings reachable from userdict, after rolling a
     /// pure movie back to its setup checkpoint (so what a frame defined is
     /// gone and what it wrote into a string is not). `None` for a stateful
@@ -817,12 +863,8 @@ impl Movie {
         let mut snap = StringSnapshot::default();
         for key in keys.as_array().unwrap_or(&[]) {
             let Some(name) = key.as_text() else { continue };
-            match self.interp.lookup(name) {
-                Some(Value::Other(_)) | None => {
-                    // A procedure, an operator, or a value too large to
-                    // copy out. Only the last matters, and it is rare.
-                }
-                Some(v) => collect_strings(name, &v, 0, &mut snap.strings),
+            if let Some(v) = self.interp.lookup(name) {
+                self.collect_strings(name, &v, 0, &mut snap.strings);
             }
         }
         Ok(Some(snap))
@@ -869,6 +911,35 @@ impl Movie {
     }
 
     fn render(&mut self, index: u64, time: f64) -> Result<Frame<'_>, Error> {
+        let from_accum = match self.draw(index, time) {
+            Ok(a) => a,
+            Err(mut e) => {
+                // What the frame printed before it failed is often the
+                // clue: the error carries a copy (the movie keeps it too).
+                e.printed = Printed {
+                    text: self.output.clone(),
+                    truncated: self.output_truncated,
+                };
+                return Err(e);
+            }
+        };
+        let (width, height) = self.interp.canvas_size();
+        Ok(Frame {
+            index,
+            time,
+            width,
+            height,
+            premultiplied: if from_accum {
+                &self.blurred
+            } else {
+                self.interp.canvas_premultiplied_rgba8()
+            },
+        })
+    }
+
+    /// Draw frame `index` at `time` onto the canvas; true when the frame
+    /// is the motion-blur accumulation rather than the canvas.
+    fn draw(&mut self, index: u64, time: f64) -> Result<bool, Error> {
         let phase = Phase::Frame { index, time };
         self.last_steps = 0;
         self.last_ticks = 0;
@@ -945,18 +1016,7 @@ impl Movie {
                 }
             }
         }
-        let (width, height) = self.interp.canvas_size();
-        Ok(Frame {
-            index,
-            time,
-            width,
-            height,
-            premultiplied: if from_accum {
-                &self.blurred
-            } else {
-                self.interp.canvas_premultiplied_rgba8()
-            },
-        })
+        Ok(from_accum)
     }
 
     fn begin(&mut self, running: Running, frame: i64, t: f64, dt: f64) {
@@ -1377,6 +1437,7 @@ struct Declaration {
     seed: i64,
     background: Option<[f64; 3]>,
     looping: bool,
+    cuts: Vec<f64>,
     scene: String,
     step: Option<String>,
     step_declared: bool,
@@ -1394,6 +1455,7 @@ const DECLARATION_KEYS: &[&str] = &[
     "Title",
     "Description",
     "Loop",
+    "Cuts",
     "Scene",
     "Step",
     "StepRate",
@@ -1422,6 +1484,7 @@ impl Declaration {
             seed: 1,
             background: Some([0.0, 0.0, 0.0]),
             looping: false,
+            cuts: Vec::new(),
             scene: "scene".into(),
             step: Some("step".into()),
             step_declared: false,
@@ -1489,6 +1552,14 @@ impl Declaration {
                     );
                 }
                 "Loop" => d.looping = v.as_bool().ok_or_else(|| bad("Loop", "true or false"))?,
+                "Cuts" => {
+                    d.cuts = v
+                        .as_numbers()
+                        .filter(|c| c.iter().all(|t| t.is_finite() && *t >= 0.0))
+                        .ok_or_else(|| {
+                            bad("Cuts", "an array of times in seconds, like [4 12.5]")
+                        })?;
+                }
                 "Persist" => {
                     d.persist = v.as_bool().ok_or_else(|| bad("Persist", "true or false"))?
                 }
