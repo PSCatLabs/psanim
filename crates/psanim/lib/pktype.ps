@@ -511,7 +511,7 @@ end
 } bind def
 /.runw {                 % run -> width
   dup type /arraytype ne { .runbasew } {
-  dup .rungroup? { runwidth } {
+  dup .rungroup? { .runsw } {
     4 dict begin
       /rn-r exch def /rn-k rn-r 0 get def
       rn-k /as eq { rn-r 2 get .runw } {
@@ -526,7 +526,7 @@ end
 } bind def
 /.rundraw {              % run -     at the current point; advances it
   dup type /arraytype ne { .runbase } {
-  dup .rungroup? { showruns } {
+  dup .rungroup? { .runsdraw } {
     8 dict begin
       /rn-r exch def /rn-k rn-r 0 get def /rn-f currentfont def /rn-s fontsize def
       currentpoint /rn-y exch def /rn-x exch def
@@ -551,13 +551,52 @@ end
   } ifelse } ifelse
 } bind def
 % runs runwidth -> w
-/runwidth { 0 exch { .runw add } forall } bind def
+% x .runbaseok? -> bool     a string, or the name of a sign in `symbols`
+/.runbaseok? {
+  dup type /stringtype eq { pop true } {
+    dup type /nametype eq { symbols exch known } { pop false } ifelse
+  } ifelse
+} bind def
+% run .runok? -> bool       a run of one of the forms above, all the way down
+/.runok? {
+  dup type /arraytype ne { .runbaseok? } {
+    dup .rungroup? { .runsok? } {
+      dup 0 get
+      dup /as eq { pop dup length 3 ge { 2 get .runok? } { pop false } ifelse } {
+      dup /it eq { pop dup length 2 ge { 1 get type /stringtype eq } { pop false } ifelse } {
+      /frac eq
+        { dup length 3 ge { dup 1 get .runbaseok? exch 2 get .runbaseok? and } { pop false } ifelse }
+        { dup length 2 ge { 1 get .runbaseok? } { pop false } ifelse } ifelse
+      } ifelse } ifelse
+    } ifelse
+  } ifelse
+} bind def
+% runs .runsok? -> bool
+/.runsok? {
+  dup type /arraytype eq { true exch { .runok? and } forall } { pop false } ifelse
+} bind def
+% The public words check their operands before opening a dictionary, so an
+% error leaves the dictionary stack as it was and the operands on the stack.
+% runs i .runiok? -> runs i bool
+/.runiok? {
+  2 copy exch dup .runsok? {
+    length 1 index type /integertype eq { 1 index gt exch 0 ge and } { pop pop false } ifelse
+  } { pop pop false } ifelse
+} bind def
+/.runsw { 0 exch { .runw add } forall } bind def
+/.runsdraw { { .rundraw } forall } bind def
+/runwidth { dup .runsok? not { /runwidth errordict /typecheck get exec } if .runsw } bind def
 % runs showruns -          show the whole line at the current point
-/showruns { { .rundraw } forall } bind def
+/showruns {
+  dup .runsok? not { /showruns errordict /typecheck get exec } if
+  currentpoint pop pop .runsdraw
+} bind def
 % runs i showrun -         show only run i, at the place it has in the line
 %                          that starts at the current point: bring an
 %                          equation in term by term, each with its own motion
 /showrun {
+  .runiok? not { /showrun errordict /rangecheck get exec } if
+  currentpoint pop pop
   4 dict begin
     /sr-i exch def /sr-r exch def
     currentpoint /sr-y exch def /sr-x exch def
@@ -568,6 +607,8 @@ end
 % runs i runbox -> box     the box of run i in the line that starts at the
 %                          current point, for a marker, a ring or a note
 /runbox {
+  .runiok? not { /runbox errordict /rangecheck get exec } if
+  currentpoint pop pop
   4 dict begin
     /sr-i exch def /sr-r exch def
     currentpoint /sr-y exch def /sr-x exch def
@@ -617,7 +658,6 @@ end
           { /mr-px mr-px mr-t .runw add def } ifelse
       } if
     } forall
-    mr-pf not { /morphruns errordict /rangecheck get exec } if
     mr-cx mr-px sub
   } ifelse } ifelse } ifelse
 } bind def
@@ -710,7 +750,42 @@ end
 %   current point); /Arc 1 (0: move in
 %   straight lines); /Rise 0.25 (ems a term drifts as it fades). The current
 %   point is kept.
+% lines s opts|null .mrerr -> errorname|null     what is wrong with the operands
+%   (the dictionary is closed before it returns: nothing in it can fail)
+/.mrerr {
+  12 dict begin
+    /me-o exch def /me-s exch def /me-L exch def
+    /me-e null def
+    me-s type dup /integertype ne exch /realtype ne and { /me-e /typecheck def } if
+    me-L type /arraytype ne { /me-e /typecheck def } {
+      me-L { .runsok? not { /me-e /typecheck def } if } forall
+    } ifelse
+    /me-al /left def
+    me-o type /nametype eq { /me-al me-o def } if
+    me-o type /dicttype eq {
+      me-o /Align known { /me-al me-o /Align get def } if
+      [ /Arc /Rise ] {
+        dup me-o exch known {
+          me-o exch get type dup /integertype ne exch /realtype ne and { /me-e /typecheck def } if
+        } { pop } ifelse
+      } forall
+    } if
+    me-o type dup /nulltype ne 1 index /nametype ne and exch /dicttype ne and { /me-e /typecheck def } if
+    me-e null eq me-al type /nametype ne and { /me-e /typecheck def } if
+    me-e null eq {
+      false [ /left /center /right /l /c /r ] { me-al eq or } forall not {
+        % a tag: every line must have it
+        me-L { false exch { .runkey me-al eq or } forall not { /me-e /rangecheck def } if } forall
+      } if
+    } if
+    me-e
+  end
+} bind def
 /morphruns {
+  dup type /nametype eq 1 index type /dicttype eq or
+    { 3 copy .mrerr } { 2 copy null .mrerr } ifelse
+  dup null eq { pop } { /morphruns exch errordict exch get exec } ifelse
+  currentpoint pop pop
   40 dict begin
     dup type /nametype eq { 1 dict dup /Align 4 -1 roll put } if
     dup type /dicttype eq { /mr-o exch def } { /mr-o 0 dict def } ifelse

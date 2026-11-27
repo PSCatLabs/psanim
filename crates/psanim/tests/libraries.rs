@@ -1137,6 +1137,11 @@ fn morphruns_is_exactly_the_first_line_at_0_and_the_second_at_1() {
         at("[ (1) ( ) /minus [/it (x)] ] showruns"),
         "a group is set as its runs"
     );
+    assert_eq!(
+        at("[ (1) ( ) /minus [/it (x)] ] showruns"),
+        at("[ [ (1) [ ( ) /minus [/it (x)] ] ] [ (2) ] ] 0 morphruns"),
+        "and morphruns sets a group as its runs"
+    );
     assert_eq!(a, at("[A B] 0 morphruns"), "at 0, the first line");
     assert_eq!(b, at("[A B] 1 morphruns"), "at 1, the second line");
     assert_ne!(a, at("[A B] 0.5 morphruns"));
@@ -1157,6 +1162,160 @@ fn morphruns_is_exactly_the_first_line_at_0_and_the_second_at_1() {
         0.0,
     ));
     assert_eq!(n, [60.0, 20.0]);
+}
+
+#[test]
+fn morphruns_is_showruns_at_its_ends_for_every_run_form_and_alignment() {
+    // Superscripts, subscripts, fractions (with a sign in them), a group, a
+    // tag around a group, a tag inside a group, and a tag both lines share.
+    let lines = "/F1 [ [/as /eq (=)] [ /minus [/frac (1) /pi] ] [/sup (2)] ] def
+                 /F2 [ [/it (x)] [/sup (2)] [/sub (k)] [/frac (1) (2)] [/as /eq ( = )]
+                       [/as /g [ [/as /h [/it (y)]] [/sup /pi] ]] ] def";
+    // Each line, and where `/eq` alignment puts its start: the anchor less
+    // the runs before the tag and half the tag.
+    let cases = [
+        ("F1", "[ (=) ] runwidth 2 div"),
+        (
+            "F2",
+            "[ [/it (x)] [/sup (2)] [/sub (k)] [/frac (1) (2)] ] runwidth ( = ) stringwidth pop 2 div add",
+        ),
+    ];
+    for (l, before) in cases {
+        let m = if l == "F1" { "F2" } else { "F1" };
+        let at = |x: u32, body: &str| pixels(&mut eq_movie(lines, x, body), 0.0);
+        // Left: the current point is the start.
+        let plain = at(20, &format!("{l} showruns"));
+        assert!(plain.iter().any(|c| *c > 8), "{l} shows");
+        assert_eq!(
+            plain,
+            at(20, &format!("[{l} {m}] 0 morphruns")),
+            "{l} left, at 0"
+        );
+        assert_eq!(
+            plain,
+            at(20, &format!("[{m} {l}] 1 morphruns")),
+            "{l} left, at 1"
+        );
+        assert_eq!(
+            plain,
+            at(20, &format!("[{l} {l}] 0.5 /l morphruns")),
+            "{l} to itself"
+        );
+        // Right: the current point is the end.
+        let right = at(190, &format!("{l} dup runwidth neg 0 rmoveto showruns"));
+        assert_eq!(
+            right,
+            at(190, &format!("[{l} {m}] 0 /right morphruns")),
+            "{l} right, at 0"
+        );
+        assert_eq!(
+            right,
+            at(190, &format!("[{m} {l}] 1 /r morphruns")),
+            "{l} right, at 1"
+        );
+        // Centre.
+        let centre = at(
+            100,
+            &format!("{l} dup runwidth 2 div neg 0 rmoveto showruns"),
+        );
+        assert_eq!(
+            centre,
+            at(100, &format!("[{l} {m}] 0 /center morphruns")),
+            "{l} centre"
+        );
+        assert_eq!(
+            centre,
+            at(100, &format!("[{m} {l}] 1 /c morphruns")),
+            "{l} centre, at 1"
+        );
+        // A tag: its centre on the current point.
+        let pinned = at(100, &format!("{before} neg 0 rmoveto {l} showruns"));
+        assert_ne!(pinned, centre, "{l}: the pin is not the centre");
+        for body in [
+            format!("[{l} {l}] 0 /eq morphruns"),
+            format!("[{l} {l}] 1 /eq morphruns"),
+            format!("[{l} {m}] 0 /eq morphruns"),
+            format!("[{m} {l}] 1 << /Align /eq >> morphruns"),
+        ] {
+            assert_eq!(pinned, at(100, &body), "{body}");
+        }
+    }
+}
+
+#[test]
+fn the_run_words_check_their_operands_and_leave_no_dictionary_open() {
+    // Each call fails; afterwards the dictionary stack is as it was and the
+    // operand stack holds what it held plus the word's own operands.
+    let cases = [
+        ("[ [(a)] [(b)] ] 0.5 /eq morphruns", 3, "a tag no line has"),
+        (
+            "[ [(a) [/as /eq (=)]] [(b)] ] 1 << /Align /eq >> morphruns",
+            3,
+            "a tag one line lacks",
+        ),
+        (
+            "[ [(a)] ] (x) morphruns",
+            2,
+            "a progress that is not a number",
+        ),
+        (
+            "[ [(a)] ] 0 << /Arc (x) >> morphruns",
+            3,
+            "an option that is not a number",
+        ),
+        (
+            "[ [(a)] ] 0 3 morphruns",
+            3,
+            "an alignment that is not a name",
+        ),
+        ("[ (a) ] 0 morphruns", 2, "a line that is not a run list"),
+        ("[ [ [/as /k] ] ] 0 morphruns", 2, "a tag with no run"),
+        ("[ [/as /k] ] showruns", 1, "a tag with no run"),
+        (
+            "[ [ (a) /nosuch ] ] showruns",
+            1,
+            "an unknown sign in a group",
+        ),
+        (
+            "[ [/frac (1)] ] runwidth",
+            1,
+            "a fraction with no denominator",
+        ),
+        ("[ [/sup] ] showruns", 1, "a superscript with nothing in it"),
+        ("[ (a) ] 3 showrun", 2, "an index past the end"),
+        ("[ (a) ] -1 runbox", 2, "a negative index"),
+        (
+            "[ (a) ] 0 showrun newpath [ (a) ] showruns",
+            1,
+            "no current point",
+        ),
+        (
+            "newpath [ [(a)] [(b)] ] 0.5 morphruns",
+            2,
+            "no current point",
+        ),
+    ];
+    for (call, operands, why) in cases {
+        let out = eval_at(
+            "",
+            &format!(
+                "{EQ_FONT} 20 60 moveto countdictstack == mark (S) {{ {call} }} stopped == counttomark == countdictstack == cleartomark"
+            ),
+            0.0,
+        );
+        let lines: Vec<&str> = out.lines().collect();
+        assert_eq!(lines.len(), 4, "{why}: {out}");
+        assert_eq!(lines[1], "true", "{why}: `{call}` fails");
+        assert_eq!(
+            lines[0], lines[3],
+            "{why}: the dictionary stack is as it was"
+        );
+        assert_eq!(
+            lines[2],
+            (1 + operands).to_string(),
+            "{why}: only the operands of `{call}` are left"
+        );
+    }
 }
 
 #[test]
