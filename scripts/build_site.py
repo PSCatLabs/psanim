@@ -274,8 +274,9 @@ def shell(page, title, body, toc=None, wide=False):
     nav = []
     top = [("index.html", "psanim"), ("gallery.html", "Gallery"), ("guide/writing.html", "Guide"),
            ("reference.html", "Reference"), ("playground.html", "Playground"), ("guide/architecture.html", "Design")]
+    mark = f'<img src="{rel(page, "img/logo-mark.png")}" alt="" width="28" height="28">'
     top_html = "".join(
-        f'<a class="{"brand" if i == 0 else ""}{" here" if out == page else ""}" href="{rel(page, out)}">{name}</a>'
+        f'<a class="{"brand" if i == 0 else ""}{" here" if out == page else ""}" href="{rel(page, out)}">{mark if i == 0 else ""}{name}</a>'
         for i, (out, name) in enumerate(top))
     side = ""
     if not wide:
@@ -299,6 +300,9 @@ def shell(page, title, body, toc=None, wide=False):
 <title>{html.escape(title)} · psanim</title>
 <meta name="description" content="psanim: programmable animation in PostScript, on the PSCat graphics engine.">
 <link rel="stylesheet" href="{rel(page, 'site.css')}">
+<link rel="icon" href="{rel(page, 'img/favicon.ico')}" sizes="32x32">
+<link rel="icon" href="{rel(page, 'img/favicon-32.png')}" type="image/png">
+<link rel="apple-touch-icon" href="{rel(page, 'img/favicon-180.png')}">
 </head>
 <body>
 <header class="top"><nav>{top_html}</nav></header>
@@ -403,6 +407,7 @@ GALLERY_ORDER = [
     "birthday", "canon", "circle-area", "end-credits", "fresh", "heron", "how-it-works",
     "buildfarm", "morph-clock", "campfire", "ship-it", "salt-roads", "twiddle", "departures",
     "news-sign", "kayaks", "huzzah", "builds-passed", "signage", "banner", "turing", "automata",
+    "logo",
 ]
 
 def signals_of(src):
@@ -567,8 +572,14 @@ def build_eval():
         body.append("</div>")
     write("eval/index.html", shell("eval/index.html", "Model comparison", "\n".join(body), wide=True))
 
+# The logo's outputs, rendered from gallery/logo/logo.ps by scripts/build_logo.sh and kept in git.
+LOGO_ASSETS = ["logo-mark.png", "logo.gif", "favicon.ico", "favicon-32.png", "favicon-180.png", "social-preview.png"]
+
 def copy_assets():
     shutil.copy(ROOT / "scripts/site/site.css", SITE / "site.css")
+    (SITE / "img").mkdir(exist_ok=True)
+    for f in LOGO_ASSETS:
+        shutil.copy(ROOT / "docs/img" / f, SITE / "img" / f)
     shutil.copy(ROOT / "scripts/site/source-viewer.js", SITE / "source-viewer.js")
     for f in ["psanim.js", "player.js", "widget.js", "widget-core.js", "widget-worker.js", "widgets.html"]:
         shutil.copy(ROOT / "web" / f, SITE / f)

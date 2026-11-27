@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="docs/img/logo-light.gif">
+    <img src="docs/img/logo.gif" width="456" alt="The psanim logo: an amber tile with an ease-in-out curve cut through it and a coral point at its end, beside the word psanim. The point runs back to the start and plays forward again, redrawing the curve.">
+  </picture>
+</p>
+
 # psanim
 
 Programmable animation in PostScript, on the [PSCat](https://github.com/PSCatLabs/pscat) graphics engine.
@@ -94,7 +101,7 @@ when it arrives and by what motion.
   animated diffs, charts that move between datasets, brush marks. About
   105 more words in seven libraries, written in PostScript.
   [Design](docs/vocabulary-design.md), [evaluation](docs/vocabulary-evaluation.md).
-- **A gallery** (`gallery/`): thirty-five films, each one file. [Index, with stills](docs/gallery.md).
+- **A gallery** (`gallery/`): thirty-eight films, each one file. [Index, with stills](docs/gallery.md).
 - **An agent skill** (`skills/psanim/`) and a documentation site built
   from the same text.
 - **A host API for PSCat**, on a feature branch: what PSCat needed to
