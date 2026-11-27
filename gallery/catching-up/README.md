@@ -33,13 +33,13 @@ value rounded to two decimals.
 
 | On screen | From the data |
 |---|---|
-| 54 years in 1960; 84.3 in 2023; "thirty more" | South Korea 53.76 in 1960, 84.33 in 2023: 30.6 more |
+| 54 years in 1960; 84 and 84.3 in 2023; 30.6 more | South Korea 53.76 in 1960, 84.33 in 2023: 30.57 more |
 | 16.1 years behind | United States 69.83 minus South Korea 53.76, in 1960 |
 | level in 2001, 76.9 in both | 76.9195 and 76.9194: the only year within 0.05 |
 | ahead every year since | South Korea above the United States in every year 2002 to 2023 (checked by `data.py`) |
 | 5.0 years ahead in 2023 | 84.33 against 79.30 |
 | within half a year of Japan | Japan 84.71 in 2023, 0.38 more |
-| the Great Leap Forward famine | China's 33.4 in 1960; Our World in Data's description of the series names this famine as one of the large post-war drops |
+| China, 1960 and 1961: 33.4 and 40.2 (famine), below the axis | China's values for those years. The y axis starts at 50 so the story is not squeezed into the top of the chart; China's line enters from below it in 1962 (51.0), and the note says what is cut. Our World in Data's description of the series names this famine, the Great Leap Forward, as one of the large post-war drops |
 
 While the tracer moves it reads the line between data points; its
 reading is the value at the year it writes, so a year is never shown

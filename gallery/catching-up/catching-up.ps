@@ -77,8 +77,8 @@ page 0.17 splity /body exch def /head exch def
   /o /open beat def  /d /draw beat def  /n /names beat def
   /l /level beat def  /t /today beat def  /c /close beat def
 
-  plot [first-year last-year] [30 90] plotframe
-  << /Draw o 1 add o 2.6 add /cubic-out tween /YTicks 6 /XValues [ 1960 1970 1980 1990 2000 2010 2020 ]
+  plot [first-year last-year] [50 90] plotframe
+  << /Draw o 1 add o 2.6 add /cubic-out tween /YTicks 4 /XValues [ 1960 1970 1980 1990 2000 2010 2020 ]
      /Size 20 >> plotaxes
 
   % the years sweep across, every line drawn up to the same year
@@ -89,9 +89,10 @@ page 0.17 splity /body exch def /head exch def
   % 0.4 years apart, the US and China 1.3: serieslabels keeps them clear
   series names << /X year /Size 22 >> serieslabels
 
-  % China's first point is the end of a famine
-  d 1.0 add /fade { /body 18 face /muted ink
-    1961 36 plotpoint moveto (the Great Leap Forward famine) show } enters
+  % China's first two years are below the axis: said, not hidden
+  d 1.0 add /fade { /body 17 face /muted ink
+    1966.5 51.1 plotpoint moveto (China, 1960 and 1961: 33.4 and 40.2 \(famine\), below the axis) show
+    1 setlinewidth newpath 1966.2 51.5 plotpoint moveto 1961.3 50.2 plotpoint lineto stroke } enters
 
   % 1960: sixteen years behind
   l 0.2 add t /fade /fade {
@@ -118,7 +119,7 @@ page 0.17 splity /body exch def /head exch def
                    (life expectancy at birth, in years: the four lines are named where they end) hl
   l 0.4 add t      (Level with the United States in 2001)
                    (76.9 years in both, and South Korea ahead every year since) hl
-  t 0.4 add c 60 add (Today: 84 years, thirty more than in 1960)
+  t 0.4 add c 60 add (Today: 84 years, 30.6 more than in 1960)
                    (5.0 years ahead of the United States in 2023, within half a year of Japan) hl
 
   % where the numbers come from

@@ -10,6 +10,7 @@ From 1950 OWID takes these values from the UN World Population Prospects
 (2024). Period life expectancy at birth, in years.
 """
 import csv
+import re
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -40,6 +41,37 @@ ahead_before = [y for y in years if y < 2001 and kor[y] >= usa[y]]
 print(f"  years before 2001 with Korea level or ahead: {ahead_before or 'none'}")
 print(f"  Japan 2023: {jpn[2023]:.1f}   China 1960: {chn[1960]:.1f}   China 2023: {chn[2023]:.1f}")
 print(f"  ends 2023, Japan - Korea: {jpn[2023] - kor[2023]:.2f}   US - China: {usa[2023] - chn[2023]:.2f}")
+
+# Every statement the film makes, checked: this fails if the CSV and the film disagree.
+claims = [
+    ("In 1960 ... could expect 54 years", round(kor[1960]) == 54),
+    ("16.1 years behind (1960)", f"{usa[1960] - kor[1960]:.1f}" == "16.1"),
+    ("Level with the United States in 2001", level == [2001]),
+    ("76.9 years in both", f"{kor[2001]:.1f}" == f"{usa[2001]:.1f}" == "76.9"),
+    ("South Korea ahead every year since", not behind_after),
+    ("Today: 84 years", round(kor[2023]) == 84),
+    ("30.6 more than in 1960", f"{kor[2023] - kor[1960]:.1f}" == "30.6"),
+    ("5.0 years ahead of the United States in 2023", f"{kor[2023] - usa[2023]:.1f}" == "5.0"),
+    ("within half a year of Japan", 0 < jpn[2023] - kor[2023] < 0.5),
+    ("China, 1960 and 1961: 33.4 and 40.2 (famine), below the axis (50)",
+     f"{chn[1960]:.1f}" == "33.4" and f"{chn[1961]:.1f}" == "40.2"
+     and chn[1960] < 50 and chn[1961] < 50
+     and all(series[n][y] >= 50 for n in ORDER for y in years if (n, y) not in {("China", 1960), ("China", 1961)})),
+    ("the y axis reaches 90", all(series[n][y] <= 90 for n in ORDER for y in years)),
+]
+failed = [c for c, ok in claims if not ok]
+assert not failed, f"the film says what the data does not: {failed}"
+
+# And the data block in the film is this CSV, rounded to two decimals.
+film = (HERE / "catching-up.ps").read_text()
+for name in ORDER:
+    m = re.search(r"/" + PS_NAME[name] + r" \[([^\]]*)\] def", film)
+    assert m, f"no /{PS_NAME[name]} in the film"
+    got = [float(v) for v in m.group(1).split()]
+    want = [round(series[name][y], 2) for y in years]
+    assert got == want, f"/{PS_NAME[name]} in the film differs from the CSV"
+print(f"  checked: {len(claims)} statements, and the film's data block")
+
 print()
 print("% ---- data: printed by data.py (life expectancy at birth, years, 1960..2023) ----")
 for name in ORDER:
