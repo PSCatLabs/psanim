@@ -96,6 +96,7 @@ The time on a scrolling LED sign: a 5 by 7 dot matrix with unlit dots faintly vi
 
 | Param | Default | Meaning |
 |---|---|---|
+| /Font | `7` | 7: psanim's 7-row pixel font; /Diode7: PSCat's LED face (its digits and colon) |
 | /Gap | `12` | blank dot columns between one showing of the time and the next |
 | /Panel | `1` | 1 paints the sign's dark housing, 0 leaves the dots on whatever is there |
 | /Scroll | `14` | dot columns per second the text moves left (0 holds it still) |

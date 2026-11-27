@@ -110,3 +110,18 @@ fn every_theme_draws_every_clock() {
         }
     }
 }
+
+#[test]
+fn the_led_sign_clock_can_be_set_in_the_diode7_face() {
+    let src = psanim::catalog::source("clock-ledsign").unwrap();
+    let mut opts = Options::default();
+    opts.params.insert("Scroll".into(), Param::Number(0.0));
+    opts.params.insert("Start".into(), Param::parse("10:00:00"));
+    let mut own = Movie::load(src, &opts).unwrap();
+    opts.params
+        .insert("Font".into(), Param::Text("Diode7".into()));
+    let mut face = Movie::load(src, &opts).unwrap();
+    // Diode7's zero is slashed and pkpixel's is not: the same time, other dots.
+    assert_ne!(at(&mut own, 0.0), at(&mut face, 0.0));
+    assert_eq!(at(&mut face, 0.0), at(&mut face, 0.0));
+}

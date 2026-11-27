@@ -35,8 +35,11 @@ three integrations:
 - The labels are plain `show` in `/Diode5`, loaded once in setup by
   `pixelface`, because `findfont` does not load these faces by name.
 
-The film names the faces once, at the top; psanim keeps their files in one
-table at the top of `crates/psanim/lib/pkpixel.ps`.
+The film names the faces once, at the top, and the labels print those
+names (`32 string cvs`), so a renamed face renames its label; the
+terminal and the report describe the devices without naming faces. psanim
+keeps the faces' files in one table at the top of
+`crates/psanim/lib/pkpixel.ps`.
 
 **Time comes from one session plan.** The printer starts at the mark where
 `status > lpt1` is entered; the session then waits as long as the printer

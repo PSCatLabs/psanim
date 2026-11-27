@@ -300,6 +300,7 @@ The catalog's devices take a face:
   dots wide on the same 9 pins; `/Quality` still chooses one pass or two.
 - `/ledmatrix` with `/Font /Diode7` or `/Diode5` lights the face's lamps;
   Diode7's lower case needs a grid 8 rows high for its descenders.
+- `/clock-ledsign` with `/Font /Diode7` shows the time in Diode7's digits.
 
 The face names live in one table at the top of pkpixel, so a rename
 touches one line there. The gallery's *Boot Sequence* uses all three
