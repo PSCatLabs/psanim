@@ -277,7 +277,7 @@
       } if
     } for
     % the faces are printable ASCII: lend them psanim's degree sign
-    9 pixelfont dup 176 known { 176 get 1 index exch 176 exch put } { pop } ifelse
+    .pxglyphs7 { dup 0 get 0 get 176 eq { 1 .pxrowscols 1 index exch 176 exch put } { pop } ifelse } forall
     dup /Rows nrows put
   end
 } bind def

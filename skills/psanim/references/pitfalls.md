@@ -225,6 +225,12 @@ The text fonts are ASCII. A string containing "π", "→", "≠" or any other
 non-ASCII character shows a blank for it, with no error. Use pktype's
 `/pi sym`, `/arrow sym`, `/neq sym`, or a run list (`showruns`).
 
+## My pixel font came out as Helvetica
+
+`/Phosphor findfont` (or Pinpoint, Diode) before the face's file has run
+gives a substitute font, with no error. Load it with `/Phosphor
+pixelface` (pkpixel) in setup; see [type.md](type.md#pixel-faces-terminals-printers-led-signs).
+
 ## Single blank frames between sections
 
 One section fades out by its end and the next fades in from its start,
