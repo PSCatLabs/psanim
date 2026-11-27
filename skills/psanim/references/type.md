@@ -261,9 +261,13 @@ PSCat has four pixel fonts, six faces, for things made of dots:
 
 `findfont` does not load them by name: asked for one that was never
 loaded, it quietly gives you Helvetica. `/name pixelface` (pkpixel) is
-`findfont` that loads the face's file first. Call it once in setup and
-keep the font; in the scene only scale it. Size a face at a whole multiple
-of the number in the table and its pixels land on whole units.
+`findfont` that loads the face's file first, and fails on a name that is
+neither a face nor a font that exists. **Call it in setup and keep the
+font**; in the scene only scale it. A frame starts from the VM as setup
+left it, so a face first asked for in the scene is loaded again every
+frame (about 30 ms a frame for Phosphor, measured on a busy machine, against
+0.2 ms when it was loaded in setup). Size a face at a whole multiple of the
+number in the table and its pixels land on whole units.
 
 ```postscript
 %!PS
@@ -283,14 +287,22 @@ of the number in the table and its pixels land on whole units.
 They are printable ASCII only: no block cursor (draw a rectangle), no
 degree sign, no box drawing. The colour is the current colour, so a face
 glows under `glowing` like any drawing. The dials (dot shape, dot size,
-scan gap) are set by making a variant once, in setup, with the
-`pf-variant` the font files define:
-`/Phosphor pixelface pop /Phosphor-Round /Phosphor << /DotShape /round /DotSize 0.85 >> pf-variant`.
+scan gap, in-between dots) are set by making a variant once, in setup:
+`/Phosphor-Round /Phosphor << /DotShape /round /DotSize 0.85 >> pixelvariant`,
+then `/Phosphor-Round findfont` in the scene.
+
+`pixelface` runs a face's file in a dictionary of its own. Running the file
+yourself, `(lib/fonts/phosphor.ps) run`, defines its names in your current
+dictionary and overwrites any of yours with the same name. They are
+`pf-variant` (all four files) and `PhosphorDict`, `PinpointDict`,
+`Diode7Dict`, `Diode5Dict` (one each); with `pixelface` you need not avoid
+them.
 
 Each face's bitmaps are also data. `/Diode7 pixelfont` gives them as the
 column masks `pixelcols` and `pixeltext` read (the same shape as pkpixel's
 own 5, 7 and 9 row fonts, `font /Rows get` the height), for lighting LEDs
-or striking pins one at a time.
+or striking pins one at a time. Build it in setup too: in a scene the face is
+loaded and converted every frame (about 15 ms).
 
 The catalog's devices take a face:
 
