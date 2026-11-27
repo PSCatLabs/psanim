@@ -422,6 +422,11 @@ still above (an aligned derivation). As a dictionary: `<< /Align /center
 goes, so terms that cross do not overprint) and `/Rise` is how far, in
 ems, a leaving term rises and an arriving one comes up from.
 
+A tagged term that crosses a term held still passes through it: in the
+example the `+ 6` slides across the equals sign. Where that reads badly,
+leave the term untagged in one of the two lines, and it fades out on one
+side while its negative fades in on the other.
+
 Matching is by term, so split a line where you want things to move
 separately: `( + 6)` moves as one, `( + ) (6)` as two. To mark a term
 of a line while it holds, move to where the line starts and use

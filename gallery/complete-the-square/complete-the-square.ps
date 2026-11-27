@@ -2,8 +2,9 @@
 % Poster: 33
 % Complete the Square: x squared plus 6x plus 5 is zero, solved
 % Seven lines, each becoming the next with `morphruns`: terms that carry
-% over slide to their new places, a term that crosses the equals sign
-% changes its sign on the way, and terms that cancel leave. Beside the
+% over slide to their new places, terms that change in place cross-fade,
+% and a term taken from one side leaves it as its negative arrives on the
+% other. Beside the
 % algebra, x squared plus 6x is drawn as a square and two strips, and the
 % 9 that is added is the corner that completes it.
 %
@@ -13,8 +14,11 @@
 %     placed twice.
 %   - Every line tags its first equals sign /eq, and `/Align /eq` keeps
 %     it still, so the steps read as an aligned derivation.
-%   - Tags pair terms that look different: + 5 on the left becomes -5 on
-%     the right, +3 becomes -3, 4 becomes +-2.
+%   - Tags pair terms that look different, which then cross-fade as they
+%     move: -5 + 9 becomes 4, 4 becomes +-2, -3 becomes -1. A term that
+%     changes sides is deliberately not tagged: + 5 fades out on the left
+%     while -5 fades in on the right, since a term sliding across the
+%     still equals sign would pass straight through it.
 %   - The figure's corner fills with the same number that drives the
 %     equation, so the 9 arrives in both at once.
 << /Size [1280 720] /Duration 36 /FPS 30
@@ -27,12 +31,12 @@
 /X [/it (x)] def
 /EQ [/as /eq ( = )] def
 /lines [
-  [ X [/sup (2)] ( + 6) X [/as /five ( + 5)] EQ (0) ]
+  [ X [/sup (2)] ( + 6) X ( + 5) EQ (0) ]
   [ X [/sup (2)] ( + 6) X EQ [/as /five [/minus (5)]] ]
   [ X [/sup (2)] ( + 6) X ( + 9) EQ [/as /five [/minus (5)]] ( + 9) ]
   [ (\() X ( + 3) (\)) [/sup (2)] EQ [/as /five (4)] ]
-  [ X [/as /three ( + 3)] EQ [/as /five [/pm (2)]] ]
-  [ X EQ [/as /three [/minus (3)]] [/as /five [( ) /pm ( 2)]] ]
+  [ X ( + 3) EQ [/as /five [/pm ( 2)]] ]
+  [ X EQ [/as /three [/minus (3)]] ( ) [/as /five [/pm ( 2)]] ]
   [ X EQ [/as /three [/minus (1)]] (,     ) X ( = ) [/minus (5)] ]
 ] def
 % what each line says, set under it while it holds
