@@ -1,0 +1,204 @@
+%!PS
+% Hello, world: a greeting in many scripts, and an honest note on where the
+% fonts stop. Every string in this file is UTF-8, written as it reads:
+% accents, Greek, Cyrillic, flags, skin tones and joined emoji sequences,
+% all through `face`, whose fonts read UTF-8 and fall back on PSCat's faces
+% and its Twemoji colour emoji. The greetings arrive glyph by glyph with
+% `kinetic`, which steps by whole characters, so a flag or an accented
+% letter is never split. Korean, Japanese and Thai have no face yet: the
+% film names them instead of drawing empty boxes where their letters go.
+% Emoji graphics by Twemoji (Twitter, Inc and other contributors), CC BY 4.0.
+% Poster: 9.45
+[ /hello 3.5  /greet 15.5  /chorus 4  /notyet 5.5  /close 3.5 ] storyboard
+<< /Size [1280 720] /Duration storylength /FPS 30 /Background [0.07 0.06 0.11]
+   /Title (Hello, world)
+   /Description (Hello, world in a dozen languages and scripts, letter by letter, with colour emoji: flags, five skin tones, joined sequences. Then the scripts PSCat cannot draw yet, named rather than drawn as empty boxes.)
+>> animation
+
+/pktype use
+
+% ---- what can be edited ------------------------------------------------------------------
+<< /bg [0.07 0.06 0.11] /surface [0.13 0.11 0.19] /line [0.42 0.38 0.52]
+   /fg [0.98 0.95 0.90] /muted [0.70 0.66 0.76]
+   /accent [1.0 0.72 0.30] /accent2 [0.45 0.80 1.0] /accent3 [0.98 0.50 0.62]
+   /title /Helvetica-Bold /display /Helvetica-Bold /body /Helvetica /serif /Times-Italic >> usetheme
+% greeting, language (in itself), flag
+/greetings [
+  [ (¡Hola!)    (Español)        (🇪🇸) ]
+  [ (Bonjour)   (Français)       (🇫🇷) ]
+  [ (Olá)       (Português)      (🇧🇷) ]
+  [ (Привіт)    (Українська)     (🇺🇦) ]
+  [ (Γειά σου)  (Ελληνικά)       (🇬🇷) ]
+  [ (Merhaba)   (Türkçe)         (🇹🇷) ]
+  [ (Cześć)     (Polski)         (🇵🇱) ]
+  [ (Xin chào)  (Tiếng Việt)     (🇻🇳) ]
+  [ (Habari)    (Kiswahili)      (🇰🇪) ]
+  [ (Kia ora)   (Te reo Māori)   (🇳🇿) ]
+  [ (Sawubona)  (isiZulu)        (🇿🇦) ]
+  [ (Hallå)     (Svenska)        (🇸🇪) ]
+] def
+/hands [ (👋🏻) (👋🏼) (👋🏽) (👋🏾) (👋🏿) ] def
+/joined [ (👩🏽‍💻) (🧑🏿‍🚀) (👨‍👩‍👧) (🏳️‍🌈) (🧑🏻‍🎨) ] def
+% the scripts with no face yet: name, a greeting in Latin letters
+/missing [ [ (Korean) (annyeonghaseyo) ] [ (Japanese) (konnichiwa) ] [ (Thai) (sawasdee) ] ] def
+/lead 0.3 def                                            % before the first greeting
+/per /greet beatspan exch sub lead 2 mul sub greetings length div def   % seconds per greeting
+/overlap 0 def                                           % seconds each stays into the next one's
+
+% ---- places, in vmin ---------------------------------------------------------------------
+/page   canvasbox 6 vmin inset def
+/centre page 0.06 0.40 0.88 0.22 subbox def     % the title, while it is the film
+/head   page 0.20 0.86 0.60 0.12 subbox def     % the title, once it is the heading
+/word   page 0.05 0.40 0.90 0.26 subbox def     % a greeting
+/lang   page 0.05 0.27 0.90 0.09 subbox def     % its language
+/lower  page 0 0.02 1 0.10 subbox def           % a footnote
+/cards  page 0.04 0.30 0.92 0.32 subbox 3 4 vmin cols def
+/notehead page 0 0.67 1 0.09 subbox def        % the heading over them
+/ending page 0.06 0.50 0.88 0.22 subbox def     % the title at the close
+/world  page 0 0.12 1 0.34 subbox def           % the world under it
+/handrow  page 0.12 0.48 0.76 0.24 subbox 5 3 vmin cols def
+/joinrow  page 0.16 0.20 0.68 0.18 subbox 5 3 vmin cols def
+
+% ---- things at rest ----------------------------------------------------------------------
+/hello (Hello, world) def
+/globes [ (🌍) (🌎) (🌏) ] def
+% alpha box globe -> the world turning: the three globe emoji in turn, each
+% dissolving into the next (set the size first)
+/globe {
+  4 dict begin /gl-b exch def /gl-a exch def
+    /gl-p now 0.5 div def /gl-k gl-p floor cvi def
+    /gl-f gl-p gl-k sub 0.55 sub 0.45 div 0 1 clamp def
+    gl-a {
+      globes gl-k 3 mod get gl-b /c showin
+      gsave gl-f setalpha globes gl-k 1 add 3 mod get gl-b /c showin grestore
+    } faded
+  end
+} def
+% box -> the title's size in it: Hello, world and a wave after it
+/titlesize { (Hello, world 👋) exch /display fitface fontsize } def
+% u -> where the title is: the centre, moving up to the heading as u goes 0..1
+/titlebox { centre head between } def
+% (s) box w -> the string centred in the box with room for w more after it;
+% leaves the current point where the string starts
+/placewith {
+  3 dict begin /pw-w exch def /pw-b exch def /pw-s exch def
+  pw-b aload pop pop pop exch pw-b 2 get pw-s stringwidth pop pw-w add sub 2 div add exch
+  pw-b 3 get fontsize 0.72 mul sub 2 div add moveto
+  end
+} def
+% size angle -> a waving hand at the current point, turned about its wrist
+/wave {
+  2 dict begin /wv-a exch def /wv-s exch def
+  gsave currentpoint translate wv-s 0.75 mul wv-s 0.05 mul translate wv-a rotate
+    wv-s 0.75 mul neg wv-s 0.05 mul neg moveto (👋) show
+  grestore
+  end
+} def
+% - wavingangle -> degrees: three quick waves after it arrives, then a sway
+/wavingangle { now 2.5 mul 360 mul sin 18 mul 1 0.6 2.4 /sine-inout tween sub mul now 0.8 mul 360 mul sin 4 mul add } def
+% box size -> the title at that box and size, with its wave
+/titleat {
+  2 dict begin /ta-s exch def /ta-b exch def
+    /display ta-s face /fg ink
+    hello ta-b ( 👋) stringwidth pop placewith
+    hello show ( ) show
+    ta-s wavingangle wave
+  end
+} def
+% a dashed card for a script with no face: its name and a greeting in Latin letters
+/emptycard {   % [ (name) (greeting) ] box
+  2 dict begin /ec-b exch def /ec-m exch def
+    gsave /surface ink ec-b 2 vmin roundpath fill grestore
+    gsave /line ink 0.35 vmin setlinewidth [1.6 vmin 1.1 vmin] 0 setdash ec-b 2 vmin roundpath stroke grestore
+    /title 6 vmin face /fg ink ec-m 0 get ec-b 0.1 0.52 0.8 0.3 subbox /c showin
+    /serif 4.2 vmin face /muted ink ec-m 1 get ec-b 0.1 0.2 0.8 0.2 subbox /c showin
+  end
+} def
+
+% ---- the film ----------------------------------------------------------------------------
+/scene {
+  ground
+  % a faint world turning behind everything: the three globe emoji in turn
+  /body 58 vmin face 0.07 canvasbox globe
+
+  % 1. Hello, world: letter by letter, then the wave
+  /hello {
+    /display centre titlesize face /fg ink
+    hello centre ( 👋) stringwidth pop placewith
+    hello /glyphs 0.07 /mask-up kinetic
+    hello centre ( 👋) stringwidth pop placewith hello stringwidth pop ( ) stringwidth pop add 0 rmoveto
+    0.95 [/pop 0.45] { fontsize wavingangle wave } enters
+    /body 4.4 vmin face /muted ink
+    1.7 [/rise 0.5] { (in UTF-8, as it is written) lower /c showin } enters
+  } inbeat
+
+  % the title moves up to be the heading, then comes back for the close
+  /greet {
+    0 0.8 /cubic-inout tween titlebox dup titlesize titleat
+  } inbeat
+  /chorus { 1 titlebox dup titlesize titleat } inbeat
+  /notyet { 1 titlebox dup titlesize titleat } inbeat
+
+  % 2. the greetings, one after another, each with its language and flag
+  /greet {
+    0 1 greetings length 1 sub {
+      /gi exch def
+      gi per mul lead add  gi 1 add per mul lead add overlap add  {
+        greetings gi get aload pop /gflag exch def /glang exch def /gword exch def
+        [/fade 0.22] {
+          gword word /display fitface
+          /display fontsize 15 vmin min face /fg ink
+          gword word /c placetext gword /glyphs 0.03 [/mask-up 0.28] kinetic
+          /body 6 vmin face /accent ink
+          0.25 [/rise 0.35] { glang (  ) strcat gflag strcat lang /c showin } enters
+        } leaving
+      } during
+    } for
+    % how far along: a dot per greeting
+    0 1 greetings length 1 sub { /di exch def
+      di per mul lead add now le { /accent } { /line } ifelse ink
+      width 2 div  di greetings length 1 sub 2 div sub 2.4 vmin mul add
+      lower 1 get lower 3 get 2 div add  0.6 vmin disc
+    } for
+  } inbeat
+
+  % 3. one wave in five skin tones, and sequences that join into one picture
+  /chorus {
+    [/fade 0.3] {
+      handrow 0.12 { /hi exch def /hb exch def
+        [/pop 0.4] { /body 12 vmin face hands hi get hb /c showin } entering
+      } cascade
+      joinrow 0.12 { /ji exch def /jb exch def
+        0.8 [/rise 0.4] { /body 9 vmin face joined ji get jb /c showin } enters
+      } cascade
+      /body 4.2 vmin face /muted ink
+      1.6 [/rise 0.5] { (skin tones, flags and joined sequences, each drawn as one) lower /c showin } enters
+    } leaving
+  } inbeat
+
+  % 4. where the fonts stop: named, not drawn as empty boxes
+  /notyet {
+    [/fade 0.3] {
+      /title 6.5 vmin face /accent3 ink
+      [/rise 0.4] { (Not drawn yet) notehead /c showin } entering
+      cards 0.18 { /ci exch def /cb exch def
+        0.4 [/pop 0.4] { missing ci get cb emptycard } enters
+      } cascade
+      /body 3.8 vmin face /muted ink
+      1.4 [/rise 0.5] {
+        (PSCat has no face for these scripts yet, nor for Chinese, Arabic or Hindi.) page 0 0.17 1 0.06 subbox /c showin
+        (Their letters would draw as empty boxes, so this film names them instead.) page 0 0.10 1 0.06 subbox /c showin
+      } enters
+    } leaving
+  } inbeat
+
+  % 5. back to the start, with the world under it
+  /close {
+    0 0.9 /cubic-inout tween head ending between dup titlesize titleat
+    0.5 [/pop 0.5] {
+      /body 24 vmin face 1 world globe
+    } enters
+    /body 2.8 vmin face /muted ink
+    1.0 [/fade 0.6] { (Emoji graphics by Twemoji, CC BY 4.0) lower /c showin } enters
+  } inbeat
+} def
