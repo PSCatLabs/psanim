@@ -1,0 +1,61 @@
+# Build the site (docs, reference, playground) and render every gallery
+# film, then publish it on GitHub Pages. On a pull request it builds and
+# renders without publishing, so a film that stops rendering is caught.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Rust, with the wasm target
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Build the CLI
+        run: cargo build --release -p psanim-cli
+      - name: Build the browser engine
+        run: scripts/build_wasm.sh
+      - name: Render the gallery
+        run: NOGIF=1 scripts/build_gallery.sh
+      - name: Build the site
+        run: python3 scripts/build_site.py
+      - name: Size
+        run: |
+          du -sh site
+          find site -size +95M -exec ls -lh {} \;
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
