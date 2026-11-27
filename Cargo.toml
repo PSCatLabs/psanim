@@ -9,9 +9,10 @@ license = "MIT OR Apache-2.0"
 rust-version = "1.88"
 
 [workspace.dependencies]
-# Local development dependency on the PSCat feature branch
-# `feature/psanim-library-api` (see docs/pscat-integration.md).
-pscat = { path = "../pscat-psanim-api", default-features = false }
+# PSCat's 0.8.0 development branch; Cargo.lock pins the revision
+# (see docs/pscat-integration.md for how to move it or build against a
+# local checkout).
+pscat = { git = "https://github.com/PSCatLabs/pscat", branch = "feature/0.8.0", default-features = false }
 
 [profile.release]
 opt-level = 3

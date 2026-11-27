@@ -218,7 +218,8 @@ dependencies = [
 
 [[package]]
 name = "pscat"
-version = "0.7.0-rc.5"
+version = "0.7.1"
+source = "git+https://github.com/PSCatLabs/pscat?branch=feature%2F0.8.0#d385971a1eae16268172e01f0769094ed869f46a"
 dependencies = [
  "flate2",
  "libc",
