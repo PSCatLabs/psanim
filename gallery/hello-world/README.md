@@ -55,7 +55,9 @@ left to right, because it does no bidi.
   title to whichever box it is in, so the move up is a single `between`.
 - **The turning world** is the three globe emoji (🌍 🌎 🌏), each
   dissolving into the next inside `faded`: once very faint behind
-  everything, and once in full colour at the close.
+  everything, and once in full colour at the close. In the last second
+  the world stops turning and the hand comes to rest, so the film ends
+  on a still picture.
 - The wave is a `👋` turned about its wrist: three quick waves as it
   arrives, settling into a slow sway.
 - `check --all` flags two one-tile "abrupt changes", at 0.7 s and 5.1 s.

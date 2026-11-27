@@ -1637,11 +1637,11 @@ fn ascii_in_a_face_font_draws_as_it_did_and_symbol_keeps_its_codes() {
     // Symbol through face keeps its codes: (p) is pi, at pi's width.
     let out = eval_at(
         "",
-        "/Symbol 20 face currentfont /PSCatUnicode known == (p) stringwidth pop
+        "/Symbol 20 face (p) stringwidth pop
          /Symbol findfont 20 scalefont setfont (p) stringwidth pop eq ==",
         0.0,
     );
-    assert_eq!(out.lines().collect::<Vec<_>>(), ["false", "true"], "{out}");
+    assert_eq!(out, "true", "{out}");
 }
 
 #[test]

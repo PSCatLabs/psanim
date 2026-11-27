@@ -63,10 +63,10 @@
 /hello (Hello, world) def
 /globes [ (🌍) (🌎) (🌏) ] def
 % alpha box globe -> the world turning: the three globe emoji in turn, each
-% dissolving into the next (set the size first)
+% dissolving into the next (set the size first), on the clock `gt`
 /globe {
   4 dict begin /gl-b exch def /gl-a exch def
-    /gl-p now 0.5 div def /gl-k gl-p floor cvi def
+    /gl-p gt 0.5 div def /gl-k gl-p floor cvi def
     /gl-f gl-p gl-k sub 0.55 sub 0.45 div 0 1 clamp def
     gl-a {
       globes gl-k 3 mod get gl-b /c showin
@@ -95,7 +95,7 @@
   end
 } def
 % - wavingangle -> degrees: three quick waves after it arrives, then a sway
-/wavingangle { now 2.5 mul 360 mul sin 18 mul 1 0.6 2.4 /sine-inout tween sub mul now 0.8 mul 360 mul sin 4 mul add } def
+/wavingangle { now 2.5 mul 360 mul sin 18 mul 1 0.6 2.4 /sine-inout tween sub mul now 0.8 mul 360 mul sin 4 mul add calm mul } def
 % box size -> the title at that box and size, with its wave
 /titleat {
   2 dict begin /ta-s exch def /ta-b exch def
@@ -117,6 +117,9 @@
 
 % ---- the film ----------------------------------------------------------------------------
 /scene {
+  % the last second is still: the world stops turning, the hand settles
+  /gt now duration 1 sub min def
+  /calm 1 duration 1.8 sub duration 1 sub /sine-inout tween sub def
   ground
   % a faint world turning behind everything: the three globe emoji in turn
   /body 58 vmin face 0.07 canvasbox globe
@@ -198,7 +201,7 @@
     0.5 [/pop 0.5] {
       /body 24 vmin face 1 world globe
     } enters
-    /body 2.8 vmin face /muted ink
+    /body 3 vmin face /muted ink
     1.0 [/fade 0.6] { (Emoji graphics by Twemoji, CC BY 4.0) lower /c showin } enters
   } inbeat
 } def

@@ -203,14 +203,15 @@
 %   Symbol, ZapfDingbats, Type 3 fonts and a font that already says which it
 %   reads are returned as they are. The one place psanim names PSCat's key.
 /.utf8font {             % font -> font     (a dict of our own, as scalefont makes)
-  dup /PSCatUnicode known not {
-    dup /FontType known { dup /FontType get dup 1 eq exch 42 eq or } { false } ifelse {
-      dup /Encoding known {
-        dup /Encoding get dup type /arraytype eq { 65 get /A eq } { pop false } ifelse
+  /PSCatUnicode                                % font key
+  1 index 1 index known not {
+    1 index /FontType known { 1 index /FontType get dup 1 eq exch 42 eq or } { false } ifelse {
+      1 index /Encoding known {
+        1 index /Encoding get dup type /arraytype eq { 65 get /A eq } { pop false } ifelse
       } { true } ifelse
-      { dup /PSCatUnicode true put } if
-    } if
-  } if
+      { 1 index exch true put } { pop } ifelse
+    } { pop } ifelse
+  } { pop } ifelse
 } bind def
 /unicodefont { 1 scalefont .utf8font } bind def
 % str offs i .charpre -> (prefix)    the characters before character i
