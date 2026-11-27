@@ -103,15 +103,12 @@ when it arrives and by what motion.
 
 ## Build
 
-psanim builds against a PSCat feature branch checked out beside it.
+psanim builds against PSCat's `feature/0.8.0` branch, which Cargo
+fetches; `Cargo.lock` pins the revision.
 
 ```sh
-# 1. PSCat's feature branch, checked out beside this repository
-git clone -b feature/psanim-library-api https://github.com/PSCatLabs/pscat ../pscat-psanim-api
-
-# 2. psanim
 cargo build --release                # target/release/psanim
-cargo test  --release                # about 140 tests; renders thousands of frames
+cargo test  --release                # about 400 tests; renders thousands of frames
 
 # 3. optional
 scripts/build_wasm.sh                # web/psanim.wasm (needs: rustup target add wasm32-unknown-unknown)

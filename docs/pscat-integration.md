@@ -9,26 +9,21 @@ PSCat to grow, and how the two repositories are built together.
 | | |
 |---|---|
 | PSCat repository | https://github.com/PSCatLabs/pscat |
-| Upstream base | `feature/0.7.1` at `72a2c4e` (the active development branch; `main` was 64 commits behind it on 2026-11-23) |
-| Feature branch | `feature/psanim-library-api` (pushed; draft PR [#1410](https://github.com/PSCatLabs/pscat/pull/1410), issue [#1403](https://github.com/PSCatLabs/pscat/issues/1403); not merged) |
-| Tested revision | `7a9e024` |
-| PSCat version | 0.7.0-rc.5 |
-| Local checkout | a git worktree at `../pscat-psanim-api`, beside this repository |
+| Branch | `feature/0.8.0`, PSCat's development branch for 0.8.0 (not released) |
+| Pinned revision | `d385971`, recorded in `Cargo.lock` |
+| PSCat version | 0.7.1 (the branch has not bumped it yet) |
 
-The existing checkout (`pscat_gpu`, on `main`) was left untouched; the
-feature branch lives in its own worktree, with its Cargo `target/` linked
-by PSCat's `scripts/worktree_target.sh` as that repository's conventions
-require.
+The host API psanim needs was developed on `feature/psanim-library-api`
+(PR [#1410](https://github.com/PSCatLabs/pscat/pull/1410), issue
+[#1403](https://github.com/PSCatLabs/pscat/issues/1403)) and merged into
+0.7.1; `feature/0.8.0` carries it forward.
 
 ## Building both together
 
-```sh
-# once: the PSCat feature branch, beside this repository
-git clone -b feature/psanim-library-api https://github.com/PSCatLabs/pscat ../pscat-psanim-api
-#   (or, from an existing PSCat clone: git fetch origin && git worktree add ../pscat-psanim-api feature/psanim-library-api)
+Nothing to check out: Cargo fetches PSCat.
 
-# then, in psanim
-cargo build --release          # builds pscat from ../pscat-psanim-api as a path dependency
+```sh
+cargo build --release
 cargo test  --release
 ```
 
@@ -36,7 +31,18 @@ The dependency is declared once, in the workspace `Cargo.toml`:
 
 ```toml
 [workspace.dependencies]
-pscat = { path = "../pscat-psanim-api", default-features = false }
+pscat = { git = "https://github.com/PSCatLabs/pscat", branch = "feature/0.8.0", default-features = false }
+```
+
+`Cargo.lock` pins the revision, so a build is reproducible. To move to
+the branch's current head, run `cargo update pscat`, then the tests, and
+update the table above.
+
+To build against a local PSCat checkout (to try a change in both at
+once) without editing the manifest:
+
+```sh
+cargo test --release --config 'paths=["/path/to/pscat"]'
 ```
 
 `default-features = false` leaves out PSCat's window (winit, softbuffer):

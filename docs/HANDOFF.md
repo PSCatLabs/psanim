@@ -43,11 +43,11 @@ Working and tested on macOS (Apple silicon):
   (character rigs). `<psanim-widget>` runs a movie live in a page
   (`docs/widgets.md`). Each piece of this was built on its own branch and
   merged in `integration-0.2`; the merge commits say what met what.
-- PSCat branch `feature/psanim-library-api` in `../pscat-psanim-api`:
-  on top of `feature/0.7.1` @ `72a2c4e`. Full PSCat suite green (3688
-  passed). **Pushed, with a draft PR (PSCatLabs/pscat#1410, issue
-  #1403); not reviewed, not merged.** `notes/1403-psanim-library-api.md`
-  in that branch is the write-up.
+- PSCat: a git dependency on `feature/0.8.0`, pinned at `d385971` by
+  `Cargo.lock`. The host API (PSCatLabs/pscat#1410) is merged there.
+  psanim uses none of 0.8.0's additions yet; PSCatLabs/pscat#1488 lists
+  them (line numbers in errors, the UTF-8 check, Unicode text, pixel
+  fonts).
 
 ## Decisions worth knowing before changing things
 
