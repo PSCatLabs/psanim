@@ -25,14 +25,36 @@ skins. It comes to rest where the loop began.
 - **One file, every form.** `--param form=` chooses `lockup` (the
   default: mark and word), `mark` (512 square), `icon` (the tile edge to
   edge, for favicons) or `social` (1280x640, with a line under the word);
-  `--param ground=` chooses `dark`, `light` or `transparent`. Both are
-  read before `animation`, so they set the canvas and the background.
+  `--param ground=` chooses `dark` (the site's ground), `light` (white),
+  `github` (GitHub's dark page, #0d1117) or `transparent`. Both are read
+  before `animation`, so they set the canvas and the background, and a
+  value not in the list stops the movie with an error that names the
+  allowed ones.
 - **Made to survive 32 pixels.** The groove is a seventh of the tile's
   width and the point nearly a third, so at favicon size the tile still
   shows an S and a dot.
 
 The word is set in AvantGarde-Demi, whose round letters answer the
 tile's corners and the point.
+
+## The exports
+
+`scripts/build_logo.sh` writes these to `docs/img/`, where they are kept
+in git:
+
+| file | what | used by |
+|---|---|---|
+| `logo.gif` | the animated lockup on #0d1117 | the README, GitHub's dark theme |
+| `logo-light.gif` | the same on white | the README, GitHub's light theme |
+| `logo-site.gif` | the same on the site's ground, #0b0d12 | the site's home page |
+| `logo.png`, `logo-light.png` | the still lockup, dark and on white | nothing here: exports for anyone who needs the logo as a picture |
+| `logo-mark.png` | the mark alone, 512, transparent | the site's header |
+| `favicon.ico`, `favicon-32.png`, `favicon-180.png` | favicons and a touch icon | every page of the site |
+| `social-preview.png` | 1280x640 | GitHub's social preview, uploaded by hand in Settings |
+
+Each GIF is opaque on exactly the page colour it is shown on. GIF
+transparency is one bit, which leaves the tile's corners and the letters
+jagged and cannot carry the wordmark on both a dark and a white page.
 
 ## Render
 

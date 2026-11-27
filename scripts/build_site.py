@@ -573,7 +573,7 @@ def build_eval():
     write("eval/index.html", shell("eval/index.html", "Model comparison", "\n".join(body), wide=True))
 
 # The logo's outputs, rendered from gallery/logo/logo.ps by scripts/build_logo.sh and kept in git.
-LOGO_ASSETS = ["logo-mark.png", "logo.gif", "favicon.ico", "favicon-32.png", "favicon-180.png", "social-preview.png"]
+LOGO_ASSETS = ["logo-mark.png", "logo-site.gif", "favicon.ico", "favicon-32.png", "favicon-180.png", "social-preview.png"]
 
 def copy_assets():
     shutil.copy(ROOT / "scripts/site/site.css", SITE / "site.css")
@@ -583,10 +583,16 @@ def copy_assets():
     shutil.copy(ROOT / "scripts/site/source-viewer.js", SITE / "source-viewer.js")
     for f in ["psanim.js", "player.js", "widget.js", "widget-core.js", "widget-worker.js"]:
         shutil.copy(ROOT / "web" / f, SITE / f)
-    # The widgets demo is a page of web/ as written; on the site it gets the favicon too.
+    # The widgets demo is a page of web/ as written; on the site it gets the favicon too,
+    # unless it already links an icon of its own.
     demo = (ROOT / "web/widgets.html").read_text()
-    (SITE / "widgets.html").write_text(demo.replace("<title>", '<link rel="icon" href="img/favicon.ico" sizes="32x32">\n'
-                                                     '<link rel="icon" href="img/favicon-32.png" type="image/png">\n<title>', 1))
+    if not re.search(r'<link[^>]*\brel=["\']?(shortcut )?icon\b', demo, re.I):
+        if "</head>" in demo:
+            demo = demo.replace("</head>", '<link rel="icon" href="img/favicon.ico" sizes="32x32">\n'
+                                '<link rel="icon" href="img/favicon-32.png" type="image/png">\n</head>', 1)
+        else:
+            print("  (web/widgets.html has no </head>: copied without the favicon)")
+    (SITE / "widgets.html").write_text(demo)
     wasm = ROOT / "web/psanim.wasm"
     if wasm.exists():
         shutil.copy(wasm, SITE / "psanim.wasm")

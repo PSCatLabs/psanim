@@ -13,12 +13,25 @@
 %   --param form=mark     the mark alone, 512 square
 %   --param form=icon     the tile alone, edge to edge, 416 square (favicons)
 %   --param form=social   the lockup and a line, 1280x640
-%   --param ground=dark   (default) or light, or transparent
+%   --param ground=dark   (default: the site's ground), light (white), github
+%                         (GitHub's dark page, #0d1117) or transparent
 
 /logo-form /form (lockup) param def
 /logo-ground /ground (dark) param def
 /form-is { logo-form eq } def            % (name) form-is -> bool
 /ground-is { logo-ground eq } def
+
+% A value not in the list stops the movie with an error that names the allowed ones.
+% The message is the error itself: printing in setup is dropped while psanim reads
+% the declaration, so a printed message would not be seen.
+/one-of { % value [allowed ...] (message) -> -
+  3 1 roll false exch { 2 index eq or } forall exch pop
+  { pop } {
+    cvn cvx exec } ifelse } def
+logo-form [(lockup) (mark) (icon) (social)]
+  (--param form must be lockup, mark, icon or social) one-of
+logo-ground [(dark) (light) (github) (transparent)]
+  (--param ground must be dark, light, github or transparent) one-of
 
 /logo-size
   (mark) form-is { [512 512] } {
@@ -28,7 +41,8 @@
 << /Size logo-size /Duration 4.4 /FPS 30 /Loop true
    /Background
      (transparent) ground-is { /transparent } {
-     (light) ground-is { [1 1 1] } { [0.043 0.051 0.071] } ifelse } ifelse
+     (light) ground-is { [1 1 1] } {
+     (github) ground-is { [13 255 div 17 255 div 23 255 div] } { [0.043 0.051 0.071] } ifelse } ifelse } ifelse
    /Title (The psanim logo)
    /Description (The psanim logo: an amber tile with an ease-in-out curve cut through it and the current point at its end. The point is scrubbed back to the start and plays forward again, leaving onion skins that bunch where the ease is slow; it rests where it began, so the still is a frame of the film.)
 >> animation

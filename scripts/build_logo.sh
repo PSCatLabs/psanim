@@ -15,16 +15,27 @@ mkdir -p "$out"
 
 $P check "$src" --all -q > /dev/null
 
-# The animated lockup for the README, on a dark and on a light ground. GIF delays are
-# whole hundredths of a second, so 25 fps (4/100 s) keeps the 4.4 s loop exact.
-for g in dark light; do
-  $P render "$src" --param ground=$g --width 912 --fps 25 -o "$tmp/$g/" -q
-  name=logo; [ $g = light ] && name=logo-light
-  ffmpeg -v error -y -framerate 25 -i "$tmp/$g/frame_%05d.png" \
+# The animated lockup. GIF delays are whole hundredths of a second, so 25 fps
+# (4/100 s) keeps the 4.4 s loop exact. GIF transparency is one bit, which
+# leaves the tile's corners and the letters jagged, so each GIF is opaque on
+# exactly the ground it is shown on:
+#   logo.gif        the README in GitHub's dark theme (#0d1117)
+#   logo-light.gif  the README in GitHub's light theme (white)
+#   logo-site.gif   the site's home page (its ground, #0b0d12)
+gif() { # ground name
+  $P render "$src" --param ground=$1 --width 912 --fps 25 -o "$tmp/$1/" -q
+  ffmpeg -v error -y -framerate 25 -i "$tmp/$1/frame_%05d.png" \
     -vf "split[a][b];[a]palettegen=max_colors=64:reserve_transparent=0[p];[b][p]paletteuse=dither=none:diff_mode=rectangle" \
-    -loop 0 "$out/$name.gif"
-  $P frame "$src" --param ground=$g --at 0 -o "$out/$name.png" -q
-done
+    -loop 0 "$out/$2.gif"
+}
+gif github logo
+gif light logo-light
+gif dark logo-site
+
+# Stills of the lockup, for anyone who needs the logo as a picture (not used by
+# the README or the site): on the site's dark ground and on white.
+$P frame "$src" --at 0 -o "$out/logo.png" -q
+$P frame "$src" --param ground=light --at 0 -o "$out/logo-light.png" -q
 
 # The mark alone, on nothing.
 $P frame "$src" --param form=mark --param ground=transparent --at 0 -o "$out/logo-mark.png" -q
@@ -35,6 +46,6 @@ $P frame "$src" --param form=mark --at 0 --width 180 -o "$out/favicon-180.png" -
 # GitHub's social preview (uploaded by hand in the repository's Settings).
 $P frame "$src" --param form=social --at 0 -o "$out/social-preview.png" -q
 
-for f in logo.gif logo-light.gif logo.png logo-light.png logo-mark.png favicon-32.png favicon.ico favicon-180.png social-preview.png; do
+for f in logo.gif logo-light.gif logo-site.gif logo.png logo-light.png logo-mark.png favicon-32.png favicon.ico favicon-180.png social-preview.png; do
   printf '  %-20s %7d bytes\n' "$f" "$(wc -c < "$out/$f")"
 done
