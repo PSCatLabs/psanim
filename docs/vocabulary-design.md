@@ -385,12 +385,16 @@ overlapping.
   the line agree without a legend.
 - **Moved apart by least squares, keeping order.** The names' heights are
   fitted by pool-adjacent-violators on `y - k gap`, then clamped to the
-  frame. That moves each name as little as possible and is continuous in
-  the ends, so names slide rather than hop while the data moves. Where
-  two lines cross while their names ride the drawn ends (`/Ride true`),
-  the two names must trade places, and no continuous rule can avoid
-  overlapping them at the crossing. The default is therefore that a name
-  fades in at its line's end as the line completes.
+  frame. That moves each name as little as possible and, while the ends
+  keep their order, moves the names continuously with them, so they
+  slide rather than hop. Where two ends cross, the two names trade places
+  by a whole gap in one frame: no rule that keeps names from overlapping
+  can avoid it. That happens when names ride the drawn ends (`/Ride
+  true`) and lines cross, and also with the default if the final ends
+  are animated past each other. The default, a name fading in at its
+  line's end as the line completes, avoids it for fixed data. When more
+  names end together than fit in the frame's height, the gap shrinks
+  evenly so they stay inside.
 - **The drawn end is found on the path that is stroked.** `/Draw u` is the
   number given to `0 u trimpath`, which measures canvas arc length, so the
   word builds the same path and trims it; reading the data at a fraction
@@ -398,6 +402,13 @@ overlapping.
   the same data x (clipped there), where all the ends share one x.
 - **No clock, no procedure.** Both words take numbers the caller computes
   (`/Draw`, `/X`, the tracer's x), and neither runs a caller's procedure.
+- **A failure leaves nothing behind.** Each word does everything that can
+  fail (reading the data, roles, fonts, formatting) before it draws, and
+  runs under `.guarded`, which ends any dictionary it began and raises the
+  error again as from the word. A caller that stops the error finds the
+  dictionary stack and the graphics state as they were. Empty lines are
+  skipped, a line of no length drawn in part is its start, and `lineat`
+  refuses no points or x going back with a rangecheck.
 - **The tracer reads what it writes.** `lineat` reads a line straight
   between its points. With `/XDecimals` the tracer's value is read at x as
   written, so a moving dot never shows a year beside another year's value.

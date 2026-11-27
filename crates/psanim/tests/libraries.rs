@@ -1353,7 +1353,8 @@ fn names_at_line_ends_are_kept_apart_in_order() {
         (n[0] - 100.0).abs() < 1e-9 && (n[1] - 90.0).abs() < 1e-9,
         "kept inside: {n:?}"
     );
-    // Continuous: a small change in the values moves the labels a little.
+    // Continuous while the order holds: a small change in the values, the
+    // same way round, moves the labels a little.
     let a = nums(&eval_at("", "[ 50 50.01 ] 10 0 100 .spread ==", 0.0));
     let b = nums(&eval_at("", "[ 50 50.02 ] 10 0 100 .spread ==", 0.0));
     assert!((a[0] - b[0]).abs() < 0.02 && (a[1] - b[1]).abs() < 0.02);
@@ -1387,6 +1388,114 @@ fn names_at_line_ends_are_kept_apart_in_order() {
     let f = m.render_at(0.0).unwrap();
     let r = channel_box(&f, 0).unwrap();
     assert!(r.0 > 80 && r.2 < 144, "half-way along: {r:?}");
+}
+
+#[test]
+fn a_line_of_no_length_drawn_in_part_is_its_start() {
+    // A line of one point, or of repeated points, has no length: a part of
+    // it drawn is its start, not an error.
+    for expr in [
+        "[[[4 50]]] [(a)] << /Draw 0.5 >> serieslabels",
+        "[[[4 50] [4 50] [4 50]]] [(a)] << /Draw 0.5 /Ride true >> serieslabels",
+        "[[4 50]] 0.5 << /Along true /Draw 0 >> tracer",
+        "[[4 50]] 0.5 << /Along true >> tracer",
+        "[[4 50] [4 50]] 0.5 << /Along true >> tracer",
+    ] {
+        assert_eq!(
+            eval_at("", &format!("{PLOT} {expr} (ok) ="), 0.0),
+            "ok",
+            "{expr}"
+        );
+    }
+}
+
+#[test]
+fn empty_lines_are_skipped() {
+    for expr in [
+        "[[]] [(a)] << /Draw 0 >> serieslabels",
+        "[[] [[0 0] [10 50]]] [(a) (b)] << >> serieslabels",
+        "[] 0 << /Draw 0 >> tracer",
+        "[] 3 << >> tracer",
+    ] {
+        assert_eq!(
+            eval_at("", &format!("{PLOT} {expr} (ok) ="), 0.0),
+            "ok",
+            "{expr}"
+        );
+    }
+}
+
+#[test]
+fn a_chart_word_that_fails_leaves_no_dictionary_open_and_the_graphics_state_alone() {
+    // A word that fails ends the dictionaries it began and leaves the
+    // graphics state as it was, so a caller that stops the error can go on.
+    for expr in [
+        "[[[0 0] [10 50]]] [] << >> serieslabels",
+        "[[[0 0] [10 50]]] [ 7 ] << >> serieslabels",
+        "[[[0 0] [10 50]]] [(a)] << /Roles /nosuch >> serieslabels",
+        "[[0 0] [10 50]] 5 << /Role /nosuch >> tracer",
+        "[[0 0] [10 50]] 5 << /XDecimals (x) >> tracer",
+        "[] 2 lineat",
+        "[[0 0] [5 10] [3 4]] 4 lineat",
+    ] {
+        let n = nums(&eval_at(
+            "",
+            &format!(
+                "{PLOT} 0.2 setalpha countdictstack == {{ {expr} }} stopped == countdictstack == currentalpha == clear"
+            ),
+            0.0,
+        ));
+        assert_eq!(n[0], n[1], "{expr}: dictionaries left open: {n:?}");
+        assert!((n[2] - 0.2).abs() < 1e-6, "{expr}: alpha changed: {n:?}");
+    }
+}
+
+#[test]
+fn lineat_reads_tiny_intervals_and_refuses_what_it_cannot_read() {
+    // lineat's contract: no points, or x going back, is a rangecheck.
+    for pts in ["[]", "[[0 0] [5 10] [3 4]]"] {
+        assert_eq!(
+            eval_at(
+                "",
+                &format!("{{ {pts} 2 lineat }} stopped pop $error /errorname get == clear"),
+                0.0
+            ),
+            "/rangecheck"
+        );
+    }
+    // A tiny interval is still an interval.
+    let v = nums(&eval_at(
+        "",
+        "[[0 0] [0.0000000000001 10]] 0.00000000000005 lineat ==",
+        0.0,
+    ))[0];
+    assert!((v - 5.0).abs() < 1e-6, "{v}");
+}
+
+#[test]
+fn too_many_names_for_the_range_close_up_inside_it() {
+    // Too many names for the range: the gap shrinks evenly, inside it.
+    let n = nums(&eval_at("", "[ 0 1 2 3 ] 10 0 20 .spread ==", 0.0));
+    for (got, want) in n.iter().zip([0.0, 20.0 / 3.0, 40.0 / 3.0, 20.0]) {
+        assert!((got - want).abs() < 1e-9, "{n:?}");
+    }
+}
+
+#[test]
+fn a_line_of_one_point_drawn_up_to_x_is_complete_once_x_reaches_it() {
+    let p = |x: &str| {
+        nums(&eval_at(
+            "",
+            &format!("{PLOT} [[4 50]] << /X {x} >> .lineend == pop"),
+            0.0,
+        ))[0]
+    };
+    assert_eq!((p("3"), p("4"), p("10")), (0.0, 1.0, 1.0));
+    let mut m = load(&format!(
+        "/scene {{ {PLOT} [[[4 50]]] [(a)] << /X 10 /Roles [[1 0 0]] /Size 12 >> serieslabels }} def"
+    ));
+    let f = m.render_at(0.0).unwrap();
+    assert!(channel_box(&f, 0).is_some(), "its name is shown");
 }
 
 #[test]

@@ -244,7 +244,7 @@ a 2.8 3.6 /cubic-inout tween 2023 2020 between
 `/Draw u` is the number given to `trimpath`: each name fades in as its
 line completes. `/Ride true` makes the names ride the drawn ends
 instead; where two lines cross while drawn, their names trade places
-there. To draw several lines up to the same year, clip them at that
+there (names slide only while the ends keep their order). To draw several lines up to the same year, clip them at that
 year's `plotpoint` x and pass `/X year` instead of `/Draw` (the gallery's
 `gallery/catching-up/catching-up.ps` does this). With
 `/XDecimals` the tracer writes x too (a year) and reads the line at x as
