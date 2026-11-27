@@ -1263,6 +1263,132 @@ fn edges_take_sides_and_waypoints_and_charts_take_marks() {
     assert!(pixels(&mut m, 0.0) != pixels(&mut n, 0.0));
 }
 
+/// The box of pixels in one colour channel only (that channel above 100,
+/// the others below 60), as (x0, y0, x1, y1), rows from the top.
+fn channel_box(f: &Frame, ch: usize) -> Option<(u32, u32, u32, u32)> {
+    let mut b: Option<(u32, u32, u32, u32)> = None;
+    for y in 0..f.height {
+        for x in 0..f.width {
+            let o = ((y * f.width + x) * 4) as usize;
+            let px = &f.premultiplied[o..o + 3];
+            if px[ch] > 100 && (0..3).all(|c| c == ch || px[c] < 60) {
+                b = Some(match b {
+                    None => (x, y, x + 1, y + 1),
+                    Some((x0, y0, x1, y1)) => (x0.min(x), y0.min(y), x1.max(x + 1), y1.max(y + 1)),
+                });
+            }
+        }
+    }
+    b
+}
+
+const PLOT: &str = "[ 20 20 120 80 ] [ 0 10 ] [ 0 100 ] plotframe";
+
+#[test]
+fn a_line_is_read_between_its_points_and_a_tracer_sits_on_it() {
+    let pts = "/pts [ [0 10] [4 50] [10 20] ] def";
+    let at = |x: &str| nums(&eval_at(pts, &format!("{PLOT} pts {x} lineat =="), 0.0))[0];
+    assert_eq!(at("0"), 10.0, "at a data point, the data");
+    assert_eq!(at("4"), 50.0);
+    assert_eq!(at("10"), 20.0);
+    assert!((at("2") - 30.0).abs() < 1e-9, "half-way, half-way");
+    assert!((at("7") - 35.0).abs() < 1e-9);
+    assert_eq!(at("-3"), 10.0, "beyond the ends, the end values");
+    assert_eq!(at("12"), 20.0);
+    // Values spread across the frame, as seriesline takes them.
+    let v = nums(&eval_at(
+        "",
+        &format!("{PLOT} [ 0 40 100 ] 2.5 lineat =="),
+        0.0,
+    ))[0];
+    assert!((v - 20.0).abs() < 1e-9, "{v}");
+    // The tracer's dot is where plotpoint puts the data, at a point and between.
+    for (x, y) in [(4.0, 50.0), (2.0, 30.0), (7.0, 35.0)] {
+        let mut m = load(&format!(
+            "<< /bg [0 0 0] >> usetheme {pts}
+             /scene {{ {PLOT} pts {x} << /Role [1 1 1] /Radius 4 /Drop false /Readout false >> tracer }} def"
+        ));
+        let (x0, y0, x1, y1, _) = ink_at(&mut m, 0.0).unwrap();
+        let want = (20.0 + x / 10.0 * 120.0, 120.0 - (20.0 + y / 100.0 * 80.0));
+        let got = ((x0 + x1) as f64 / 2.0, (y0 + y1) as f64 / 2.0);
+        assert!(
+            (got.0 - want.0).abs() <= 1.0 && (got.1 - want.1).abs() <= 1.0,
+            "tracer at {x}: {got:?}, plotpoint says {want:?}"
+        );
+    }
+    // Along the drawing, it is at the drawn end of `0 u trimpath`.
+    let n = nums(&eval_at(
+        pts,
+        &format!(
+            "{PLOT} pts plotline 0 0.37 trimpath currentpoint == == newpath
+             pts 0.37 .lineend pop aload pop == =="
+        ),
+        0.0,
+    ));
+    assert!(
+        (n[0] - n[2]).abs() < 1e-6 && (n[1] - n[3]).abs() < 1e-6,
+        "{n:?}"
+    );
+    // With a readout, more is drawn.
+    let mut a = load(&format!(
+        "{pts} /scene {{ {PLOT} pts 2 << /Readout false >> tracer }} def"
+    ));
+    let mut b = load(&format!(
+        "{pts} /scene {{ {PLOT} pts 2 << /XDecimals 0 /Suffix (%) >> tracer }} def"
+    ));
+    assert!(ink_at(&mut b, 0.0).unwrap().4 > ink_at(&mut a, 0.0).unwrap().4);
+}
+
+#[test]
+fn names_at_line_ends_are_kept_apart_in_order() {
+    // Values moved apart: in order, at least the gap, the least they can be.
+    let n = nums(&eval_at("", "[ 50.4 50 90 ] 10 0 100 .spread ==", 0.0));
+    assert!(
+        (n[0] - 55.2).abs() < 1e-9 && (n[1] - 45.2).abs() < 1e-9,
+        "the close pair is centred on its mean: {n:?}"
+    );
+    assert_eq!(n[2], 90.0, "one that was clear does not move");
+    let n = nums(&eval_at("", "[ 99 98 ] 10 0 100 .spread ==", 0.0));
+    assert!(
+        (n[0] - 100.0).abs() < 1e-9 && (n[1] - 90.0).abs() < 1e-9,
+        "kept inside: {n:?}"
+    );
+    // Continuous: a small change in the values moves the labels a little.
+    let a = nums(&eval_at("", "[ 50 50.01 ] 10 0 100 .spread ==", 0.0));
+    let b = nums(&eval_at("", "[ 50 50.02 ] 10 0 100 .spread ==", 0.0));
+    assert!((a[0] - b[0]).abs() < 0.02 && (a[1] - b[1]).abs() < 0.02);
+
+    // Two lines that end one unit apart: two names, right of the frame,
+    // in the lines' order, not overlapping.
+    let series = "/s [ [ [0 0] [10 50] ] [ [0 100] [10 51] ] ] def
+                  /o << /Roles [ [1 0 0] [0 1 0] ] /Size 12 /Leader false >> def";
+    let mut m = load(&format!(
+        "{series} /scene {{ {PLOT} s [ (ab) (cd) ] o dup /Draw 0 1 ramp put serieslabels }} def"
+    ));
+    let f = m.render_at(0.4).unwrap();
+    assert!(
+        channel_box(&f, 0).is_none() && channel_box(&f, 1).is_none(),
+        "not yet: the lines are not finished"
+    );
+    let f = m.render_at(2.0).unwrap();
+    let (r, g) = (channel_box(&f, 0).unwrap(), channel_box(&f, 1).unwrap());
+    assert!(r.0 >= 140 && g.0 >= 140, "right of the frame: {r:?} {g:?}");
+    assert!(
+        g.3 <= r.1,
+        "the higher line's name above the lower's, clear of it: {g:?} {r:?}"
+    );
+    let end = 120.0 - (20.0 + 0.505 * 80.0);
+    let mid = (g.1 + r.3) as f64 / 2.0;
+    assert!((mid - end).abs() < 3.0, "centred on the ends: {mid} {end}");
+    // Riding: the name travels with the drawn end.
+    let mut m = load(&format!(
+        "{series} /scene {{ {PLOT} s [ (ab) (cd) ] o dup /Draw 0.5 put dup /Ride true put serieslabels }} def"
+    ));
+    let f = m.render_at(0.0).unwrap();
+    let r = channel_box(&f, 0).unwrap();
+    assert!(r.0 > 80 && r.2 < 144, "half-way along: {r:?}");
+}
+
 #[test]
 fn a_band_of_a_stroke_is_revealed_for_persistent_painting() {
     let mut m = load(

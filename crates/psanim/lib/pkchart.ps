@@ -212,14 +212,48 @@
 } bind def
 % [ y ... ] seriesline -       the same for values evenly spaced across the
 %                              frame's x range
-/seriesline {
-  4 dict begin
-    /sl-v exch def /sl-n sl-v length def
-    [ 0 1 sl-n 1 sub { /sl-i exch def
-      [ /.plot .mine /x0 get /.plot .mine /x1 get /.plot .mine /x0 get sub sl-i sl-n 1 sub 1 max div mul add  sl-v sl-i get ]
-    } for ]
+/seriesline { .aspoints plotline } bind def
+% [ y ... ] or [ [x y] ... ] .aspoints -> [ [x y] ... ]    values become points
+%   spread evenly across the frame's x range; points stay as they are
+/.aspoints {
+  dup length 0 gt { dup 0 get type /arraytype ne {
+    4 dict begin
+      /sl-v exch def /sl-n sl-v length def
+      [ 0 1 sl-n 1 sub { /sl-i exch def
+        [ /.plot .mine /x0 get /.plot .mine /x1 get /.plot .mine /x0 get sub sl-i sl-n 1 sub 1 max div mul add  sl-v sl-i get ]
+      } for ]
+    end
+  } if } if
+} bind def
+% X Y .plotdata -> x y     canvas to data: plotpoint undone
+/.plotdata {
+  .plot begin
+    y sub h div y1 y0 sub mul y0 add exch
+    x sub w div x1 x0 sub mul x0 add exch
   end
-  plotline
+} bind def
+% [ [x y] ... ] x lineat -> y     the line through the points, read at data
+%   x: straight between points, the end value beyond either end. The
+%   points are in increasing x.
+/lineat {
+  8 dict begin
+    /la-x exch def /la-p exch .aspoints def
+    /la-n la-p length def
+    la-x la-p 0 get 0 get le { la-p 0 get 1 get } {
+      la-x la-p la-n 1 sub get 0 get ge { la-p la-n 1 sub get 1 get } {
+        0
+        1 1 la-n 1 sub { /la-i exch def
+          la-p la-i get 0 get la-x ge {
+            pop
+            la-p la-i 1 sub get aload pop /la-ya exch def /la-xa exch def
+            la-p la-i get aload pop /la-yb exch def /la-xb exch def
+            la-x la-xa sub la-xb la-xa sub 1e-12 max div la-yb la-ya sub mul la-ya add
+            exit
+          } if
+        } for
+      } ifelse
+    } ifelse
+  end
 } bind def
 % - plotarea -     close the current line down to the bottom of the frame,
 %                  for filling under a curve
@@ -334,6 +368,198 @@
         } if
       grestore
     } if
+  end
+} bind def
+
+% [y ...] gap lo hi .spread -> [y' ...]     move values apart until each is
+%   at least gap from its neighbours, keeping their order, moving them as
+%   little as possible (least squares: pool adjacent violators on y - k gap)
+%   and keeping them in lo..hi. Continuous in the values, so labels slide.
+/.spread {
+  20 dict begin
+    /sp-hi exch def /sp-lo exch def /sp-g exch def /sp-y exch def
+    /sp-n sp-y length def
+    % the order, by value (insertion sort: a chart has a few labels)
+    /sp-ix [ 0 1 sp-n 1 sub { } for ] def
+    1 1 sp-n 1 sub { /sp-j exch def
+      { sp-j 0 gt { sp-y sp-ix sp-j 1 sub get get sp-y sp-ix sp-j get get gt } { false } ifelse
+        { /sp-a sp-ix sp-j 1 sub get def
+          sp-ix sp-j 1 sub sp-ix sp-j get put sp-ix sp-j sp-a put
+          /sp-j sp-j 1 sub def } { exit } ifelse
+      } loop
+    } for
+    % blocks of (sum, count) whose means never decrease
+    /sp-bs sp-n array def /sp-bc sp-n array def /sp-nb 0 def
+    0 1 sp-n 1 sub { /sp-k exch def
+      sp-bs sp-nb sp-y sp-ix sp-k get get sp-k sp-g mul sub put
+      sp-bc sp-nb 1 put
+      /sp-nb sp-nb 1 add def
+      { sp-nb 2 ge {
+          sp-bs sp-nb 2 sub get sp-bc sp-nb 2 sub get div
+          sp-bs sp-nb 1 sub get sp-bc sp-nb 1 sub get div gt } { false } ifelse
+        { sp-bs sp-nb 2 sub 2 copy get sp-bs sp-nb 1 sub get add put
+          sp-bc sp-nb 2 sub 2 copy get sp-bc sp-nb 1 sub get add put
+          /sp-nb sp-nb 1 sub def } { exit } ifelse
+      } loop
+    } for
+    % each block at its mean, clamped, and back in the caller's order
+    /sp-top sp-hi sp-n 1 sub sp-g mul sub sp-lo max def
+    /sp-out sp-n array def /sp-k 0 def
+    0 1 sp-nb 1 sub { /sp-b exch def
+      /sp-m sp-bs sp-b get sp-bc sp-b get div sp-lo max sp-top min def
+      sp-bc sp-b get { sp-out sp-ix sp-k get sp-m sp-k sp-g mul add put /sp-k sp-k 1 add def } repeat
+    } for
+    sp-out
+  end
+} bind def
+% pts u .lineend -> [X Y] p     where a line's drawn part ends on the
+%   canvas, and how much of it is drawn: u as for `0 u trimpath`, or a
+%   dictionary << /X x >> for a line drawn up to data x (p is then the
+%   fraction of its x range).
+/.lineend {
+  10 dict begin
+    /le-u exch def /le-p exch .aspoints def
+    /le-a le-p 0 get def /le-z le-p le-p length 1 sub get def
+    le-u type /dicttype eq {
+      /le-x le-u /X get le-a 0 get max le-z 0 get min def
+      [ le-x le-p le-x lineat plotpoint ]
+      le-x le-a 0 get sub le-z 0 get le-a 0 get sub 1e-12 max div
+    } {
+      /le-u le-u 0 1 clamp def
+      le-u 1e-6 le { [ le-a aload pop plotpoint ] } {
+        le-u 1 ge { [ le-z aload pop plotpoint ] }
+                  { le-p plotline 0 le-u trimpath [ currentpoint ] newpath } ifelse
+      } ifelse
+      le-u
+    } ifelse
+  end
+} bind def
+% [ pts ... ] [ (name) ... ] opts serieslabels -     each series named at
+%   the end of its line, in the line's colour, the names kept clear of
+%   each other. Written right of the plot frame's box: leave room there.
+%   << /Roles chartroles (line i is in role i; stroke it in the same)
+%      /Draw u (or [u ...]: how much of each line is drawn, as for
+%               `0 u trimpath`) /X x (or: the lines are drawn up to data x)
+%      /Ride false (true: the name rides the drawn end; otherwise it fades
+%                   in at the line's end as the line completes)
+%      /Size 3 vmin /Face /title /Gap 1.2 x Size (between baselines)
+%      /Pad 0.7 x Size (from the line's end) /Leader true >>
+/serieslabels {
+  32 dict begin
+    /lb-o exch def /lb-names exch def /lb-s exch def
+    /lb-n lb-s length def
+    /lb-size lb-o /Size 3 vmin .opt def
+    /lb-roles lb-o /Roles chartroles .opt def
+    /lb-ride lb-o /Ride false .opt def
+    /lb-gap lb-o /Gap lb-size 1.2 mul .opt def
+    /lb-pad lb-o /Pad lb-size 0.7 mul .opt def
+    /lb-bx plotbox def
+    /lb-at [ lb-n { 0 } repeat ] def /lb-al [ lb-n { 0 } repeat ] def
+    0 1 lb-n 1 sub { /lb-i exch def
+      lb-s lb-i get
+      lb-o /X known { lb-o } { lb-o /Draw 1 .opt dup type /arraytype eq { lb-i get } if } ifelse
+      .lineend
+      lb-ride not { exch pop lb-s lb-i get 1 .lineend pop exch } if
+      % the visible amount: riding, as soon as drawn; otherwise over the last 15%
+      lb-ride { 0.04 div } { 0.85 sub 0.15 div } ifelse 0 1 clamp
+      lb-al lb-i 3 -1 roll put lb-at lb-i 3 -1 roll put
+    } for
+    % kept apart: all of them, where they will end; riding, the ones drawn
+    /lb-k [ 0 1 lb-n 1 sub { dup lb-al exch get 0 gt lb-ride not or not { pop } if } for ] def
+    /lb-cy lb-n array def
+    lb-k length 0 gt {
+      [ lb-k { lb-at exch get 1 get } forall ] lb-gap lb-bx 1 get lb-bx 1 get lb-bx 3 get add .spread
+      0 1 lb-k length 1 sub { /lb-j exch def lb-cy lb-k lb-j get 2 index lb-j get put } for pop
+    } if
+    gsave
+      lb-o /Face /title .opt lb-size face
+      theme /stroke get 0.6 mul setlinewidth 1 setlinecap
+      lb-k { /lb-i exch def
+        /lb-a lb-al lb-i get def
+        lb-a 0 gt {
+        lb-at lb-i get aload pop /lb-y exch def /lb-x exch def
+        /lb-c lb-cy lb-i get def
+        lb-roles dup type /arraytype eq { dup 0 get type /nametype eq 1 index 0 get type /arraytype eq or { lb-i 1 index length mod get } if } if ink
+        lb-a setalpha
+        lb-o /Leader true .opt {
+          /lb-off lb-c lb-y sub abs lb-size 0.2 mul sub lb-size 0.3 mul div 0 1 clamp def
+          lb-off 0 gt {
+            lb-off lb-a mul setalpha
+            newpath lb-x lb-pad 0.2 mul add lb-y moveto lb-x lb-pad 0.8 mul add lb-c lineto stroke
+            lb-a setalpha
+          } if
+        } if
+        lb-x lb-pad add lb-c lb-size 0.36 mul sub moveto lb-names lb-i get show
+        } if
+      } forall
+      1 setalpha
+    grestore
+    newpath
+  end
+} bind def
+% pts x opts tracer -     a point riding a series at data x, with its
+%   reading: a dot on the line (straight between data points), a dashed
+%   drop to the x axis, and the value beside it.
+%   << /Along false (true: x is the drawn fraction of the line, as for
+%                    `0 u trimpath`, and the tracer leads the pen)
+%      /Role /accent /Radius 0.9 vmin /Size 3 vmin /Draw u (brought in)
+%      /Decimals 0 /Prefix () /Suffix () (the value, as fmtnum writes it)
+%      /XDecimals n (also write x before it, as fmtfixed does: a year; the
+%                    value is then read at x as written, so the pair is true)
+%      /Drop true /Readout true /Plate true (a backing under the readout, in /bg) >>
+/tracer {
+  24 dict begin
+    /tr-o exch def /tr-x exch def /tr-p exch .aspoints def
+    tr-o /Along false .opt {
+      tr-p tr-x .lineend pop aload pop .plotdata
+    } {
+      tr-x tr-p 0 get 0 get max tr-p tr-p length 1 sub get 0 get min
+      dup tr-p exch lineat
+    } ifelse
+    /tr-y exch def /tr-x exch def
+    /tr-u tr-o /Draw 1 .opt 0 1 clamp def
+    /tr-size tr-o /Size 3 vmin .opt def
+    /tr-r tr-o /Radius 0.9 vmin .opt def
+    tr-u 0 gt {
+      gsave
+        tr-x tr-y plotpoint /tr-Y exch def /tr-X exch def
+        tr-o /Drop true .opt {
+          /muted ink theme /stroke get 0.5 mul setlinewidth [ tr-size 0.3 mul dup ] 0 setdash
+          newpath tr-X tr-Y moveto tr-X plotbox 1 get lineto 0 tr-u trimpath stroke [] 0 setdash
+        } if
+        /tr-k tr-u 3 mul 1 min /back-out ease def
+        /bg ink tr-X tr-Y tr-r 1.6 mul tr-k mul disc
+        tr-o /Role /accent .opt ink tr-X tr-Y tr-r tr-k mul disc
+        tr-o /Readout true .opt {
+          tr-u 0.3 sub 0.7 div 0 1 clamp setalpha
+          % with x written, the value is the one at x as written: a true pair
+          /tr-ry tr-y def /tr-t () def
+          tr-o /XDecimals known {
+            /tr-xr 10 tr-o /XDecimals get exp dup tr-x mul round exch div def
+            /tr-ry tr-p tr-xr lineat def
+            /tr-t tr-xr tr-o /XDecimals get fmtfixed (  ) strcat def
+          } if
+          /tr-v tr-o /Prefix () .opt tr-ry tr-o /Decimals 0 .opt fmtnum strcat tr-o /Suffix () .opt strcat def
+          /body tr-size 0.8 mul face /tr-w1 tr-t stringwidth pop def
+          /title tr-size face /tr-w tr-w1 tr-v stringwidth pop add def
+          % above and to the right, or to the left where the frame ends
+          /tr-lx tr-X tr-r 1.8 mul add def
+          tr-lx tr-w add plotbox dup 0 get exch 2 get add gt { /tr-lx tr-X tr-r 1.8 mul sub tr-w sub def } if
+          tr-o /Plate true .opt {
+            gsave
+              /bg ink tr-u 0.3 sub 0.7 div 0 1 clamp 0.82 mul setalpha
+              [ tr-lx tr-size 0.3 mul sub tr-Y tr-r 1.8 mul add tr-size 0.3 mul sub
+                tr-w tr-size 0.6 mul add tr-size 1.25 mul ] tr-size 0.25 mul roundpath fill
+            grestore
+          } if
+          tr-lx tr-Y tr-r 1.8 mul add moveto
+          /muted ink /body tr-size 0.8 mul face tr-t show
+          /fg ink /title tr-size face tr-v show
+          1 setalpha
+        } if
+      grestore
+    } if
+    newpath
   end
 } bind def
 

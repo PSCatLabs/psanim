@@ -98,11 +98,10 @@ agent with the report it came from (summarised in
    returned; a flow layout (stack lines top-down with gaps) so fitted
    lines place their neighbours; vertical and rotated text in a box;
    outline type as a state.
-6. **Charts**: labels on a series (a name at the end of its line, kept
-   clear of its neighbours; the model comparison's authors placed these
-   by hand with `plotpoint`); a tracer (a point riding a series with its readout), unit
-   charts (a waffle of cells), cross-fading ticks, stacked and grouped
-   bars, a ruler outside a plot frame.
+6. **Charts**: unit charts (a waffle of cells), stacked and grouped
+   bars, a ruler outside a plot frame. Done: names at line ends kept
+   clear of each other (`serieslabels`) and a tracer with its readout
+   (`tracer`, `lineat`), #105; cross-fading ticks (`plotaxes /Fade`).
 7. **Diagrams**: a layered layout for graphs given as data; a section
    header / lower-third word; labels along curved edges.
 8. **Motion**: vector motions when a pivot is given (no rasterization);
