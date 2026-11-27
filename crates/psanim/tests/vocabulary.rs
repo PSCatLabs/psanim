@@ -300,14 +300,15 @@ fn a_library_loads_once_and_an_unknown_one_is_explained() {
 #[test]
 fn no_pscat_library_redefines_a_psanim_word() {
     let vocabulary: BTreeSet<&str> = API.iter().map(|e| e.name).collect();
-    // Each library with what it needs loaded first.
+    // Each library with what it needs loaded first: its `@requires` line.
+    // PSCat 0.8.0 fails at load, not at first call, when one is missing.
     let libs = [
         ("artkit", ""),
         ("paintkit", "artkit"),
-        ("drykit", "artkit"),
-        ("drychalk", "artkit"),
-        ("drycharcoal", "artkit"),
-        ("drycrayon", "artkit"),
+        ("drykit", "artkit paintkit"),
+        ("drychalk", "artkit paintkit drykit"),
+        ("drycharcoal", "artkit paintkit drykit hatchkit"),
+        ("drycrayon", "artkit paintkit drykit"),
         ("graph", ""),
         ("dataviz", ""),
         ("pagekit", "artkit"),
@@ -318,7 +319,7 @@ fn no_pscat_library_redefines_a_psanim_word() {
         ("stipplekit", "artkit"),
         ("halftonekit", "artkit"),
         ("surfacekit", "artkit"),
-        ("mathkit", "artkit"),
+        ("mathkit", "artkit handscript strokeglyphs"),
         ("lettering", "artkit"),
         ("headline", "artkit"),
         ("handscript", "artkit"),
@@ -326,11 +327,11 @@ fn no_pscat_library_redefines_a_psanim_word() {
         ("typewriter_outlines", ""),
         ("typewriter", "typewriter_outlines"),
         ("warp", "functional aspect"),
-        ("printkit", "artkit"),
+        ("printkit", "artkit hatchkit surfacekit"),
         ("etching", ""),
         ("qr", ""),
         ("kernel", ""),
-        ("apparel", "artkit"),
+        ("apparel", "artkit headline lettering"),
         ("jersey", "artkit"),
         ("hangul", "artkit"),
         ("noiseref", ""),
