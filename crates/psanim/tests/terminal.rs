@@ -170,6 +170,20 @@ fn the_terminal_shows_the_session_as_it_unfolds_and_is_pure() {
 }
 
 #[test]
+fn the_terminal_can_be_set_in_the_phosphor_face() {
+    let params = "/Session [ [/type (ls)] [/out (one\\ntwo)] ] /Glow 0 /Grain 0";
+    let courier = place("terminal", params, 20.0);
+    let early = place("terminal", &format!("{params} /Font /Phosphor"), 0.0);
+    let late = place("terminal", &format!("{params} /Font /Phosphor"), 20.0);
+    let (l, e) = (
+        lit(&late, |_, g, _| g > 120),
+        lit(&early, |_, g, _| g > 120),
+    );
+    assert!(l > e + 100, "the face shows the session: {l} {e}");
+    assert_ne!(late.premultiplied, courier.premultiplied);
+}
+
+#[test]
 fn persistence_leaves_a_fading_trace_when_the_screen_clears() {
     // Clear at about 1 s: with persistence the old text is still faintly there just after.
     let session = "/Session [ [/out (WWWWWWWWWWWWWWWWWWWW\\nWWWWWWWWWWWWWWWWWWWW)] [/wait 1] [/clear] [/wait 3] ] /Glow 0 /Grain 0 /Scanlines 0 /Typos 0";

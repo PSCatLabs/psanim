@@ -1833,7 +1833,13 @@ pub const API: &[ApiEntry] = &[
         "pkpixel",
         "pixelfont",
         "rows  pixelfont  font",
-        "A pixel font of 5, 7 or 9 rows, as a dictionary from character code to the character's columns (see `pixelcols`). The 7-row font has capitals, digits, lower case with descenders held to the last row and punctuation; the 5-row font has capitals, digits and punctuation; the 9-row font is the 7-row one with the descenders of g j p q y hanging below the baseline. Build it once, in setup.",
+        "A pixel font of 5, 7 or 9 rows, as a dictionary from character code to the character's columns (see `pixelcols`). The 7-row font has capitals, digits, lower case with descenders held to the last row and punctuation; the 5-row font has capitals, digits and punctuation; the 9-row font is the 7-row one with the descenders of g j p q y hanging below the baseline. Given the name of one of PSCat's pixel faces instead of a number (`/Diode7 pixelfont`; see `pixelface`), the same from that face's bitmaps: printable ASCII, a monospaced face's glyphs padded to its cell, psanim's degree sign lent. `font /Rows get` is the height in rows. Build it once, in setup.",
+    ),
+    e(
+        "pkpixel",
+        "pixelface",
+        "name  pixelface  font",
+        "`findfont` for PSCat's pixel faces, which `findfont` does not load by name: the first call runs the face's file (lib/fonts/...), later ones find it. The faces: /Phosphor and /Phosphor-Scan (an 8x16 video terminal), /Pinpoint-Draft and /Pinpoint-NLQ (a 9-pin dot-matrix printer), /Diode7 and /Diode5 (LED signs). Any other name is plain `findfont`. Call it in setup (`/crt /Phosphor pixelface def`, then `crt 32 scalefont setfont` in the scene); called in the scene it reloads the file every frame. Printable ASCII only. The names are kept in one table in pkpixel.",
     ),
     e(
         "pkpixel",

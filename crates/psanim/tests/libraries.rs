@@ -1477,6 +1477,44 @@ fn a_pixel_font_falls_back_and_the_nine_row_font_has_descenders() {
 }
 
 #[test]
+fn a_pscat_pixel_face_gives_its_bitmaps_as_columns() {
+    // Diode7's A: a crossbar on row 4 (pkpixel's is on row 3), five lamps wide.
+    let out = eval_at("", "/Diode7 pixelfont 65 pixelcols { == } forall", 0.0);
+    assert_eq!(nums(&out), vec![126.0, 17.0, 17.0, 17.0, 126.0], "{out}");
+    let out = eval_at("", "7 pixelfont 65 pixelcols { == } forall", 0.0);
+    assert_eq!(nums(&out), vec![126.0, 9.0, 9.0, 9.0, 126.0], "{out}");
+    // Heights by /Rows; a monospaced face pads every glyph (space too) to its cell.
+    let out = eval_at(
+        "",
+        "[/Phosphor /Pinpoint-Draft /Diode7 /Diode5] { pixelfont /Rows get == } forall 9 pixelfont /Rows get ==",
+        0.0,
+    );
+    assert_eq!(nums(&out), vec![13.0, 9.0, 8.0, 5.0, 9.0], "{out}");
+    let out = eval_at(
+        "",
+        "/Phosphor pixelfont dup 32 pixelcols length == (Hi) pixeltext length ==",
+        0.0,
+    );
+    assert_eq!(nums(&out), vec![7.0, 15.0], "{out}");
+    // Diode5 has no lower case: 'a' is 'A'. The faces borrow psanim's degree sign.
+    let cols = |e: &str| eval_at("", &format!("{e} {{ == }} forall"), 0.0);
+    assert_eq!(
+        cols("/Diode5 pixelfont 97 pixelcols"),
+        cols("/Diode5 pixelfont 65 pixelcols")
+    );
+    assert!(!cols("/Diode7 pixelfont 176 pixelcols").is_empty());
+    assert_ne!(
+        cols("/Diode7 pixelfont 176 pixelcols"),
+        cols("/Diode7 pixelfont 63 pixelcols")
+    );
+    // pixelface loads the face's file; findfont alone does not.
+    let out = eval_at("", "/Phosphor pixelface /Bitmaps known ==", 0.0);
+    assert_eq!(out, "true");
+    let out = eval_at("", "/Courier pixelface /FontName get ==", 0.0);
+    assert_eq!(out, "/Courier");
+}
+
+#[test]
 fn a_pixel_picture_is_its_columns_and_a_bad_font_size_is_an_error() {
     let out = eval_at("", "[ (#.) (.#) (##) ] pixelpicture { == } forall", 0.0);
     assert_eq!(nums(&out), vec![5.0, 6.0], "{out}");

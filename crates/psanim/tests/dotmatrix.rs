@@ -163,6 +163,26 @@ fn near_letter_quality_is_a_second_pass_that_fills_between_the_dots() {
 }
 
 #[test]
+fn the_pinpoint_face_prints_its_own_letters_in_the_same_cells() {
+    let text = "/Text (MOW 0042 gjpqy) /Speed 200 /Tear /none";
+    let own = at(&mut movie(&format!("{RED} {text}")), 5.0).ink();
+    let pin = at(
+        &mut movie(&format!("{RED} {text} /Face /Pinpoint-Draft")),
+        5.0,
+    )
+    .ink();
+    assert!(!own.is_empty() && !pin.is_empty());
+    assert!(own != pin, "the faces print differently");
+    // the same characters across: the line spans the same cells, give or take one
+    let span = |v: &[(usize, usize)]| {
+        let xs = v.iter().map(|p| p.0);
+        xs.clone().max().unwrap() - xs.min().unwrap()
+    };
+    let (a, b) = (span(&own) as f64, span(&pin) as f64);
+    assert!((a - b).abs() < 15.0, "{a} {b}");
+}
+
+#[test]
 fn green_bar_paper_has_bars_and_plain_does_not() {
     let base = "/Ribbon [1 0 0] /Backdrop false /Text (HELLO) /Speed 200 /Tear /none";
     let g = at(&mut movie(&format!("{base} /Paper /greenbar")), 5.0).green();

@@ -466,6 +466,24 @@ fn the_pixel_font_sets_text_exactly() {
         ]
         .map(|r| format!(".{r}."))
     );
+    // /Font /Diode7 sets it in PSCat's LED face: its A has the crossbar a row lower.
+    let diode = led_rows(
+        7,
+        7,
+        &[
+            ("Text", text("A")),
+            ("Effect", text("static")),
+            ("Font", text("Diode7")),
+        ],
+        0.1,
+    );
+    assert_eq!(
+        diode,
+        [
+            ".###.", "#...#", "#...#", "#...#", "#####", "#...#", "#...#"
+        ]
+        .map(|r| format!(".{r}."))
+    );
     // Five rows use the lower font; lower case falls back to capitals there.
     assert_eq!(still("a", 5), still("A", 5));
     assert!(still("a", 5).iter().any(|r| r.contains('#')));
