@@ -355,7 +355,8 @@ sign from the Symbol font at the current size (`/neq /le /ge /approx
 
 A line of mathematics is a **run list**: an array of `(text)`, `/name`
 (a sign), `[/it (r)]` (italic, as variables are set), `[/sup x]`,
-`[/sub x]` and `[/frac a b]`. `showruns` sets it; `runs i showrun` sets
+`[/sub x]` and `[/frac a b]` (and, for `morphruns` below, `[/as /key
+run]` and groups). `showruns` sets it; `runs i showrun` sets
 one term where the line puts it, so an equation arrives term by term;
 `runs i runbox` is a term's box, for a ring, a marker or a pulse that
 ties it to the picture.
@@ -375,8 +376,61 @@ ground /serif 34 face
 eq 4 runbox eq 6 runbox boxunion circled 0 2.8 3.5 /cubic-inout tween trimpath stroke
 ```
 
-For displayed formulas beyond this (integrals, matrices, aligned
-derivations), PSCat's `lib/mathkit.ps` lays a TeX subset out as stroke
+### One equation becoming the next
+
+`[ line line ... ] s morphruns` draws a derivation. `s` runs from 0 to
+the number of lines less one: at a whole number it is that line exactly,
+as `showruns` would set it; between, the terms that carry over slide to
+their new places, terms with no partner fade away and new ones fade in.
+The word owns no clock: make `s` with `keyframes`, giving each line a
+hold and each move an easing.
+
+```postscript
+/X [/it (x)] def  /EQ [/as /eq ( = )] def
+/lines [
+  [ (2) X [/as /n ( + 6)] EQ (10) ]
+  [ (2) X EQ (10) [/as /n [( ) /minus ( 6)]] ]
+  [ (2) X EQ (4) ]
+  [ X EQ (2) ]
+] def
+ground /serif 40 face /fg ink
+320 180 moveto
+lines [ 0.3 0  0.9 1 /cubic-inout  1.6 1  2.2 2 /cubic-inout  2.6 2  3.2 3 /cubic-inout ] keyframes
+/eq morphruns
+```
+
+How terms are paired:
+
+- **By content, in order.** A term goes to the first term of the next
+  line that is the same and not yet taken, so the first x stays the
+  first x and the second the second.
+- **By tag.** `[/as /key run]` draws as the run and is paired with the
+  term of the same tag in the next line, whatever either shows. Tag a
+  term to pair it out of order, or to let it change on the way: above,
+  `+ 6` crosses the equals sign and becomes `- 6`, its glyphs
+  cross-fading as it moves.
+- **A group is one term.** An array of runs, `[ ( ) /minus ( 6) ]`,
+  moves as one piece. `/minus` is a true minus sign; the hyphen in a
+  string is too short.
+
+The third operand is optional: `/left` (the default), `/center` or
+`/right` aligns every line on the current point, or a tag that every
+line has keeps that term's centre on it, as `/eq` keeps the equals sign
+still above (an aligned derivation). As a dictionary: `<< /Align /center
+/Arc 0 /Rise 0.25 >>`, where `/Arc 0` moves terms in straight lines
+(by default a term lifts or dips a little in proportion to how far it
+goes, so terms that cross do not overprint) and `/Rise` is how far, in
+ems, a leaving term rises and an arriving one comes up from.
+
+Matching is by term, so split a line where you want things to move
+separately: `( + 6)` moves as one, `( + ) (6)` as two. To mark a term
+of a line while it holds, move to where the line starts and use
+`runbox`; with `/eq` alignment the start is the current point less the
+width of the runs before the equals sign and half its own. The gallery
+film `gallery/complete-the-square/complete-the-square.ps` derives a
+quadratic's roots in six moves this way.
+
+For displayed formulas beyond this (integrals, matrices), PSCat's `lib/mathkit.ps` lays a TeX subset out as stroke
 paths (see the psart skill); a path takes `trimpath` and any motion.
 
 ## Hierarchy

@@ -1,0 +1,151 @@
+%!PS
+% Poster: 33
+% Complete the Square: x squared plus 6x plus 5 is zero, solved
+% Seven lines, each becoming the next with `morphruns`: terms that carry
+% over slide to their new places, a term that crosses the equals sign
+% changes its sign on the way, and terms that cancel leave. Beside the
+% algebra, x squared plus 6x is drawn as a square and two strips, and the
+% 9 that is added is the corner that completes it.
+%
+% Techniques
+%   - The derivation is data: seven run lists and one progress number,
+%     made with `keyframes` from the times of the six moves. Nothing is
+%     placed twice.
+%   - Every line tags its first equals sign /eq, and `/Align /eq` keeps
+%     it still, so the steps read as an aligned derivation.
+%   - Tags pair terms that look different: + 5 on the left becomes -5 on
+%     the right, +3 becomes -3, 4 becomes +-2.
+%   - The figure's corner fills with the same number that drives the
+%     equation, so the 9 arrives in both at once.
+<< /Size [1280 720] /Duration 36 /FPS 30
+   /Title (Complete the Square)
+   /Description (A quadratic solved by completing the square: each line of the derivation becomes the next, beside the square that gives the method its name.)
+>> animation
+/pkdiagram use                 % loads pkstage, pkmotion, pktype
+
+% ------------------------------------------------------------------ the lines
+/X [/it (x)] def
+/EQ [/as /eq ( = )] def
+/lines [
+  [ X [/sup (2)] ( + 6) X [/as /five ( + 5)] EQ (0) ]
+  [ X [/sup (2)] ( + 6) X EQ [/as /five [/minus (5)]] ]
+  [ X [/sup (2)] ( + 6) X ( + 9) EQ [/as /five [/minus (5)]] ( + 9) ]
+  [ (\() X ( + 3) (\)) [/sup (2)] EQ [/as /five (4)] ]
+  [ X [/as /three ( + 3)] EQ [/as /five [/pm (2)]] ]
+  [ X EQ [/as /three [/minus (3)]] [/as /five [( ) /pm ( 2)]] ]
+  [ X EQ [/as /three [/minus (1)]] (,     ) X ( = ) [/as /five [/minus (5)]] ]
+] def
+% what each line says, set under it while it holds
+/says [
+  [ (Solve for ) X ]
+  [ (Take 5 from both sides) ]
+  [ (Add 9 to both sides: half of 6, squared) ]
+  [ (The left side is now one square) ]
+  [ (Take the square root of both sides) ]
+  [ (Take 3 from both sides) ]
+  [ (Two answers) ]
+] def
+
+% ------------------------------------------------------------------ the clock
+/D 1.6 def                                       % seconds a move takes
+/moves [ 4.0 9.0 15.0 20.5 24.5 28.5 ] def        % when each move starts
+/progress-keys [
+  0 0
+  0 1 moves length 1 sub {
+    /k exch def
+    moves k get k                                % hold line k until the move
+    moves k get D add k 1 add /cubic-inout       % then become line k+1
+  } for
+] def
+% when line k arrives, and when it starts to leave
+/arrives { dup 0 eq { pop 0 } { 1 sub moves exch get D add } ifelse } def
+/departs { dup moves length lt { moves exch get } { pop 36 } ifelse } def
+
+% ------------------------------------------------------------------ places
+/PX 600 def                                      % the equals sign stays here
+/EqSize 68 def
+% the equation sits at mid height, and rises to make room for the figure
+/eqy { [ 0 340  6.0 340  7.0 560 /cubic-inout  20.5 560  21.4 340 /cubic-inout ] keyframes } def
+
+% the figure: x is drawn 170 long, 3 is drawn 85
+/FX 200 def /FT 100 def
+/F0x 640 FX FT add 2 div sub def /F0y 56 def
+/sqbox  [ F0x F0y FX FX ] def
+/rbox   [ F0x FX add F0y FT FX ] def
+/tbox   [ F0x F0y FX add FX FT ] def
+/cbox   [ F0x FX add F0y FX add FT FT ] def
+/allbox [ F0x F0y FX FT add dup ] def
+% runs box label -     a run list centred in a box
+/label {
+  /c boxpoint 13 sub 3 -1 roll dup runwidth 2 div 4 -1 roll exch sub 3 -1 roll moveto
+  showruns
+} def
+% box role piece -      a tinted panel with a firm edge
+/piece {
+  gsave ink 0.35 setalpha dup aload pop rectfill grestore
+  gsave /fg ink 2 setlinewidth aload pop rectstroke grestore
+} def
+% (text) x y sidelabel -
+/sidelabel { /muted ink /serif 34 face moveto show } def
+
+/figure {
+  /serif 40 face
+  % x squared
+  moves 0 get D add 0.6 add /pop { sqbox /accent2 piece /fg ink [ X [/sup (2)] ] sqbox label } enters
+  % two strips, 3 by x: the 6x, split in half
+  moves 0 get D add 1.6 add /wipe-right { rbox /accent3 piece /fg ink [ (3) X ] rbox label } enters
+  moves 0 get D add 2.2 add /mask-up { tbox /accent3 piece /fg ink [ (3) X ] tbox label } enters
+  % the sides
+  moves 0 get D add 0.9 add [/fade 0.5] {
+    /muted ink /serif 34 face
+    F0x FX 2 div add F0y 40 sub moveto [ X ] dup runwidth 2 div neg 0 rmoveto showruns
+    F0x 34 sub F0y FX 2 div add 10 sub moveto [ X ] showruns
+  } enters
+  moves 0 get D add 2.6 add [/fade 0.5] {
+    (3) F0x FX add FT 2 div add 8 sub F0y 40 sub sidelabel
+    (3) F0x 30 sub F0y FX add FT 2 div add 10 sub sidelabel
+  } enters
+  % the corner, 3 by 3: the 9, arriving with the equation's +9s
+  moves 1 get D 0.5 mul add /pop { cbox /accent piece /fg ink [ (9) ] cbox label } enters
+  % then one square, of side x + 3
+  moves 2 get 0.2 add moves 2 get D add 0.6 add /cubic-inout tween dup 0 gt {
+    /accent ink 5 setlinewidth 1 setlinejoin
+    newpath F0x F0y moveto FX FT add 0 rlineto 0 FX FT add rlineto FX FT add neg 0 rlineto closepath
+    0 exch trimpath stroke
+  } { pop } ifelse
+  moves 2 get D add 0.3 add [/fade 0.6] {
+    /accent ink /serif 34 face
+    F0x FX FT add add 24 add F0y FX FT add 2 div add 10 sub moveto [ X ( + 3) ] showruns
+  } enters
+} def
+
+/scene {
+  ground
+  /ey eqy def                      % read the clocks here: inside a scope, now starts again from 0
+  /eqs progress-keys keyframes def
+  /title 28 face /muted ink 64 660 moveto (Completing the square) show
+  % the figure is there while it helps, and leaves before the square root
+  moves 3 get 0.2 add [/fade 0.6] { figure } leaves
+  % the equation
+  /fg ink /serif EqSize face
+  PX ey moveto
+  0 [/fade 0.8] { lines eqs /eq morphruns } enters
+  % what the step does, under the line
+  0 1 lines length 1 sub {
+    /k exch def
+    k arrives 0.3 add  k departs 0.1 add  [/fade 0.5] [/fade 0.3] {
+      /muted ink /serif 34 face
+      says k get dup runwidth 2 div 640 exch sub ey 90 sub moveto showruns
+    } onstage
+  } for
+  % the answers, ringed
+  moves 5 get D add 2.0 add dup 1.0 add /cubic-inout tween /ringed exch def
+  ringed 0 gt {
+    /accent ink 3 setlinewidth /serif EqSize face
+    /L lines 6 get def
+    PX [ X ] runwidth sub [ EQ ] runwidth 2 div sub ey moveto    % where the line starts
+    L 0 runbox L 2 runbox boxunion  L 4 runbox L 6 runbox boxunion
+    circled 0 ringed trimpath stroke
+    circled 0 ringed trimpath stroke
+  } if
+} def

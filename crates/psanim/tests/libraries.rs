@@ -1107,6 +1107,133 @@ fn equations_are_runs_that_can_be_shown_whole_or_term_by_term() {
     assert!(ink_at(&mut m, 0.0).unwrap().4 > 100);
 }
 
+// --- one equation becoming the next (morphruns) -------------------------------------
+
+const EQ_FONT: &str = "/Times-Roman 20 face 1 1 1 setrgbcolor";
+
+/// A movie whose scene sets the font, moves to (x, 60) and runs `body`.
+fn eq_movie(setup: &str, x: u32, body: &str) -> Movie {
+    load(&format!(
+        "{setup} /scene {{ {EQ_FONT} {x} 60 moveto {body} }} def"
+    ))
+}
+
+#[test]
+fn morphruns_is_exactly_the_first_line_at_0_and_the_second_at_1() {
+    let lines = "/A [ (2) [/it (x)] ( + ) [/as /n (6)] ( = ) (10) ] def
+                 /A0 [ (2) [/it (x)] ( + ) (6) ( = ) (10) ] def
+                 /B [ (2) [/it (x)] ( = ) (10) ( ) [/as /n [/sub (6)]] ] def";
+    let at = |body: &str| pixels(&mut eq_movie(lines, 20, body), 0.0);
+    let a = at("A showruns");
+    let b = at("B showruns");
+    assert_ne!(a, b);
+    assert_eq!(
+        a,
+        at("A0 showruns"),
+        "a tag does not change how a term looks"
+    );
+    assert_eq!(
+        at("[ (1) [ ( ) /minus [/it (x)] ] ] showruns"),
+        at("[ (1) ( ) /minus [/it (x)] ] showruns"),
+        "a group is set as its runs"
+    );
+    assert_eq!(a, at("[A B] 0 morphruns"), "at 0, the first line");
+    assert_eq!(b, at("[A B] 1 morphruns"), "at 1, the second line");
+    assert_ne!(a, at("[A B] 0.5 morphruns"));
+    // Centred on the current point, and clamped outside 0..1.
+    let centred = |body: &str| pixels(&mut eq_movie(lines, 100, body), 0.0);
+    assert_eq!(
+        centred("A dup runwidth 2 div neg 0 rmoveto showruns"),
+        centred("[A B] -0.5 /center morphruns")
+    );
+    assert_eq!(
+        centred("B dup runwidth 2 div neg 0 rmoveto showruns"),
+        centred("[A B] 1.5 << /Align /center >> morphruns")
+    );
+    // The current point is kept.
+    let n = nums(&eval_at(
+        lines,
+        &format!("{EQ_FONT} 20 60 moveto [A B] 0.3 /center morphruns currentpoint == =="),
+        0.0,
+    ));
+    assert_eq!(n, [60.0, 20.0]);
+}
+
+#[test]
+fn a_matched_term_slides_between_its_two_places() {
+    let lines = "/L [ [ (a) (        ) ] [ (        ) (a) ] ] def";
+    let m = |u: f64| eq_ink(lines, &format!("L {u} morphruns")).unwrap();
+    let (a0, a5, a1) = (m(0.0), m(0.5), m(1.0));
+    assert!(a1.0 > a0.0 + 20, "{a0:?} {a1:?}");
+    assert!(
+        a5.0 > a0.0 + 5 && a5.0 + 5 < a1.0,
+        "half way: {a0:?} {a5:?} {a1:?}"
+    );
+    // It is the same term moving, at full strength, not two fading.
+    assert!(a5.4 * 10 > a0.4 * 8, "{a0:?} {a5:?}");
+}
+
+/// Where the ink of `body` falls, the line starting at (20, 60).
+fn eq_ink(setup: &str, body: &str) -> Option<(u32, u32, u32, u32, usize)> {
+    ink_at(&mut eq_movie(setup, 20, body), 0.0)
+}
+
+#[test]
+fn a_term_with_no_partner_leaves_and_a_new_one_arrives() {
+    let lines = "/L [ [ (a) ] [ (            ) (b) ] ] def";
+    let at = |u: f64| eq_ink(lines, &format!("L {u} morphruns"));
+    let (a, b) = (at(0.0).unwrap(), at(1.0).unwrap());
+    assert!(a.2 < b.0, "{a:?} {b:?}");
+    let early = at(0.05).unwrap();
+    assert!(early.2 <= a.2 + 1, "b has not begun to arrive: {early:?}");
+    let late = at(0.95).unwrap();
+    assert!(late.0 + 1 >= b.0, "a has gone: {late:?}");
+    // Half way, a is fading out and b fading in.
+    let mid = at(0.5).unwrap();
+    assert!(mid.0 <= a.0 + 1 && mid.2 + 1 >= b.2, "{mid:?}");
+}
+
+#[test]
+fn the_kth_copy_of_a_term_is_the_kth_copy_unless_a_tag_says_otherwise() {
+    // x + x becomes x. Untagged, the first x stays and the rest leave; with
+    // a tag, the second x is the one that stays, and slides into place.
+    let plain = "/L [ [ [/it (x)] ( + ) [/it (x)] ] [ [/it (x)] ] ] def";
+    let tagged = "/L [ [ [/it (x)] ( + ) [/as /k [/it (x)]] ] [ [/as /k [/it (x)]] ] ] def";
+    let p = eq_ink(plain, "L 0.7 morphruns").unwrap();
+    let t = eq_ink(tagged, "L 0.7 morphruns").unwrap();
+    let home = eq_ink(plain, "L 1 morphruns").unwrap();
+    assert_eq!(
+        (p.0, p.2),
+        (home.0, home.2),
+        "the first x held still: {p:?}"
+    );
+    assert!(
+        t.0 > home.0 + 3,
+        "the second x is on its way: {t:?} {home:?}"
+    );
+}
+
+#[test]
+fn a_chain_of_lines_is_one_progress_number() {
+    let lines = "/L1 [ (2) [/it (x)] ( + ) (6) ( = ) (10) ] def
+                 /L2 [ (2) [/it (x)] ( = ) (10) ( ) /minus ( 6) ] def
+                 /L3 [ [/it (x)] ( = ) (2) ] def
+                 /L [ L1 L2 L3 ] def";
+    let at = |body: &str| pixels(&mut eq_movie(lines, 20, body), 0.0);
+    let shown: Vec<_> = ["L1", "L2", "L3"]
+        .iter()
+        .map(|l| at(&format!("{l} showruns")))
+        .collect();
+    for (k, want) in shown.iter().enumerate() {
+        assert_eq!(&at(&format!("L {k} morphruns")), want, "line {k}");
+    }
+    assert_eq!(at("L 7 morphruns"), shown[2], "held at the last line");
+    for s in ["0.5", "1.5"] {
+        let mid = at(&format!("L {s} morphruns"));
+        assert!(shown.iter().all(|l| *l != mid), "{s} is in between");
+    }
+}
+
 #[test]
 fn a_path_straightens_without_changing_length() {
     let out = eval_at(
