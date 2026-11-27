@@ -1476,42 +1476,208 @@ fn a_pixel_font_falls_back_and_the_nine_row_font_has_descenders() {
     assert!(low(widths("9", 103)));
 }
 
+/// The name pkpixel gives the face that PSCat's `lib/fonts/{file}.ps` defines
+/// first: the tests read names from pkpixel's table, so a rename is one line.
+fn face(file: &str) -> String {
+    let path = format!("lib/fonts/{file}.ps");
+    psanim::pixel_faces()
+        .into_iter()
+        .find(|(_, f)| *f == path)
+        .map(|(n, _)| format!("/{n}"))
+        .unwrap_or_else(|| panic!("no face for {path} in pkpixel's table"))
+}
+
+/// The columns a glyph's rows (top first, '#' lit) make, padded to `width`.
+fn columns_of(rows: &[String], width: usize) -> Vec<u64> {
+    (0..width)
+        .map(|c| {
+            rows.iter()
+                .enumerate()
+                .filter(|(_, r)| r.as_bytes().get(c) == Some(&b'#'))
+                .map(|(i, _)| 1u64 << i)
+                .sum()
+        })
+        .collect()
+}
+
+#[test]
+fn every_glyph_of_every_pixel_face_converts_to_its_bitmap() {
+    let faces = psanim::pixel_faces();
+    assert_eq!(faces.len(), 6, "pkpixel's table: {faces:?}");
+    for (name, _) in &faces {
+        // For each printable code: the face's rows (through its Encoding), then
+        // the columns pixelfont made; the face's cell when it is monospaced.
+        let out = eval_at(
+            &format!("/F /{name} pixelface def /P /{name} pixelfont def"),
+            "F /Proportional known { F /Proportional get } { false } ifelse
+             { (cell 0\n) print } { (cell ) print F /Cell get 1 sub == } ifelse
+             32 1 126 { /cd exch def
+               (R) print F /Bitmaps get F /Encoding get cd get get { (|) print print } forall (\n) print
+               (C) print P cd pixelcols { ( ) print 20 string cvs print } forall (\n) print
+             } for",
+            0.0,
+        );
+        let mut lines = out.lines();
+        let cell: usize = lines
+            .next()
+            .and_then(|l| l.strip_prefix("cell "))
+            .and_then(|n| n.trim().parse().ok())
+            .unwrap_or_else(|| panic!("/{name}: {out}"));
+        let mut code = 32;
+        while let (Some(r), Some(c)) = (lines.next(), lines.next()) {
+            let rows: Vec<String> = r
+                .strip_prefix('R')
+                .unwrap()
+                .split('|')
+                .skip(1)
+                .map(String::from)
+                .collect();
+            let got: Vec<u64> = c
+                .strip_prefix('C')
+                .unwrap()
+                .split_whitespace()
+                .map(|n| n.parse().unwrap())
+                .collect();
+            let natural = rows.first().map_or(1, |r| r.len().max(1));
+            let width = if cell > 0 { natural.max(cell) } else { natural };
+            assert_eq!(
+                got,
+                columns_of(&rows, width),
+                "/{name} code {code}: rows {rows:?}"
+            );
+            if code == 32 {
+                // the space: blank, and as wide as the face says
+                assert!(
+                    got.iter().all(|m| *m == 0) && !got.is_empty(),
+                    "/{name} space {got:?}"
+                );
+                if cell > 0 {
+                    assert_eq!(
+                        got.len(),
+                        cell,
+                        "/{name}: a monospaced space fills the cell"
+                    );
+                }
+            }
+            code += 1;
+        }
+        assert_eq!(code, 127, "/{name}: every printable code");
+    }
+}
+
 #[test]
 fn a_pscat_pixel_face_gives_its_bitmaps_as_columns() {
+    let (diode7, diode5) = (face("diode7"), face("diode5"));
+    let (phosphor, pinpoint) = (face("phosphor"), face("pinpoint"));
     // Diode7's A: a crossbar on row 4 (pkpixel's is on row 3), five lamps wide.
-    let out = eval_at("", "/Diode7 pixelfont 65 pixelcols { == } forall", 0.0);
+    let out = eval_at(
+        "",
+        &format!("{diode7} pixelfont 65 pixelcols {{ == }} forall"),
+        0.0,
+    );
     assert_eq!(nums(&out), vec![126.0, 17.0, 17.0, 17.0, 126.0], "{out}");
     let out = eval_at("", "7 pixelfont 65 pixelcols { == } forall", 0.0);
     assert_eq!(nums(&out), vec![126.0, 9.0, 9.0, 9.0, 126.0], "{out}");
-    // Heights by /Rows; a monospaced face pads every glyph (space too) to its cell.
+    // Heights by /Rows.
     let out = eval_at(
         "",
-        "[/Phosphor /Pinpoint-Draft /Diode7 /Diode5] { pixelfont /Rows get == } forall 9 pixelfont /Rows get ==",
+        &format!(
+            "[{phosphor} {pinpoint} {diode7} {diode5}] {{ pixelfont /Rows get == }} forall 9 pixelfont /Rows get =="
+        ),
         0.0,
     );
     assert_eq!(nums(&out), vec![13.0, 9.0, 8.0, 5.0, 9.0], "{out}");
     let out = eval_at(
         "",
-        "/Phosphor pixelfont dup 32 pixelcols length == (Hi) pixeltext length ==",
+        &format!("{phosphor} pixelfont (Hi) pixeltext length =="),
         0.0,
     );
-    assert_eq!(nums(&out), vec![7.0, 15.0], "{out}");
+    assert_eq!(nums(&out), vec![15.0], "{out}");
     // Diode5 has no lower case: 'a' is 'A'. The faces borrow psanim's degree sign.
     let cols = |e: &str| eval_at("", &format!("{e} {{ == }} forall"), 0.0);
     assert_eq!(
-        cols("/Diode5 pixelfont 97 pixelcols"),
-        cols("/Diode5 pixelfont 65 pixelcols")
+        cols(&format!("{diode5} pixelfont 97 pixelcols")),
+        cols(&format!("{diode5} pixelfont 65 pixelcols"))
     );
-    assert!(!cols("/Diode7 pixelfont 176 pixelcols").is_empty());
-    assert_ne!(
-        cols("/Diode7 pixelfont 176 pixelcols"),
-        cols("/Diode7 pixelfont 63 pixelcols")
-    );
-    // pixelface loads the face's file; findfont alone does not.
-    let out = eval_at("", "/Phosphor pixelface /Bitmaps known ==", 0.0);
+    let degree = cols(&format!("{diode7} pixelfont 176 pixelcols"));
+    assert!(!degree.is_empty());
+    assert_ne!(degree, cols(&format!("{diode7} pixelfont 63 pixelcols")));
+    // pixelface loads the face's file; any other font that exists is findfont.
+    let out = eval_at("", &format!("{phosphor} pixelface /Bitmaps known =="), 0.0);
     assert_eq!(out, "true");
     let out = eval_at("", "/Courier pixelface /FontName get ==", 0.0);
     assert_eq!(out, "/Courier");
+}
+
+#[test]
+fn a_substitute_cached_by_findfont_does_not_stop_the_face_loading() {
+    // findfont on a face never loaded caches a substitute under its name.
+    let phosphor = face("phosphor");
+    let out = eval_at(
+        "",
+        &format!("{phosphor} findfont pop {phosphor} pixelface /Bitmaps known =="),
+        0.0,
+    );
+    assert_eq!(out, "true");
+}
+
+#[test]
+fn a_bad_face_is_an_error_that_names_the_faces_and_leaves_no_dictionary_open() {
+    for bad in [
+        "/NoSuchFace pixelfont",
+        "/Courier pixelfont",
+        "/Courrier pixelface",
+        "/Courier /Courier << >> pixelvariant",
+    ] {
+        let out = eval_at(
+            "",
+            &format!(
+                "countdictstack /c0 exch def mark {{ {bad} }} stopped /ok exch def cleartomark ok == countdictstack c0 sub =="
+            ),
+            0.0,
+        );
+        assert_eq!(nums(&out), vec![0.0], "{bad}: {out}");
+        assert!(out.starts_with("true"), "{bad} must fail: {out}");
+    }
+    // Uncaught, the error says which names it takes.
+    let mut m = load("/scene { /Phosfor pixelface pop } def");
+    let e = m.render_at(0.0).expect_err("an error").to_string();
+    for (name, _) in psanim::pixel_faces() {
+        assert!(e.contains(&format!("/{name}")), "{e}");
+    }
+}
+
+#[test]
+fn loading_a_face_defines_nothing_in_the_movies_dictionaries() {
+    // The font files define pf-variant and a ...Dict; pkpixel runs them privately.
+    let all: String = psanim::pixel_faces()
+        .iter()
+        .map(|(n, _)| format!("/{n} pixelface pop "))
+        .collect();
+    let out = eval_at(
+        "/pf-variant 123 def /PhosphorDict 7 def /Diode5Dict (mine) def",
+        &format!("{all} /pf-variant load == PhosphorDict == Diode5Dict == /PinpointDict where =="),
+        0.0,
+    );
+    assert_eq!(
+        out.split_whitespace().collect::<Vec<_>>(),
+        ["123", "7", "(mine)", "false"],
+        "{out}"
+    );
+    // The dials are still there, through pixelvariant.
+    let out = eval_at(
+        &format!(
+            "/Round {} << /DotShape /round >> pixelvariant",
+            face("phosphor")
+        ),
+        "/Round findfont dup /DotShape get == /Bitmaps known ==",
+        0.0,
+    );
+    assert_eq!(
+        out.split_whitespace().collect::<Vec<_>>(),
+        ["/round", "true"],
+        "{out}"
+    );
 }
 
 #[test]

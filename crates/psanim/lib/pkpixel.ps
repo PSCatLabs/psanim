@@ -243,20 +243,65 @@
   /Diode5         (lib/fonts/diode5.ps)       % LED strip, 5 rows, capitals only
 >> def
 
+% Loading a face runs PSCat's file in a dictionary of its own, so the names
+% the file defines (PhosphorDict, PinpointDict, Diode7Dict, Diode5Dict and
+% pf-variant) never land in, or overwrite, the movie's own. pf-variant is
+% kept here for `pixelvariant`; the font dictionaries need no name at draw
+% time (BuildChar reads the font dictionary it is handed).
+/.pxvariant null def
+/.pxcache 8 dict def                        % face name -> its columns, once per load
+
+% name .pxreal? -> bool    is the font registered under name the face itself
+% (a substitute that findfont cached under the name has no /Bitmaps)
+/.pxreal? {
+  FontDirectory exch 2 copy known { get /Bitmaps known } { pop pop false } ifelse
+} bind def
+
+% name .pxload -    run the face's file, privately
+/.pxload {
+  .pxfaces exch get
+  20 dict begin
+    { run } stopped
+    currentdict /pf-variant known { /.pxvariant currentdict /pf-variant get store } if
+  end
+  { /pixelface errordict /invalidfont get exec } if
+} bind def
+
 % name pixelface -> font
-%   findfont that loads a PSCat pixel face's file the first time it is asked
-%   for (findfont does not load them by name). Any other name is findfont.
+%   findfont for PSCat's pixel faces, loading the face's file the first time
+%   (findfont does not load them by name, and would hand back a substitute).
+%   Any other name must be a font that exists: a misspelt one is a rangecheck,
+%   not Helvetica.
 /pixelface {
-  FontDirectory 1 index known not {
-    .pxfaces 1 index known { userdict begin .pxfaces 1 index get run end } if
-  } if
-  findfont
+  dup type /nametype ne { /pixelface errordict /typecheck get exec } if
+  .pxfaces 1 index known {
+    dup .pxreal? not { dup .pxload } if
+    dup .pxreal? not { /pixelface errordict /invalidfont get exec } if
+    findfont
+  } {
+    FontDirectory 1 index known { dup FontDirectory exch get /FontName known } { false } ifelse
+    { findfont } {
+      dup /Font resourcestatus { pop pop findfont } { /pixelface errordict /rangecheck get exec } ifelse
+    } ifelse
+  } ifelse
+} bind def
+
+% /New /Base << dials >> pixelvariant -    a copy of a pixel face with its dials
+%   changed (/DotShape /square or /round, /DotSize, /ScanGap, /Interpolate),
+%   defined as /New: the faces' own pf-variant, without the name.
+/pixelvariant {
+  1 index .pxfaces exch known not { /pixelvariant errordict /rangecheck get exec } if
+  1 index pixelface pop
+  /.pxvariant load null eq { 1 index .pxload } if  % the face was loaded some other way
+  /.pxvariant load exec
 } bind def
 
 % name .pxfacefont -> font    the columns of a pixel face's /Bitmaps
 /.pxfacefont {
+  .pxcache 1 index known { .pxcache exch get } {
+  dup pixelface                            % (errors here, before begin, leave no dictionary open)
   12 dict begin
-    pixelface /pf exch def
+    /pf exch def
     pf /Bitmaps get /bm exch def
     pf /Encoding get /enc exch def
     pf /Proportional known { pf /Proportional get } { false } ifelse not
@@ -280,11 +325,15 @@
     .pxglyphs7 { dup 0 get 0 get 176 eq { 1 .pxrowscols 1 index exch 176 exch put } { pop } ifelse } forall
     dup /Rows nrows put
   end
+  dup .pxcache 4 2 roll put
+  } ifelse
 } bind def
 
 % rows pixelfont -> font    (or a pixel face's name)
 /pixelfont {
-  dup type /nametype eq { .pxfacefont } {
+  dup type /nametype eq {
+    .pxfaces 1 index known not { /pixelfont errordict /rangecheck get exec } if
+    .pxfacefont } {
   dup 5 eq { pop [ .pxglyphs5 ] .pxmkfont dup /Rows 5 put } {
     dup 7 eq { pop [ .pxglyphs7 ] .pxmkfont dup /Rows 7 put } {
       dup 9 eq { pop [ .pxglyphs7 .pxglyphs9 ] .pxmkfont dup /Rows 9 put } {
