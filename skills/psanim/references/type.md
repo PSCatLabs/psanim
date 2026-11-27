@@ -16,6 +16,7 @@ Scene bodies below run on a 640x360 canvas, 4 seconds, libraries loaded.
 - [Marking a word](#marking-a-word)
 - [Numbers that count](#numbers-that-count)
 - [Typing](#typing)
+- [Text in any language](#text-in-any-language)
 - [Emoji](#emoji)
 - [Captions](#captions)
 - [End credits](#end-credits)
@@ -209,12 +210,65 @@ planmark` (see [catalog.md](catalog.md)).
 } def
 ```
 
+## Text in any language
+
+A font chosen with `face` reads its strings as UTF-8: write the text as it
+is, in a `.ps` file saved as UTF-8. Accented Latin, Greek, Cyrillic, signs
+(→ ≠ ± €) and colour emoji (👋🏽 🇯🇵 👨‍👩‍👧, flags, skin tones, keycaps and
+ZWJ sequences joined) draw from the font's own face or from PSCat's
+fallback faces, and `stringwidth` measures what `show` draws, so
+`showin`, `fitface`, `paragraph`, `kinetic` and `captions` place it right.
+
+```postscript
+ground /title 40 face /fg ink
+(Grüße · Привет · Γειά σου) [40 220 560 80] /c showin
+/body 30 face /accent ink
+(¡Hola! 👋🏽  café ☕  1 → 2  🇫🇷 🇧🇷 🇺🇦) [40 120 560 60] /c showin
+```
+
+The words that step through a string by character (`typed`, `typewrite`,
+`eachglyph`, `eachspaced`, `eachonpath`, `kinetic`'s `/glyphs`, the
+code block's `/Reveal`) step by what a reader calls a character, the
+string's grapheme clusters: `é`, `🇫🇷` and `👨‍👩‍👧` are one each, never cut in
+half. `(text) charcount` is that count. ASCII is one character per byte,
+as it always was.
+
+```postscript
+ground /display 56 face /fg ink
+(Olá 👋🏽 🌍) [40 140 560 100] /c placetext (Olá 👋🏽 🌍) /glyphs 0.12 /pop kinetic
+/body 26 face /muted ink 60 80 moveto (Ωμέγα 🧑🏽‍💻) 0 3 /linear tween typewrite
+```
+
+**Where it stops.** Korean, Japanese, Chinese, Thai, Arabic, the Indic
+scripts, Armenian, Georgian and Ethiopic have no face in the chain: each
+of their characters draws as an empty box, and `psanim check` (and
+`frame`) says which, once per character. Hebrew draws, but left to right:
+PSCat does no shaping or bidi. Fallback
+faces are regular weight, so a bold title's accented capital that comes
+from a fallback is lighter than its neighbours.
+
+A font chosen with `findfont` still reads bytes, one character each, as
+PostScript always has. `/Helvetica findfont unicodefont 24 scalefont
+setfont` makes it read UTF-8; `check` warns when UTF-8 text is shown in a
+font that reads bytes. Symbol and ZapfDingbats keep their codes (`sym`
+relies on that), and so does a font that states which it wants.
+
+One thing changes for ASCII in a `face` font: `'` and `` ` `` are the
+typewriter apostrophe and grave, as in Unicode, where a byte font draws
+the curly ’ and ‘ of PostScript's standard encoding. For curly quotes, type
+them: `(it’s “here”)`.
+
+The emoji art is Twemoji (CC-BY 4.0): a film that shows it should say so,
+for example in its README: "Emoji graphics by Twemoji (Twitter, Inc and
+other contributors), CC BY 4.0".
+
 ## Emoji
 
-Real Unicode emoji need font support PSCat does not have yet, so psanim
-draws twelve of its own: `emojinames` lists them (smile laugh wink sad cool
-heart thumbsup party fire check rocket eyes). They are flat, round and in
-one style, and paint in their own colours.
+`face` fonts draw real colour emoji (above). psanim also draws twelve of
+its own, which predate them: `emojinames` lists them (smile laugh wink sad
+cool heart thumbsup party fire check rocket eyes). They are flat, round and
+in one style, paint in their own colours, and scale to any size without a
+font.
 
 `/name emoji` draws one as if it were a letter of the current font: sized
 to it, sitting on its baseline, and the current point moves past it.
@@ -347,9 +401,9 @@ false` turns it off.
 
 ## Mathematics
 
-The text fonts have no pi, no arrows, no "not equal": **a non-ASCII
-character in a string shows as a blank, silently.** `/name sym` shows a
-sign from the Symbol font at the current size (`/neq /le /ge /approx
+A `face` font takes a sign typed into the string (`(2πr)`, `(a ≠ b)`).
+`/name sym` shows one from the Symbol font at the current size, in
+Symbol's design and in any font (`/neq /le /ge /approx
 /times /dot /arrow /infinity /pi /theta /Sigma` ... the list is in
 `psanim api sym`).
 

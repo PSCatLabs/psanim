@@ -45,9 +45,12 @@ Working and tested on macOS (Apple silicon):
   merged in `integration-0.2`; the merge commits say what met what.
 - PSCat: a git dependency on `feature/0.8.0`, pinned at `d385971` by
   `Cargo.lock`. The host API (PSCatLabs/pscat#1410) is merged there.
-  psanim uses none of 0.8.0's additions yet; PSCatLabs/pscat#1488 lists
-  them (line numbers in errors, the UTF-8 check, Unicode text, pixel
-  fonts).
+  PSCatLabs/pscat#1488 lists 0.8.0's additions (line numbers in errors,
+  the UTF-8 check, Unicode text, pixel fonts). psanim uses Unicode text
+  (`face` fonts read UTF-8 through `unicodefont`, the one place that
+  names PSCat's provisional `/PSCatUnicode` key) and the UTF-8 check
+  (`Movie::text_warnings`, reported by `check` and `frame` with PSCat's
+  missing-glyph notes).
 
 ## Decisions worth knowing before changing things
 

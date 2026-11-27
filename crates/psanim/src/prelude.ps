@@ -189,53 +189,74 @@
 } bind def
 
 % --- text ------------------------------------------------------------------------
-% (str) u typed -> (prefix)     the first u (0..1) of the string, by characters
-/typed {
-  0 1 clamp 1 index length mul round cvi 0 exch getinterval
-} bind def
+% (str) u typed -> (prefix) is native: the first u (0..1) of the string, by
+% characters. A character is what `charcount` counts: in UTF-8 text an accent
+% stays on its letter and an emoji sequence stays whole; ASCII and other bytes
+% are one character each.
 % (str) showcenter              show centred on the current point
 /showcenter {
   dup stringwidth pop 2 div neg 0 rmoveto show
 } bind def
+% font unicodefont -> font      the font, reading its strings as UTF-8:
+%   accented letters, Greek, Cyrillic, signs and colour emoji, the characters
+%   its face lacks from PSCat's fallback faces. `face` does this for you.
+%   Symbol, ZapfDingbats, Type 3 fonts and a font that already says which it
+%   reads are returned as they are. The one place psanim names PSCat's key.
+/.utf8font {             % font -> font     (a dict of our own, as scalefont makes)
+  dup /PSCatUnicode known not {
+    dup /FontType known { dup /FontType get dup 1 eq exch 42 eq or } { false } ifelse {
+      dup /Encoding known {
+        dup /Encoding get dup type /arraytype eq { 65 get /A eq } { pop false } ifelse
+      } { true } ifelse
+      { dup /PSCatUnicode true put } if
+    } if
+  } if
+} bind def
+/unicodefont { 1 scalefont .utf8font } bind def
+% str offs i .charpre -> (prefix)    the characters before character i
+/.charpre { get 0 exch getinterval } bind def
+% str offs i .charat -> (c)          character i
+/.charat { 2 copy get 3 1 roll 1 add get 1 index sub getinterval } bind def
 % (str) proc eachglyph          run proc once per character, with `(c) i` on
 %                               the stack and the current point at that
 %                               character's origin on the baseline.
-/.glyphstep {            % i str proc x0 y0
-  4 index 4 index exch 0 exch getinterval stringwidth pop   % i str proc x0 y0 wprefix
-  3 -1 roll add exch moveto                                  % i str proc
-  3 1 roll                                                   % proc i str
-  1 index 1 getinterval exch                                 % proc (c) i
+/.glyphstep {            % i str offs proc x0 y0
+  4 index 4 index 7 index .charpre stringwidth pop          % i str offs proc x0 y0 wprefix
+  3 -1 roll add exch moveto                                  % i str offs proc
+  4 1 roll 2 index .charat exch                              % proc (c) i
   3 -1 roll exec
 } bind def
 /eachglyph {             % str proc
-  currentpoint                                 % str proc x0 y0
-  3 index length 1 sub 0 exch 1 exch           % str proc x0 y0 0 1 n-1   (for's three operands, reordered below)
-  7 3 roll                                     % 0 1 n-1 str proc x0 y0
-  [ 5 1 roll /.glyphstep cvx ] cvx             % 0 1 n-1 { str proc x0 y0 .glyphstep }
+  1 index .charoffsets exch                    % str offs proc
+  currentpoint                                 % str offs proc x0 y0
+  3 index length 2 sub 0 exch 1 exch           % str offs proc x0 y0 0 1 n-1
+  8 3 roll                                     % 0 1 n-1 str offs proc x0 y0
+  [ 6 1 roll /.glyphstep cvx ] cvx             % 0 1 n-1 { str offs proc x0 y0 .glyphstep }
   for
 } bind def
 
 % (str) track spacedwidth -> w   the width of the string set with `track`
 %                               extra units after every character but the last
 /spacedwidth {
-  exch dup stringwidth pop exch length 1 sub 0 max 3 -1 roll mul add
+  exch dup stringwidth pop exch charcount 1 sub 0 max 3 -1 roll mul add
 } bind def
 % (str) track proc eachspaced   like eachglyph, letterspaced: each character's
 %                               origin is `track` units further along than
 %                               its natural place.
-/.spacedstep {           % i str track proc x0 y0
-  5 index 5 index exch 0 exch getinterval stringwidth pop   % i str track proc x0 y0 wprefix
-  6 index 5 index mul add                                     % ... wprefix + i*track
-  3 -1 roll add exch moveto                                   % i str track proc
-  exch pop                                                    % i str proc
-  3 1 roll 1 index 1 getinterval exch                         % proc (c) i
+/.spacedstep {           % i str offs track proc x0 y0
+  5 index 5 index 8 index .charpre stringwidth pop          % ... wprefix
+  7 index 5 index mul add                                     % ... wprefix + i*track
+  3 -1 roll add exch moveto                                   % i str offs track proc
+  exch pop                                                    % i str offs proc
+  4 1 roll 2 index .charat exch                               % proc (c) i
   3 -1 roll exec
 } bind def
 /eachspaced {            % str track proc
-  currentpoint                                 % str track proc x0 y0
-  4 index length 1 sub 0 exch 1 exch           % str track proc x0 y0 0 1 n-1
-  8 3 roll                                     % 0 1 n-1 str track proc x0 y0
-  [ 6 1 roll /.spacedstep cvx ] cvx
+  2 index .charoffsets 3 1 roll                % str offs track proc
+  currentpoint                                 % str offs track proc x0 y0
+  4 index length 2 sub 0 exch 1 exch           % str offs track proc x0 y0 0 1 n-1
+  9 3 roll                                     % 0 1 n-1 str offs track proc x0 y0
+  [ 7 1 roll /.spacedstep cvx ] cvx
   for
 } bind def
 % (str) u0 proc eachonpath      set the string along the current path, starting
@@ -247,25 +268,26 @@
 %                               point is the character's origin. The current
 %                               path is left as it was. `{ pop show }` sets the
 %                               text.
-/.onpathstep {           % i str u0 proc len
-  4 index 4 index exch 0 exch getinterval stringwidth pop    % i str u0 proc len wprefix
-  4 index 6 index 1 getinterval stringwidth pop 2 div        % ... wprefix halfw
-  dup 3 1 roll add                                            % i str u0 proc len halfw centre
-  2 index div 4 index add                                     % i str u0 proc len halfw u
-  pathpoint                                                   % i str u0 proc len halfw x y ang
+/.onpathstep {           % i str offs u0 proc len
+  4 index 4 index 7 index .charpre stringwidth pop           % i str offs u0 proc len wprefix
+  5 index 5 index 8 index .charat stringwidth pop 2 div      % ... wprefix halfw
+  dup 3 1 roll add                                            % i str offs u0 proc len halfw centre
+  2 index div 4 index add                                     % i str offs u0 proc len halfw u
+  pathpoint                                                   % i str offs u0 proc len halfw x y ang
   gsave
     3 1 roll translate rotate newpath
-    neg 0 moveto                                              % i str u0 proc len
-    pop exch pop                                              % i str proc
-    3 1 roll 1 index 1 getinterval exch                       % proc (c) i
+    neg 0 moveto                                              % i str offs u0 proc len
+    pop exch pop                                              % i str offs proc
+    4 1 roll 2 index .charat exch                             % proc (c) i
     3 -1 roll exec
   grestore
 } bind def
 /eachonpath {            % str u0 proc
-  pathlength                                   % str u0 proc len
-  3 index length 1 sub 0 exch 1 exch           % str u0 proc len 0 1 n-1
-  7 3 roll                                     % 0 1 n-1 str u0 proc len
-  [ 5 1 roll /.onpathstep cvx ] cvx
+  2 index .charoffsets 3 1 roll                % str offs u0 proc
+  pathlength                                   % str offs u0 proc len
+  3 index length 2 sub 0 exch 1 exch           % str offs u0 proc len 0 1 n-1
+  8 3 roll                                     % 0 1 n-1 str offs u0 proc len
+  [ 6 1 roll /.onpathstep cvx ] cvx
   for
 } bind def
 

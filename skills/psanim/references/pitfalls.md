@@ -221,9 +221,23 @@ render larger.
 
 ## A character does not appear
 
-The text fonts are ASCII. A string containing "π", "→", "≠" or any other
-non-ASCII character shows a blank for it, with no error. Use pktype's
-`/pi sym`, `/arrow sym`, `/neq sym`, or a run list (`showruns`).
+Read `psanim check`'s warnings; it names the character and the font.
+
+- **An empty box (.notdef) where a character should be**: no face has it.
+  Korean, Japanese, Chinese, Thai, Arabic, the Indic scripts, Armenian,
+  Georgian and Ethiopic are not in PSCat's fallback faces yet. `check`
+  warns `no glyph for U+AC00 (가) in /Helvetica ...`, once per character.
+  Leave the text out, or set it as a picture you draw.
+- **Stray accents or blanks**: UTF-8 text in a font chosen with
+  `findfont`, which reads one byte per character. `check` warns `UTF-8
+  text (é) shown in /Helvetica, a font that reads one byte ...`. Choose the
+  font with `face`, or `/Helvetica findfont unicodefont 24 scalefont
+  setfont`.
+- **A sign in a `sym` or run list**: Symbol reads its own codes, so write
+  `/pi sym`, not `(π) sym`.
+- **Half an emoji, a flag as two letters**: a string cut by byte
+  (`getinterval`, `length`) can split a character. Count and cut with
+  `charcount`, `typed` and `eachglyph`, which step by whole characters.
 
 ## Single blank frames between sections
 

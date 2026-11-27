@@ -1484,3 +1484,184 @@ fn a_pixel_picture_is_its_columns_and_a_bad_font_size_is_an_error() {
     let e = m.render_at(0.0).expect_err("an error").to_string();
     assert!(e.contains("rangecheck") || e.contains("pixelfont"), "{e}");
 }
+
+// --- UTF-8 text ---------------------------------------------------------------
+
+/// Characters of five kinds, each one character to a reader: an accented
+/// letter, a skin-toned emoji, a flag, a ZWJ family, and ASCII.
+const MIXED: &str = "é👋🏽🇫🇷👨‍👩‍👧x";
+
+#[test]
+fn a_face_font_reads_utf8_measures_it_and_draws_colour_emoji() {
+    // Measured in a face font, `é` is one glyph; in a byte font it is two
+    // codes (stray accents), so the widths differ.
+    let w = nums(&eval_at(
+        "",
+        "/body 20 face (é) stringwidth pop == /Helvetica findfont 20 scalefont setfont (é) stringwidth pop ==",
+        0.0,
+    ));
+    assert_eq!(w.len(), 2);
+    assert!(w[0] > 5.0 && (w[0] - w[1]).abs() > 0.5, "{w:?}");
+    // A flag draws in colour (red and blue), where text is white.
+    let mut m = load("/scene { /body 40 face 20 40 moveto (🇫🇷) show } def");
+    let f = m.render_at(0.0).unwrap();
+    let (mut red, mut blue) = (false, false);
+    for p in f.premultiplied.chunks(4) {
+        red |= p[0] > 150 && p[1] < 80 && p[2] < 80;
+        blue |= p[2] > 100 && p[0] < 60;
+    }
+    assert!(red && blue, "the flag is not drawn in colour");
+    assert!(m.text_warnings().is_empty(), "{:?}", m.text_warnings());
+    // showin centres by what is drawn: the ink sits in the middle of the box.
+    let mut m = load("/scene { 1 setgray /body 30 face (Grüße 👋🏽) [0 0 200 120] /c showin } def");
+    let (x0, _, x1, _, _) = ink_at(&mut m, 0.0).unwrap();
+    assert!((x0 as i32 - (200 - x1) as i32).abs() <= 3, "{x0} {x1}");
+}
+
+#[test]
+fn the_per_character_words_never_cut_a_character() {
+    let src = format!("/s ({MIXED}) def");
+    let out = eval_at(
+        &src,
+        "s charcount ==  s length ==  s 0.4 typed charcount ==  (hello) 0.5 typed ==  (hello) charcount ==
+         /body 20 face 10 10 moveto
+         () s { pop strcat } eachglyph s eq ==
+         0 s { pop pop 1 add } eachglyph ==
+         0 s 3 { pop pop 1 add } eachspaced ==
+         s 3 spacedwidth s stringwidth pop sub ==",
+        0.0,
+    );
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(
+        lines,
+        [
+            "5",
+            &MIXED.len().to_string(),
+            "2",
+            "(hel)",
+            "5",
+            "true",
+            "5",
+            "5",
+            "12.0"
+        ],
+        "{out}"
+    );
+    // Bytes that are not UTF-8 (a Symbol code, Latin-1) stay one per byte.
+    assert_eq!(eval_at("", "(\\271a\\351) charcount ==", 0.0), "3");
+    // The byte helpers are safe: a multi-byte character holds no space or
+    // newline byte, so splitting and joining keep it whole.
+    let out = eval_at(
+        "",
+        "(añb 👋🏽\nc) splitwords dup length == {} forall strcat strcat (añb👋🏽c) eq ==",
+        0.0,
+    );
+    assert_eq!(out.lines().collect::<Vec<_>>(), ["3", "true"], "{out}");
+}
+
+#[test]
+fn kinetic_typewrite_and_a_code_reveal_take_utf8_whole() {
+    let mut m = load(&format!(
+        "/scene {{ ground /title 24 face
+           ({MIXED} ok) [0 70 200 40] /c placetext ({MIXED} ok) /glyphs 0.2 /pop kinetic
+           /body 14 face 10 40 moveto ({MIXED}) now 4 div typewrite
+           /src (let s = \"{MIXED}\";) /rust codetokens def
+           src [0 0 200 30] << /Reveal now 4 div >> codeblock }} def"
+    ));
+    for k in 0..40 {
+        m.render_at(k as f64 * 0.1)
+            .unwrap_or_else(|e| panic!("{e}"));
+    }
+    // A half character would be invalid UTF-8, which PSCat draws as .notdef
+    // and reports; whole characters report nothing.
+    assert!(m.text_warnings().is_empty(), "{:?}", m.text_warnings());
+}
+
+#[test]
+fn an_uncovered_character_or_utf8_in_a_byte_font_is_reported_once() {
+    let mut m = load(
+        "/scene { /body 20 face 10 60 moveto (안녕 ok) show
+                  /Helvetica findfont 20 scalefont setfont 10 20 moveto (café) show } def",
+    );
+    for t in [0.0, 1.0, 2.0] {
+        m.render_at(t).unwrap();
+    }
+    let w = m.text_warnings();
+    assert_eq!(w.len(), 3, "{w:?}");
+    assert!(w[0].contains("U+C548") && w[0].contains(".notdef"), "{w:?}");
+    assert!(w[1].contains("U+B155"), "{w:?}");
+    assert!(
+        w[2].contains("/Helvetica") && w[2].contains("é") && w[2].contains("unicodefont"),
+        "{w:?}"
+    );
+    // `unicodefont` fixes the second.
+    let mut m = load(
+        "/scene { /Helvetica findfont unicodefont 20 scalefont setfont 10 20 moveto (café) show } def",
+    );
+    m.render_at(0.0).unwrap();
+    assert!(m.text_warnings().is_empty(), "{:?}", m.text_warnings());
+}
+
+#[test]
+fn ascii_in_a_face_font_draws_as_it_did_and_symbol_keeps_its_codes() {
+    // Every printable ASCII character but ' and ` (whose standard-encoding
+    // glyphs are the curly quotes) draws the same through `face` as through
+    // a plain findfont, which reads bytes.
+    let text: String = (32u8..127)
+        .map(char::from)
+        .filter(|c| !"'`".contains(*c))
+        .map(|c| match c {
+            '(' | ')' | '\\' => format!("\\{c}"),
+            c => c.to_string(),
+        })
+        .collect();
+    for font in [
+        "/Helvetica-Bold",
+        "/Palatino-Roman",
+        "/Courier",
+        "/Bookman-Demi",
+    ] {
+        let mut m = Movie::load(
+            &format!(
+                "<< /Size [1400 60] /Duration 2 /FPS 1 /Background [0 0 0] >> animation /pkstage use
+                 /scene {{ 1 setgray now 1 lt {{ {font} 14 face }} {{ {font} findfont 14 scalefont setfont }} ifelse
+                   4 20 moveto ({text}) show }} def"
+            ),
+            &Options::default(),
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+        let a = pixels(&mut m, 0.0);
+        let b = pixels(&mut m, 1.0);
+        assert!(a == b, "{font}: ASCII through face differs from bytes");
+    }
+    // Symbol through face keeps its codes: (p) is pi, at pi's width.
+    let out = eval_at(
+        "",
+        "/Symbol 20 face currentfont /PSCatUnicode known == (p) stringwidth pop
+         /Symbol findfont 20 scalefont setfont (p) stringwidth pop eq ==",
+        0.0,
+    );
+    assert_eq!(out.lines().collect::<Vec<_>>(), ["false", "true"], "{out}");
+}
+
+#[test]
+fn a_text_heavy_frame_stays_far_inside_the_step_limit() {
+    // charpath and show are charged per glyph; a frame of 24 lines of mixed
+    // UTF-8 and emoji, shown and outlined, against the untrusted budget.
+    let opts = Options {
+        budget: psanim::Budget::untrusted(),
+        ..Options::default()
+    };
+    let mut m = Movie::load(
+        &format!(
+            "{HEAD}/scene {{ /body 8 face 0 1 23 {{ 2 exch 5 mul moveto
+               (Grüße Привет Γειά 👋🏽🇫🇷 {MIXED}) dup show 0 -2 rmoveto true charpath stroke }} for }} def"
+        ),
+        &opts,
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    m.render_at(0.0).unwrap_or_else(|e| panic!("{e}"));
+    let steps = m.last_frame_steps();
+    eprintln!("text-heavy frame: {steps} steps");
+    assert!(steps > 0 && steps < 100_000, "{steps}");
+}

@@ -90,6 +90,27 @@ fn split_text(bytes: &[u8]) -> String {
 }
 
 /// `value` with `decimals` places, optionally grouped in thousands.
+/// Where each character of a string starts, as byte offsets, with the
+/// string's length last (so character `k` is `offsets[k]..offsets[k + 1]`).
+///
+/// A character is what a reader counts as one: for a string that is
+/// well-formed UTF-8 with a non-ASCII character in it, an extended grapheme
+/// cluster (UAX #29), so an accent stays on its letter and a flag, a skin
+/// tone, a keycap or a ZWJ family stays whole, as a Unicode-mode font draws
+/// it. Any other string, ASCII or bytes in a byte font (`(caf\351)`, Symbol
+/// codes), is one character per byte, as before.
+pub fn char_offsets(s: &[u8]) -> Vec<usize> {
+    match std::str::from_utf8(s) {
+        Ok(text) if !text.is_ascii() => {
+            use unicode_segmentation::UnicodeSegmentation;
+            let mut v: Vec<usize> = text.grapheme_indices(true).map(|(k, _)| k).collect();
+            v.push(s.len());
+            v
+        }
+        _ => (0..=s.len()).collect(),
+    }
+}
+
 pub fn format_number(value: f64, decimals: i64, grouped: bool) -> String {
     let d = decimals.clamp(0, 9) as usize;
     let s = format!("{:.*}", d, value.abs());
@@ -759,6 +780,33 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let mut a = i.pop_string()?;
         a.extend_from_slice(&b);
         i.push_string(&a);
+        Ok(())
+    });
+    // (str) charcount -> n          characters as drawn (see `char_offsets`)
+    reg(interp, ctx, "charcount", |i, _| {
+        let s = i.pop_string()?;
+        i.push_int(char_offsets(&s).len() as i64 - 1);
+        Ok(())
+    });
+    // (str) .charoffsets -> [0 ... length]   where each character starts
+    reg(interp, ctx, ".charoffsets", |i, _| {
+        let s = i.pop_string()?;
+        i.push_value(&Value::Array(
+            char_offsets(&s)
+                .into_iter()
+                .map(|k| Value::Int(k as i64))
+                .collect(),
+        ))?;
+        Ok(())
+    });
+    // (str) u typed -> (prefix)     the first u (0..1) of it, by characters
+    reg(interp, ctx, "typed", |i, _| {
+        let u = i.pop_f64()?.clamp(0.0, 1.0);
+        let s = i.pop_string()?;
+        let offsets = char_offsets(&s);
+        let n = offsets.len() - 1;
+        let k = ((u * n as f64).round().max(0.0) as usize).min(n);
+        i.push_string(&s[..offsets[k]]);
         Ok(())
     });
     reg(interp, ctx, "fmtnum", |i, _| {

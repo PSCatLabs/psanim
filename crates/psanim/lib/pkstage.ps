@@ -270,10 +270,11 @@
   end
 } bind def
 % /role size face -     select the theme's font for that role (/title /body
-%                       /mono /display /serif), or any font name, at a size
+%                       /mono /display /serif), or any font name, at a size.
+%                       Its strings are read as UTF-8 (see `unicodefont`).
 /face {
   exch dup theme exch known { theme exch get } if
-  findfont exch scalefont setfont
+  findfont exch scalefont .utf8font setfont
 } bind def
 % - ground -            fill the canvas with the theme's background, and
 %                       make the theme's text colour the current colour

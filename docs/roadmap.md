@@ -61,8 +61,14 @@ What psanim does not do today, stated plainly, and what would come next.
 - A motion measures what was painted. Applied to something that covers
   the frame (a ground) it moves the frame. Motions move in screen
   directions whatever the transformation.
-- Text is ASCII in the text fonts. `sym` and run lists reach the Symbol
-  font; there is no Unicode fallback and a missing glyph is silent.
+- Text in a `face` font is UTF-8 with PSCat's fallback faces and colour
+  emoji, but Korean, Japanese, Chinese, Thai, Arabic, the Indic scripts,
+  Armenian, Georgian and Ethiopic have no face yet (each character draws
+  an empty box, and `check` names it); there is no shaping or bidi, so
+  Hebrew runs left to right; fallback faces are regular weight. Fonts
+  chosen with `findfont` still read bytes (`check` warns on UTF-8 in one).
+  The catalog entries (chat, splitflap, terminal ...) choose their own
+  fonts and are still byte text, and `typingplan` types bytes.
 - `showin` and `node` labels do not wrap or shrink a long string by
   themselves; `kinetic` has no tracking option.
 - pkchart has no stacked or grouped bars, no log scales, no unit charts,
@@ -108,8 +114,7 @@ agent with the report it came from (summarised in
 8. **Motion**: vector motions when a pivot is given (no rasterization);
    motion along the text's own axis under rotation; per-contour
    `morphpath`.
-9. **Diagnostics**: `check` warning on non-ASCII bytes shown in a text
-   font, on text drawn outside the canvas, and on type below a legible
+9. **Diagnostics**: `check` warning on text drawn outside the canvas, and on type below a legible
    size; marking intended cuts so `check --all` can be fully clean;
    naming the procedure that left operands on the stack.
 10. **A review loop.** Blind review found what authors did not (holds
