@@ -15,17 +15,17 @@
 %   --param form=social   the lockup and a line, 1280x640
 %   --param ground=dark   (default) or light, or transparent
 
-/form /form (lockup) param def
-/ground /ground (dark) param def
-/form-is { form eq } def                 % (name) form-is -> bool
-/ground-is { ground eq } def
+/logo-form /form (lockup) param def
+/logo-ground /ground (dark) param def
+/form-is { logo-form eq } def            % (name) form-is -> bool
+/ground-is { logo-ground eq } def
 
-/canvas
+/logo-size
   (mark) form-is { [512 512] } {
   (icon) form-is { [416 416] } {
   (social) form-is { [1280 640] } { [1140 400] } ifelse } ifelse } ifelse def
 
-<< /Size canvas /Duration 4.4 /FPS 30 /Loop true
+<< /Size logo-size /Duration 4.4 /FPS 30 /Loop true
    /Background
      (transparent) ground-is { /transparent } {
      (light) ground-is { [1 1 1] } { [0.043 0.051 0.071] } ifelse } ifelse
@@ -54,20 +54,20 @@
 /ring-r 62 def /core-r 34 def
 
 % ---- the motion: where the point is, 0 (start) .. 1 (end), at time t -----------
-/hold 1.7 def        % at rest
-/back 0.7 def        % scrubbed back to the start
-/wait 0.1 def        % a beat at the start
-/play 1.4 def        % plays forward, drawing the curve; then rests again
+/rest-s 1.7 def       % at rest
+/back-s 0.7 def       % scrubbed back to the start
+/beat-s 0.1 def       % a beat at the start
+/play-s 1.4 def       % plays forward, drawing the curve; then rests again
 /skin 0.07 def       % seconds between onion skins
 /skins 4 def
-/from hold back add wait add def                    % when the forward play starts
+/play-from rest-s back-s add beat-s add def   % when the forward play starts
 /at-u { % t -> u
-  dup hold lt { pop 1 } {
-  hold sub dup back lt { back div /cubic-inout ease 1 exch sub } {
-  back sub dup wait lt { pop 0 } {
-  wait sub play div /cubic-inout ease } ifelse } ifelse } ifelse } def
+  dup rest-s lt { pop 1 } {
+  rest-s sub dup back-s lt { back-s div /cubic-inout ease 1 exch sub } {
+  back-s sub dup beat-s lt { pop 0 } {
+  beat-s sub play-s div /cubic-inout ease } ifelse } ifelse } ifelse } def
 
-/mark {
+/logomark {
   gsave
   /u now at-u def
   tile-rgb rgb tile-path fill
@@ -75,9 +75,9 @@
   u 0.001 gt { ease-path 0 u trimpath stroke } if
   % onion skins: where the point was a few frames ago, while it plays forward.
   % They bunch where the ease is slow and spread where it is fast.
-  now from ge {
+  now play-from ge {
     skins -1 1 { /k exch def
-      ease-path now k skin mul sub from max at-u pathpoint pop /sy exch def /sx exch def
+      ease-path now k skin mul sub play-from max at-u pathpoint pop /sy exch def /sx exch def
       point-rgb rgb 1 k skins 1 add div sub 0.85 mul setalpha
       newpath sx sy core-r 0.62 mul 0 360 arc fill
     } for
@@ -93,13 +93,13 @@
 % AvantGarde-Demi at 190: x-height 105, centred on the tile's middle (y 200).
 /wordmark { word-rgb rgb /AvantGarde-Demi 190 selectfont 384 147 moveto (psanim) show } def
 /lockup {                                  % in a 1140x400 box
-  gsave 52 52 translate 296 512 div dup scale mark grestore
+  gsave 52 52 translate 296 512 div dup scale logomark grestore
   wordmark
 } def
 
 /scene {
-  (mark) form-is { mark } if
-  (icon) form-is { -48 -48 translate mark } if
+  (mark) form-is { logomark } if
+  (icon) form-is { -48 -48 translate logomark } if
   (lockup) form-is { lockup } if
   (social) form-is {
     gsave 71 150 translate lockup

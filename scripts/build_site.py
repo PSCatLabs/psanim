@@ -581,8 +581,12 @@ def copy_assets():
     for f in LOGO_ASSETS:
         shutil.copy(ROOT / "docs/img" / f, SITE / "img" / f)
     shutil.copy(ROOT / "scripts/site/source-viewer.js", SITE / "source-viewer.js")
-    for f in ["psanim.js", "player.js", "widget.js", "widget-core.js", "widget-worker.js", "widgets.html"]:
+    for f in ["psanim.js", "player.js", "widget.js", "widget-core.js", "widget-worker.js"]:
         shutil.copy(ROOT / "web" / f, SITE / f)
+    # The widgets demo is a page of web/ as written; on the site it gets the favicon too.
+    demo = (ROOT / "web/widgets.html").read_text()
+    (SITE / "widgets.html").write_text(demo.replace("<title>", '<link rel="icon" href="img/favicon.ico" sizes="32x32">\n'
+                                                     '<link rel="icon" href="img/favicon-32.png" type="image/png">\n<title>', 1))
     wasm = ROOT / "web/psanim.wasm"
     if wasm.exists():
         shutil.copy(wasm, SITE / "psanim.wasm")
