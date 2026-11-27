@@ -235,9 +235,23 @@ Read `psanim check`'s warnings; it names the character and the font.
   setfont`.
 - **A sign in a `sym` or run list**: Symbol reads its own codes, so write
   `/pi sym`, not `(π) sym`.
+- **A replacement box where `é` was**: a Latin-1 escape (`(caf\351)`) in a
+  `face` font, which reads UTF-8. `check` warns `no glyph for U+FFFD`.
+  Write the character itself: `(café)`.
 - **Half an emoji, a flag as two letters**: a string cut by byte
-  (`getinterval`, `length`) can split a character. Count and cut with
-  `charcount`, `typed` and `eachglyph`, which step by whole characters.
+  (`getinterval`, `length`) can split a character. Cut with `typed` and
+  step with `eachglyph`, which take whole characters in a `face` font;
+  `charcount` counts them.
+
+`check` and `frame` print these warnings; `render` and `sheet` do not.
+
+## My apostrophes went straight
+
+In a font chosen with `face`, `'` is the straight typewriter apostrophe and
+`` ` `` the grave accent, as Unicode has them. Before UTF-8 text, the same
+bytes drew PostScript's curly ’ and ‘. Type the curly characters you want:
+`(it’s)`, `(“quoted”)`, `(‘single’)`. Code keeps the straight ones, which
+is what code means.
 
 ## Single blank frames between sections
 

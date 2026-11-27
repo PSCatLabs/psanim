@@ -189,10 +189,6 @@
 } bind def
 
 % --- text ------------------------------------------------------------------------
-% (str) u typed -> (prefix) is native: the first u (0..1) of the string, by
-% characters. A character is what `charcount` counts: in UTF-8 text an accent
-% stays on its letter and an emoji sequence stays whole; ASCII and other bytes
-% are one character each.
 % (str) showcenter              show centred on the current point
 /showcenter {
   dup stringwidth pop 2 div neg 0 rmoveto show
@@ -201,9 +197,12 @@
 %   accented letters, Greek, Cyrillic, signs and colour emoji, the characters
 %   its face lacks from PSCat's fallback faces. `face` does this for you.
 %   Symbol, ZapfDingbats, Type 3 fonts and a font that already says which it
-%   reads are returned as they are. The one place psanim names PSCat's key.
+%   reads are returned as they are.
+% The key a PSCat font dictionary carries to read UTF-8 (provisional in
+% PSCat): the one place psanim names it.
+/.unicodekey /PSCatUnicode def
 /.utf8font {             % font -> font     (a dict of our own, as scalefont makes)
-  /PSCatUnicode                                % font key
+  .unicodekey                                  % font key
   1 index 1 index known not {
     1 index /FontType known { 1 index /FontType get dup 1 eq exch 42 eq or } { false } ifelse {
       1 index /Encoding known {
@@ -213,6 +212,27 @@
     } { pop } ifelse
   } { pop } ifelse
 } bind def
+% - .fontutf8 -> bool     whether the current font reads its strings as UTF-8
+%                        (false when no font is set: a string is then bytes)
+/.fontutf8 {
+  mark { currentfont } stopped { cleartomark false } {
+    exch pop dup .unicodekey known { .unicodekey get true eq } { pop false } ifelse
+  } ifelse
+} bind def
+% (str) .fontoffsets -> [0 ... length]   where each character starts, as the
+%   current font reads the string: by grapheme in a font that reads UTF-8,
+%   by byte in one that reads bytes. Every word that steps through a string
+%   it draws or measures cuts it here.
+/.fontoffsets { .fontutf8 .charoffsets } bind def
+% (str) u typed -> (prefix)     the first u (0..1) of the string, by the
+%                               characters the current font draws
+/typed {
+  0 1 clamp exch dup .fontoffsets               % u str offs
+  dup length 1 sub 3 index mul round cvi        % u str offs k
+  get 0 exch getinterval exch pop
+} bind def
+% (str) .fontcharcount -> n     how many characters the current font draws
+/.fontcharcount { .fontoffsets length 1 sub } bind def
 /unicodefont { 1 scalefont .utf8font } bind def
 % str offs i .charpre -> (prefix)    the characters before character i
 /.charpre { get 0 exch getinterval } bind def
@@ -228,7 +248,7 @@
   3 -1 roll exec
 } bind def
 /eachglyph {             % str proc
-  1 index .charoffsets exch                    % str offs proc
+  1 index .fontoffsets exch                    % str offs proc
   currentpoint                                 % str offs proc x0 y0
   3 index length 2 sub 0 exch 1 exch           % str offs proc x0 y0 0 1 n-1
   8 3 roll                                     % 0 1 n-1 str offs proc x0 y0
@@ -239,7 +259,7 @@
 % (str) track spacedwidth -> w   the width of the string set with `track`
 %                               extra units after every character but the last
 /spacedwidth {
-  exch dup stringwidth pop exch charcount 1 sub 0 max 3 -1 roll mul add
+  exch dup stringwidth pop exch .fontcharcount 1 sub 0 max 3 -1 roll mul add
 } bind def
 % (str) track proc eachspaced   like eachglyph, letterspaced: each character's
 %                               origin is `track` units further along than
@@ -253,7 +273,7 @@
   3 -1 roll exec
 } bind def
 /eachspaced {            % str track proc
-  2 index .charoffsets 3 1 roll                % str offs track proc
+  2 index .fontoffsets 3 1 roll                % str offs track proc
   currentpoint                                 % str offs track proc x0 y0
   4 index length 2 sub 0 exch 1 exch           % str offs track proc x0 y0 0 1 n-1
   9 3 roll                                     % 0 1 n-1 str offs track proc x0 y0
@@ -284,7 +304,7 @@
   grestore
 } bind def
 /eachonpath {            % str u0 proc
-  2 index .charoffsets 3 1 roll                % str offs u0 proc
+  2 index .fontoffsets 3 1 roll                % str offs u0 proc
   pathlength                                   % str offs u0 proc len
   3 index length 2 sub 0 exch 1 exch           % str offs u0 proc len 0 1 n-1
   8 3 roll                                     % 0 1 n-1 str offs u0 proc len

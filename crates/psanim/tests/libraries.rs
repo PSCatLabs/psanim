@@ -1518,45 +1518,109 @@ fn a_face_font_reads_utf8_measures_it_and_draws_colour_emoji() {
     assert!((x0 as i32 - (200 - x1) as i32).abs() <= 3, "{x0} {x1}");
 }
 
+/// `expr` run at t = 0, each result printed: true / false lines.
+fn truths(setup: &str, expr: &str) -> Vec<String> {
+    eval_at(setup, expr, 0.0)
+        .lines()
+        .map(str::to_string)
+        .collect()
+}
+
 #[test]
-fn the_per_character_words_never_cut_a_character() {
+fn a_face_font_steps_by_whole_characters_at_every_boundary() {
     let src = format!("/s ({MIXED}) def");
-    let out = eval_at(
+    // Every cut `typed` makes ends on a character, and eachglyph hands over
+    // the characters themselves.
+    let out = truths(
         &src,
-        "s charcount ==  s length ==  s 0.4 typed charcount ==  (hello) 0.5 typed ==  (hello) charcount ==
-         /body 20 face 10 10 moveto
-         () s { pop strcat } eachglyph s eq ==
-         0 s { pop pop 1 add } eachglyph ==
+        "/body 20 face 10 10 moveto
+         s charcount ==
+         s 0.2 typed (é) eq ==  s 0.4 typed (é👋🏽) eq ==  s 0.6 typed (é👋🏽🇫🇷) eq ==
+         s 0.8 typed (é👋🏽🇫🇷👨‍👩‍👧) eq ==  s 1 typed s eq ==
+         [ s { pop } eachglyph ] dup length == dup 1 get (👋🏽) eq == dup 2 get (🇫🇷) eq ==
+           3 get (👨‍👩‍👧) eq ==
          0 s 3 { pop pop 1 add } eachspaced ==
-         s 3 spacedwidth s stringwidth pop sub ==",
-        0.0,
+         s 3 spacedwidth s stringwidth pop sub ==
+         (hello) 0.5 typed ==",
     );
-    let lines: Vec<&str> = out.lines().collect();
     assert_eq!(
-        lines,
+        out,
         [
-            "5",
-            &MIXED.len().to_string(),
-            "2",
-            "(hel)",
-            "5",
-            "true",
-            "5",
-            "5",
-            "12.0"
+            "5", "true", "true", "true", "true", "true", "5", "true", "true", "true", "5", "12.0",
+            "(hel)"
         ],
-        "{out}"
     );
-    // Bytes that are not UTF-8 (a Symbol code, Latin-1) stay one per byte.
-    assert_eq!(eval_at("", "(\\271a\\351) charcount ==", 0.0), "3");
+    // A decomposed accent (e + U+0301) stays on its letter.
+    let out = truths(
+        "",
+        "/body 20 face (e\u{301}x) charcount == (e\u{301}x) 0.5 typed (e\u{301}) eq ==",
+    );
+    assert_eq!(out, ["2", "true"]);
+    // One malformed byte is one character of its own; the rest is still
+    // read as UTF-8, so é is never cut.
+    let out = truths(
+        "",
+        "/body 20 face (é\\377x) charcount == (é\\377x) 0.34 typed (é) eq == (é\\377x) 0.67 typed (é\\377) eq ==",
+    );
+    assert_eq!(out, ["3", "true", "true"]);
     // The byte helpers are safe: a multi-byte character holds no space or
     // newline byte, so splitting and joining keep it whole.
-    let out = eval_at(
+    let out = truths(
         "",
         "(añb 👋🏽\nc) splitwords dup length == {} forall strcat strcat (añb👋🏽c) eq ==",
-        0.0,
     );
-    assert_eq!(out.lines().collect::<Vec<_>>(), ["3", "true"], "{out}");
+    assert_eq!(out, ["3", "true"]);
+}
+
+#[test]
+fn a_byte_font_steps_by_byte_as_it_draws() {
+    // A font chosen with findfont reads bytes: é is two codes, so the words
+    // that draw or measure step by byte, as they always did.
+    let out = truths(
+        "",
+        "/Helvetica findfont 20 scalefont setfont 10 10 moveto
+         (éx) 1 3 div typed (\\303) eq ==
+         0 (éx) { pop pop 1 add } eachglyph ==
+         (éx) 5 spacedwidth (éx) stringwidth pop sub ==
+         (éx) charcount ==",
+    );
+    // charcount is about the text, not a font: two characters.
+    assert_eq!(out, ["true", "3", "10.0", "2"]);
+    // Symbol codes through `sym` and Latin-1 through a byte font are untouched.
+    assert_eq!(eval_at("", "(\\271a\\351) charcount ==", 0.0), "3");
+}
+
+#[test]
+fn a_code_token_never_starts_inside_a_character() {
+    // A combining accent after a letter is one character, though the
+    // highlighter would call the accent punctuation.
+    let out = truths(
+        "",
+        "(a\u{301}) /rust codetokens 0 get dup length == 0 get (a\u{301}) eq ==
+         0 (x = \"🇫🇷\";) /rust codetokens 0 get { dup type /stringtype eq { charcount add } { pop } ifelse } forall ==",
+    );
+    assert_eq!(out[0], "2", "{out:?}");
+    assert_eq!(out[1], "true", "{out:?}");
+    // x, space, =, space, quote, flag, quote, ; : eight characters however
+    // the tokens fall
+    assert_eq!(out[2], "8", "{out:?}");
+    // Half of a line that is one accented letter shows the whole letter:
+    // the same picture as revealing nearly all of it, never the bare `a`.
+    let reveal = |u: f64| {
+        let mut m = load(&format!(
+            "/scene {{ 1 setgray /src (a\u{301}) /rust codetokens def
+                      src [0 0 200 120] << /Reveal {u} /Size 40 /Plate false >> codeblock }} def"
+        ));
+        let px = pixels(&mut m, 0.0);
+        assert!(m.text_warnings().is_empty(), "{:?}", m.text_warnings());
+        px
+    };
+    assert!(
+        reveal(0.55) == reveal(0.95),
+        "half a line shows less than its one character"
+    );
+    let m = load("/scene { } def");
+    assert!(m.text_warnings().is_empty(), "{:?}", m.text_warnings());
 }
 
 #[test]
@@ -1572,9 +1636,16 @@ fn kinetic_typewrite_and_a_code_reveal_take_utf8_whole() {
         m.render_at(k as f64 * 0.1)
             .unwrap_or_else(|e| panic!("{e}"));
     }
-    // A half character would be invalid UTF-8, which PSCat draws as .notdef
-    // and reports; whole characters report nothing.
+    // A half character would be malformed UTF-8, which PSCat draws as
+    // .notdef and reports (the next test shows that it does).
     assert!(m.text_warnings().is_empty(), "{:?}", m.text_warnings());
+    let mut cut = load("/scene { /body 20 face 10 10 moveto (é) 0 1 getinterval show } def");
+    cut.render_at(0.0).unwrap();
+    assert!(
+        cut.text_warnings().iter().any(|w| w.contains("U+FFFD")),
+        "{:?}",
+        cut.text_warnings()
+    );
 }
 
 #[test]
@@ -1593,6 +1664,36 @@ fn an_uncovered_character_or_utf8_in_a_byte_font_is_reported_once() {
     assert!(
         w[2].contains("/Helvetica") && w[2].contains("é") && w[2].contains("unicodefont"),
         "{w:?}"
+    );
+    // Past five byte fonts the rest are counted, not dropped.
+    let fonts = [
+        "/Helvetica",
+        "/Times-Roman",
+        "/Courier",
+        "/Palatino-Roman",
+        "/Bookman-Light",
+        "/AvantGarde-Book",
+        "/NewCenturySchlbk-Roman",
+    ];
+    let shows: String = fonts
+        .iter()
+        .map(|f| format!("{f} findfont 10 scalefont setfont 5 5 moveto (é) show\n"))
+        .collect();
+    let mut m = load(&format!("/scene {{ {shows} }} def"));
+    m.render_at(0.0).unwrap();
+    m.render_at(1.0).unwrap();
+    let w = m.text_warnings();
+    assert_eq!(w.len(), 6, "{w:?}");
+    assert!(w[5].contains("at least 2 more fonts"), "{w:?}");
+    // A frame that fails carries what had gone wrong with text before it.
+    let mut m = load("/scene { /body 20 face 10 10 moveto (안) show nosuchword } def");
+    let Err(e) = m.render_at(0.0) else {
+        panic!("the frame should fail")
+    };
+    assert!(e.text_warnings.iter().any(|w| w.contains("U+C548")), "{e}");
+    assert!(
+        e.to_string().contains("text warning: no glyph for U+C548"),
+        "{e}"
     );
     // `unicodefont` fixes the second.
     let mut m = load(

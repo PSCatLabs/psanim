@@ -227,11 +227,17 @@ ground /title 40 face /fg ink
 ```
 
 The words that step through a string by character (`typed`, `typewrite`,
-`eachglyph`, `eachspaced`, `eachonpath`, `kinetic`'s `/glyphs`, the
-code block's `/Reveal`) step by what a reader calls a character, the
-string's grapheme clusters: `é`, `🇫🇷` and `👨‍👩‍👧` are one each, never cut in
-half. `(text) charcount` is that count. ASCII is one character per byte,
-as it always was.
+`eachglyph`, `eachspaced`, `eachonpath`, `spacedwidth`, `kinetic`'s
+`/glyphs`, the karaoke in `captions`, the code block's `/Reveal`) step
+the way the current font reads. In a `face` font that is by what a reader
+calls a character, the string's grapheme clusters: `é` (one code point or
+`e` and a combining accent), `🇫🇷` and `👨‍👩‍👧` are one each, and these
+words do not cut them. A byte that is not well-formed UTF-8 is a
+character of its own (PSCat draws it as one replacement box). In a font
+chosen with `findfont`, which reads bytes, they step by byte, as they
+always did. `(text) charcount` counts the text's characters as UTF-8,
+whatever the font. Cutting a string yourself with `getinterval` can still
+split a character: cut with `typed` instead.
 
 ```postscript
 ground /display 56 face /fg ink
@@ -253,10 +259,19 @@ setfont` makes it read UTF-8; `check` warns when UTF-8 text is shown in a
 font that reads bytes. Symbol and ZapfDingbats keep their codes (`sym`
 relies on that), and so does a font that states which it wants.
 
-One thing changes for ASCII in a `face` font: `'` and `` ` `` are the
-typewriter apostrophe and grave, as in Unicode, where a byte font draws
-the curly ’ and ‘ of PostScript's standard encoding. For curly quotes, type
-them: `(it’s “here”)`.
+**Moving a film from before UTF-8 text.** Two things read differently in
+a `face` font, on purpose:
+
+- `'` and `` ` `` are the typewriter apostrophe and the grave accent, as
+  in Unicode, where a byte font draws the curly ’ and ‘ of PostScript's
+  standard encoding. For curly quotes, type them: `(it’s “here”)`.
+- A Latin-1 escape such as `(caf\351)` is not UTF-8: it draws a
+  replacement box and `check` warns. Write the character itself
+  (`(café)`), or keep the font reading bytes by choosing it with
+  `findfont`.
+
+`check` and `frame` report text warnings; `render` and `sheet` do not, so
+run `check` on a film before rendering it.
 
 The emoji art is Twemoji (CC-BY 4.0): a film that shows it should say so,
 for example in its README: "Emoji graphics by Twemoji (Twitter, Inc and
