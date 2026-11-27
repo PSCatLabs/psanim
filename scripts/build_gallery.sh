@@ -4,6 +4,7 @@
 # file there is reproducible from the source with the commands below).
 #   scripts/build_gallery.sh [name ...]        # all pieces, or just the named ones
 #   PREVIEW=1 scripts/build_gallery.sh         # half size, for a quick look
+#   NOGIF=1 scripts/build_gallery.sh           # no GIFs (what the published site uses)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 cargo build --release -q -p psanim-cli
@@ -33,8 +34,11 @@ for name in "${names[@]}"; do
   ffmpeg -v error -y -i "$out/poster.png" -vf scale=480:-2 -q:v 4 "docs/img/gallery/$name.jpg"
   $P sheet "$src" ${sig[@]+"${sig[@]}"} -o "$out/sheet.png" --count 12 --cols 4 --thumb 400 -q
   $P render "$src" ${sig[@]+"${sig[@]}"} -o "$out/$name.mp4" $scale --json > "$out/render.json"
-  # An animated GIF too: 480 wide at 20 fps keeps it a few megabytes.
-  $P render "$src" ${sig[@]+"${sig[@]}"} -o "$out/$name.gif" --width 480 --fps 20 -q
+  # An animated GIF too: 480 wide at 20 fps keeps it a few megabytes. NOGIF=1 leaves it out
+  # (the published site does: the GIFs are about half its size).
+  if [ -z "${NOGIF:-}" ]; then
+    $P render "$src" ${sig[@]+"${sig[@]}"} -o "$out/$name.gif" --width 480 --fps 20 -q
+  fi
   cp "$src" "$out/$name.ps"
   python3 -c "import json;r=json.load(open('$out/render.json'));print('   %d frames %dx%d in %.1fs on %d threads (%.1f fps), %.1f MB' % (r['frames'],r['width'],r['height'],r['total_seconds'],r['threads'],r['frames_per_second'],r['bytes']/1e6))"
 done
