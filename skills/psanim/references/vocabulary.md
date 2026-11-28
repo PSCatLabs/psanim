@@ -598,7 +598,7 @@ Run proc with its painting laid on a plane in 3D and seen in perspective: fill, 
 
 `string u  typed  string`
 
-The first u (0..1) of the string, by characters: a typewriter reveal.
+The first u (0..1) of the string, by the characters the current font draws: a typewriter reveal. In a font that reads UTF-8 (any `face` font) a character is a whole grapheme, so a letter and its accent, a flag or an emoji sequence are never cut; in a font that reads bytes it is a byte, as PostScript has it.
 
 ### `typingplan`
 
@@ -642,11 +642,23 @@ What a character grid shows at time t: its rows (at most `rows`, top to bottom; 
 
 Show the string centred horizontally on the current point.
 
+### `charcount`
+
+`string  charcount  n`
+
+How many characters the string has read as UTF-8 text, as a reader counts them: its grapheme clusters, so an accented letter, a flag, a skin-toned or ZWJ emoji is one; a byte that is not part of a well-formed sequence counts as one; ASCII is its length. It looks at the text only, not the current font: the words that draw (`typed`, `eachglyph`, `eachspaced`, `eachonpath`, `spacedwidth`, `kinetic`'s /glyphs) step the way the current font reads, which for a font chosen with findfont is by byte.
+
+### `unicodefont`
+
+`font  unicodefont  font'`
+
+A copy of the font that reads its strings as UTF-8: accents, Greek, Cyrillic, signs and colour emoji, with the characters its face lacks taken from PSCat's fallback faces. `face` does this already; this is for a font chosen with findfont: `/Helvetica findfont unicodefont 24 scalefont setfont`. Symbol, ZapfDingbats and Type 3 fonts come back unchanged. Korean, Japanese, Chinese, Thai, Arabic, the Indic scripts and others have no glyphs yet: they draw an empty box, and `check` names each.
+
 ### `eachglyph`
 
 `string proc  eachglyph  -`
 
-Run proc once per character with `(c) i` on the stack (the character as a one-character string, and its index) and the current point at that character's origin. The font must be set. proc consumes both operands; `{ pop show }` reproduces show. The current point is set afresh before each call, so proc may move it, build paths and paint; graphics state it changes (colour, CTM) stays changed, so wrap transforms in gsave/grestore.
+Run proc once per character with `(c) i` on the stack (the character as a string, and its index; a character is a whole grapheme in a font that reads UTF-8, a byte in one that reads bytes) and the current point at that character's origin. The font must be set. proc consumes both operands; `{ pop show }` reproduces show. The current point is set afresh before each call, so proc may move it, build paths and paint; graphics state it changes (colour, CTM) stays changed, so wrap transforms in gsave/grestore.
 
 ### `spacedwidth`
 

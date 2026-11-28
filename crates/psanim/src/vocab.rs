@@ -115,6 +115,36 @@ fn split_text(bytes: &[u8]) -> String {
 }
 
 /// `value` with `decimals` places, optionally grouped in thousands.
+/// Where each character of a string starts, as byte offsets, with the
+/// string's length last (so character `k` is `offsets[k]..offsets[k + 1]`).
+///
+/// `utf8`: the string is read as UTF-8, as a Unicode-mode font draws it.
+/// Then a character is what a reader counts as one, an extended grapheme
+/// cluster (UAX #29): an accent stays on its letter, and a flag, a skin
+/// tone, a keycap or a ZWJ family stays whole. A byte that is not part of a
+/// well-formed sequence is a character of its own, as PSCat draws it (one
+/// replacement glyph), so one stray byte never changes how the rest of the
+/// string is cut. Otherwise (a byte font) every byte is a character.
+pub fn char_offsets(s: &[u8], utf8: bool) -> Vec<usize> {
+    if !utf8 || s.is_ascii() {
+        return (0..=s.len()).collect();
+    }
+    use unicode_segmentation::UnicodeSegmentation;
+    let mut v = Vec::new();
+    let mut at = 0;
+    for chunk in s.utf8_chunks() {
+        let valid = chunk.valid();
+        v.extend(valid.grapheme_indices(true).map(|(k, _)| at + k));
+        at += valid.len();
+        for _ in chunk.invalid() {
+            v.push(at);
+            at += 1;
+        }
+    }
+    v.push(s.len());
+    v
+}
+
 pub fn format_number(value: f64, decimals: i64, grouped: bool) -> String {
     let d = decimals.clamp(0, 9) as usize;
     let s = format!("{:.*}", d, value.abs());
@@ -941,6 +971,25 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let mut a = i.pop_string()?;
         a.extend_from_slice(&b);
         i.push_string(&a);
+        Ok(())
+    });
+    // (str) charcount -> n          characters of UTF-8 text (see `char_offsets`)
+    reg(interp, ctx, "charcount", |i, _| {
+        let s = i.pop_string()?;
+        i.push_int(char_offsets(&s, true).len() as i64 - 1);
+        Ok(())
+    });
+    // (str) utf8 .charoffsets -> [0 ... length]   where each character starts,
+    // read as UTF-8 or as bytes
+    reg(interp, ctx, ".charoffsets", |i, _| {
+        let utf8 = i.pop_bool()?;
+        let s = i.pop_string()?;
+        i.push_value(&Value::Array(
+            char_offsets(&s, utf8)
+                .into_iter()
+                .map(|k| Value::Int(k as i64))
+                .collect(),
+        ))?;
         Ok(())
     });
     reg(interp, ctx, "fmtnum", |i, _| {

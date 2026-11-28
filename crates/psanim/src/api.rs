@@ -566,7 +566,7 @@ pub const API: &[ApiEntry] = &[
         "text",
         "typed",
         "string u  typed  string",
-        "The first u (0..1) of the string, by characters: a typewriter reveal.",
+        "The first u (0..1) of the string, by the characters the current font draws: a typewriter reveal. In a font that reads UTF-8 (any `face` font) a character is a whole grapheme, so a letter and its accent, a flag or an emoji sequence are never cut; in a font that reads bytes it is a byte, as PostScript has it.",
     ),
     e(
         "text",
@@ -612,9 +612,21 @@ pub const API: &[ApiEntry] = &[
     ),
     e(
         "text",
+        "charcount",
+        "string  charcount  n",
+        "How many characters the string has read as UTF-8 text, as a reader counts them: its grapheme clusters, so an accented letter, a flag, a skin-toned or ZWJ emoji is one; a byte that is not part of a well-formed sequence counts as one; ASCII is its length. It looks at the text only, not the current font: the words that draw (`typed`, `eachglyph`, `eachspaced`, `eachonpath`, `spacedwidth`, `kinetic`'s /glyphs) step the way the current font reads, which for a font chosen with findfont is by byte.",
+    ),
+    e(
+        "text",
+        "unicodefont",
+        "font  unicodefont  font'",
+        "A copy of the font that reads its strings as UTF-8: accents, Greek, Cyrillic, signs and colour emoji, with the characters its face lacks taken from PSCat's fallback faces. `face` does this already; this is for a font chosen with findfont: `/Helvetica findfont unicodefont 24 scalefont setfont`. Symbol, ZapfDingbats and Type 3 fonts come back unchanged. Korean, Japanese, Chinese, Thai, Arabic, the Indic scripts and others have no glyphs yet: they draw an empty box, and `check` names each.",
+    ),
+    e(
+        "text",
         "eachglyph",
         "string proc  eachglyph  -",
-        "Run proc once per character with `(c) i` on the stack (the character as a one-character string, and its index) and the current point at that character's origin. The font must be set. proc consumes both operands; `{ pop show }` reproduces show. The current point is set afresh before each call, so proc may move it, build paths and paint; graphics state it changes (colour, CTM) stays changed, so wrap transforms in gsave/grestore.",
+        "Run proc once per character with `(c) i` on the stack (the character as a string, and its index; a character is a whole grapheme in a font that reads UTF-8, a byte in one that reads bytes) and the current point at that character's origin. The font must be set. proc consumes both operands; `{ pop show }` reproduces show. The current point is set afresh before each call, so proc may move it, build paths and paint; graphics state it changes (colour, CTM) stays changed, so wrap transforms in gsave/grestore.",
     ),
     e(
         "text",
@@ -1185,7 +1197,7 @@ pub const API: &[ApiEntry] = &[
         "pkstage",
         "face",
         "/role size  face  -",
-        "Select a font by theme role at a size: /title /body /mono /display /serif. Any font name works too (`/Palatino-Italic 30 face`).",
+        "Select a font by theme role at a size: /title /body /mono /display /serif. Any font name works too (`/Palatino-Italic 30 face`). The font reads its strings as UTF-8 (`unicodefont`), so `(Grüße 👋)` shows as written; Symbol and ZapfDingbats keep their own codes.",
     ),
     e(
         "pkstage",
@@ -1293,7 +1305,7 @@ pub const API: &[ApiEntry] = &[
         "pktype",
         "sym",
         "/name  sym  -",
-        "Show a mathematical sign or Greek letter at the current point at the current font's size, keeping the font: /neq /le /ge /approx /pm /times /div /dot /infinity /degree /arrow /larrow /uparrow /downarrow /implies /sum /product /sqrt /integral /in /bullet /minus (a true minus sign, wider than the hyphen), and /alpha /beta /gamma /delta /epsilon /theta /lambda /mu /pi /rho /sigma /tau /phi /omega /Delta /Sigma /Pi /Omega. The text fonts have no such characters: a non-ASCII character in a string shows as a blank. `(kiwi ) show /neq sym ( plum) show`.",
+        "Show a mathematical sign or Greek letter at the current point at the current font's size, keeping the font: /neq /le /ge /approx /pm /times /div /dot /infinity /degree /arrow /larrow /uparrow /downarrow /implies /sum /product /sqrt /integral /in /bullet /minus (a true minus sign, wider than the hyphen), and /alpha /beta /gamma /delta /epsilon /theta /lambda /mu /pi /rho /sigma /tau /phi /omega /Delta /Sigma /Pi /Omega. A font chosen with `face` also takes the sign typed into the string as UTF-8; `sym` sets it in Symbol's design and works in any font. `(kiwi ) show /neq sym ( plum) show`.",
     ),
     e(
         "pktype",

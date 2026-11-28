@@ -11,6 +11,8 @@
   /number /accent /comment /muted /type /accent2 /call /accent
 >> def
 
+% Code is set in a `face` font, which reads UTF-8, so its layout counts
+% characters with `charcount` before the font is chosen.
 % tokens box opts .codelayout     (inside a caller's dictionary) measures:
 %   cb-size cb-L cb-cw cb-x0 (text left) cb-top (first baseline) cb-gut
 /.codelayout {
@@ -20,7 +22,7 @@
   /cb-lead cb-o /Leading 1.4 .opt def
   /cb-title cb-o /Title () .opt def
   /cb-num cb-o /Numbers false .opt def
-  /cb-cols 1 cb-t { 0 exch { dup type /stringtype eq { length add } { pop } ifelse } forall max } forall def
+  /cb-cols 1 cb-t { 0 exch { dup type /stringtype eq { charcount add } { pop } ifelse } forall max } forall def
   /cb-gutc cb-num { 4 } { 0 } ifelse def
   /cb-size
     cb-o /Size known { cb-o /Size get } {
@@ -45,10 +47,10 @@
     0 2 cl-toks length 2 sub { /cl-i exch def
       cl-n cl-lim lt {
         /cl-s cl-toks cl-i get def
-        cl-s length cl-lim cl-n sub gt { /cl-s cl-s 0 cl-lim cl-n sub cvi getinterval def } if
+        cl-s .fontcharcount cl-lim cl-n sub gt { /cl-s cl-s dup .fontoffsets cl-lim cl-n sub cvi .charpre def } if
         codecolors cl-toks cl-i 1 add get 2 copy known { get } { pop pop /fg } ifelse ink
         cl-a setalpha cl-s show
-        /cl-n cl-n cl-s length add def
+        /cl-n cl-n cl-s .fontcharcount add def
       } if
     } for
     cl-n
@@ -85,7 +87,7 @@
       cb-o /Plate true .opt { .codeplate } if
       newpath cb-x cb-y cb-w cb-h cb-bar sub rectclip
       /mono cb-size face
-      /cb-total 0 cb-t { { dup type /stringtype eq { length add } { pop } ifelse } forall } forall def
+      /cb-total 0 cb-t { { dup type /stringtype eq { .fontcharcount add } { pop } ifelse } forall } forall def
       /cb-left cb-o /Reveal 1 .opt 0 1 clamp cb-total mul round def
       /cb-typing cb-o /Reveal 1 .opt dup 0 gt exch 1 lt and def
       /cb-focus cb-o /Focus [] .opt def
@@ -123,7 +125,7 @@
 /codelinebox {
   40 dict begin
     /cb-n exch def .codelayout
-    /cb-len 0 cb-t cb-n get { dup type /stringtype eq { length add } { pop } ifelse } forall def
+    /cb-len 0 cb-t cb-n get { dup type /stringtype eq { charcount add } { pop } ifelse } forall def
     /cb-lead0 0 def
     cb-t cb-n get dup length 0 gt { 0 get { 32 eq { /cb-lead0 cb-lead0 1 add def } { exit } ifelse } forall } { pop } ifelse
     [ cb-x0 cb-lead0 cb-cw mul add

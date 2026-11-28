@@ -261,6 +261,42 @@ pub type Line = Vec<(String, &'static str)>;
 
 /// Split `source` into lines of classified runs. Concatenating a line's
 /// runs gives the line back exactly.
+/// The runs of a line with no character split between two of them: where a
+/// run starts inside a grapheme cluster (a combining accent after a letter
+/// of another kind, the rest of a flag, a skin tone, a ZWJ sequence), the
+/// part that finishes the cluster moves to the run before it. A code block
+/// then reveals, counts and colours the cluster as the one character it is.
+fn whole_graphemes(runs: Line) -> Line {
+    use unicode_segmentation::UnicodeSegmentation;
+    let line: String = runs.iter().map(|(t, _)| t.as_str()).collect();
+    if line.is_ascii() {
+        return runs;
+    }
+    let bounds: std::collections::BTreeSet<usize> = line
+        .grapheme_indices(true)
+        .map(|(k, _)| k)
+        .chain([line.len()])
+        .collect();
+    let mut out: Line = Vec::new();
+    let mut at = 0;
+    for (mut text, kind) in runs {
+        let start = at;
+        at += text.len();
+        if !bounds.contains(&start)
+            && let Some(prev) = out.last_mut()
+        {
+            let next = bounds.range(start..).next().copied().unwrap_or(line.len());
+            let cut = (next - start).min(text.len());
+            prev.0.push_str(&text[..cut]);
+            text = text[cut..].to_string();
+        }
+        if !text.is_empty() {
+            out.push((text, kind));
+        }
+    }
+    out
+}
+
 pub fn tokenize(source: &str, lang: Lang) -> Vec<Line> {
     let mut out = Vec::new();
     let mut in_block = false;
@@ -400,7 +436,7 @@ pub fn tokenize(source: &str, lang: Lang) -> Vec<Line> {
                 }
             }
         }
-        out.push(runs);
+        out.push(whole_graphemes(runs));
     }
     out
 }
