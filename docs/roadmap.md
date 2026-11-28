@@ -91,12 +91,14 @@ much it cost them. Each is self-contained and can be given to another
 agent with the report it came from (summarised in
 [the evaluation](vocabulary-evaluation.md)).
 
-1. **A stroke scheduler for painting over time** (`paintplan`): a list of
-   strokes with a start, a duration, a seed and a kind (along a path, a
-   sweep, a soak), played onto a persistent canvas, with the active
-   stroke's tip available to `overlay` for a brush cursor. Chalk Proof
-   and Heron each wrote this from scratch (about 60 lines each).
-   `revealband` is its first brick.
+1. **A stroke scheduler for painting over time**: done, as pkink's
+   `paintplan` (#107): strokes /along a path, /sweep and /soak, kept once
+   on the step that finishes them and regrown in `overlay` until then,
+   exact at any `--fps`, with `painttip` for a brush. Chalk Lecture uses
+   it (byte-identical to its hand-written scheduler); Evening Harbour was
+   painted with it. Heron and Chalk Proof keep their own: Heron regrows its
+   pen strokes on the kept canvas and Chalk Proof lays its chalk in
+   clipped pieces, so either would change its look if moved.
 2. **Equations as objects.** Run lists set a line and bring it in term
    by term, and `morphruns` (#104) makes one line become the next: terms
    are paired by content in order or by tag (`[/as /key run]`), slide,

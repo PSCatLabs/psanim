@@ -1,0 +1,265 @@
+%!PS
+% Poster: 41
+% Evening Harbour
+%
+% A plein-air sketch in gouache, painted stroke by stroke on a toned
+% board as the light goes: the sky laid in broad loaded bands, a low sun
+% soaking in, the far shore washed in, the water brushed across, the
+% sun's path broken on it, then a moored boat, its reflection, the
+% posts of a jetty and two gulls. Then the painter steps back.
+%
+% Techniques
+%   - pkink `paintplan`: every stroke is one entry of a plan, with a
+%     start, a length, a seed and the procedure that paints it whole.
+%     The plan keeps each stroke on the canvas once, whole, on the step
+%     that finishes it, and shows the strokes in progress in `overlay`
+%     until then; the last frame is the board painted in one go.
+%   - Three kinds of stroke. /along with /Reveal: a broad brush, oil,
+%     liner or dry brush shown through a band following its path (they
+%     cannot grow, so the band is the brush). /sweep: the
+%     underpainting, the far shore and the sail, each washed in behind
+%     a moving front. /soak: the sun and its
+%     haze, faint washes laid one over another.
+%   - The brush (a ring at `painttip`) and the title are in `overlay`.
+%   - `--param oneshot=1` paints the finished board on frame 0 from the
+%     same plan: the reference the last frame is compared with.
+<< /Size [1280 720] /Duration 42 /FPS 30 /Persist true
+   /Background [0.80 0.72 0.60]
+   /Title (Evening Harbour)
+   /Description (A plein-air gouache of a harbour at dusk, painted stroke by stroke: loaded sky bands, a soaking sun, a shore washed in, broken water, a moored boat and two gulls.)
+>> animation
+
+(lib/artkit.ps) run (lib/paintkit.ps) run
+/pkink use /pktype use /pkmotion use
+
+/oneshot /oneshot 0 param cvi 1 eq def
+
+% ------------------------------------------------------------- palette
+/rgb { aload pop setrgbcolor } def
+/c-ground  [0.80 0.72 0.60] def
+/c-zenith  [0.20 0.24 0.42] def
+/c-violet  [0.42 0.36 0.55] def
+/c-rose    [0.80 0.52 0.50] def
+/c-peach   [0.96 0.72 0.50] def
+/c-gold    [0.99 0.85 0.55] def
+/c-sun     [1.00 0.93 0.70] def
+/c-shore   [0.30 0.28 0.40] def
+/c-shore2  [0.40 0.36 0.48] def
+/c-sea     [0.22 0.25 0.38] def
+/c-sea2    [0.33 0.33 0.48] def
+/c-dark    [0.10 0.10 0.16] def
+/c-hull    [0.14 0.12 0.16] def
+/c-sail    [0.93 0.83 0.70] def
+<< /bg c-ground /fg c-dark /muted [0.30 0.26 0.24] /accent c-gold
+   /title /Palatino-Italic >> usetheme
+
+/horizon 318 def
+/sunx 860 def /suny horizon 44 add def
+
+% ------------------------------------------------------------- the plan
+/strokes 200 array def /n 0 def
+/addstroke { strokes n 3 -1 roll put /n n 1 add def } def
+/t 0.6 def                                      % when the next stroke starts
+/next { /t exch t add def } def                 % a pause
+
+% /along with a reveal band:  path-proc width colour-proc opts brush dur
+% -> a stroke at t; the next starts `gap` after it ends
+/gap 0.12 def
+/brushed { % {path} width {paint} dur ->
+  /b-dur exch def /b-paint exch def /b-w exch def /b-path exch def
+  << /At t /For b-dur /Path /b-path load /Reveal b-w /Ease /sine-inout
+     /Paint [ /pop cvx /b-paint load /exec cvx ] cvx >> addstroke
+  /t t b-dur add gap add def
+} def
+
+% A colour ramp: y0 y1 [c0 c1 ...] ramp -   flat rows from y0 (c0) to y1
+/colourramp {
+  /rp-c exch def /rp-y1 exch def /rp-y0 exch def
+  0 1 59 { /rp-i exch def
+    rp-i 59 div rp-c length 1 sub mul /rp-f exch def
+    rp-f floor cvi rp-c length 2 sub min /rp-k exch def
+    rp-f rp-k sub rp-c rp-k get rp-c rp-k 1 add get between rgb
+    -20 rp-y0 rp-y1 rp-y0 sub rp-i mul 60 div add
+    1320 rp-y1 rp-y0 sub 60 div abs 1 add rp-y1 rp-y0 lt { neg } if rectfill
+  } for
+} def
+
+% The underpainting: sky and sea blocked in thin, swept down the board,
+% with a wash over it for the paper's grain.
+<< /Kind /sweep /At t /For 2.2 /Across [740 -20] /Axis /y /Seed 11 /Ease /sine-inout
+   /Paint { pop
+     horizon 740 [c-gold c-peach c-rose c-violet c-zenith c-zenith] colourramp
+     horizon -20 [c-sea2 c-sea c-sea c-dark] colourramp
+     c-rose rgb newpath -20 horizon moveto 1320 horizon lineto 1320 740 lineto -20 740 lineto closepath
+     << /Alpha 0.14 /Layers 2 /Wet 12 /Bloom 0.3 /Grain 0.8 /Seed 12 >> pkwash } >> addstroke
+/t t 2.0 add def
+
+% The sky: loaded broad bands over it, top to bottom, alternating direction.
+/band { % y dir cols width ->
+  /bd-w exch def /bd-c exch def /bd-d exch def /bd-y exch def
+  bd-d 0 gt
+    { [ -30 bd-y /moveto cvx 420 bd-y 6 add 860 bd-y 4 sub 1310 bd-y 3 add /curveto cvx ] cvx }
+    { [ 1310 bd-y /moveto cvx 860 bd-y 5 add 420 bd-y 4 sub -30 bd-y 2 add /curveto cvx ] cvx }
+  ifelse
+  bd-w
+  [ << /Width bd-w /Charge 1 /Depletion 0.35 /Grain 26 /Edge 0.12 /ColorJitter 0.06
+       /Colors bd-c /ColorMix 0.8 /Light 90 >> /pkbroad cvx ] cvx
+  0.8 brushed
+} def
+/gap 0.06 def
+700 1  [c-zenith c-zenith] 64 band
+652 -1 [c-zenith c-violet] 64 band
+600 1  [c-violet c-violet c-rose] 66 band
+548 -1 [c-violet c-rose c-rose] 66 band
+494 1  [c-rose c-rose c-peach] 64 band
+444 -1 [c-rose c-peach c-peach] 62 band
+394 1  [c-peach c-gold] 56 band
+350 -1 [c-gold c-gold c-sun] 44 band
+0.3 next
+
+% The sun: a soak, faint washes laid one over another from the centre out.
+<< /Kind /soak /At t /For 2.4 /Passes 16 /Seed 501
+   /Paint { /su exch def
+     c-sun rgb newpath sunx suny su sqrt 46 mul 6 add 0 360 arc closepath
+     << /Alpha 0.16 /Layers 1 /Wet 5 /Bloom 0.6 /Grain 0.2 /Seed rand 1000 mod >> pkwash } >> addstroke
+% and its haze over the sky, wider and fainter, overlapping it
+<< /Kind /soak /At t 0.8 add /For 2.6 /Passes 10 /Seed 601
+   /Paint { /su exch def
+     gsave newpath -20 horizon 2 add 1340 500 rectclip
+     c-gold rgb newpath sunx suny su 120 mul 50 add 0 360 arc closepath
+     << /Alpha 0.05 /Layers 2 /Wet 30 /Bloom 0.2 /Grain 0.1 /Seed rand 1000 mod >> pkwash
+     grestore } >> addstroke
+/t t 3.0 add def
+
+% The far shore: washed in, a front moving along the horizon.
+/shore { newpath -10 horizon moveto 120 horizon 34 add 260 horizon 52 add 380 horizon 30 add curveto
+  470 horizon 16 add 540 horizon 20 add 620 horizon 6 add curveto
+  700 horizon 2 sub 1000 horizon 4 add 1290 horizon 10 add curveto
+  1290 horizon 14 sub lineto -10 horizon 14 sub lineto closepath } def
+<< /Kind /sweep /At t /For 2.2 /Across [-10 1290] /Seed 71 /Ease /sine-inout
+   /Paint { pop c-shore rgb shore
+     << /Alpha 0.85 /Layers 2 /Wet 2 /Bloom 0.2 /Grain 0.4 /Seed 71 >> pkwash
+     c-shore2 rgb newpath -10 horizon 4 add moveto 150 horizon 40 add 290 horizon 40 add 420 horizon 16 add curveto
+     600 horizon 6 add 900 horizon 2 add 1290 horizon 6 add curveto 1290 horizon 6 sub lineto -10 horizon 6 sub lineto closepath
+     << /Alpha 0.35 /Layers 1 /Wet 4 /Bloom 0.3 /Grain 0.5 /Seed 72 >> pkwash } >> addstroke
+/t t 2.4 add def
+
+% The water: broad strokes across, darker toward us, broken by depletion
+% so the underpainting shows through like light on the swell.
+/wave { % y dir width depletion cols ->
+  /wv-c exch def /wv-d exch def /wv-w exch def /wv-dir exch def /wv-y exch def
+  wv-dir 0 gt
+    { [ -30 wv-y /moveto cvx 1310 wv-y 4 add /lineto cvx ] cvx }
+    { [ 1310 wv-y /moveto cvx -30 wv-y 3 sub /lineto cvx ] cvx } ifelse
+  wv-w
+  [ << /Width wv-w /Charge 0.9 /Depletion wv-d /Grain 20 /Edge 0.35 /ColorJitter 0.05
+       /Colors wv-c /ColorMix 0.5 /Light 90 >> /pkbroad cvx ] cvx
+  0.65 brushed
+} def
+/gap 0.06 def
+292 1  22 0.25 [c-sea2 c-rose] wave
+262 -1 34 0.40 [c-sea2 c-sea2 c-violet] wave
+222 1  44 0.50 [c-sea c-sea2] wave
+172 -1 54 0.55 [c-sea c-sea c-violet] wave
+114 1  62 0.60 [c-sea c-dark] wave
+52 -1  72 0.65 [c-dark c-sea] wave
+0.2 next
+
+% The sun's path on the water: short dabs, quick, broken, narrowing down.
+/gap 0.04 def
+0 1 13 { /i exch def
+  /dy i 17 mul def
+  /hw 70 i 3.2 mul sub [i 3] hash01 30 mul add def
+  /cx sunx [i 4] hash01 24 mul 12 sub add def
+  [ cx hw sub horizon 14 sub dy sub /moveto cvx cx hw add horizon 13 sub dy sub /lineto cvx ] cvx
+  10
+  [ i 2 mod 0 eq { c-sun } { c-gold } ifelse /rgb cvx
+    << /Width 6 /Taper 0.5 /Waver 0.4 /Charge 0.9 /Depletion 0.5 >> /pkliner cvx ] cvx
+  0.22 brushed
+} for
+0.4 next
+
+% The boat: the hull, the mast and boom, the sail washed in (a sweep up
+% it), then its reflection dragged down in dry brush.
+/gap 0.15 def
+/bx 300 def /by 190 def
+/sail { newpath bx 106 add by 16 add moveto bx 104 add by 196 add lineto
+  bx 30 add by 28 add lineto closepath } def
+{ bx by 4 add moveto bx 40 add by 18 sub bx 170 add by 18 sub bx 214 add by 10 add curveto }
+26 { c-hull rgb << /Width 20 /Ridges 8 /Load 0.9 >> pkoil } 1.0 brushed
+{ bx 112 add by 6 add moveto bx 108 add by 214 add lineto }
+8 { c-dark rgb << /Width 3.6 /Taper 0.3 /Waver 0.2 /Depletion 0 >> pkliner } 0.6 brushed
+{ bx 26 add by 22 add moveto bx 114 add by 18 add lineto }
+8 { c-dark rgb << /Width 3 /Taper 0.2 /Waver 0.2 /Depletion 0 >> pkliner } 0.4 brushed
+<< /Kind /sweep /At t /For 1.3 /Across [by 14 add by 202 add] /Axis /y /Seed 81 /Ease /sine-inout
+   /Paint { pop c-sail rgb sail << /Alpha 0.9 /Layers 2 /Wet 3 /Bloom 0.2 /Grain 0.5 /Seed 81 >> pkwash
+     c-peach rgb newpath bx 98 add by 30 add moveto bx 96 add by 176 add lineto
+     << /Width 10 /Bristles 10 /BristleWidth 1.2 /Load 0.5 /Dropout 0.5 >> pkdry } >> addstroke
+/t t 1.45 add def
+{ bx 24 add by 16 sub moveto bx 200 add by 20 sub lineto }
+18 { c-hull rgb << /Width 16 /Bristles 16 /BristleWidth 1.2 /Load 0.6 /Dropout 0.55 >> pkdry } 0.7 brushed
+{ bx 108 add by 26 sub moveto bx 116 add by 150 sub lineto }
+12 { c-dark rgb << /Width 5 /Bristles 6 /BristleWidth 1 /Load 0.5 /Dropout 0.65 >> pkdry } 0.6 brushed
+0 1 3 { /i exch def
+  [ bx 60 add i 6 mul add by 34 sub i 22 mul sub /moveto cvx bx 104 add by 32 sub i 22 mul sub /lineto cvx ] cvx
+  8 { c-rose rgb << /Width 5 /Taper 0.5 /Waver 0.4 /Charge 0.7 /Depletion 0.6 >> pkliner } 0.18 brushed
+} for
+
+% The jetty: a deck running out from the right, its posts, their
+% reflections.
+/gap 0.06 def
+{ 1300 156 moveto 1080 151 lineto 964 147 lineto }
+16 { c-dark rgb << /Width 10 /Taper 0.04 /Waver 0.25 /Depletion 0 >> pkliner } 0.7 brushed
+0 1 6 { /i exch def
+  /px 980 i 48 mul add [i 9] hash01 8 mul add def
+  [ px 150 /moveto cvx px 1 add 104 i 2 mul sub /lineto cvx ] cvx
+  10 { c-dark rgb << /Width 6.5 /Taper 0.05 /Waver 0.2 /Charge 1 /Depletion 0 >> pkliner } 0.25 brushed
+} for
+0 1 6 { /i exch def
+  /px 980 i 48 mul add [i 9] hash01 8 mul add def
+  [ px 1 add 100 i 2 mul sub /moveto cvx px 3 add 50 i 3 mul sub /lineto cvx ] cvx
+  10 { c-dark rgb << /Width 6 /Bristles 5 /BristleWidth 1 /Load 0.45 /Dropout 0.6 >> pkdry } 0.2 brushed
+} for
+0.4 next
+
+% Two gulls.
+/gap 0.2 def
+/gull { % x y s ->
+  /g-s exch def /g-y exch def /g-x exch def
+  [ g-x g-s 14 mul sub g-y g-s 4 mul sub /moveto cvx
+    g-x g-s 7 mul sub g-y g-s 5 mul add g-x g-s 2 mul sub g-y g-s 3 mul add g-x g-y /curveto cvx
+    g-x g-s 3 mul add g-y g-s 4 mul add g-x g-s 9 mul add g-y g-s 6 mul add g-x g-s 15 mul add g-y g-s 2 mul sub /curveto cvx ] cvx
+  10 { c-dark rgb << /Width 3.2 /Taper 0.8 /Waver 0.3 /Depletion 0 >> pkliner } 0.7 brushed
+} def
+620 560 1.9 gull
+716 604 1.3 gull
+
+/plan strokes 0 n getinterval paintplan def
+/painted t def                         % when the last stroke has ended
+
+% ------------------------------------------------------------- per frame
+/ground {
+  c-ground rgb 0 0 1280 720 rectfill
+  0 0 1280 720 << /Tone c-ground /Grain 0.35 /Seed 3 >> pkpaper
+} def
+
+/scene {
+  frame 0 eq { ground oneshot { plan paintall } if } if
+  oneshot not { plan paintkept } if
+} def
+
+/overlay {
+  oneshot not {
+    plan paintlive
+    % the brush: a ring at the tip of the stroke being painted
+    plan painttip {
+      pop pop 2 copy
+      0 0 0 setrgbcolor 0.35 setalpha 2.4 setlinewidth newpath 11 0 360 arc stroke
+      1 1 1 setrgbcolor 0.9 setalpha 1.2 setlinewidth newpath 11 0 360 arc stroke
+      1 setalpha
+    } if
+  } if
+  % the painter steps back: the title
+  /title 30 face c-sail rgb
+  painted 0.8 add [/fade 1.4] { 72 40 moveto (Evening Harbour) show } enters
+} def
