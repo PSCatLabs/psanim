@@ -1,0 +1,21 @@
+%!PS
+% Test content for poem.ps: the shortest poem it takes (two lines), dark theme.
+% Ezra Pound, "In a Station of the Metro" (1913), in the public domain.
+% `psanim check poem-pound.ps` runs poem.ps with this content.
+/tpl (poem.ps) component
+/film /tpl << /Params <<
+  /look /midnight
+  /heading (In a Station of the Metro)
+  /poet (Ezra Pound, 1913)
+  /poem [ (The apparition of these faces in the crowd;)
+          (Petals on a wet, black bough.) ]
+  /notes [
+    [ 0 (apparition) (image)
+      (A ghostly word for ordinary travellers: faces seen for an instant in a dark station.) ]
+    [ 1 (Petals on a wet, black bough) (turn)
+      (No verb joins the two lines. The second sits beside the first, and the eye makes the comparison.) ]
+  ]
+  /reading (One image laid over another: a crowd becomes a branch after rain, and a moment underground becomes something seen in nature.)
+>> >> instance
+<< /Size [1280 720] /Duration /film componentduration /FPS 30 >> animation
+/scene { /film << /After /hold >> place } def

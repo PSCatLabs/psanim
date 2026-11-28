@@ -1,0 +1,21 @@
+%!PS
+% Test content for process.ps: four steps, the key step last, a path that jumps
+% forward from the first step to the last; dusk theme.
+% `psanim check process-incident.ps` runs process.ps with it.
+/tpl (process.ps) component
+/film /tpl << /Params <<
+  /look /dusk
+  /heading (When the pager goes off)
+  /steps [
+    [ (alert) (A monitor sees errors rise and pages the on-call engineer.) ]
+    [ (triage) (The engineer decides how bad it is and who else to call.) ]
+    [ (contain damage) (Traffic moves away from the failing part.) ]
+    [ (review) (A written review says what to change so it does not recur.) ]
+  ]
+  /key 3
+  /why (Without the review, the same page comes back next month.)
+  /pathback [ 0 3 (false alarm) (A false alarm skips straight to tuning the monitor.) ]
+  /summary (Stop the damage first; learn from it after.)
+>> >> instance
+<< /Size [1280 720] /Duration /film componentduration /FPS 30 >> animation
+/scene { /film << /After /hold >> place } def

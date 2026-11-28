@@ -1,0 +1,32 @@
+%!PS
+% Test content for poem.ps: every string near its limit (six lines of about 45
+% characters, notes of about 160, a reading of about 200); blueprint theme.
+% The poem was written for this test.
+% `psanim check poem-long.ps` runs poem.ps with this content.
+/tpl (poem.ps) component
+/film /tpl << /Params <<
+  /look /blueprint
+  /heading (Morning on the quay, in six long lines)
+  /poet (Written for this template's tests, not published)
+  /poem [ (The harbour lamps go out along the sea wall,)
+          (and gulls come back to argue on the pilings;)
+          (a ferry, early, coughs its engine into life,)
+          (and someone on the quay is counting crates)
+          (while the tide, not counting anything at all,)
+          (lifts every boat an inch and sets it down.) ]
+  /notes [
+    [ 1 (argue) (personification)
+      (The gulls are given a human habit. It makes the harbour sound busy and a little comic before any person has appeared in the poem at all.) ]
+    [ 2 (coughs its engine into life) (sound)
+      (Hard c and k sounds imitate an old engine starting. The line itself stutters, with a comma before and after the word early.) ]
+    [ 3 (counting crates) (contrast)
+      (A person doing careful, measured work. The next line sets this against the tide, which measures nothing and still moves everything.) ]
+    [ 4 (not counting anything at all) (turn)
+      (The turn of the poem: the word counting comes back, negated. Human effort and the indifferent sea are placed side by side.) ]
+    [ 5 (an inch) (scale)
+      (The smallest possible measure ends the poem. A great force does a tiny, gentle thing, and then does it again tomorrow.) ]
+  ]
+  /reading (The poem watches a harbour wake up. People count and labour; the sea does not count but lifts every boat anyway. The quiet last line suggests the larger rhythm matters more.)
+>> >> instance
+<< /Size [1280 720] /Duration /film componentduration /FPS 30 >> animation
+/scene { /film << /After /hold >> place } def

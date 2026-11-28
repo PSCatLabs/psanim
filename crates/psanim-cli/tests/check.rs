@@ -378,3 +378,37 @@ fn a_fixed_sweep_covers_the_same_pairs_every_run() {
     // Sized by time, it says so.
     assert_eq!(run("sweep_time", src, &[])["pop_scan"]["sized_by"], "time");
 }
+
+/// The explainer templates and their test contents (skills/psanim/templates)
+/// pass the real `check` with no warnings: no blank frames, no pops in the
+/// stretches scanned, no redefined words. (`check --all` on each was run by
+/// hand; it takes too long for the suite.)
+#[test]
+fn the_explainer_templates_check_clean() {
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../skills/psanim/templates")
+        .canonicalize()
+        .unwrap();
+    let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .unwrap()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "ps"))
+        .collect();
+    files.sort();
+    assert!(files.len() >= 10, "{files:?}");
+    for path in files {
+        let out = Command::new(env!("CARGO_BIN_EXE_psanim"))
+            .arg("check")
+            .arg(&path)
+            .args(["--sweep", "6", "--json"])
+            .output()
+            .expect("psanim runs");
+        let text = String::from_utf8_lossy(&out.stdout);
+        let json: serde_json::Value = serde_json::from_str(&text)
+            .unwrap_or_else(|e| panic!("{}: not JSON ({e}): {text}", path.display()));
+        assert_eq!(json["ok"], true, "{}: {json}", path.display());
+        let warnings = strings(&json, "warnings");
+        assert!(warnings.is_empty(), "{}: {warnings:?}", path.display());
+    }
+}

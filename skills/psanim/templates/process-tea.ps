@@ -1,0 +1,15 @@
+%!PS
+% Test content for process.ps: the fewest steps (three), short strings, no path
+% back; paper theme. `psanim check process-tea.ps` runs process.ps with it.
+/tpl (process.ps) component
+/film /tpl << /Params <<
+  /look /paper
+  /heading (Making tea)
+  /steps [ [ (boil) (Heat the water.) ] [ (steep) (Leave the leaves in.) ] [ (pour) (Serve it hot.) ] ]
+  /key 1
+  /why (Timing the steep sets the taste.) 
+  /pathback [ ]
+  /summary (Three steps, one that matters.)
+>> >> instance
+<< /Size [1280 720] /Duration /film componentduration /FPS 30 >> animation
+/scene { /film << /After /hold >> place } def

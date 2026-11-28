@@ -61,6 +61,27 @@ psanim render movie.ps -o movie.mp4    # 5. the film (also .webm, .gif, or a dir
   `check`, `sheet` and `frame`: expect each to cost the film up to that
   moment.
 
+## Start from a template, when one fits
+
+Two everyday explainers have a finished film to start from, in
+[templates/](templates/):
+
+| the request | start from |
+|---|---|
+| explain this short poem (2 to 6 lines) | `templates/poem.ps` |
+| show me this process (3 to 8 steps, at most one path back) | `templates/process.ps` |
+
+Copy the file and change only its CONTENT block (the comments there give
+each field's limits), then `check`, `check --all` and a `sheet`, and look.
+The staging, pacing, sizes and closing hold are already done, and the
+film's length follows from the text. A `check` that fails with `content:
+...` names the field to shorten. Change the staging only if the request
+asks for something the template does not do, and say what you changed.
+With a template you need this page down to "When something fails"; the
+rest is for changing the staging. Anything else is written from scratch.
+The `poem-*.ps` and `process-*.ps` files beside the templates are their
+test contents, not starting points.
+
 ## The five ideas
 
 1. **`now` is the clock, in seconds.** At the top of `scene` it is the
@@ -96,7 +117,9 @@ psanim render movie.ps -o movie.mp4    # 5. the film (also .webm, .gif, or a dir
 - **Combinators take their procedure last**: `0 2 { ... } during`.
 - **Stack discipline**: a body must leave the stack as it found it. Use
   a local dictionary for names (`8 dict begin ... end`) so recursion and
-  nesting do not clobber them.
+  nesting do not clobber them: a helper that does `/i exch def` changes
+  the `i` of the loop that called it ([pitfalls.md](references/pitfalls.md),
+  "Nested procedures share names").
 - **Randomness**: `rand` is reseeded identically every frame, so a random
   layout holds still. For a per-item constant use `i hash01` (0..1,
   stable). For smooth drift use `key freq amp wiggle`.
@@ -234,8 +257,8 @@ number still passes `check`). So:
 |---|---|
 | cut up the page | `canvasbox 7 vmin inset`, `box fx fy fw fh subbox`, `box n gap cols`, `box n gap rows`, `box nc nr gap cells`, `box /c boxpoint` |
 | set colour and font | `/fg ink` (`/muted /accent /accent2 /accent3 /good /bad /bg /surface /line`), `/title 6 vmin face` (`/body /mono /display /serif`), `ground` |
-| put text in a box | `(text) box /c showin` (`/w` left, `/e` right), `(text) box /title fitface`, `(text) box << /Align /center >> paragraph` |
-| bring a thing on | `/pop { ... } entering` in a script step; `t /pop { ... } enters` at a time |
+| put text in a box | `(text) box /c showin` (`/w` left, `/e` right), `(text) box /title fitface`, `(text) box << /Align /center >> paragraph`; join strings with `(a) (b) strcat` |
+| bring a thing on | `/pop { ... } entering` in a script step; `t /pop { ... } enters` at a time (inside, the clock starts from 0 at t) |
 | take it off | `/rise /fade { ... } staged` inside `thenfor` or `inbeat`; `a b /rise /fade { ... } onstage` |
 | call attention | `t /shake { ... } emphasized`, `box amount spotlight`, `(text) box /ne u note`, `box circled 0 u trimpath stroke` |
 | one after another | `{ 0.6 { ... } then  0.3 wait  2 { ... } thenfor } script` |
@@ -264,6 +287,14 @@ From blind reviews of finished films, the defects that recur:
   box of modest height (10 to 12% of the page), not the page's width.
 - **A state that contradicts the story.** If a thing is ruled out, it
   must lose its highlight as well as dim.
+- **Reading time with nothing changing.** A long still hold while text
+  is read feels slow: bring a long text on a line at a time, at about
+  0.25 s a word, so something arrives while it is read, and keep the
+  rest after it short.
+- **Text swapped through an empty frame.** When one caption replaces
+  another in the same place, start the new one while the old one fades,
+  and do not let the finished picture lose a caption it needs: give
+  each one a place of its own.
 - **Things that collide while moving.** A large `/drop` or `/zoom`
   passes through whatever is above or around it: look at three frames
   inside every big entrance.
@@ -306,6 +337,7 @@ detail) is in [storytelling.md](references/storytelling.md).
 | Making it good: timing, easing, composition, colour, how to review motion | [references/craft.md](references/craft.md) |
 | Stateful simulations, persistent canvases, signals, parameters, the time of day for clocks, motion blur | [references/modes.md](references/modes.md) |
 | Complete small movies to start from | [examples/](examples/) |
+| A finished explainer to fill in: a short poem, a process | [templates/](templates/) |
 
 For drawing itself (brushes, palettes, L-systems, text layout, charts),
 use the `psart` and `pscat` skills: everything they describe works inside
