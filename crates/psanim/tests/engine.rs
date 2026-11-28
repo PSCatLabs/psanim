@@ -1923,3 +1923,27 @@ fn stepat_is_true_on_exactly_one_step() {
         "a pure movie's step is its frame"
     );
 }
+
+#[test]
+fn a_persistent_canvas_is_the_same_played_or_sought() {
+    // Faint fills laid one a step: PSCat composites a fill through a 16-bit
+    // shadow of the page, which showing a frame's overlay (or seeking from
+    // a checkpoint) drops. The kept canvas must not depend on that.
+    let src =
+        "<< /Size [32 16] /Duration 3 /FPS 10 /Persist true /Background [0.9 0.9 0.9] >> animation
+        /scene { 0.1 0.4 0.3 setrgbcolor 0.07 setalpha 0 0 32 16 rectfill } def
+        /overlay { } def";
+    let mut played = Movie::load(src, &Options::default()).unwrap();
+    for k in 0..29 {
+        played.render_frame(k).unwrap();
+    }
+    let a = played.render_frame(29).unwrap().premultiplied.to_vec();
+    let mut sought = Movie::load(src, &Options::default()).unwrap();
+    assert_eq!(sought.render_frame(29).unwrap().premultiplied, &a[..]);
+    // And without an overlay, the same pixels.
+    let mut bare = Movie::load(&src.replace("/overlay { } def", ""), &Options::default()).unwrap();
+    for k in 0..29 {
+        bare.render_frame(k).unwrap();
+    }
+    assert_eq!(bare.render_frame(29).unwrap().premultiplied, &a[..]);
+}

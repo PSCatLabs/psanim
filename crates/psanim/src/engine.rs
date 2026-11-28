@@ -387,6 +387,9 @@ pub struct Movie {
     output_truncated: bool,
     /// The persistent canvas, set aside while a frame's overlay is shown.
     kept: Option<Page>,
+    /// A page the size of the canvas, swapped in and straight back out
+    /// before each step of a persistent movie: see [`Movie::settle_canvas`].
+    spare: Option<Page>,
     /// The overlay procedure of a persistent movie, if it defines one.
     overlay: Option<String>,
     /// Simulation ticks the last render had to apply.
@@ -856,6 +859,7 @@ impl Movie {
             output_truncated: setup_truncated,
             byte_font_text,
             kept: None,
+            spare: None,
             overlay,
             last_ticks: 0,
         };
@@ -1353,6 +1357,32 @@ impl Movie {
         Ok(())
     }
 
+    /// Start a step of a persistent movie from the canvas's 8-bit pixels
+    /// alone. PSCat keeps a 16-bit shadow of the pixels translucent fills
+    /// composite into, and drops it whenever the canvas is swapped: for
+    /// the overlay (each frame shown) and for a checkpoint (each seek). Left
+    /// to that, a step's translucent fill came out a level apart depending
+    /// on whether the frames before it were shown, so a movie played and
+    /// the same movie sought to a frame differed. Dropping the shadow before
+    /// every step makes the kept canvas the same however it was reached;
+    /// within a step the shadow still serves (a wash's own layers).
+    fn settle_canvas(&mut self, phase: Phase) -> Result<(), Error> {
+        let spare = match self.spare.take() {
+            Some(p) => p,
+            None => {
+                let (w, h) = self.interp.canvas_size();
+                Page::from_premultiplied_rgba8(w, h, vec![0; w as usize * h as usize * 4])
+                    .ok_or_else(|| Error::new(phase, "internal", "no spare canvas"))?
+            }
+        };
+        let canvas = self
+            .interp
+            .swap_canvas(spare)
+            .map_err(|_| Error::new(phase, "internal", "the canvas could not be swapped"))?;
+        self.spare = self.interp.swap_canvas(canvas).ok();
+        Ok(())
+    }
+
     /// Apply one tick: advance the simulation, and for a persistent movie
     /// paint that tick's frame over the canvas.
     fn tick(&mut self) -> Result<(), Error> {
@@ -1374,6 +1404,7 @@ impl Movie {
         }
         if self.meta.mode == Mode::Persistent {
             let phase = Phase::Frame { index: tick, time };
+            self.settle_canvas(phase)?;
             self.exec(phase, "cleardictstack save")?;
             let guard = self.pop_save(phase)?;
             self.begin(Running::Frame, tick as i64, time, dt);
