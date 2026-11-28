@@ -256,6 +256,162 @@ for motion names, and a list in the skill of what reviewers mark down.
 The films, their sources and the review are in `out/eval4/`, and
 `scripts/build_site.py` turns them into a page (`site/eval/`).
 
+## 5. Templates for everyday explainers
+
+Experiment 4 left Haiku's films at 6 to 7 and every author scoring
+itself 7 to 8. Issue #108 asked whether a finished film to fill in would
+lift the cheaper models, and at what cost. Two templates were written
+(`skills/psanim/templates/poem.ps`, "explain this short poem", and
+`process.ps`, "show me this process"), each a whole film with its content
+in one block and the staging derived from it, and run on 2026-11-27/28.
+
+**Method.** Two fixed briefs ([poem](briefs/poem.md): Basho's old pond,
+three notes, about 38 s; [process](briefs/process.md): a six-step
+deployment with a rollback, about 45 s), each in two variants with the
+same content, beats and length: A starts from the template, B is written
+from the skill alone. Sonnet and Haiku each ran both variants of both
+briefs: eight runs, one per cell. Each run had its own directory with its
+own copy of the skill; in the B copies `templates/` was removed and the
+SKILL.md section on templates cut out. All eight used one frozen binary,
+built from this branch before UTF-8 text (#115) reached main. Codex then
+reviewed all eight blind, from anonymised folders (a contact sheet, six
+full-size frames and the mp4), and scored fidelity, layout, legibility,
+pacing, motion and overall out of 10. In its scale 8 or more is "show
+unchanged".
+
+**Measurements.** From the agent harness and the authors' reports:
+
+| Brief | Model | Template | Wall time | Tokens | Edit rounds | psanim errors | Self-score |
+|---|---|---|---|---|---|---|---|
+| poem | sonnet | yes | 24 s | 70k | 1 | 0 | 8 |
+| poem | haiku | yes | 39 s | 68k | 1 | 0 | 8 |
+| poem | sonnet | no | 102 s | 83k | 3 | 2 (tween given `now`; a string-join word that does not exist) | 8 |
+| poem | haiku | no | 153 s | 98k | 1 | 1 (helper `def` overwrote caller's variable) | 7 |
+| process | sonnet | yes | 35 s | 60k | 1 | 0 | 8 |
+| process | haiku | yes | 40 s | 68k | 1 | 0 | 8 |
+| process | sonnet | no | 243 s | 106k | 5 | 1 (`mixink` operand missing) + one check --all pop | 7 |
+| process | haiku | no | 214 s | 102k | 2 | 0, + tiny labels (`/Size` unit) + one check --all pop | 7 |
+
+All eight passed `check --all` and rendered. Films ran 37.7 to 45 s.
+Non-comment lines: 163 (poem) and 188 (process) in the template films,
+61 to 105 from scratch.
+
+**The blind review.** Overall scores, and sub-scores (fidelity, layout,
+legibility, pacing, motion, overall):
+
+| Brief | Film | Model | Template | Sub-scores | Overall | Reviewer's order |
+|---|---|---|---|---|---|---|
+| poem | P | haiku | yes | 7 7 7 7 7 7 | 7 | 3rd, tied with R |
+| poem | R | sonnet | yes | 7 7 7 7 7 7 | 7 | 3rd, tied with P |
+| poem | Q | sonnet | no | 7 7 9 7 7 7 | 7 | 2nd |
+| poem | S | haiku | no | 7 8 8 7 7 7 | 7 | 1st |
+| process | X | haiku | yes | 9 8 9 7 8 8 | 8 | 1st, tied with Z |
+| process | Z | sonnet | yes | 9 8 9 7 8 8 | 8 | 1st, tied with X |
+| process | Y | sonnet | no | 9 7 7 7 8 7 | 7 | 3rd |
+| process | W | haiku | no | 7 7 8 7 7 7 | 7 | 4th |
+
+P and R are pixel-identical over all 1131 frames, X and Z over all 1339:
+with the template, the model made no difference to the film. Codex would
+show X/Z unchanged and sent the other six back.
+
+**What the reviewer marked down.**
+
+- The poem template: a large unused band under the heading; commentary
+  and attribution small against the poem; the card empty between notes
+  (13.0 s); the closing picture complete by 27.6 s of 37.7 s; a short note
+  lingering as long as a long one.
+- The process template: the key step's reason leaves the foot when the
+  walk moves on, though its emphasis stays; the closing line replaces the
+  rollback's sentence, so the final picture has the arrow without it; the
+  test step held through three sheet samples (11.9 to 17.8 s); 44.6 s
+  felt leisurely.
+- The from-scratch films: a quotation filling the card's width, a bold
+  quotation competing with the poem, a slow opening (Q); a card empty
+  across 12.67 to 13.0 s, a long tail (S); a rollback curve with no
+  arrowhead, a sentence 20 px from the edge, a rationale smaller than the
+  step text (W); descriptions wrapped into fragments in six narrow
+  columns, explanations far from their nodes (Y).
+- Across all eight: reading time generous but monotonous; secondary
+  information treated worse than primary; text swaps that break
+  continuity.
+- All four poem films lost marks for a curly apostrophe in "Basho's",
+  which the brief required in ASCII. That was an artefact: every author
+  typed `'`, and the frozen binary, which predates #115, drew it curly in
+  StandardEncoding. It hit all four poem films equally. The current
+  binary draws `'` straight.
+
+**What this shows and does not.**
+
+- **A template makes the model irrelevant.** Both models produced the
+  same film, pixel for pixel, in 24 to 40 seconds with no errors and one
+  edit round. From scratch they took 102 to 243 seconds, 83k to 106k
+  tokens, and hit four psanim errors between them.
+- **The film is then as good as the template, no better.** One template
+  beat the from-scratch films (process, 8 against 7 and 7) and one did
+  not (poem, 7, ranked behind both). A weak template caps every author
+  below what the stronger ones did unaided.
+- **Self-scores still do not track quality.** Every template author
+  scored 8, for the films ranked first and the films ranked last.
+- One run per cell, two briefs, one reviewer, motion judged from sampled
+  frames. Wall times are the harness's; the authors' own clocks were
+  coarser.
+
+**What was changed as a result.** Both templates were revised against
+the review, and against a code review of the PR that found six defects
+in validation and timing. **The revised templates have not been
+re-reviewed blind**; what follows is from `check --all`, contact sheets
+and full-size frames of the two brief contents, re-run through the
+revised templates.
+
+- `poem.ps`: heading and content form one group centred on the page, so
+  no band is left under the heading. The commentary is set at 4.6 vmin
+  (was 3.8), and the attribution follows the poem's size. Each note's
+  explanation, and the closing reading, arrives a line at a time at about
+  0.24 s a word. The next note's text rises in while the last fades, so
+  the card is never empty (for two or three frames at each swap the two
+  quotations overlap at partial opacity). A note's time follows its own
+  length. The finished picture is still for the last line's reading time
+  plus 2.5 s. The brief's film went from 37.7 s to 29.6 s; its picture
+  is complete 4 to 4.5 s before the end (it was 10.1 s).
+- `process.ps`: the key step's reason is set under its line, at the
+  same size as the steps' lines (W was marked down for a smaller one),
+  and stays. The path back's sentence, with its label, has a foot line of its own
+  above the summary, so the finished picture keeps all three. Steps take
+  0.24 s a word and half a second's rest: the brief's film went from
+  44.6 s to 36.2 s, and the test step, by the template's own sums, from
+  about 8.2 s to 6.2 s.
+- From the code review: a word wider than the card is refused by name;
+  `/loop`, which shadowed the operator and broke library helpers, is now
+  `/pathback`; empty text is refused by name; reading time counts words,
+  not spaces; the path back's label is measured and blamed by name; the
+  default content works under every theme; a film over 90 s is refused.
+  Each has a test that failed before its fix.
+- **Against the two from-scratch poem films** (their sheets rendered
+  with their own frozen binary, and S's card swap frame by frame): the
+  revised template no longer has the defects that ranked it last. Its
+  card never empties, where S's is empty from 12.6 to 13.0 s. Its
+  finished picture is still for the last 4 to 4.5 s, Q's for the last 8
+  to 8.5 s and S's for the last 12 to 13 s (compared frame against last
+  frame, half a second apart). Its poem (8.5 vmin) is larger than Q's
+  (7.2) and S's (8). It is still behind Q on the size of the commentary
+  (4.6 vmin against Q's 5), and behind S on use of the page: it gathers
+  heading, poem and card in the middle, with about a fifth of the height
+  empty above and below, where S spreads the poem over the full height. Whether it now ranks with or above them is
+  for a second blind review to say.
+- The skill gaps the from-scratch authors reported were checked against
+  the skill text. Real, and fixed: pkdiagram's `/Size` gave no unit (now
+  "canvas units, `4 vmin` not 4" in `node`'s entry and explain.md); no
+  join word in the most-used table (`strcat` is a core word, not
+  pktype's as one author thought; now listed); the helper-`def` warning
+  lived in pitfalls.md and as a bare rule in SKILL.md (the rule now names
+  the symptom and links to it). Already documented, not changed: `enters`
+  rebasing `now` (its entry says so; the table now repeats it), `tween`
+  taking no `now` (its entry and SKILL.md's third idea say so), and
+  `check` noting a pop that `--all` makes a warning (SKILL.md says so).
+  Not reproduced: `/Pulse` ending abruptly; two test edges with a
+  clamped pulse passed `check --all`, and no B film still uses `/Pulse`
+  to show the case.
+
 ## What the evaluation supports
 
 - The vocabulary removes the mechanical part of the work: code size
@@ -264,6 +420,9 @@ The films, their sources and the review are in `out/eval4/`, and
 - Fresh agents can make long, structured, correct films from the skill
   alone, in about ten minutes and 170k tokens each, across explainers,
   mathematics, data, type and paint.
+- A finished template takes the model out of the result: Sonnet and
+  Haiku made the same film, pixel for pixel, in well under a minute
+  (experiment 5).
 - The vocabulary is discoverable: authors found and used motions,
   boxes, themes, storyboards, charts, code panels and diagram words
   without help, and reported no library word producing wrong output.
@@ -279,10 +438,16 @@ The films, their sources and the review are in `out/eval4/`, and
   experiment 4, after the skill argued for it, most films used it, but
   no edit was then made to them to measure the benefit.
 - Any claim about reliability: each cell of each table is one run.
+- That templates make better films in general: one of two beat the
+  from-scratch work, and a template is only as good as itself.
 - Any claim about smaller models with and without the libraries: only
   the with-libraries arm was run on Opus, Sonnet and Haiku.
 
 ## What to run next
+
+- A second blind review of the revised templates against the same
+  from-scratch films: nothing yet says the revisions closed the gap on
+  the poem.
 
 - Each comparison five times, to see whether the differences in fix
   rounds and time are real.

@@ -1,0 +1,324 @@
+%!PS
+% process.ps: a template for "show me this process".
+%
+% The film: a heading, then the steps of the process in a column, joined
+% by a line; a token travels down the line, and as it reaches each step
+% the step lights up and one line beside it says what happens there. The
+% step that matters most is flagged in the accent colour, with a line
+% saying why. An optional path back (a rollback, a retry) is drawn and
+% travelled after the main run. It ends on the whole picture with a
+% one-line summary. Its length follows from the text: more steps and
+% longer lines make a longer film.
+%
+% To use it: copy this file, change only the CONTENT block below, then
+% `psanim check film.ps`, `psanim check film.ps --all` and
+% `psanim sheet film.ps -o sheet.png` and look at the sheet. If content
+% is too long to fit, `check` fails with a message naming the field.
+%
+% Text is UTF-8: write it as it is, with curly quotes (’ “ ”), arrows (→)
+% and accents (café). A straight ' draws as a straight typewriter
+% apostrophe. A character no face has (Japanese, Chinese, Korean, Thai,
+% Arabic, the Indic scripts) draws as an empty box, and `psanim check`
+% names it. The limits below count characters as written; the numbers in
+% `check`'s messages count bytes, so an accented letter counts as two there.
+
+% ============================ CONTENT: edit this ============================
+
+% The theme, by name: /midnight (dark), /paper (warm white), /blueprint
+% (deep blue), /dusk (plum), /poster (yellow), /terminal (green on black).
+/look /midnight def
+
+% The heading: a few words, at most about 45 characters.
+/heading (How a pull request gets merged) def
+
+% The steps, in order: 3 to 8 of them. Each is
+%   [ (name) (what happens) ]
+% name:         one or two words, at most about 14 characters.
+% what happens: one line, at most about 60 characters, about 55 in the
+%               wider face of /terminal (with 8 steps the type is smaller;
+%               `check` says if a line will not fit).
+/steps [
+  [ (open) (The author pushes a branch and opens a pull request.) ]
+  [ (checks) (Tests and linters run on every push to the branch.) ]
+  [ (review) (A teammate reads the change and asks questions.) ]
+  [ (approve) (The reviewer approves once every question is answered.) ]
+  [ (merge) (The branch joins main and the next release.) ]
+] def
+
+% The step that matters most, counting from 0, and why: at most about 90
+% characters, about 80 in /terminal. It is set under that step's line when the token reaches it,
+% and stays.
+/key 2 def
+/why (Review is where a second person catches what tests cannot.) def
+
+% An optional path back, taken sometimes (a rollback, a retry, a fix):
+%   [ from to (label) (what happens) ]
+% from, to:     step numbers, counting from 0; usually to is earlier.
+% label:        one or two words, at most about 16 characters.
+% what happens: one line, at most about 60 characters, label included.
+% Write  /pathback [ ] def  for none.
+/pathback [ 2 0 (changes asked) (If the reviewer asks for changes, the author pushes again.) ] def
+
+% The closing line: what the whole picture says, at most about 70
+% characters. It stays on screen to the end.
+/summary (Every change is checked by machines, then by a person.) def
+
+% ===================== nothing below here needs to change =====================
+
+% A movie that places this file as a component can pass any of the content
+% names in /Params; otherwise the values above are used.
+/look /look look param def
+/heading /heading heading param def
+/steps /steps steps param def
+/key /key key param def
+/why /why why param def
+/pathback /pathback pathback param def
+/summary /summary summary param def
+
+% ---- checks that need no fonts: counts, indexes, empty fields ---------------
+/pr-fail { cvn errordict /rangecheck get exec } def              % (why) pr-fail
+/pr-num { 12 string cvs } def
+/pr-cat { 1 index length 1 index length add string
+          dup 0 4 index putinterval dup 3 index length 3 index putinterval
+          3 1 roll pop pop } def                                 % (a) (b) -> (ab)
+/pr-join { () exch { dup type /stringtype ne { pr-num } if pr-cat } forall } def  % [ (a) 1 ] -> (a1)
+/pr-cats { pr-join (content: ) exch pr-cat } def                 % [ ... ] -> (content: ...)
+/pr-words { % (text) -> the number of words: runs of characters between spaces
+  0 32 3 -1 roll { dup 32 gt 2 index 32 le and { 3 -1 roll 1 add 3 1 roll } if exch pop } forall pop } def
+/pr-text { % value (field) -> fails unless value is a string with a word in it
+  exch dup type /stringtype ne { pop true } { pr-words 0 eq } ifelse
+    { [ exch ( must be text with at least one word in it) ] pr-cats pr-fail } { pop } ifelse } def
+heading (/heading) pr-text
+why (/why) pr-text
+summary (/summary) pr-text
+steps type /arraytype ne { [ (/steps must be an array of steps: [ [\(name\) \(what happens\)] ... ]) ] pr-cats pr-fail } if
+pathback type /arraytype ne { [ (/pathback is [ from to \(label\) \(what happens\) ], or [ ] for none) ] pr-cats pr-fail } if
+/pr-n steps length def
+pr-n 3 lt pr-n 8 gt or
+  { [ (/steps has ) pr-n ( steps; this template takes 3 to 8) ] pr-cats pr-fail } if
+0 1 pr-n 1 sub { /pr-j exch def
+  steps pr-j get dup type /arraytype ne { pop true } { length 2 ne } ifelse
+    { [ (step ) pr-j ( of /steps is not [ \(name\) \(what happens\) ]) ] pr-cats pr-fail } if
+  steps pr-j get 0 get [ (step ) pr-j (: the name) ] pr-join pr-text
+  steps pr-j get 1 get [ (step ) pr-j (: what happens) ] pr-join pr-text
+} for
+/pr-index? { dup type /integertype eq { dup 0 ge exch pr-n lt and } { pop false } ifelse } def
+key pr-index? not { [ (/key must be a step number from 0 to ) pr-n 1 sub ] pr-cats pr-fail } if
+/pr-hasloop pathback length 0 gt def
+pr-hasloop {
+  pathback length 4 ne { [ (/pathback is [ from to \(label\) \(what happens\) ], or [ ] for none) ] pr-cats pr-fail } if
+  pathback 0 get pr-index? pathback 1 get pr-index? and not
+    { [ (/pathback: from and to must be step numbers from 0 to ) pr-n 1 sub ] pr-cats pr-fail } if
+  pathback 0 get pathback 1 get eq { [ (/pathback: from and to must be different steps) ] pr-cats pr-fail } if
+  pathback 2 get (/pathback: the label) pr-text
+  pathback 3 get (/pathback: what happens) pr-text
+} if
+
+% ---- time, from the text ------------------------------------------------------
+% Reading takes about 0.24 s a word. At each step the token arrives, the
+% step's line rises in and is read, and the walk moves on after half a
+% second's rest; at the key step its reason follows the line. The finished
+% picture holds, still, for 2.5 s once the summary has been read.
+/pr-rate 0.24 def                                                % seconds a word
+/pr-read { pr-words pr-rate mul } def                            % (text) -> seconds
+/pr-in 0.4 def                                                   % an entrance's length
+/pr-move 0.6 def                                                 % the token, one step on
+/pr-gap 0.12 def                                                 % between steps arriving
+/pr-rest 0.5 def                                                 % after a line has been read
+/pr-hold 2.5 def                                                 % the finished picture, still
+/pr-whyat pr-move pr-in add steps key get 1 get pr-read add def  % into the key step: its reason arrives
+/pr-stepdurs [ 0 1 pr-n 1 sub { /pr-j exch def                   % seconds at each step
+  pr-move pr-in add steps pr-j get 1 get pr-read add pr-rest add
+  pr-j key eq { pr-in add why pr-read add } if } for ] def
+/pr-builddur pr-n pr-gap mul pr-in add 0.6 add def
+/pr-walkdur 0 pr-stepdurs { add } forall def
+/pr-loopdur pr-hasloop { 0.8 pr-in add pathback 3 get pr-read add pr-rest add } { 0 } ifelse def
+/pr-closedur pr-in summary pr-read add pr-hold add def
+/pr-total 0.8 pr-builddur add pr-walkdur add pr-loopdur add pr-closedur add def
+pr-total 90 gt { [ (the film would run ) pr-total cvi ( s; this template stops at 90 s: shorten the lines) ] pr-cats pr-fail } if
+[ /open 0.8  /build pr-builddur  /walk pr-walkdur
+  pr-hasloop { /back pr-loopdur } if
+  /close pr-closedur ] storyboard
+
+<< /Size [1280 720] /Duration storylength /FPS 30 >> animation
+/pkdiagram use
+look usetheme
+
+% ---- the head and the foot ----------------------------------------------------
+/pr-page canvasbox 6 vmin inset def
+/pr-head pr-page 0 0.9 1 0.1 subbox def
+/heading-size 5.2 vmin def
+/title heading-size face heading stringwidth pop pr-head 2 get gt
+  { /heading-size heading-size pr-head 2 get mul heading stringwidth pop div def } if
+heading-size 3.6 vmin lt { [ (/heading is too long; keep it under about 45 characters) ] pr-cats pr-fail } if
+% the foot: the path back's line (with its label) over the summary
+/pr-footsize 4 vmin def  /pr-footlead pr-footsize 1.5 mul def
+/pr-footn pr-hasloop { 2 } { 1 } ifelse def
+/pr-foot [ pr-page 0 get pr-page 1 get pr-page 2 get pr-footn pr-footlead mul ] def
+/pr-footy { pr-footlead mul pr-foot 1 get add pr-footsize 0.3 mul add } def   % k -> baseline of foot line k, 0 the lowest
+/pr-labelgap 2 vmin def
+/pr-backlabel pr-hasloop { pathback 2 get } { () } ifelse def
+/pr-footfit { % (text) indent (field) (limit) -> the size it is set at, or a failure naming the field
+  4 2 roll exch /body pr-footsize face stringwidth pop 0.01 max
+  pr-foot 2 get 3 -1 roll sub exch div pr-footsize mul pr-footsize min
+  dup 3.4 vmin lt { pop [ 3 1 roll ( is too long for one line; keep it under about ) exch ( characters) ] pr-cats pr-fail }
+                  { 3 1 roll pop pop } ifelse
+} def
+/pr-sumsize summary 0 (/summary) (70) pr-footfit def
+/pr-backindent pr-hasloop { /title pr-footsize face pr-backlabel stringwidth pop pr-labelgap add } { 0 } ifelse def
+/pr-backsize pr-hasloop { pathback 3 get pr-backindent (/pathback: what happens) (60) pr-footfit } { 0 } ifelse def
+
+% ---- the loop's column, on the left: room for its label and its curve -------
+/pr-bulge 5 vmin def
+/pr-loopsize 3.2 vmin def
+/pr-labelw 20 vmin def
+/pr-looplabels pr-hasloop { /body pr-loopsize face pr-backlabel pr-labelw wraplines } { [ ] } ifelse def
+pr-looplabels length 2 gt pr-looplabels { stringwidth pop pr-labelw gt or } forall
+  { [ (/pathback: the label is too long; keep it under about 16 characters) ] pr-cats pr-fail } if
+/pr-loopw pr-hasloop {
+  /body pr-loopsize face 0 pr-looplabels { stringwidth pop max } forall pr-bulge 1.2 mul add 4 vmin add
+} { 0 } ifelse def
+
+% ---- the steps' column: as wide as the longest name needs at most -----------
+/title 100 face
+/pr-namew 0 steps { 0 get stringwidth pop max } forall 100 div def   % in ems
+% a long name makes the labels smaller, down to 3 vmin, before it is refused
+/pr-labelmax 4.4 vmin 36 vmin pr-namew 2.4 add div min def
+pr-labelmax 3 vmin lt { [ (a step name is too long; keep names under about 14 characters) ] pr-cats pr-fail } if
+/pr-nodew pr-namew 2.4 add pr-labelmax mul 20 vmin max def
+/pr-spinex pr-page 0 get pr-loopw add 2 vmin add def             % the line the token rides
+/pr-nodex pr-spinex 3 vmin add def
+/pr-textx pr-nodex pr-nodew add 4 vmin add def
+/pr-textw pr-page 0 get pr-page 2 get add pr-textx sub def
+
+% ---- the key step's reason, set under its line: one or two lines ------------
+/pr-whymax 4.4 vmin def  /pr-whylead 1.3 def
+/pr-whylines /body pr-whymax face why pr-textw wraplines def
+pr-whylines length 2 gt pr-whylines { stringwidth pop pr-textw gt or } forall
+  { [ (/why is too long for two lines beside the steps; keep it under about ) pr-textw pr-whymax div 3.5 mul cvi 1 max ( characters) ] pr-cats pr-fail } if
+/pr-whyh pr-whylines length pr-whymax pr-whylead mul mul def     % the room it adds to the key row
+
+% ---- rows: as tall as the body allows, no taller than 15 vmin, centred ------
+/pr-bodytop pr-head 1 get 3 vmin sub def
+/pr-bodybot pr-foot 1 get pr-foot 3 get add 3 vmin add def
+/pr-bodyh pr-bodytop pr-bodybot sub def
+/pr-pitch pr-bodyh pr-whyh sub pr-n div 15 vmin min def
+/pr-nodeh pr-pitch 0.78 mul 10 vmin min def
+/pr-labelsize pr-nodeh 0.5 mul pr-labelmax min 3 vmin max def   % never under 3 vmin
+% now the nodes can narrow to the labels' size, and the lines' column widen;
+% the reason, wrapped again, takes no more lines than before; the rows are
+% centred again on what it now needs
+/pr-nodew pr-namew 2.4 add pr-labelsize mul 20 vmin max def
+/pr-textx pr-nodex pr-nodew add 4 vmin add def
+/pr-textw pr-page 0 get pr-page 2 get add pr-textx sub def
+/pr-whylines /body pr-whymax face why pr-textw wraplines def
+/pr-whyh pr-whylines length pr-whymax pr-whylead mul mul def
+/pr-stack pr-pitch pr-n mul pr-whyh add def
+/pr-top pr-bodytop pr-bodyh pr-stack sub 2 div sub def
+/pr-rowtop { dup pr-pitch mul pr-top exch sub exch key gt { pr-whyh sub } if } def  % i -> top of row i
+/pr-rowy { pr-rowtop pr-pitch sub } def                           % i -> bottom of row i's line
+/pr-midy { pr-rowy pr-pitch 2 div add } def                       % i -> its middle
+/pr-node { % i -> the box of step i's node
+  pr-rowy pr-pitch pr-nodeh sub 2 div add pr-nodex exch pr-nodew pr-nodeh 4 array astore } def
+
+% the lines beside the steps: one size for all, as large as the longest allows
+/pr-textsize pr-pitch 0.5 mul 4.4 vmin min def
+/body 100 face
+steps { 1 get stringwidth pop 100 div 0.01 max pr-textw exch div pr-textsize min /pr-textsize exch def } forall
+pr-textsize 3 vmin lt {
+  0 steps { 1 get length max } forall /pr-long exch def
+  [ (a step's line is too long to set at a legible size; with ) pr-n ( steps keep lines under about )
+    pr-long pr-textsize mul 3 vmin div cvi 1 max ( characters in this theme’s face \(the longest has ) pr-long (\)) ] pr-cats pr-fail
+} if
+/pr-whysize pr-textsize def                                       % the same size as the steps' lines
+/pr-whyy { % k -> baseline of the reason's line k, under the key step's line
+  pr-whysize pr-whylead mul mul key pr-midy pr-textsize 0.35 mul sub exch sub
+  pr-whysize pr-whylead mul sub } def
+
+% ---- things at rest ----------------------------------------------------------
+/pr-station { pr-midy pr-spinex exch } def                       % i -> x y of its stop on the line
+/pr-spine { newpath 0 pr-station moveto pr-n 1 sub pr-station lineto } def
+/pr-loopcurve { % the path back, from step `from` to step `to`, bulging left
+  newpath pathback 0 get pr-station moveto
+  pathback 0 get pr-station exch pr-bulge 1.6 mul sub exch
+  pathback 1 get pr-station exch pr-bulge 1.6 mul sub exch
+  pathback 1 get pr-station curveto } def
+/pr-looplabel { % beside the curve, at its middle, in one or two lines set right
+  /body pr-loopsize face /fg ink
+  0 1 pr-looplabels length 1 sub { /pr-q exch def
+    pr-spinex pr-bulge 1.2 mul sub 1.5 vmin sub pr-looplabels pr-q get stringwidth pop sub
+    pathback 0 get pr-midy pathback 1 get pr-midy add 2 div pr-loopsize 0.35 mul sub
+    pr-looplabels length 1 sub 2 div pr-q sub pr-loopsize 1.25 mul mul add
+    moveto pr-looplabels pr-q get show } for } def
+/pr-stepnode { % i lit flag -> step i's node; lit 0..1: the token is here; flag: the key step
+  /pr-flag exch def /pr-lit exch def /pr-i exch def
+  steps pr-i get 0 get pr-i pr-node
+  << pr-flag { /Fill /accent /Ink /bg } { /Fill /surface /Ink /fg } ifelse
+     /Stroke /line /Size pr-labelsize /Font /title >> node
+  pr-lit 0 gt { /accent2 ink 0.5 vmin setlinewidth pr-i pr-node -0.9 vmin inset 1.4 vmin roundpath
+                gsave pr-lit setalpha stroke grestore newpath } if } def
+/pr-stepline { % i -> step i's line, beside it
+  /pr-q exch def pr-q key eq { /accent } { /fg } ifelse ink /body pr-textsize face
+  steps pr-q get 1 get [ pr-textx pr-q pr-rowy pr-textw pr-pitch ] /w showin } def
+/pr-why { % the key step's reason, under its line
+  /accent ink /body pr-whysize face
+  0 1 pr-whylines length 1 sub { dup pr-textx exch pr-whyy moveto pr-whylines exch get show } for } def
+/pr-token { % x y -> the token
+  /accent2 ink 1.5 vmin disc } def
+/pr-backline { % the path back's label and line, in the foot over the summary
+  /title pr-footsize face /muted ink pr-foot 0 get 1 pr-footy moveto pr-backlabel show
+  /body pr-backsize face /fg ink pr-foot 0 get pr-backindent add 1 pr-footy moveto pathback 3 get show } def
+/pr-summary { /body pr-sumsize face /fg ink pr-foot 0 get 0 pr-footy moveto summary show } def
+
+% ---- the film ----------------------------------------------------------------
+/scene {
+  ground
+  % the heading arrives and stays: modest, top left
+  /open { [/rise pr-in] { heading pr-head /title heading-size face /fg ink /w showin } entering } frombeat
+  % the steps arrive down the column as the line draws on
+  /build {
+    /line ink 0.4 vmin setlinewidth pr-spine 0 0 pr-builddur 0.6 sub /cubic-inout tween trimpath stroke
+    [ 0 1 pr-n 1 sub { } for ] pr-gap { /pr-c exch def pop
+      [/pop pr-in] { /line ink pr-c pr-station 0.7 vmin disc pr-c 0 false pr-stepnode } entering
+    } cascade
+  } frombeat
+  % the walk: the token goes from step to step; each lights up and says what
+  % happens there, and the line stays; at the key step its reason follows
+  /walk {
+    {
+      0 1 pr-n 1 sub { /pr-k exch def
+        pr-stepdurs pr-k get /pr-d exch def
+        pr-d {
+          0 pr-d {
+            pr-k  pr-move 0.25 sub pr-move ramp span 0.35 sub span ramp sub  false  pr-stepnode   % lit while the token is here
+            pr-k 0 eq
+              { [/pop 0.4] { 0 pr-station pr-token } entering }
+              { 0 pr-move /cubic-inout tween pr-k 1 sub pr-station 2 array astore pr-k pr-station 2 array astore
+                between aload pop pr-token } ifelse
+          } during
+          pr-move [/rise pr-in] { pr-k pr-stepline } enters             % the line stays
+          pr-k key eq {                                                % the key step: flagged, and why
+            pr-move 0.4 add /pulse { pr-move [/fade 0.4] { pr-k 0 true pr-stepnode } enters } emphasized
+            pr-whyat [/rise pr-in] { pr-why } enters
+          } if
+        } then
+      } for
+    } script
+  } frombeat
+  % after the walk the token rests on the last step
+  /walk { pr-walkdur { pr-n 1 sub pr-station pr-token } after } frombeat
+  % the path back: drawn, labelled, travelled, and its line in the foot; it all stays
+  pr-hasloop {
+    /back {
+      /muted ink 0.5 vmin setlinewidth pr-loopcurve 0 0.8 /cubic-inout tween arrow
+      [/fade pr-in] { pr-looplabel } entering
+      0.8 1.8 {                                                    % something travels it
+        pr-loopcurve 0 1 /cubic-inout tween {
+          /fg ink 0 0 1.4 vmin 0 0.15 ramp 0.85 1 ramp sub mul disc } onpath newpath
+      } during
+      0.8 [/rise pr-in] { pr-backline } enters
+    } frombeat
+  } if
+  % the summary, on the whole picture
+  /close { [/rise pr-in] { pr-summary } entering } frombeat
+} def

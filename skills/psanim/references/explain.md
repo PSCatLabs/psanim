@@ -35,7 +35,9 @@ b c << /Draw 1.5 2.1 /cubic-inout tween /Pulse 1.2 2 pulsetrain >> edge
 
 - **`(label) box opts node`**: `opts` is a fill role or `<< /Fill /Stroke
   /Ink /Shape /Sub /SubInk /Size /Font >>`. Shapes `/box /pill /circle
-  /diamond /cylinder /plain`. The label is sized to fit the box.
+  /diamond /cylinder /plain`. The label is sized to fit the box. `/Size`
+  is in canvas units, like every size: `/Size 4 vmin`, not `/Size 4`
+  (which is 4 units, a speck).
 - **`boxA boxB opts edge`**: `opts` is a route or `<< /Route /Draw /Label
   /Pulse /Role /Head /Dash /Width >>`. Routes: `/straight`, `/elbow`
   (right angles), `/hv` `/vh` (one corner), `/arc` `/arc-right`. Animate

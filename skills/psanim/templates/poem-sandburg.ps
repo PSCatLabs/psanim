@@ -1,0 +1,22 @@
+%!PS
+% Test content for poem.ps: six short lines and five notes, the most it takes; plum theme.
+% Carl Sandburg, "Fog", from Chicago Poems (1916), in the public domain.
+% `psanim check poem-sandburg.ps` runs poem.ps with this content.
+/tpl (poem.ps) component
+/film /tpl << /Params <<
+  /look /dusk
+  /heading (Fog)
+  /poet (Carl Sandburg, Chicago Poems, 1916)
+  /poem [ (The fog comes) (on little cat feet.) (It sits looking) (over harbor and city)
+          (on silent haunches) (and then moves on.) ]
+  /notes [
+    [ 0 (fog) (subject) (Named plainly in the first line, then never named again: the rest is all cat.) ]
+    [ 1 (little cat feet) (image) (The fog arrives the way a cat does: quietly, and on its own terms.) ]
+    [ 3 (harbor and city) (scale) (A whole city under one small animal's gaze.) ]
+    [ 4 (silent haunches) (sound) (Soft s sounds slow the line down, as the fog settles.) ]
+    [ 5 (moves on) (turn) (It leaves without a reason, as cats and weather do.) ]
+  ]
+  /reading (A single metaphor held for six lines. The fog is never described as fog, only as a cat that comes, watches and goes.)
+>> >> instance
+<< /Size [1280 720] /Duration /film componentduration /FPS 30 >> animation
+/scene { /film << /After /hold >> place } def

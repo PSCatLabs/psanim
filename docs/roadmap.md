@@ -132,6 +132,15 @@ agent with the report it came from (summarised in
    (frames changing during a stated hold, a second with nothing
    changing mid-film, an ending in motion); the rest wants a second
    agent reviewing a sheet and one revision pass.
+   The template experiment (issue #108, [evaluation, section
+   5](vocabulary-evaluation.md#5-templates-for-everyday-explainers))
+   adds two things. Reviewers' commonest complaint across eight films was
+   reading time with nothing changing, and text swapped through an empty
+   frame; `check` could flag both (a long run of identical frames
+   mid-film; a region that goes blank and refills). And a template is a
+   place where one review pays many times: both models made the same
+   film from it, so fixing a template fixes every film made from it. The
+   revised templates are waiting for their second blind review.
 
 ## Next: the engine
 

@@ -1,0 +1,23 @@
+%!PS
+% Test content for poem.ps: text in UTF-8 (accented letters, œ, curly quotes
+% and apostrophes), with a marked phrase that comes after accented letters in
+% its line; dusk theme.
+% Paul Verlaine, "Il pleure dans mon cœur" (Romances sans paroles, 1874),
+% the first stanza's opening and the second's close, in the original French.
+% `psanim check poem-verlaine.ps` runs poem.ps with this content.
+/tpl (poem.ps) component
+/film /tpl << /Params <<
+  /look /dusk
+  /heading (Verlaine’s rain)
+  /poet (Paul Verlaine, 1874)
+  /poem [ (Il pleure dans mon cœur) (Comme il pleut sur la ville ;) (Quelle est cette langueur) (Qui pénètre mon cœur ?) ]
+  /notes [
+    [ 0 (pleure) (sound)
+      (“Il pleure” sounds like “il pleut”: in French, weeping and raining are almost one word.) ]
+    [ 3 (mon cœur) (echo)
+      (The line ends where the first one did, so the rain’s weight comes back to the heart.) ]
+  ]
+  /reading (The poet can’t say why he is sad. The poem’s answer is the rain, heard as the heart’s own sound.)
+>> >> instance
+<< /Size [1280 720] /Duration /film componentduration /FPS 30 >> animation
+/scene { /film << /After /hold >> place } def
