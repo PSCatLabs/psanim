@@ -379,6 +379,33 @@ fn every_transition_between_beats_is_the_reels() {
 }
 
 #[test]
+fn a_transition_of_ones_own_joins_beats_when_defined_before_the_storyboard() {
+    let src = |scene: &str| {
+        format!(
+            "transitions /halves {{ pop exch gsave 0 0 20 20 rectclip exec grestore gsave 20 0 20 20 rectclip exec grestore }} put
+             [ /a 2 [1 /halves] /b 2 ] storyboard
+             << /Size [40 20] /Duration storylength /FPS 10 >> animation
+             /scene {{ {scene} }} def"
+        )
+    };
+    let mut sb = Movie::load(
+        &src("/a { 1 0 0 backdrop } inbeat /b { 0 0 1 backdrop } inbeat"),
+        &Options::default(),
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    let mut reel = Movie::load(
+        &src("[ [2 { 1 0 0 backdrop }] [1 /halves] [2 { 0 0 1 backdrop }] ] reel"),
+        &Options::default(),
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    let mid = pixels(&mut sb, 1.5);
+    assert!(mid == pixels(&mut reel, 1.5));
+    // the left half is a, the right half b
+    assert_eq!(&mid[(10 * 40 + 5) * 4..][..4], [255, 0, 0, 255]);
+    assert_eq!(&mid[(10 * 40 + 35) * 4..][..4], [0, 0, 255, 255]);
+}
+
+#[test]
 fn frombeat_comes_in_with_its_beat_and_is_not_taken_away() {
     // /b's frombeat dissolves in with b (from 1 s), and stays through the
     // wipe from b to c.
