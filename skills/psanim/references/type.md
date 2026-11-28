@@ -362,10 +362,8 @@ then `/Phosphor-Round findfont` in the scene.
 
 `pixelface` runs a face's file in a dictionary of its own. Running the file
 yourself, `(lib/fonts/phosphor.ps) run`, defines its names in your current
-dictionary and overwrites any of yours with the same name. They are
-`pf-variant` (all four files) and `PhosphorDict`, `PinpointDict`,
-`Diode7Dict`, `Diode5Dict` (one each); with `pixelface` you need not avoid
-them.
+dictionary and overwrites any of yours with the same name: `pf-variant`,
+which all four files define. With `pixelface` you need not avoid it.
 
 Each face's bitmaps are also data. `/Diode7 pixelfont` gives them as the
 column masks `pixelcols` and `pixeltext` read (the same shape as pkpixel's

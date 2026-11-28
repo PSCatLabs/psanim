@@ -10,7 +10,7 @@ PSCat to grow, and how the two repositories are built together.
 |---|---|
 | PSCat repository | https://github.com/PSCatLabs/pscat |
 | Branch | `feature/0.8.0`, PSCat's development branch for 0.8.0 (not released) |
-| Pinned revision | `13fa9e6`, recorded in `Cargo.lock` |
+| Pinned revision | `c0a5636`, recorded in `Cargo.lock` |
 | PSCat version | 0.7.1 (the branch has not bumped it yet) |
 
 The host API psanim needs was developed on `feature/psanim-library-api`
