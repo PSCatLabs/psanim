@@ -294,7 +294,7 @@ Show the string so that it ends at the current point: right-aligned, which keeps
 
 `/name  sym  -`
 
-Show a mathematical sign or Greek letter at the current point at the current font's size, keeping the font: /neq /le /ge /approx /pm /times /div /dot /infinity /degree /arrow /larrow /uparrow /downarrow /implies /sum /product /sqrt /integral /in /bullet, and /alpha /beta /gamma /delta /epsilon /theta /lambda /mu /pi /rho /sigma /tau /phi /omega /Delta /Sigma /Pi /Omega. The text fonts have no such characters: a non-ASCII character in a string shows as a blank. `(kiwi ) show /neq sym ( plum) show`.
+Show a mathematical sign or Greek letter at the current point at the current font's size, keeping the font: /neq /le /ge /approx /pm /times /div /dot /infinity /degree /arrow /larrow /uparrow /downarrow /implies /sum /product /sqrt /integral /in /bullet /minus (a true minus sign, wider than the hyphen), and /alpha /beta /gamma /delta /epsilon /theta /lambda /mu /pi /rho /sigma /tau /phi /omega /Delta /Sigma /Pi /Omega. The text fonts have no such characters: a non-ASCII character in a string shows as a blank. `(kiwi ) show /neq sym ( plum) show`.
 
 ### `symwidth`
 
@@ -312,7 +312,7 @@ The signs `sym` knows, by name, as strings in the Symbol font.
 
 `runs  showruns  -`
 
-Show a line of mixed type at the current point, in the current font and colour. A run list is an array of (text), /name (a sign from `symbols`: /pi /times ...), [/it (r)] (italic, as variables are set), [/sup x], [/sub x] and [/frac a b]: `[ (Area = ) /pi [/it (r)] [/sup (2)] ] showruns`.
+Show a line of mixed type at the current point, in the current font and colour. A run list is an array of (text), /name (a sign from `symbols`: /pi /times ...), [/it (r)] (italic, as variables are set), [/sup x], [/sub x] and [/frac a b]: `[ (Area = ) /pi [/it (r)] [/sup (2)] ] showruns`. [/as /key run] tags a term for `morphruns` and draws as the run; an array of runs, `[ /minus (5) ]`, is a group set as one term.
 
 ### `showrun`
 
@@ -325,6 +325,12 @@ Show only run i of a run list, at the place it has in the line that starts at th
 `runs  runwidth  w`
 
 The width of a run list in the current font, for centring it.
+
+### `morphruns`
+
+`[ runs runs ... ] s  morphruns  -    or  [ runs ... ] s /align|opts  morphruns  -`
+
+One equation becoming the next, at the current point. s goes from 0 (the first line, exactly as `showruns` sets it) to n-1 (the last): between k and k+1, terms of line k slide to their places in line k+1, terms with no partner fade away and new ones fade in. A term matches the first unmatched equal term of the other line, so the second x stays the second x; tag terms `[/as /key run]` to pair them otherwise, or to pair terms that look different (`[/as /n (+ 6)]` becoming `[/as /n (- 6)]` slides and cross-fades). No clock: make s with `keyframes`, holding each line, `[1 0  2.5 1 /cubic-inout  5 1  6.5 2 /cubic-inout] keyframes`. opts: /Align /left /center /right (or /l /c /r), or a tag every line has, whose centre then stays on the current point (an aligned derivation); /Arc 1 (terms crossing lift apart; 0 for straight); /Rise 0.25 (ems a leaving or arriving term drifts). Keeps the current point.
 
 ### `runbox`
 

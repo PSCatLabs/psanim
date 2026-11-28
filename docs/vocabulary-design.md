@@ -129,7 +129,7 @@ for the common case.
 | core additions | `within`, `fitted`, `script`/`then`, `storyboard`, `tempo`/`counts`, `cascade`, `onpath`, `taperpath`, `straightenpath`, `smoothkeys`, `valueat`, `fmtnum`, `codetokens` ... | Rust + prelude |
 | `pkstage` | boxes, themes, `lookat`, `spotlight` | PostScript |
 | `pkmotion` | `enters`, `leaves`, `onstage`, `emphasized`, `motion`, `echoed`, `rank` | native layer placement |
-| `pktype` | `showin`, `placetext`, `fitface`, `paragraph`, `kinetic`, `marker`, `typewrite`, `captions`, `credits`, `sym`, run lists (`showruns`) | pkstage, pkmotion |
+| `pktype` | `showin`, `placetext`, `fitface`, `paragraph`, `kinetic`, `marker`, `typewrite`, `captions`, `credits`, `sym`, run lists (`showruns`, `morphruns`) | pkstage, pkmotion |
 | `pkdiagram` | `node`, `edge`, `connect`, `arrow`, `pulse`, `group`, `note`, `circled` | pktype |
 | `pkcode` | `codeblock`, `codelinebox`, `codediff` | native tokenizer and diff |
 | `pkchart` | `plotframe`, `plotaxes`, `bars`, `hbars`, `plotline`, `plotmark`, `plotrule`, `dots`, `donut`; for dashboards `stattile`, `dial`, `horizon`, `sparkline`, `heatmap`, `statuslight`, `panel`, `thresholdrole` | pktype |
@@ -223,8 +223,14 @@ libraries are about 2,000 lines of PostScript.
   an explainer needs, run lists (`showruns`, `showrun`, `runbox`) set
   mixed type and bring it in term by term; they were added after the
   maths film's author wrote a fifty-line typesetter by hand. One
-  equation *becoming* another is the largest remaining gap (see the
-  roadmap).
+  equation *becoming* another is `morphruns`: idea 2 again, in one
+  dimension. Nothing is an object between frames; the word lays out
+  both lines, pairs their terms (by content in order, or by an `/as`
+  tag written in the line itself) and draws each term at its place
+  for the progress the caller gives. Rejected: a diff that keeps order
+  (it cannot let a term cross the equals sign), and pairing by index
+  arrays beside the lines (they are miscounted and drift when a line
+  is edited).
 
 ## How it was arrived at
 
