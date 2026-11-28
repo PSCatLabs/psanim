@@ -618,6 +618,7 @@ pub(crate) fn check_storyboard(
 }
 
 pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
+    crate::paint::install(interp, ctx);
     // --- libraries ----------------------------------------------------------
     reg(interp, ctx, ".libsource", |i, ctx| {
         let name = match i.pop_value()? {

@@ -36,6 +36,30 @@ impl TimeScope {
     }
 }
 
+/// What the drawing of a moment lands on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Canvas {
+    /// Nothing is kept: a pure or stateful movie's frame, or setup.
+    Fresh,
+    /// A persistent movie's scene: what it paints stays.
+    Kept,
+    /// A persistent movie's overlay: shown over the kept canvas, never kept.
+    Overlay,
+}
+
+/// The last step run at movie time `t` for steps at `rate`: the engine's
+/// own rule, so the words that report it and the seek agree.
+pub(crate) fn last_step_at(t: f64, rate: f64) -> i64 {
+    (t * rate + 1e-9).floor() as i64
+}
+
+/// The step on which movie time `t` is reached: the first whose time is
+/// at or after `t`, a `t` within a millionth of a step after a step's time
+/// counting as that step's.
+pub(crate) fn step_reaching(t: f64, rate: f64) -> i64 {
+    (t * rate - 1e-6).ceil() as i64
+}
+
 /// What the engine is running, for error reports.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum Running {
@@ -67,6 +91,23 @@ pub(crate) struct Ctx {
     pub global_t: f64,
     pub dt: f64,
     pub scopes: Vec<TimeScope>,
+    /// The rate the movie steps at: for a persistent movie the declared
+    /// FPS (its canvas is painted a step a frame of that rate whatever
+    /// rate it is shown at), for a simulation its step rate, otherwise the
+    /// frame rate.
+    pub step_rate: f64,
+    /// While a movie that is not persistent runs its setup: the name of
+    /// its simulation procedure and the rate it would step at. Whether it
+    /// is a simulation is known only once that procedure is defined, so
+    /// `steprate`, `stepat` and `dt` in setup ask then.
+    pub setup_sim: Option<(String, f64)>,
+    /// The last step run at this moment (-1 before the first): in a
+    /// persistent movie's scene the step being painted, in its overlay the
+    /// last step the kept canvas holds; in a pure movie the frame.
+    pub step: i64,
+    /// What the moment draws on: a canvas that is not kept, a persistent
+    /// movie's kept canvas (its scene) or its overlay.
+    pub canvas: Canvas,
 
     /// Canvases set aside by `beginlayer`, outermost first.
     pub layers: Vec<Page>,
@@ -219,6 +260,10 @@ impl Ctx {
             global_t: 0.0,
             dt: 1.0 / 30.0,
             scopes: Vec::new(),
+            step_rate: 30.0,
+            setup_sim: None,
+            step: 0,
+            canvas: Canvas::Fresh,
             layers: Vec::new(),
             pending: Vec::new(),
             fades: Vec::new(),
@@ -299,6 +344,30 @@ impl Ctx {
             })
     }
 
+    /// The clock steps are counted on, as the running program sees it:
+    /// (movie time, step rate, last step reached, canvas, inside a
+    /// component). Inside a component the time is the component's own and
+    /// the step is reached on it at the movie's step rate (a component has
+    /// no kept canvas: its frames are drawn whole), so a delayed, sped-up
+    /// or looping instance counts its own steps; its canvas is `Fresh`,
+    /// unless it is being drawn into a persistent movie's kept canvas.
+    pub fn step_view(&self) -> (f64, f64, i64, Canvas, bool) {
+        match self.comps.last() {
+            Some(c) => (
+                c.t,
+                self.step_rate,
+                last_step_at(c.t, self.step_rate),
+                if self.canvas == Canvas::Kept {
+                    Canvas::Kept
+                } else {
+                    Canvas::Fresh
+                },
+                true,
+            ),
+            None => (self.global_t, self.step_rate, self.step, self.canvas, false),
+        }
+    }
+
     /// The innermost time scope: local time and window.
     pub fn scope(&self) -> TimeScope {
         self.scopes
@@ -313,6 +382,8 @@ impl Ctx {
         self.frame = frame;
         self.global_t = t;
         self.dt = dt;
+        self.step = frame;
+        self.canvas = Canvas::Fresh;
         self.scopes.clear();
         self.scopes.push(TimeScope::window(t, self.duration));
         if let Some(m) = self.clip_taken.take().flatten() {

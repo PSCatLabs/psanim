@@ -129,6 +129,30 @@ Full reasoning in `docs/architecture.md`.
     same mask fixes them, but a 12-item cascade then measured +3.9 ms a
     frame inside a `within` (+1.0 ms unclipped), so that is a follow-up.
 
+14. **A persistent movie counts its own steps** (#107, #121, #122). Its
+    scene steps at the declared FPS whatever `--fps` it is shown at;
+    `steprate`, `stepnow` and `t stepat` say so in setup, the scene and
+    the overlay alike (`fps` stays the rate frames are shown at). PSCat
+    composites fills through a 16-bit shadow of the canvas that is lost
+    whenever the canvas is swapped (the overlay, a checkpoint), so a
+    canvas that kept it only sometimes differed by a level or two between
+    playing and seeking. The engine now drops it where either path might:
+    before every step of a movie with an overlay, and before each step a
+    checkpoint starts from in one without. Dropping it every step in all
+    movies was tried and rejected: modes.md's veil, faint fills laid each
+    step, then stalls in 8 bits (17,806 pixels left more than 10 levels
+    off the ground after 5 s, against 8,384); with the rule above it
+    fades as before (8,392). Movies with an overlay stalled that way
+    already (pitfalls.md). The drop is a swap of the canvas out and back
+    (`Movie::settle_canvas`, and pkink's `.paintsettle` before each unit),
+    which relies on `swap_canvas` clearing the shadow; PSCatLabs/pscat#1506
+    asks PSCat to document that and add an explicit call, and using that
+    call is the follow-up. pkink's `paintplan`
+    is built on both: each stroke kept once, whole, on the step that
+    finishes it (each unit composited from 8-bit pixels too), the strokes
+    in progress regrown in the overlay. The last frame is the board
+    painted in one go, at any rate.
+
 ## How the gallery was made, and what it taught
 
 Two pieces (`epicycles`, `one-frame`) were written by hand while building
@@ -214,7 +238,7 @@ built; `docs/roadmap.md` ranks it.
 
 ## Next steps
 
-`docs/roadmap.md`, in two lists. For the vocabulary: a stroke scheduler
-for painting over time, equations that transform, soft reveal edges. For
+`docs/roadmap.md`, in two lists. For the vocabulary: equations that
+transform, soft reveal edges (the stroke scheduler is `paintplan`). For
 the engine: get the PSCat branch reviewed and merged; a Worker-based
 browser player; an MCP server over the CLI's JSON.

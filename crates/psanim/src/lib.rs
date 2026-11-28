@@ -56,6 +56,7 @@ mod error;
 mod groups;
 pub mod motion;
 mod ops;
+mod paint;
 mod particles;
 pub mod pathmath;
 pub mod plane;

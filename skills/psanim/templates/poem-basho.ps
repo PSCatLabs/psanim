@@ -1,0 +1,24 @@
+%!PS
+% Test content for poem.ps: the content of the poem brief that the blind
+% reviews of issue #108 judged (Basho's old pond, three notes, ASCII text
+% with straight apostrophes); paper theme. The English is a word-for-word
+% rendering written for that brief.
+% `psanim check poem-basho.ps` runs poem.ps with this content.
+/tpl (poem.ps) component
+/film /tpl << /Params <<
+  /look /paper
+  /heading (Basho's old pond)
+  /poet (Matsuo Basho, 1686; literal rendering)
+  /poem [ (old pond) (a frog jumps in) (the sound of water) ]
+  /notes [
+    [ 0 (old pond) (image)
+      (The scene is set in two words: something old, still and silent, before anything happens.) ]
+    [ 1 (a frog jumps in) (turn)
+      (The only movement in the poem, and it is over in an instant.) ]
+    [ 2 (the sound of water) (sound)
+      (The poem ends on a sound, and on the silence that comes back after it.) ]
+  ]
+  /reading (A brief sound makes the stillness around it noticeable. The pond is quiet before and after; the frog is only a moment.)
+>> >> instance
+<< /Size [1280 720] /Duration /film componentduration /FPS 30 >> animation
+/scene { /film << /After /hold >> place } def

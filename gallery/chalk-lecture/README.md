@@ -18,37 +18,29 @@ line does not flicker. [Chalk Proof](../chalk-proof/) paints
 each stroke whole and reveals it through a moving clip; here the chalk
 itself grows: the stroke lands, tires and lifts where it would.
 
-The structure was chosen by measuring it (see the numbers below):
+The structure was chosen by measuring it (see the numbers below), and is
+now pkink's `paintplan`, which this film was the model for:
 
 - **Persistent canvas.** The board is painted once, on frame 0.
-- **A stroke is kept once, whole, on the frame it is finished.** Until
-  then it is regrown from 0 each frame in `overlay`, which is shown and
-  never kept. Chalk is not opaque: regrown on the kept canvas, a stroke
-  is laid down again on every frame it spans and ends heavier.
-- **The commit is by step number.** The scene's steps are frames of
-  the declared rate, named once in the program (`rate`). A stroke is
-  kept on step `t1 rate mul 1e-6 sub ceiling cvi`: the first whose time
-  is at or after its end (an end within a millionth of a step after a
-  step's time counts as that step's). Not by testing whether the end
-  lies between `now dt sub` and `now`: in floating point `now dt sub`
-  is not exactly the previous frame's `now`, so that test can be true
-  on two frames and the stroke is painted twice (PSCatLabs/psanim#121).
-- **The overlay asks whether the scene has kept a stroke yet**, by the
-  scene's steps: the last step run when `now` is shown is `now rate mul
-  1e-9 add floor cvi`. Until it reaches the stroke's step, the overlay
-  draws the stroke, at most whole. Rendered with `--fps`, the overlay
-  runs at the output rate while the kept canvas advances at the
-  declared 30, and `fps`, the overlay's `frame` and `dt`, and `dt` in
-  setup are the output's (PSCatLabs/psanim#122); a rule built on them
-  either keeps a stroke early or lets it vanish for a frame. Checked at
-  `--fps` 24, 25, 29.97, 60 and 120 (the CLI takes a decimal, not
-  30000/1001), rendering the 0.45 s around the end of eight strokes
-  spread through the film (the first, the last, which ends exactly on a
-  step, and six between) with the stick left out (`--param nostick=1`):
-  the chalk in the stroke's area never goes down from one output frame to
-  the next beyond texture noise (at most 0.03% of the stroke's ink, at
-  120). The earlier rule, built on the overlay's `frame` and `dt`, lost
-  19 to 26% of it for a frame on the four strokes tried at 60.
+- **A stroke is kept once, whole, on the step it is finished**
+  (`paintkept`). Until then it is regrown from 0 each frame in
+  `overlay` (`paintlive`), which is shown and never kept. Chalk is not
+  opaque: regrown on the kept canvas, a stroke is laid down again on
+  every frame it spans and ends heavier.
+- **By step number.** The scene's steps are frames of the declared
+  rate. A stroke is kept on the first step whose time is at or after its
+  end, not by testing whether the end lies between `now dt sub` and
+  `now`: in floating point `now dt sub` is not exactly the previous
+  frame's `now`, so that test can be true on two frames and the stroke
+  is painted twice (PSCatLabs/psanim#121). The overlay shows a stroke
+  until the scene has kept it, counted in the scene's steps
+  (`stepnow`): rendered with `--fps`, the overlay runs at the output
+  rate while the kept canvas advances at the declared 30, and `fps` and
+  the overlay's `frame` and `dt` are the output's (PSCatLabs/psanim#122).
+  The first cut of the film did this arithmetic by hand, about 40 lines;
+  with `paintplan` it is a plan of dictionaries and two calls. Every one
+  of the 1140 frames is byte-identical to the hand-written version's at
+  30 fps, and under `--fps` to within one frame (below).
 - **Strokes as data**, as in Chalk Proof: in setup every path (lettering
   from `sgpath`, formulas from `mkpath` and `mkalign`, the diagram) is
   split into its subpaths, one stroke each, because `/From` and `/To`
@@ -91,6 +83,26 @@ board, which had one stroke fewer.
 - **Render** (`NOGIF=1 scripts/build_gallery.sh chalk-lecture`): 1140
   frames in 18.8 s and 16.7 s in two runs, on one thread (persistent
   movies render in order), 0.8 MB MP4.
+
+### On `paintplan` (#107)
+
+Measured on the authoring machine (macOS, arm64), load average 3 to 14.
+
+- **The same film.** Rewritten on `paintplan`, every frame of the
+  rendered film is identical to the hand-written scheduler's: 1140 of
+  1140 at 30 fps, 2280 of 2280 at `--fps 60`, and 911 of 912 at `--fps
+  24`; the other (frame 771) differs in 4 pixels by one level, where two
+  strokes in progress overlap in the overlay and `paintplan` composites
+  each from the canvas's 8-bit pixels.
+- **Shorter.** 277 lines to 256; the per-frame part (the schedule, the
+  overlay and the stick) from 72 lines to 56, of which the stick is 17
+  in both.
+- **Cheaper.** The scheduling alone (`dcchalk` replaced by a procedure
+  that draws nothing, the stick off, `psanim bench --count 1140`): median
+  0.35 ms a frame by hand, 0.22 ms with `paintplan`, p95 0.42 against
+  0.25, three runs each. With the chalk, both are about 6.5 ms median
+  and 11 ms mean; the differences between runs (6.2 to 7.2 ms) were
+  larger than between the two.
 
 ## Render
 

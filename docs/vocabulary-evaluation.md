@@ -346,10 +346,13 @@ show X/Z unchanged and sent the other six back.
   same film, pixel for pixel, in 24 to 40 seconds with no errors and one
   edit round. From scratch they took 102 to 243 seconds, 83k to 106k
   tokens, and hit four psanim errors between them.
-- **The film is then as good as the template, no better.** One template
-  beat the from-scratch films (process, 8 against 7 and 7) and one did
-  not (poem, 7, ranked behind both). A weak template caps every author
-  below what the stronger ones did unaided.
+- **The film is then as good as the template, no better.** The process
+  template scored a point above the from-scratch films (8 against 7 and
+  7); the poem template scored the same 7 as both and was ranked behind
+  them. Round 2 (below) shows that a one-point difference, and an order
+  among films that score alike, can reverse in a second review of the
+  same films, so this round supports "no better than the template", not
+  that either template was better or worse than writing from scratch.
 - **Self-scores still do not track quality.** Every template author
   scored 8, for the films ranked first and the films ranked last.
 - One run per cell, two briefs, one reviewer, motion judged from sampled
@@ -357,9 +360,9 @@ show X/Z unchanged and sent the other six back.
   coarser.
 
 **What was changed as a result.** Both templates were revised against
-the review, and against a code review of the PR that found six defects
-in validation and timing. **The revised templates have not been
-re-reviewed blind**; what follows is from `check --all`, contact sheets
+the review (these revisions are what round 2, below, reviewed blind), and against a code review of the PR that found six defects
+in validation and timing. What follows, written before round 2, is
+from `check --all`, contact sheets
 and full-size frames of the two brief contents, re-run through the
 revised templates.
 
@@ -396,8 +399,8 @@ revised templates.
   (7.2) and S's (8). It is still behind Q on the size of the commentary
   (4.6 vmin against Q's 5), and behind S on use of the page: it gathers
   heading, poem and card in the middle, with about a fifth of the height
-  empty above and below, where S spreads the poem over the full height. Whether it now ranks with or above them is
-  for a second blind review to say.
+  empty above and below, where S spreads the poem over the full height. Whether it now ranks with or above them was
+  for a second blind review to say; round 2 said it ranked last.
 - The skill gaps the from-scratch authors reported were checked against
   the skill text. Real, and fixed: pkdiagram's `/Size` gave no unit (now
   "canvas units, `4 vmin` not 4" in `node`'s entry and explain.md); no
@@ -411,6 +414,163 @@ revised templates.
   Not reproduced: `/Pulse` ending abruptly; two test edges with a
   clamped pulse passed `check --all`, and no B film still uses `/Pulse`
   to show the case.
+
+**Round 2: the revised templates, reviewed blind** (2026-11-28,
+`out/eval6/review-summary.md`). A binary built from main `e7f20c0`
+(after #119 merged the revised templates and #115 the UTF-8 text). Two
+Sonnet authors made the two brief films from the revised templates. The
+blind set held, per brief, the revised template's film, the round-1
+template's film and the two round-1 from-scratch films, all re-rendered
+on the new binary (so the round-1 curly-apostrophe artefact was gone),
+under new random tags; Codex reviewed them in a fresh thread. Author
+side:
+
+| Brief | Wall time | Tokens | Edit rounds | Errors | Film length | Changed outside content |
+|---|---|---|---|---|---|---|
+| poem, revised template | 27 s | 66k | 1 | 0 | 29.63 s (was 37.7) | nothing |
+| process, revised template | 34 s | 58k | 1 | 0 | 36.2 s (was 44.62) | nothing |
+
+All eight films passed `check --all` on the new binary. Blind scores
+(fidelity, layout, legibility, pacing, motion, overall):
+
+| Brief | Film | Sub-scores | Overall | Rank |
+|---|---|---|---|---|
+| poem | round-1 template | 9 8 8 7 8 | 8 | 1 ("show unchanged") |
+| poem | REVISED template | 7 6 8 5 4 | 5 | 4 |
+| poem | Sonnet from scratch | 8 6 8 6 8 | 7 | 3 |
+| poem | Haiku from scratch | 8 8 8 6 7 | 7 | 2 |
+| process | REVISED template | 9 8 8 8 8 | 8 | 1 ("show unchanged") |
+| process | round-1 template | 9 7 9 6 8 | 7 | 2 |
+| process | Haiku from scratch | 7 7 8 5 7 | 6 | 4 |
+| process | Sonnet from scratch | 9 7 7 7 6 | 7 | 3 |
+
+- **The process revision worked**: first, above the round-1 template,
+  for exactly the intended gains (the final picture keeps the test
+  rationale and the rollback explanation; 36 s against 45 s).
+- **The poem revision made the template worse**: 5, last. The reviewer
+  named three defects. At frame 480 (16.00 s) the outgoing and incoming
+  notes are both visible in the card (both kinds, both quotes, the
+  outgoing explanation): the cross-fade that replaced the empty card
+  overlaps. Explanations and the closing reading are revealed line by
+  line, so a whole sentence is on screen only briefly (the completed
+  reading about 4 s) and a frame at about 16.3 s shows the unfinished
+  "The poem ends on a sound, and,". Curly quotation marks were added
+  around quoted words the brief gave in ASCII.
+- **Reviewer noise is about one point and can reverse a ranking.** The
+  round-1 poem template's film scored 7 and ranked last of four in
+  round 1; the same source, re-rendered, scored 8 and ranked first in
+  round 2. Part of that is the removed apostrophe artefact (its fidelity
+  went 7 to 9; the two from-scratch films' 7 to 8), part is the
+  reviewer weighing the same things differently (round 1: "large unused
+  band", "commentary small"; round 2: "clean composition"). The round-1
+  process template's film went 8 to 7. One review of one run cannot
+  rank films a point apart; differences of two or more (the revised poem
+  at 5, the Haiku process film at 6) are more believable. The rankings
+  in round 1 above rest on such differences, and on ties.
+- Still true in both rounds: with a template the author's work is 25 to
+  40 seconds with no errors, and every film that is not a template film
+  has pacing defects (long closing holds: about 9 s and about 12 s for
+  the two from-scratch poem films; slow reveals).
+
+**A third poem revision** (issue #108, after round 2). `process.ps` is
+unchanged. `poem.ps` goes back to the round-1 film's presentation and
+composition and keeps what round 2 did not criticise:
+
+- The round-1 layout: the heading in a band at the top, the poem in the
+  left column, the card beside it centred on the poem.
+- Each note comes onto the card whole: its kind, its words and its
+  explanation fade in together (0.25 s), stay for their reading time
+  (0.24 s a word, words and explanation) and a second more, and fade out
+  (0.2 s); the marked words in the poem light and dim with it. The next note starts the moment the last has gone. The
+  card's frame, and a rule under the kind, stay from the first note to
+  the end. The reading comes in the same way, whole.
+- The card adds no quotation marks: the words appear as written, in the
+  accent colour of the marked words in the poem.
+- Kept from round 2's version: the commentary at 4.6 vmin (smaller,
+  down to 4, only when a note or the reading would not otherwise fit),
+  a note's time following its own length, a 90 s ceiling, and every
+  validation fix with its test.
+- The underlines under the marked words leave as the reading comes, so
+  the finished picture is the poem and the reading (round 2 marked the
+  round-1 film down for three underlines left in it).
+- The finished picture holds for the reading's time and 2 s more, at
+  least 3 s: the brief's film runs 30.4 s, its picture still for its
+  last 7.27 s (round 2's film 4.17 s, round 1's 10.10 s; all three by
+  the hold test below, frames compared at 160 px wide).
+
+The defect classes are now tests in `crates/psanim/tests/templates.rs`,
+run on all seven poem films (the template, the brief's content as
+`poem-basho.ps`, five test contents; four of the six themes). The three
+card tests render every frame at 480 px wide and read the card's column;
+the hold test compares frames at 160 px; the quotation-mark test reads
+the template's code:
+
+| Test | Fails when | Round-2 template (main `e7f20c0`) | Round-1 template (`3ae7b11`) |
+|---|---|---|---|
+| `the_card_never_shows_two_notes_legibly_at_once` | in a handoff, the outgoing text is still legible in place while other ink is legible | fails: 1 to 3 frames at every handoff, 50 in all; the brief's at frames 334-335, 479-480, 639-640 | fails on one frame of one film, where the reading is still rising alone (a false positive of the measure on rising text) |
+| `the_card_is_never_empty_for_more_than_a_blink` | no legible ink on the card for more than 2 frames | passes (its handoffs overlap instead) | passes (one empty frame per handoff, the frame both reviews caught at 13.0 s) |
+| `no_sentence_is_shown_unfinished` | a text sits still, unfinished, for more than 6 frames before it is whole | fails on 27 of the 28 texts of the seven films, for 1.2 to 6.7 s each | passes |
+| `the_finished_picture_holds_as_long_as_the_reading_takes_to_read` | the picture is still for less than the reading's time (0.24 s a word) + 1.5 s or more than + 3.5 s | fails on all seven: 2.7 to 4.2 s | fails on all seven: 5.6 to 12.8 s |
+| `the_poem_card_adds_no_quotation_marks` | the template's code adds a quotation mark | fails (adds curly marks) | fails (adds straight marks) |
+
+The third revision passes all five. The empty-card test cannot fail on
+the round-2 template, whose defect was the opposite one, nor on the
+round-1 template; it holds the revision to at most two frames between
+notes and would catch a blank like the 12 frames (12.60 to 13.00 s) the
+reviews found in a from-scratch film. The revision still has, at some
+handoffs, one frame with no legible text on the card (frames 335, 501
+and 682 of the brief's film): the kind of frame both reviews caught in
+the round-1 film at 13.0 s. The overlap test's false positive on the
+round-1 template shows that its measure can misfire on text that rises
+into place; the revision's card text does not move.
+
+**Round 3: the third poem revision, two independent blind reviews**
+(2026-11-28, `out/eval7/review-summary.md`). A binary built from main
+`c85baae` (after #123). The third revision's film is `poem-basho.ps`
+rendered as is (30.4 s). Each review held four films: the third
+revision, the round-1 template's film, and the Sonnet and Haiku
+from-scratch films, all re-rendered on the new binary and all passing
+`check --all`. The two reviews ran in fresh Codex threads, each with its
+own random tags and order, and each was asked to decode frames around
+every change of text.
+
+| Film | Review 1 (overall, rank) | Review 2 (overall, rank) |
+|---|---|---|
+| Template v3 | 8, 1st ("no required revision") | 8, 1st ("can ship") |
+| Template v1 | 7, 3rd | 7, 2nd |
+| Haiku from scratch | 7, 2nd | 7, 3rd |
+| Sonnet from scratch | 6, 4th | 6, 4th |
+
+Sub-scores (fidelity, layout, legibility, pacing, motion, overall):
+
+| Film | Review 1 | Review 2 |
+|---|---|---|
+| Template v3 | 9 8 8 8 8 8 | 10 8 8 8 8 8 |
+| Template v1 | 9 6 8 7 8 7 | 10 7 7 6 8 7 |
+| Haiku from scratch | 9 7 8 6 7 7 | 10 7 7 6 6 7 |
+| Sonnet from scratch | 9 7 9 5 8 6 | 10 6 8 5 6 6 |
+
+- **The third revision ranked first in both reviews.** The two reviews
+  agree on every overall score and on first and last place; they swap
+  second and third, both at 7. Sub-scores differ by at most one, except
+  the Sonnet film's motion (8 and 6).
+- **The round-2 defects are gone.** Neither review reported an overlap,
+  a fragment or an added quotation mark.
+- **Defects still named for the third revision, all judged minor:**
+  review 1 found the outgoing "turn" note caught mid-fade as ghost text
+  at about 16.72 s, a small category label and muted attribution, and
+  the closing paragraph's last line close to the card's right padding.
+  Review 2 found an empty upper-middle area, "instant." alone on the
+  last line of the turn note, and the category label lighter than the
+  quoted words.
+- **Noise, measured again.** Over three rounds and four reviews the same
+  round-1 template film scored 7 (round 1, with the apostrophe artefact),
+  8 (round 2), and 7 and 7 (round 3). A single review is good to about a
+  point; two reviews reduce that but do not remove it.
+- **For #108:** both templates now rank first in their sets under blind
+  review: the process template's second version at 8 (round 2, one
+  review), the poem template's third version at 8 and 8 (round 3, two
+  reviews).
 
 ## What the evaluation supports
 
@@ -438,16 +598,18 @@ revised templates.
   experiment 4, after the skill argued for it, most films used it, but
   no edit was then made to them to measure the benefit.
 - Any claim about reliability: each cell of each table is one run.
-- That templates make better films in general: one of two beat the
-  from-scratch work, and a template is only as good as itself.
+- That templates make better films in general. Two templates, each
+  revised after blind review, now rank first in their sets, one on a
+  single review and one on two; that is two briefs, one run each. A
+  template is only as good as itself: the poem template's second
+  version ranked last.
 - Any claim about smaller models with and without the libraries: only
   the with-libraries arm was run on Opus, Sonnet and Haiku.
 
 ## What to run next
 
-- A second blind review of the revised templates against the same
-  from-scratch films: nothing yet says the revisions closed the gap on
-  the poem.
+- A second independent review of the process template's second
+  version, which has one review so far.
 
 - Each comparison five times, to see whether the differences in fix
   rounds and time are real.

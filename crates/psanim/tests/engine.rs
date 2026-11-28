@@ -1873,3 +1873,107 @@ fn setup_output_is_no_frames_whatever_the_thread_count() {
     assert_eq!(outs[0], outs[1]);
     assert_eq!(outs[0][0], "(frame)\n");
 }
+
+/// A persistent movie that prints, in setup, the scene and the overlay,
+/// what it is told about its steps.
+const STEPS: &str = "<< /Size [16 16] /Duration 2 /FPS 30 /Persist true >> animation
+    (setup ) print steprate =only ( ) print dt 30 mul =only ( ) print stepnow == 
+    /scene { frame 6 eq { (scene ) print steprate =only ( ) print stepnow =only ( ) print frame == } if
+      1.8 stepat stepnow eq { (kept ) print stepnow == } if } def
+    /overlay { (overlay ) print steprate =only ( ) print stepnow == } def";
+
+#[test]
+fn a_persistent_movie_counts_its_steps_at_the_declared_rate_under_any_fps() {
+    // #122: under --fps 20 the scene still steps at 30, and setup, the
+    // scene and the overlay agree on it.
+    let mut m = Movie::load(
+        STEPS,
+        &Options {
+            fps: Some(20.0),
+            ..Options::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(m.take_output(), "setup 30.0 1.0 0\n");
+    m.render_at(0.2).unwrap();
+    // 0.2 s is step 6 at 30.
+    assert_eq!(m.take_output(), "scene 30.0 6 6\noverlay 30.0 6\n");
+    // Frame 7 at 20 fps is 0.35 s: the canvas holds step 10.
+    m.render_frame(7).unwrap();
+    assert_eq!(m.take_output(), "overlay 30.0 10\n");
+}
+
+#[test]
+fn stepat_is_true_on_exactly_one_step() {
+    // #121: `now dt sub` at step 55 is not exactly step 54's `now`, so a
+    // test built on it fires on both. 1.8 s is reached on step 54 alone.
+    let mut m = Movie::load(STEPS, &Options::default()).unwrap();
+    m.render_frame(59).unwrap();
+    let out = m.take_output();
+    assert_eq!(out.matches("kept").count(), 1, "{out}");
+    assert!(out.contains("kept 54\n"), "{out}");
+    let eval = |expr: &str| eval_at("", expr, 0);
+    assert_eq!(eval("1.8 stepat") as i64, 18, "at 10 fps");
+    assert_eq!(eval("0.15 stepat") as i64, 2);
+    assert_eq!(eval("-3 stepat") as i64, 0);
+    assert_eq!(eval("steprate") as i64, 10);
+    assert_eq!(
+        eval_at("", "stepnow", 7) as i64,
+        7,
+        "a pure movie's step is its frame"
+    );
+}
+
+#[test]
+fn a_persistent_canvas_is_the_same_played_or_sought() {
+    // Faint fills laid one a step: PSCat composites a fill through a 16-bit
+    // shadow of the page, which showing a frame's overlay (or seeking from
+    // a checkpoint) drops. The kept canvas must not depend on that.
+    let src =
+        "<< /Size [32 16] /Duration 8 /FPS 10 /Persist true /Background [0.9 0.9 0.9] >> animation
+        /scene { 0.1 0.4 0.3 setrgbcolor 0.07 setalpha newpath 0 0 moveto 32 0 lineto 32 16 lineto 0 16 lineto closepath fill } def
+        /overlay { } def";
+    let mut played = Movie::load(src, &Options::default()).unwrap();
+    for k in 0..79 {
+        played.render_frame(k).unwrap();
+    }
+    let a = played.render_frame(79).unwrap().premultiplied.to_vec();
+    let mut sought = Movie::load(src, &Options::default()).unwrap();
+    assert_eq!(sought.render_frame(79).unwrap().premultiplied, &a[..]);
+    // Without an overlay too, across a checkpoint (every 2 s here). By
+    // 6 s a step moves a pixel under half a level: 8 bits alone stall.
+    // A veil over the past and a moving mark, as modes.md's trail.
+    let bare_src = "<< /Size [64 36] /Duration 8 /FPS 10 /Persist true /Background [0.96 0.94 0.88] >> animation
+        /scene { 0.96 0.94 0.88 setrgbcolor 0.04 setalpha 0 0 64 36 rectfill 1 setalpha
+          0.1 0.2 0.5 setrgbcolor 32 now 150 mul cos 24 mul add 18 now 210 mul sin 12 mul add 3 0 360 arc fill } def";
+    let mut bare = Movie::load(bare_src, &Options::default()).unwrap();
+    for k in 0..79 {
+        bare.render_frame(k).unwrap();
+    }
+    let b = bare.render_frame(79).unwrap().premultiplied.to_vec();
+    let mut cold = Movie::load(bare_src, &Options::default()).unwrap();
+    assert_eq!(cold.render_frame(79).unwrap().premultiplied, &b[..]);
+    cold.render_frame(65).unwrap(); // back: from the checkpoint at 6 s
+    assert_eq!(cold.render_frame(79).unwrap().premultiplied, &b[..]);
+}
+
+#[test]
+fn a_simulation_counts_steps_at_its_step_rate_in_setup_too() {
+    // /FPS 30 /StepRate 120: setup and the scene agree on the step rate
+    // (once the step procedure is defined), and setup's dt is the scene's,
+    // a frame's.
+    let src = "<< /Size [16 16] /Duration 1 /FPS 30 /StepRate 120 >> animation
+        /step { } def
+        (setup ) print steprate =only ( ) print 1 stepat =only ( ) print dt 30 mul ==
+        /scene { (scene ) print steprate =only ( ) print 1 stepat =only ( ) print dt 30 mul == } def";
+    let mut m = Movie::load(src, &Options::default()).unwrap();
+    assert_eq!(m.take_output(), "setup 120.0 120 1.0\n");
+    m.render_frame(3).unwrap();
+    assert_eq!(m.take_output(), "scene 120.0 120 1.0\n");
+    // Before the step procedure is defined the movie is not yet a
+    // simulation: setup reads the frame rate, as a pure movie's scene does.
+    let early = "<< /Size [16 16] /Duration 1 /FPS 30 /StepRate 120 >> animation
+        steprate == /step { } def /scene { } def";
+    let mut m = Movie::load(early, &Options::default()).unwrap();
+    assert_eq!(m.take_output(), "30.0\n");
+}
