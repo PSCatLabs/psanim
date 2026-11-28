@@ -163,6 +163,21 @@ for a fade alone `faded` stays the cheaper choice in a movie; a group is
 for what `faded` cannot do. The probes are one-line movies; to repeat,
 write the scene and run `psanim bench`.
 
+What #109 costs a movie that uses no groups (the checks it adds: one
+`groups_open` call per layer open and close, `.framedone` per frame, a
+look at the hint slots per native operator call), main's binary against
+the branch's, alternating, one at a time, on 2026-11-27 (load average 16
+to 58, so loose):
+
+| Probe | main | #109 |
+|---|---|---|
+| Afterglow, 4 s (120 frames) rendered to PNGs on one thread, user CPU s | 23.4, 23.7, 30.3 | 22.4, 28.3, 28.7 |
+| Neon, the same | 13.9, 10.4, 12.0 | 11.4, 13.8, 13.5 |
+| 200,000 calls of `now` in one frame, `psanim bench` median ms | 11.40, 11.45, 10.87 | 11.90, 11.48, 11.18 |
+
+No difference shows through the noise; the last probe bounds the
+per-operator cost at a few nanoseconds a call at most.
+
 ## What these numbers are not
 
 - Not a comparison with other animation systems: none was run.
