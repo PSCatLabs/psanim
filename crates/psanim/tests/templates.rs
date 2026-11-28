@@ -535,3 +535,405 @@ fn a_template_edited_in_place_refuses_bad_content() {
         "/key must be a step number from 0 to",
     );
 }
+
+// ---- the poem's card, measured on rendered frames ---------------------------
+//
+// The second blind review (out/eval6, issue #108) marked the poem template
+// down for four things a contact sheet can miss and a frame scan cannot:
+// two notes legible together during a handoff, a card left empty between
+// notes, a sentence shown unfinished while it is revealed, and a closing
+// hold too short or too long. These tests render a poem film at 480 px
+// wide and read the card's column (right of 58% of the width, where only
+// the card is drawn) frame by frame, in grey.
+//
+// - A *rest* is a run of at least three identical frames of the column.
+//   The rests before the card are those identical to the first frame.
+// - The *ground* of a pixel is its value in every rest of the walk if it
+//   never changes there (the card's frame, the page around the card), and
+//   otherwise the card's surface. Ink is a difference from the ground.
+// - A *text* is a chain of rests in which each keeps 90% of the ink of the
+//   one before (a line added to a note); its last rest is the text whole.
+// - A *handoff* is the frames between one text's last rest and the next
+//   text's first.
+
+/// A pixel is inked when it differs from the ground by this fraction of
+/// the typical difference of text from the ground: about the opacity at
+/// which a word can still be read. Checked against the frames the
+/// reviewers named: it finds the round-2 template's frame 480 with both
+/// notes legible, and the round-1 template's frame 390 empty.
+const LEGIBLE: f64 = 0.3;
+/// The most frames the card may hold no legible ink between two texts:
+/// two (0.07 s). When one text has gone before the next comes, one frame
+/// can fall between them; a second allows for where the frames fall. The
+/// reviews marked a blank card of 12 frames (12.60 to 13.00 s in a
+/// from-scratch film); they also caught the round-1 template's single
+/// empty frame, at 13.0 s, in a still, which this does not fail.
+const MAX_EMPTY: usize = 2;
+/// The most frames a text may take from its first rest to its whole one:
+/// 0.2 s. A text that comes in whole has no rest before it is whole; one
+/// revealed a line or a word at a time sits still, unfinished, between
+/// lines.
+const MAX_PARTIAL: usize = 6;
+/// Pixels of legible ink that count as text (a letter of the smallest
+/// type on the card has about this many at 480 px wide).
+const SOME_INK: usize = 25;
+
+struct CardScan {
+    fps: f64,
+    /// The first frame of the first rest that shows a text.
+    walk: usize,
+    /// Per text: the first frame of its first rest, and its last rest.
+    texts: Vec<(usize, (usize, usize))>,
+    /// Per frame: legible ink in the column, in pixels.
+    inked: Vec<usize>,
+    /// Frames, in a handoff, where the outgoing text is still legible in
+    /// its place and other ink is legible beside it.
+    overlaps: Vec<usize>,
+}
+
+fn grey(rgb: &[u8]) -> u8 {
+    ((u32::from(rgb[0]) * 77 + u32::from(rgb[1]) * 150 + u32::from(rgb[2]) * 29) >> 8) as u8
+}
+
+fn scan_card(file: &str) -> CardScan {
+    let dir = dir();
+    let source = std::fs::read_to_string(dir.join(file)).unwrap();
+    let options = Options {
+        scale: Scale::Width(480),
+        read_roots: Some(vec![dir.clone()]),
+        base_dir: Some(dir),
+        ..Options::default()
+    };
+    let movie = Movie::load(&source, &options).unwrap();
+    let meta = movie.meta().clone();
+    let (w, h) = (meta.pixel_width as usize, meta.pixel_height as usize);
+    let x0 = (w as f64 * 0.58) as usize;
+    let cw = w - x0;
+    let matte = meta
+        .background
+        .map_or([0, 0, 0], |c| c.map(|v| (v * 255.0).round() as u8));
+    let indices: Vec<u64> = (0..meta.frames).collect();
+    let mut cols: Vec<Vec<u8>> = Vec::with_capacity(indices.len());
+    let mut flat = Vec::new();
+    psanim::render::render_frames_from(movie, &source, &options, &indices, 4, |r| {
+        raster::flatten_onto(&r.premultiplied, matte, &mut flat);
+        let mut col = Vec::with_capacity(cw * h);
+        for y in 0..h {
+            for x in x0..w {
+                let i = (y * w + x) * 4;
+                col.push(grey(&flat[i..i + 3]));
+            }
+        }
+        cols.push(col);
+        Ok(())
+    })
+    .unwrap();
+    let n = cols.len();
+    let npix = cw * h;
+
+    let mut rests: Vec<(usize, usize)> = Vec::new();
+    let mut a = 0;
+    while a < n {
+        let mut b = a + 1;
+        while b < n && cols[b] == cols[a] {
+            b += 1;
+        }
+        if b - a >= 3 && cols[a] != cols[0] {
+            rests.push((a, b));
+        }
+        a = b;
+    }
+    assert!(!rests.is_empty(), "{file}: nothing ever comes to the card");
+    let mut counts = [0u32; 256];
+    for &(a, _) in &rests {
+        for &v in &cols[a] {
+            counts[usize::from(v)] += 1;
+        }
+    }
+    let surface = (0..256).max_by_key(|&v| counts[v]).unwrap() as u8;
+    let ground: Vec<u8> = (0..npix)
+        .map(|p| {
+            let v = cols[rests[0].0][p];
+            if rests.iter().all(|&(a, _)| cols[a][p] == v) {
+                v
+            } else {
+                surface
+            }
+        })
+        .collect();
+    let diff = |k: usize, p: usize| f64::from((i16::from(cols[k][p]) - i16::from(ground[p])).abs());
+    let ink = |k: usize| -> Vec<bool> { (0..npix).map(|p| diff(k, p) > 40.0).collect() };
+
+    // Texts: chains of rests, each keeping most of the ink of the one before.
+    let mut texts: Vec<(usize, (usize, usize))> = Vec::new();
+    let mut prev: Option<Vec<bool>> = None;
+    for &(a, b) in &rests {
+        let m = ink(a);
+        if m.iter().filter(|&&v| v).count() < SOME_INK {
+            continue; // the card, empty
+        }
+        let grows = prev.as_ref().is_some_and(|q| {
+            let qn = q.iter().filter(|&&v| v).count();
+            let kept = q.iter().zip(&m).filter(|(x, y)| **x && **y).count();
+            kept as f64 >= 0.9 * qn as f64
+        });
+        match texts.last_mut() {
+            Some(t) if grows => t.1 = (a, b),
+            _ => texts.push((a, (a, b))),
+        }
+        prev = Some(m);
+    }
+    let walk = texts.first().expect("no text on the card").0;
+    let masks: Vec<Vec<bool>> = texts.iter().map(|t| ink(t.1.0)).collect();
+    // The typical difference of text from the ground.
+    let (sum, count) = masks
+        .iter()
+        .zip(&texts)
+        .flat_map(|(m, t)| (0..npix).filter(|&p| m[p]).map(|p| diff(t.1.0, p)))
+        .fold((0.0, 0usize), |(s, c), d| (s + d, c + 1));
+    let typical = sum / count as f64;
+    let inked: Vec<usize> = (0..n)
+        .map(|k| {
+            (0..npix)
+                .filter(|&p| diff(k, p) >= LEGIBLE * typical)
+                .count()
+        })
+        .collect();
+
+    // Handoffs. The outgoing text has finished arriving and does not move,
+    // so its presence is how inked its letters are (as a fraction of when
+    // it is whole) less how inked the gaps between them are, inside the
+    // boxes of its lines, both away from where the incoming text's letters
+    // end up: text passing over it inks letters and gaps alike. It is
+    // legible at LEGIBLE or more. The incoming text is whatever legible ink
+    // lies outside the outgoing one's letters.
+    let rows = h;
+    let mut overlaps = Vec::new();
+    for c in 0..texts.len().saturating_sub(1) {
+        let (out_end, in_start) = (texts[c].1.1, texts[c + 1].0);
+        let f = texts[c].1.0;
+        let m = &masks[c];
+        let grow = |m: &Vec<bool>| -> Vec<bool> {
+            (0..npix)
+                .map(|p| {
+                    let (x, y) = ((p % cw) as i64, (p / cw) as i64);
+                    (-1..=1).any(|dy: i64| {
+                        (-1..=1).any(|dx: i64| {
+                            let (xx, yy) = (x + dx, y + dy);
+                            xx >= 0
+                                && yy >= 0
+                                && (xx as usize) < cw
+                                && (yy as usize) < rows
+                                && m[yy as usize * cw + xx as usize]
+                        })
+                    })
+                })
+                .collect()
+        };
+        let near_mask = grow(m);
+        let near_next = grow(&masks[c + 1]);
+        let inked_rows: Vec<bool> = (0..rows).map(|y| (0..cw).any(|x| m[y * cw + x])).collect();
+        let lines: Vec<(Vec<usize>, Vec<usize>)> = runs(0, rows, |y| inked_rows[y])
+            .into_iter()
+            .map(|(y0, len)| {
+                let band: Vec<usize> = (y0 * cw..(y0 + len) * cw).collect();
+                let xs = band.iter().filter(|&&p| m[p]).map(|&p| p % cw);
+                let (lo, hi) = (xs.clone().min().unwrap(), xs.max().unwrap());
+                let inside: Vec<usize> = band
+                    .into_iter()
+                    .filter(|&p| (lo..=hi).contains(&(p % cw)))
+                    .collect();
+                let letters = inside
+                    .iter()
+                    .copied()
+                    .filter(|&p| m[p] && !near_next[p])
+                    .collect();
+                let gaps = inside
+                    .iter()
+                    .copied()
+                    .filter(|&p| !near_mask[p] && !near_next[p])
+                    .collect();
+                (letters, gaps)
+            })
+            .collect();
+        for k in out_end..in_start {
+            let (letters, gaps): (Vec<usize>, Vec<usize>) = (
+                lines.iter().flat_map(|l| l.0.iter().copied()).collect(),
+                lines.iter().flat_map(|l| l.1.iter().copied()).collect(),
+            );
+            let on = letters
+                .iter()
+                .map(|&p| (diff(k, p) / diff(f, p)).min(1.0))
+                .sum::<f64>()
+                / letters.len() as f64;
+            let off = gaps
+                .iter()
+                .map(|&p| (diff(k, p) / typical).min(1.0))
+                .sum::<f64>()
+                / gaps.len().max(1) as f64;
+            let present = on - off >= LEGIBLE;
+            let other = (0..npix)
+                .filter(|&p| !near_mask[p] && diff(k, p) >= LEGIBLE * typical)
+                .count();
+            if present && other >= SOME_INK {
+                overlaps.push(k);
+            }
+        }
+    }
+    CardScan {
+        fps: meta.fps,
+        walk,
+        texts,
+        inked,
+        overlaps,
+    }
+}
+
+fn runs(from: usize, to: usize, test: impl Fn(usize) -> bool) -> Vec<(usize, usize)> {
+    let mut out = Vec::new();
+    let mut k = from;
+    while k < to {
+        if test(k) {
+            let a = k;
+            while k < to && test(k) {
+                k += 1;
+            }
+            out.push((a, k - a));
+        } else {
+            k += 1;
+        }
+    }
+    out
+}
+
+/// The films the card tests scan, each with its number of notes: every
+/// poem film, among them the brief the blind reviews judged (basho); four
+/// themes, one note to five.
+const CARD_FILMS: [(&str, usize); 7] = [
+    ("poem-basho.ps", 3),
+    ("poem.ps", 3),
+    ("poem-long.ps", 5),
+    ("poem-buson.ps", 1),
+    ("poem-pound.ps", 2),
+    ("poem-sandburg.ps", 5),
+    ("poem-verlaine.ps", 2),
+];
+
+fn scan_all(check: impl Fn(&str, &CardScan, &mut Vec<String>)) {
+    let mut failures = Vec::new();
+    for (file, notes) in CARD_FILMS {
+        let s = scan_card(file);
+        assert_eq!(
+            s.texts.len(),
+            notes + 1,
+            "{file}: found {} texts on the card, expected {notes} notes and the reading",
+            s.texts.len()
+        );
+        check(file, &s, &mut failures);
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn the_card_never_shows_two_notes_legibly_at_once() {
+    scan_all(|file, s, failures| {
+        if let Some(&k) = s.overlaps.first() {
+            failures.push(format!(
+                "{file}: {} frames with the outgoing text legible beside other ink, first {k} ({:.2} s): {:?}",
+                s.overlaps.len(),
+                k as f64 / s.fps,
+                s.overlaps
+            ));
+        }
+    });
+}
+
+#[test]
+fn the_card_is_never_empty_for_more_than_a_blink() {
+    scan_all(|file, s, failures| {
+        for (a, len) in runs(s.walk, s.inked.len(), |k| s.inked[k] < SOME_INK) {
+            if len > MAX_EMPTY {
+                failures.push(format!(
+                    "{file}: nothing legible on the card for {len} frames from frame {a} ({:.2} s)",
+                    a as f64 / s.fps
+                ));
+            }
+        }
+    });
+}
+
+#[test]
+fn no_sentence_is_shown_unfinished() {
+    scan_all(|file, s, failures| {
+        for (t, &(first, (whole, _))) in s.texts.iter().enumerate() {
+            if whole - first > MAX_PARTIAL {
+                failures.push(format!(
+                    "{file}: text {t} sits unfinished from frame {first} ({:.2} s) to frame {whole} ({:.2} s)",
+                    first as f64 / s.fps,
+                    whole as f64 / s.fps
+                ));
+            }
+        }
+    });
+}
+
+/// The words of the first `/reading (...)` in a file.
+fn reading_words(file: &str) -> usize {
+    let source = template_source(file);
+    let start = source.find("/reading (").unwrap() + "/reading (".len();
+    let end = start + source[start..].find(')').unwrap();
+    source[start..end].split_whitespace().count()
+}
+
+#[test]
+fn the_finished_picture_holds_as_long_as_the_reading_takes_to_read() {
+    // At 0.24 s a word (250 words a minute, the template's reading pace)
+    // the reading takes words x 0.24 s; the finished picture should then
+    // stay 1.5 to 3.5 s more. The round-2 film held 4.4 s for a 21-word
+    // reading, less than it takes to read; the round-1 film about 10 s,
+    // marked down as too long.
+    let mut failures = Vec::new();
+    for (file, _) in CARD_FILMS {
+        let source = template_source(file);
+        let mut m = load(&source).unwrap();
+        let meta = m.meta().clone();
+        let last = meta.frames - 1;
+        let end = pixels(&mut m, last).unwrap();
+        let mut k = last;
+        while k > 0 && pixels(&mut m, k - 1).unwrap() == end {
+            k -= 1;
+        }
+        let hold = (last - k + 1) as f64 / meta.fps;
+        let read = reading_words(file) as f64 * 0.24;
+        if hold < read + 1.5 || hold > read + 3.5 {
+            failures.push(format!(
+                "{file}: the finished picture holds {hold:.2} s; its reading takes {read:.2} s, \
+                 so it should hold {:.2} to {:.2} s",
+                read + 1.5,
+                read + 3.5
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn the_poem_card_adds_no_quotation_marks() {
+    // Quote marks come from the content. The round-2 film put curly marks
+    // around words its brief gave in ASCII; the round-1 film straight ones.
+    let source = template_source("poem.ps");
+    let marker = "% ===================== nothing below here needs to change";
+    let code: Vec<&str> = source[source.find(marker).unwrap()..]
+        .lines()
+        .map(|l| l.split('%').next().unwrap_or(""))
+        .collect();
+    for (i, line) in code.iter().enumerate() {
+        for mark in ["\u{201c}", "\u{201d}", "\u{2018}", "(\")", "(')"] {
+            assert!(
+                !line.contains(mark),
+                "poem.ps adds a quotation mark {mark:?} below the content block, line {}: {line}",
+                i + 1
+            );
+        }
+    }
+}

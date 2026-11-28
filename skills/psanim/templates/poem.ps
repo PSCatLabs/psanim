@@ -3,9 +3,10 @@
 %
 % The film: a heading, then the poem line by line, then a walk through it
 % (each note marks a word or phrase in the poem and says what it does, in a
-% card beside it), then a closing reading that stays on the finished
-% picture. Its length follows from the text: more lines, more notes and
-% longer notes make a longer film, up to 90 seconds.
+% card beside it; each note comes onto the card whole, one at a time), then
+% a closing reading that stays on the finished picture. Its length follows
+% from the text: more lines, more notes and longer notes make a longer
+% film, up to 90 seconds.
 %
 % To use it: copy this file, change only the CONTENT block below, then
 % `psanim check film.ps`, `psanim check film.ps --all` and
@@ -47,6 +48,8 @@
 % line:         which line of /poem the words are in, counting from 0.
 % words:        the word or phrase to mark; it must appear in that line
 %               exactly as written there. At most about 30 characters.
+%               The card shows them as written, in the accent colour,
+%               with no quotation marks added.
 % kind:         a label for the note, at most about 16 characters: image,
 %               turn, sound, contrast, form ...
 % what it does: one to three sentences, at most about 160 characters.
@@ -111,53 +114,56 @@ notes length 1 lt notes length 5 gt or
 } for
 
 % ---- time, from the text ------------------------------------------------------
-% Text arrives a line at a time at reading pace, about 0.24 s a word, so
-% something changes while it is read. A note's text starts 0.12 s into the
-% previous one's 0.25 s fade, so the card is never empty; once its last
-% line has arrived and been read the note rests for a second. The reading
-% does the same and then the finished picture holds, still, for 2.5 s.
+% A note comes in whole: its kind, its words and its explanation fade in
+% together in a quarter of a second, stay for as long as they take to read
+% (0.24 s a word) and a second more, and fade out in a fifth of a second.
+% The next note starts the moment the last has gone, so no frame shows two
+% notes and at most two frames, while one is nearly gone and the other
+% barely there, show neither; the card's frame and the rule under its kind
+% stay throughout.
+% The reading comes in the same way and stays: the finished picture holds,
+% still, for its reading time and 2 s more, at least 3 s.
 /pm-rate 0.24 def                                                % seconds a word
-/pm-in 0.4 def                                                   % an entrance's length
-/pm-out 0.25 def                                                 % outgoing text fading
-/pm-delay 0.12 def                                               % incoming text starts this far into it
+/pm-in 0.4 def                                                   % a line of the poem rising in
+/pm-tin 0.25 def                                                 % card text fading in
+/pm-tout 0.2 def                                                 % card text fading out
 /pm-linegap { pm-words 0.25 mul 0.5 add } def                    % (line) -> gap before the next
-/pm-first 0.2 def                                                % a card's first line, after its heading
-/pm-ready { pm-words pm-rate mul pm-first add pm-in add pm-delay add } def  % (text) -> all arrived and read
-/pm-notedurs [ notes { 3 get pm-ready 1.0 add 3 max } forall ] def   % each note's time on the card
-/pm-hold 2.5 def                                                 % the finished picture, still
+/pm-notedurs [ notes { dup 1 get pm-words exch 3 get pm-words add
+  pm-rate mul 1.0 add pm-tin add pm-tout add 3 max } forall ] def   % each note's time on the card
+/pm-notestarts [ 0 pm-notedurs { 1 index add } forall ] def      % and when each starts; the last, the reading
+/pm-walkdur pm-notestarts dup length 1 sub get def
+/pm-leave 0.4 def                                                % the rules under the words leaving at the close
+/pm-holddur reading pm-words pm-rate mul 2.0 add 3 max def       % the finished picture, still
+/pm-closedur pm-leave pm-holddur add def
 /pm-poemdur 0 poem { pm-linegap add } forall pm-in add 1.0 add def
-/pm-notesdur 0 pm-notedurs { add } forall def
-/pm-readdur reading pm-ready pm-hold add def
-/pm-total 0.25 pm-poemdur add pm-notesdur add pm-readdur add def
+/pm-total 0.25 pm-poemdur add pm-walkdur add pm-closedur add def
 pm-total 90 gt { [ (the film would run ) pm-total cvi ( s; this template stops at 90 s: shorten the notes or the reading) ] pm-cats pm-fail } if
-[ /open 0.25  /lines pm-poemdur  /walk pm-notesdur  /close pm-readdur ] storyboard
+[ /open 0.25  /lines pm-poemdur  /walk pm-walkdur  /close pm-closedur ] storyboard
 
 << /Size [1280 720] /Duration storylength /FPS 30 >> animation
 /pktype use
 look usetheme
 
-% ---- sizes and columns ----------------------------------------------------------
+% ---- places: the heading in a band at the top, the poem and its card below --
 /pm-page canvasbox 7 vmin inset def
-/pm-colw pm-page 2 get 0.53 mul def                              % the poem's column
-/pm-cardx pm-page 0 get pm-page 2 get 0.56 mul add def           % the card's column
-/pm-cardw pm-page 0 get pm-page 2 get add pm-cardx sub def
-/pm-x pm-page 0 get def
-/pm-gap 7 vmin def                                               % heading to content
+/pm-head pm-page 0 0.86 1 0.14 subbox def
+/pm-body pm-page 0 0 1 0.80 subbox def
+pm-body 0.56 splitx /pm-side exch def /pm-left exch def
+/pm-verse pm-left 0 0 0.94 1 subbox def                         % the poem's column
+/pm-x pm-verse 0 get def
 
 % the heading: modest, shrunk only if it is too wide
 /heading-size 5 vmin def
-/title heading-size face heading stringwidth pop pm-page 2 get gt
-  { /heading-size heading-size pm-page 2 get mul heading stringwidth pop div def } if
+/title heading-size face heading stringwidth pop pm-head 2 get gt
+  { /heading-size heading-size pm-head 2 get mul heading stringwidth pop div def } if
 heading-size 3.5 vmin lt { [ (/heading is too long; keep it under about 40 characters) ] pm-cats pm-fail } if
-/pm-headh heading-size 0.75 mul def
 
 % the poem: one size for every line, as large as the longest allows
 /pm-cap 8.5 vmin def  /pm-floor 4 vmin def  /pm-lead 1.6 def
-/pm-room pm-page 3 get pm-headh sub pm-gap sub def               % the most the content can take
 /pm-size pm-cap def
 /serif 100 face
-poem { stringwidth pop 100 div 0.01 max pm-colw exch div pm-size min /pm-size exch def } forall
-pm-size pm-room poem length 1 add pm-lead mul div min /pm-size exch def
+poem { stringwidth pop 100 div 0.01 max pm-verse 2 get exch div pm-size min /pm-size exch def } forall
+pm-size pm-verse 3 get poem length 1 add pm-lead mul div min /pm-size exch def
 pm-size pm-floor lt {
   0 poem { length max } forall /pm-long exch def
   [ (a line of /poem is too long to set at a legible size; keep lines under about )
@@ -165,32 +171,43 @@ pm-size pm-floor lt {
 } if
 /pm-step pm-size pm-lead mul def
 /pm-poetsize pm-size 0.6 mul 3.2 vmin max 4 vmin min def                % under the poem, smaller than it
-/body pm-poetsize face poet stringwidth pop 0.01 max pm-colw exch div pm-poetsize mul
+/body pm-poetsize face poet stringwidth pop 0.01 max pm-verse 2 get exch div pm-poetsize mul
   pm-poetsize min /pm-poetsize exch def
 pm-poetsize 3.2 vmin lt { [ (/poet is too long; keep it under about 45 characters) ] pm-cats pm-fail } if
-% the poem block: from the top of line 0 to the bottom of the attribution
+% the poem block, from the top of line 0 to the bottom of the attribution,
+% centred in the body
 /pm-poemh pm-size 0.72 mul poem length 1 sub pm-step mul add
   poet length 0 gt { pm-step 0.85 mul add pm-poetsize 0.3 mul add } if def
+/pm-mid pm-body 1 get pm-body 3 get 2 div add def
+/pm-y0 pm-mid pm-poemh 2 div add pm-size 0.72 mul sub def        % line 0's baseline
+/pm-base { pm-step mul pm-y0 exch sub } def                      % i -> baseline y
 
-% the card: the kind, the quoted words, then the explanation a line at a time
+% the card: the kind over a rule, the words it is about, then what they do
 /pm-pad 3.5 vmin def
 /pm-tagsize 3.5 vmin def   /pm-tagh pm-tagsize 2.1 mul def
 /pm-quotesize 4.8 vmin def /pm-quoteh pm-quotesize 1.8 mul def
-/pm-textsize 4.6 vmin def  /pm-lineh pm-textsize 1.38 mul def
-/pm-innerw pm-cardw pm-pad 2 mul sub def
+/pm-innerw pm-side 2 get pm-pad 2 mul sub def
+/pm-roomh pm-body 3 get pm-pad 2 mul sub def                     % the most the card can hold inside
+% the explanation at 4.6 vmin, smaller (down to 4) only if a note or the
+% reading would not fit the card at that size
+/pm-fits { % -> true if every note and the reading fit the card at pm-textsize
+  /pm-lineh pm-textsize 1.38 mul def
+  true
+  notes { 3 get /body pm-textsize face pm-innerw wraplines length pm-lineh mul
+          pm-tagh add pm-quoteh add pm-roomh le and } forall
+  reading /body pm-textsize face pm-innerw wraplines length pm-lineh mul pm-tagh add pm-roomh le and } def
+/pm-textsize 4.6 vmin def
+{ pm-fits pm-textsize 4.05 vmin lt or { exit } if /pm-textsize pm-textsize 0.2 vmin sub def } loop
+/pm-lineh pm-textsize 1.38 mul def
 /pm-wrap { % (text) (field) -> [ (line) ... ], every line inside the card
   /pm-field exch def /body pm-textsize face pm-innerw wraplines
   dup { stringwidth pop pm-innerw gt
         { [ pm-field ( has a word too long for the card; break it up) ] pm-cats pm-fail } if } forall } def
-/pm-starts { % [ (line) ... ] -> [ seconds ... ] when each line arrives: after the words before it
-  [ exch 0 exch { pm-words exch dup pm-rate mul pm-first add 3 1 roll add } forall pop ] } def
 /pm-notelines [ 0 1 notes length 1 sub { /pm-j exch def
   notes pm-j get 3 get [ (note ) pm-j (: what it does) ] pm-join pm-wrap } for ] def
-/pm-notestarts [ pm-notelines { pm-starts } forall ] def
 /pm-readlines reading (/reading) pm-wrap def
-/pm-readstarts pm-readlines pm-starts def
-/pm-qsizes [ 0 1 notes length 1 sub { /pm-j exch def                % each quote, shrunk to fit
-  /serif pm-quotesize face notes pm-j get 1 get (“”) pm-cat stringwidth pop 0.01 max
+/pm-qsizes [ 0 1 notes length 1 sub { /pm-j exch def                % each note's words, shrunk to fit
+  /serif pm-quotesize face notes pm-j get 1 get stringwidth pop 0.01 max
   pm-innerw exch div pm-quotesize mul pm-quotesize min
   dup 3.4 vmin lt { [ (note ) pm-j (: the words are too long to quote on the card; mark fewer of them, at most about 30 characters) ] pm-cats pm-fail } if
 } for ] def
@@ -198,31 +215,26 @@ pm-poetsize 3.2 vmin lt { [ (/poet is too long; keep it under about 45 character
   /title pm-tagsize face notes pm-j get 2 get stringwidth pop pm-innerw gt
     { [ (note ) pm-j (: kind is too long; keep it under about 16 characters) ] pm-cats pm-fail } if
 } for
-/pm-roomh pm-room pm-pad 2 mul sub def                           % the most the card can hold inside
 0 1 notes length 1 sub { /pm-j exch def
   pm-notelines pm-j get length pm-lineh mul pm-tagh add pm-quoteh add pm-roomh gt
     { [ (note ) pm-j (: what it does is too long for the card; keep it under about 160 characters) ] pm-cats pm-fail } if
 } for
 pm-readlines length pm-lineh mul pm-tagh add pm-roomh gt
   { [ (/reading is too long for the card; keep it under about 200 characters) ] pm-cats pm-fail } if
+% as tall as its longest content, centred on the poem, inside the body
 /pm-innerh pm-tagh pm-readlines length pm-lineh mul add
   pm-notelines { length pm-lineh mul pm-tagh add pm-quoteh add max } forall def
 /pm-cardh pm-innerh pm-pad 2 mul add def
-
-% ---- places: heading and content as one group, centred on the page ------------
-/pm-contenth pm-poemh pm-cardh max def
-/pm-grouph pm-headh pm-gap add pm-contenth add def
-/pm-grouptop pm-page 1 get pm-page 3 get 2 div add pm-grouph 2 div add def
-/pm-headbase pm-grouptop pm-headh sub def
-/pm-mid pm-grouptop pm-headh sub pm-gap sub pm-contenth 2 div sub def   % the content's middle
-/pm-y0 pm-mid pm-poemh 2 div add pm-size 0.72 mul sub def        % line 0's baseline
-/pm-base { pm-step mul pm-y0 exch sub } def                      % i -> baseline y
-/pm-card [ pm-cardx pm-mid pm-cardh 2 div sub pm-cardw pm-cardh ] def
-/pm-top pm-card 1 get pm-cardh add pm-pad sub def                % inside the card, at its top
-/pm-cx pm-cardx pm-pad add def
+/pm-cardy pm-mid pm-cardh 2 div sub pm-body 1 get max def
+pm-cardy pm-cardh add pm-body 1 get pm-body 3 get add gt
+  { /pm-cardy pm-body 1 get pm-body 3 get add pm-cardh sub def } if
+/pm-card [ pm-side 0 get pm-cardy pm-side 2 get pm-cardh ] def
+/pm-top pm-cardy pm-cardh add pm-pad sub def                     % inside the card, at its top
+/pm-cx pm-side 0 get pm-pad add def
 /pm-tagy pm-top pm-tagsize 0.75 mul sub def                      % baselines on the card
+/pm-ruley pm-top pm-tagsize 1.4 mul sub def                      % the rule under the kind
 /pm-quotey pm-top pm-tagh sub pm-quotesize 0.75 mul sub def
-/pm-texty { pm-lineh mul sub pm-textsize 0.75 mul sub } def  % top k -> baseline of line k
+/pm-texty { pm-lineh mul sub pm-textsize 0.75 mul sub } def      % top k -> baseline of line k
 
 % ---- things at rest ----------------------------------------------------------
 /pm-line { % i -> the poem's line i, set in its place
@@ -235,27 +247,30 @@ pm-readlines length pm-lineh mul pm-tagh add pm-roomh gt
     dup 0 get pm-base pm-wx exch moveto 1 get show grestore } { pop pop } ifelse } def
 /pm-rule { % note u -> a rule drawn on under the note's words
   exch pm-wordbox 0 -0.9 vmin shifted exch /accent ink 0.45 vmin setlinewidth underline newpath } def
-/pm-cardground { /surface ink pm-card 2 vmin roundpath fill
-                 /line ink 0.15 vmin setlinewidth pm-card 2 vmin roundpath stroke } def
+/pm-cardground { % the card, and the rule under the kind: they stay to the end
+  /surface ink pm-card 2 vmin roundpath fill
+  /line ink 0.15 vmin setlinewidth pm-card 2 vmin roundpath stroke
+  pm-cx pm-ruley moveto pm-innerw 0 rlineto stroke } def
 /pm-tag { /title pm-tagsize face /accent ink pm-cx pm-tagy moveto show } def   % (kind) -> on the card
-/pm-lines { % lines starts top -> each line rising in at its time
-  /pm-ly exch def /pm-ls exch def /pm-ll exch def
-  0 1 pm-ll length 1 sub { /pm-k exch def
-    pm-ls pm-k get [/rise pm-in] { /body pm-textsize face /fg ink
-      pm-cx pm-ly pm-k pm-texty moveto pm-ll pm-k get show } enters } for } def
-/pm-note { % j -> note j on the card: kind and quoted words, then its lines as they are read
+/pm-lines { % lines top -> each line of the explanation in its place
+  /pm-ly exch def /pm-k 0 def
+  { /body pm-textsize face /fg ink pm-cx pm-ly pm-k pm-texty moveto show /pm-k pm-k 1 add def } forall } def
+/pm-note { % j -> note j on the card, whole: its kind, its words as written, what they do
   /pm-nj exch def notes pm-nj get
   dup 2 get pm-tag
-  1 get (“) exch pm-cat (”) pm-cat /serif pm-qsizes pm-nj get face /fg ink pm-cx pm-quotey moveto show
-  pm-notelines pm-nj get pm-notestarts pm-nj get pm-top pm-tagh sub pm-quoteh sub pm-lines } def
-/pm-close { % the reading on the card, a line at a time
-  (reading) pm-tag pm-readlines pm-readstarts pm-top pm-tagh sub pm-lines } def
+  1 get /serif pm-qsizes pm-nj get face /accent ink pm-cx pm-quotey moveto show
+  pm-notelines pm-nj get pm-top pm-tagh sub pm-quoteh sub pm-lines } def
+/pm-close { % the reading on the card, whole
+  (reading) pm-tag pm-readlines pm-top pm-tagh sub pm-lines } def
+/pm-alpha { % d -> the opacity of card text shown for d seconds: in, held, out
+  dup pm-tout sub exch /cubic-in tween 1 exch sub
+  0 pm-tin /cubic-out tween min } def
 
 % ---- the film ----------------------------------------------------------------
 /scene {
   ground
-  % the heading arrives and stays: modest, top left of the group
-  /open { [/rise pm-in] { /title heading-size face /fg ink pm-x pm-headbase moveto heading show } entering } frombeat
+  % the heading arrives and stays: modest, top left
+  /open { [/rise pm-in] { heading pm-head /title heading-size face /fg ink /w showin } entering } frombeat
   % the poem, a line at a time, then its attribution
   /lines {
     {
@@ -268,22 +283,24 @@ pm-readlines length pm-lineh mul pm-tagh add pm-roomh gt
   } frombeat
   % the card arrives with the first note and stays to the end
   /walk { /fade { pm-cardground } entering } frombeat
-  % each note: its words light up and are underlined; the card says why,
-  % a line at a time. The next note's text rises in as this one fades, so
-  % the card is never empty.
   /walk {
-    {
-      0 1 notes length 1 sub { /pm-j exch def notes pm-j get /pm-n exch def
-        pm-notedurs pm-j get /pm-d exch def
-        pm-d {
-          pm-n 0.1 0.6 /cubic-out tween pm-rule                    % the rule stays
-          0 pm-d { pm-n 0 0.4 ramp span 0.4 sub span ramp sub pm-mark } during
-          pm-j 0 eq { 0 } { pm-delay } ifelse pm-d pm-out add
-            { [/rise pm-in] [/fade pm-out] { pm-j pm-note } staged } during
-        } then
-      } for
-    } script
+    % each note's words are underlined as it arrives; the rules stay until
+    % the reading comes, then leave the poem clean
+    0 1 notes length 1 sub { /pm-j exch def
+      pm-notestarts pm-j get pm-walkdur pm-leave add {
+        gsave pm-walkdur pm-notestarts pm-j get sub dup pm-leave add ramp 1 exch sub setalpha
+        notes pm-j get 0.1 0.6 /cubic-out tween pm-rule grestore
+      } during
+    } for
+    % each note: its words light up in the poem, and the card says why,
+    % whole, then makes way for the next
+    0 1 notes length 1 sub { /pm-j exch def
+      pm-notestarts pm-j get dup pm-notedurs pm-j get add {
+        notes pm-j get 0 pm-tin ramp span pm-tout sub span ramp sub pm-mark
+        gsave span pm-alpha setalpha pm-j pm-note grestore
+      } during
+    } for
   } frombeat
-  % the reading, a line at a time, on the finished picture
-  /close { pm-delay pm-readdur { [/rise pm-in] { pm-close } entering } during } frombeat
+  % the reading, whole, on the finished picture
+  /close { gsave 0 pm-tin /cubic-out tween setalpha pm-close grestore } frombeat
 } def
