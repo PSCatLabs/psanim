@@ -698,6 +698,12 @@ impl Movie {
             // A persistent movie's setup is before its first step, which is
             // a step of the declared rate: `dt` there is that step's.
             c.dt = 1.0 / c.step_rate;
+            // A simulation's setup steps at its /StepRate, once its step
+            // procedure is defined.
+            c.setup_sim = match (&decl.step, decl.persist) {
+                (Some(name), false) => Some((name.clone(), decl.step_rate)),
+                _ => None,
+            };
         }
         configure(&mut interp, &ctx, options)?;
         interp
@@ -766,6 +772,7 @@ impl Movie {
         } else {
             decl.step_rate
         };
+        ctx.borrow_mut().setup_sim = None;
         ctx.borrow_mut().step_rate = if mode == Mode::Pure {
             decl.fps
         } else {

@@ -128,7 +128,7 @@ pub const API: &[ApiEntry] = &[
         "clock",
         "steprate",
         "-  steprate  num",
-        "The rate the movie steps at: for a persistent movie its declared FPS, whatever `--fps` it is rendered or shown at (its canvas is painted one step a declared frame), for a simulation its /StepRate, otherwise the frame rate. `fps` is the rate frames are shown at.",
+        "The rate the movie steps at: for a persistent movie its declared FPS, whatever `--fps` it is rendered or shown at (its canvas is painted one step a declared frame), for a simulation its /StepRate (in setup too, once the step procedure is defined), otherwise the frame rate. The same in setup, the scene and the overlay. `fps` is the rate frames are shown at.",
     ),
     e(
         "clock",

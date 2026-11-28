@@ -96,6 +96,11 @@ pub(crate) struct Ctx {
     /// rate it is shown at), for a simulation its step rate, otherwise the
     /// frame rate.
     pub step_rate: f64,
+    /// While a movie that is not persistent runs its setup: the name of
+    /// its simulation procedure and the rate it would step at. Whether it
+    /// is a simulation is known only once that procedure is defined, so
+    /// `steprate`, `stepat` and `dt` in setup ask then.
+    pub setup_sim: Option<(String, f64)>,
     /// The last step run at this moment (-1 before the first): in a
     /// persistent movie's scene the step being painted, in its overlay the
     /// last step the kept canvas holds; in a pure movie the frame.
@@ -232,6 +237,7 @@ impl Ctx {
             dt: 1.0 / 30.0,
             scopes: Vec::new(),
             step_rate: 30.0,
+            setup_sim: None,
             step: 0,
             canvas: Canvas::Fresh,
             layers: Vec::new(),

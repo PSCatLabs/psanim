@@ -1956,3 +1956,24 @@ fn a_persistent_canvas_is_the_same_played_or_sought() {
     cold.render_frame(65).unwrap(); // back: from the checkpoint at 6 s
     assert_eq!(cold.render_frame(79).unwrap().premultiplied, &b[..]);
 }
+
+#[test]
+fn a_simulation_counts_steps_at_its_step_rate_in_setup_too() {
+    // /FPS 30 /StepRate 120: setup and the scene agree on the step rate
+    // (once the step procedure is defined), and setup's dt is the scene's,
+    // a frame's.
+    let src = "<< /Size [16 16] /Duration 1 /FPS 30 /StepRate 120 >> animation
+        /step { } def
+        (setup ) print steprate =only ( ) print 1 stepat =only ( ) print dt 30 mul ==
+        /scene { (scene ) print steprate =only ( ) print 1 stepat =only ( ) print dt 30 mul == } def";
+    let mut m = Movie::load(src, &Options::default()).unwrap();
+    assert_eq!(m.take_output(), "setup 120.0 120 1.0\n");
+    m.render_frame(3).unwrap();
+    assert_eq!(m.take_output(), "scene 120.0 120 1.0\n");
+    // Before the step procedure is defined the movie is not yet a
+    // simulation: setup reads the frame rate, as a pure movie's scene does.
+    let early = "<< /Size [16 16] /Duration 1 /FPS 30 /StepRate 120 >> animation
+        steprate == /step { } def /scene { } def";
+    let mut m = Movie::load(early, &Options::default()).unwrap();
+    assert_eq!(m.take_output(), "30.0\n");
+}

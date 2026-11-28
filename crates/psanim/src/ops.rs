@@ -559,6 +559,21 @@ fn spread_layer(i: &mut Interp, ctx: &Shared, radius: f64, strength: Option<f64>
     Ok(())
 }
 
+/// The step rate (and its step's length) as the program sees it now. In a
+/// simulation's setup it is the /StepRate once the step procedure is
+/// defined, as in its scene; otherwise the moment's. (`dt` in a
+/// simulation's setup stays a frame's, as in its scene.)
+fn step_clock(i: &Interp, ctx: &Shared) -> (f64, f64) {
+    let c = ctx.borrow();
+    if c.running == Running::Setup
+        && let Some((name, rate)) = &c.setup_sim
+        && matches!(i.lookup(name), Some(Value::Other(o)) if o.is_procedure())
+    {
+        return (*rate, 1.0 / *rate);
+    }
+    (c.step_rate, c.dt)
+}
+
 pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     crate::vocab::install(interp, ctx);
     crate::catalog::install(interp, ctx);
@@ -626,7 +641,8 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         Ok(())
     });
     reg(interp, ctx, "steprate", |i, ctx| {
-        i.push_real(ctx.borrow().step_rate);
+        let (rate, _) = step_clock(i, ctx);
+        i.push_real(rate);
         Ok(())
     });
     reg(interp, ctx, "stepnow", |i, ctx| {
@@ -638,9 +654,8 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         if !t.is_finite() {
             return fail(ctx, PsError::Rangecheck, "stepat takes a time in seconds");
         }
-        let c = ctx.borrow();
-        let k = crate::ctx::step_reaching(t, c.step_rate).clamp(0, i64::from(i32::MAX));
-        drop(c);
+        let (rate, _) = step_clock(i, ctx);
+        let k = crate::ctx::step_reaching(t, rate).clamp(0, i64::from(i32::MAX));
         i.push_int(k);
         Ok(())
     });
