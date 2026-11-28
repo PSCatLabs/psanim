@@ -17,6 +17,7 @@ Scene bodies below run on a 640x360 canvas, 4 seconds, libraries loaded.
 - [Numbers that count](#numbers-that-count)
 - [Typing](#typing)
 - [Emoji](#emoji)
+- [Pixel faces: terminals, printers, LED signs](#pixel-faces-terminals-printers-led-signs)
 - [Captions](#captions)
 - [End credits](#end-credits)
 - [Mathematics](#mathematics)
@@ -246,6 +247,76 @@ ground /body 22 face /fg ink
 
 A conversation of text messages, with these in it, is the `chat` entry of
 the [catalog](catalog.md).
+
+## Pixel faces: terminals, printers, LED signs
+
+PSCat has four pixel fonts, six faces, for things made of dots:
+
+| Face | What it is | One font pixel on one unit at |
+|---|---|---|
+| `/Phosphor`, `/Phosphor-Scan` | a video terminal, 8x16 cell, square pixels (`-Scan` leaves a dark gap between scan lines) | 16 |
+| `/Pinpoint-Draft`, `/Pinpoint-NLQ` | a 9-pin dot-matrix printer, round dots (`-NLQ` adds a dot between neighbours) | 9 |
+| `/Diode7` | an LED sign, 7 lamps high and a descender row, proportional | 8 |
+| `/Diode5` | an LED strip, 5 lamps high, capitals only | 5 |
+
+`findfont` does not load them by name: asked for one that was never
+loaded, it quietly gives you Helvetica. `/name pixelface` (pkpixel) is
+`findfont` that loads the face's file first, and fails on a name that is
+neither a face nor a font that exists. **Call it in setup and keep the
+font**; in the scene only scale it. A frame starts from the VM as setup
+left it, so a face first asked for in the scene is loaded again every
+frame (about 30 ms a frame for Phosphor, measured on a busy machine, against
+0.2 ms when it was loaded in setup). Size a face at a whole multiple of the
+number in the table and its pixels land on whole units.
+
+```postscript
+%!PS
+<< /Size [1280 720] /Duration 4 /FPS 30 /Background [0.03 0.04 0.05] >> animation
+/pkpixel use
+/crt  /Phosphor pixelface def                   % in setup: loads lib/fonts/phosphor.ps once
+/lamp /Diode7 pixelface def
+/scene {
+  0.3 1 0.5 setrgbcolor  crt 48 scalefont setfont         % 3 units a pixel
+  80 560 moveto (READY.) show
+  80 490 moveto (LOAD "BOOT",8) 0 now 0.12 div cvi 13 min getinterval show
+  1 0.25 0.1 setrgbcolor lamp 64 scalefont setfont         % 8 units a lamp
+  80 200 moveto (ALL SYSTEMS GO) show
+} def
+```
+
+They are printable ASCII only: no block cursor (draw a rectangle), no
+degree sign, no box drawing. The colour is the current colour, so a face
+glows under `glowing` like any drawing. The dials (dot shape, dot size,
+scan gap, in-between dots) are set by making a variant once, in setup:
+`/Phosphor-Round /Phosphor << /DotShape /round /DotSize 0.85 >> pixelvariant`,
+then `/Phosphor-Round findfont` in the scene.
+
+`pixelface` runs a face's file in a dictionary of its own. Running the file
+yourself, `(lib/fonts/phosphor.ps) run`, defines its names in your current
+dictionary and overwrites any of yours with the same name. They are
+`pf-variant` (all four files) and `PhosphorDict`, `PinpointDict`,
+`Diode7Dict`, `Diode5Dict` (one each); with `pixelface` you need not avoid
+them.
+
+Each face's bitmaps are also data. `/Diode7 pixelfont` gives them as the
+column masks `pixelcols` and `pixeltext` read (the same shape as pkpixel's
+own 5, 7 and 9 row fonts, `font /Rows get` the height), for lighting LEDs
+or striking pins one at a time. Build it in setup too: in a scene the face is
+loaded and converted every frame (about 15 ms).
+
+The catalog's devices take a face:
+
+- `/terminal` with `/Font /Phosphor` sets its session in the face (default
+  Courier-Bold).
+- `/dotmatrix` with `/Face /Pinpoint-Draft` prints Pinpoint's letters, 7
+  dots wide on the same 9 pins; `/Quality` still chooses one pass or two.
+- `/ledmatrix` with `/Font /Diode7` or `/Diode5` lights the face's lamps;
+  Diode7's lower case needs a grid 8 rows high for its descenders.
+- `/clock-ledsign` with `/Font /Diode7` shows the time in Diode7's digits.
+
+The face names live in one table at the top of pkpixel, so a rename
+touches one line there. The gallery's *Boot Sequence* uses all three
+devices.
 
 ## Captions
 

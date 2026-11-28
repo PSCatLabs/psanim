@@ -48,11 +48,15 @@
 /Window [720 640] param aload pop /wh exch def /ww exch def  % the picture's size: width height
 /Sheet false param dup type /booleantype ne { 0 ne } if /sheetmode exch def  % true: not the printer but one finished page lying flat (the paper alone), for laying the pages of a banner out
 /Page 0 param cvi /pagen exch def                % the page /Sheet shows, from 0
+/Face null param dup type /stringtype eq { cvn } if /face exch def   % null: psanim's own 9-pin font (5 dots wide); /Pinpoint-Draft or /Pinpoint-NLQ: PSCat's 9-pin face (7 dots wide, the same pins); /Quality still chooses the passes
 /Backdrop true param dup type /booleantype ne { 0 ne } if /backdrop exch def  % the dark inside of the printer behind the paper (false: transparent)
 
-% The font: 9 pins, the 7-row font with g j p q y reaching down to rows 7 and 8.
+% The font: 9 pins, the 7-row font with g j p q y reaching down to rows 7 and 8,
+% or with /Face PSCat's Pinpoint face, whose glyphs are 7 dots wide on the same pins.
 /pkpixel use
-/fnt 9 pixelfont def
+/fnt face null eq { 9 } { face } ifelse pixelfont def
+/gwid fnt 77 pixelcols length def                % dot columns of the widest letter (M)
+/cellc gwid 1 add def                            % dot columns a character cell is across
 /gcols { fnt exch pixelcols } def              % character code -> its columns
 /upcols { % character code -> its columns, capitals for lower case (the banner has 7 rows)
   dup 97 ge 1 index 122 le and { 32 sub } if gcols
@@ -106,9 +110,9 @@ banner null ne { banner addbanner } if
 /sidew 22 def                                    % the printer's side plates
 /mrg 1 def  /strip 3.4 def                       % margin and sprocket strips, in characters
 /cw ww sidew 2 mul sub cols mrg 2 mul add strip 2 mul add div def   % a character cell across
-/dp cw 6 div def                                 % one dot column
+/dp cw cellc div def                                 % one dot column
 /lp cw 5 3 div mul def                           % a line (6 to the inch when a character is 10 to the inch)
-/rp dp 5 6 div mul def                           % one pin row
+/rp cw 6 div 5 6 div mul def                           % one pin row
 /sheetpad 8 def
 sheetmode { /wh pagel lp mul sheetpad 2 mul add def } if       % a flat page: the window is the page
 /pw cols mrg 2 mul add strip 2 mul add cw mul def
@@ -117,7 +121,7 @@ sheetmode { /wh pagel lp mul sheetpad 2 mul add def } if       % a flat page: th
 /yslot 108 def                                   % the printer's top, where the paper comes out
 /printY yslot lp 1.05 mul add def                % the line the head prints on
 /nlq quality /NLQ eq { 1 } { 0 } ifelse def
-/dotr dp quality /NLQ eq { 0.38 } { 0.43 } ifelse mul def
+/dotr cw 6 div quality /NLQ eq { 0.38 } { 0.43 } ifelse mul cellc 6 eq { 1 } { 0.92 } ifelse mul def
 
 % ---- the plan: sweeps of the head, feeds of the paper, tears ----------------------
 % hseg: [ t0 t1 x0 x1 kind ] head moves (kind 1 prints, 0 repositions)
@@ -211,7 +215,7 @@ tear /none eq not { finalb dotear } if
   0.97 ink 0.9 1 tf sub mul 0.3 tj mul add mul sub
   4 mul floor cvi 0 max 3 min
 } def
-/maxd cols 90 mul def
+/maxd cols gwid 18 mul mul def
 /gbuf 8 array def  /gcnt 8 array def
 0 1 7 { gbuf exch maxd array put } for
 /dots nl array def
@@ -231,11 +235,11 @@ tear /none eq not { finalb dotear } if
   sheetmode li pagen pagel mul lt li pagen 1 add pagel mul ge or and { () } { lns li get } ifelse /ls exch def
   0 1 ls length 1 sub { /ci exch def
     ls ci get gcols /cm exch def
-    cm length /gw exch def  5 gw sub 2 idiv /goff exch def
+    cm length /gw exch def  gwid gw sub 2 idiv /goff exch def
     0 1 gw 1 sub { /gi exch def
       cm gi get /mask exch def
       gi gw 1 sub lt { cm gi 1 add get } { 0 } ifelse /mnext exch def
-      ci 6 mul goff add gi add 0.5 add dp mul xl add /cx0 exch def
+      ci cellc mul goff add gi add 0.5 add dp mul xl add /cx0 exch def
       0 1 8 { /ro exch def
         3 ro sub rp mul /cy0 exch def
         mask ro lit? {

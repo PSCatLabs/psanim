@@ -3,6 +3,17 @@
 
 use psanim::{Movie, Options};
 
+/// The name pkpixel's table gives the face in PSCat's `lib/fonts/{file}.ps`
+/// (the first, if the file defines several), without the slash.
+fn face(file: &str) -> &'static str {
+    let path = format!("lib/fonts/{file}.ps");
+    psanim::pixel_faces()
+        .into_iter()
+        .find(|(_, f)| *f == path)
+        .map(|(n, _)| n)
+        .unwrap_or_else(|| panic!("no face for {path} in pkpixel's table"))
+}
+
 /// A rendered frame's pixels, kept after its movie is gone.
 struct Frame {
     premultiplied: Vec<u8>,
@@ -167,6 +178,44 @@ fn the_terminal_shows_the_session_as_it_unfolds_and_is_pure() {
     assert_eq!(lit(&green, |r, g, _| r > 150 && r > g + 40), 0);
     // The glass is dark where there is no text.
     assert!(mean(&late) < 60.0);
+}
+
+#[test]
+fn the_terminal_can_be_set_in_the_phosphor_face() {
+    let params = "/Session [ [/type (ls)] [/out (one\\ntwo)] ] /Glow 0 /Grain 0";
+    let courier = place("terminal", params, 20.0);
+    let early = place(
+        "terminal",
+        &format!("{params} /Font /{}", face("phosphor")),
+        0.0,
+    );
+    let late = place(
+        "terminal",
+        &format!("{params} /Font /{}", face("phosphor")),
+        20.0,
+    );
+    let (l, e) = (
+        lit(&late, |_, g, _| g > 120),
+        lit(&early, |_, g, _| g > 120),
+    );
+    assert!(l > e + 100, "the face shows the session: {l} {e}");
+    assert_ne!(late.premultiplied, courier.premultiplied);
+}
+
+#[test]
+fn a_misspelt_font_is_an_error_not_a_substitute() {
+    let src = "<< /Size [400 300] /Duration 2 >> animation
+         /x /terminal << /Params << /Font /Phosfor >> >> instance
+         /scene { /x << >> place } def";
+    let e = match Movie::load(src, &Options::default()) {
+        Ok(mut m) => m.render_at(1.0).map(|_| ()).expect_err("a typo must fail"),
+        Err(e) => e,
+    }
+    .to_string();
+    assert!(
+        e.contains("pixelface") && e.contains(&format!("/{}", face("phosphor"))),
+        "{e}"
+    );
 }
 
 #[test]

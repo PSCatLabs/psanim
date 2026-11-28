@@ -22,7 +22,7 @@
 /Phosphor /green param /phos exch def           % /green /amber /white, or [r g b]
 /Rows 18 param /rows exch def                   % lines on the screen
 /Cols 50 param /cols exch def                   % characters across
-/Font /Courier-Bold param /fontname exch def    % a monospace face: the one parameter a bitmap terminal font will replace
+/Font /Courier-Bold param dup type /stringtype eq { cvn } if /fontname exch def  % a monospace face; /Phosphor (or /Phosphor-Scan) is PSCat's 8x16 terminal face, loaded on demand
 /Prompt (hacker@vax:~$ ) param /prompt exch def % the prompt printed before each typed command
 /Speed 1 param /speed exch def                  % typing speed, 1 is brisk
 /Typos 0.03 param /typos exch def               % chance of a slip per letter, noticed, backspaced and fixed
@@ -53,9 +53,11 @@
 /sx bz def  /sy bz def  /sw width bz 2 mul sub def  /sh height bz 2 mul sub def
 /pad sw 0.035 mul def
 /areaw sw pad 2 mul sub def  /areah sh pad 2 mul sub def
-fontname findfont 1 scalefont setfont (M) stringwidth pop /adv exch def
-/fs areaw cols adv mul div areah rows 1.2 mul div 2 copy gt { exch } if pop def
-/cw fs adv mul def  /ch fs 1.2 mul def
+/pkpixel use
+fontname pixelface dup 1 scalefont setfont (M) stringwidth pop /adv exch def
+/Bitmaps known { 1.0 0.25 } { 1.2 0.3 } ifelse /bl exch def /lead exch def   % a pixel face's cell is its em: no leading
+/fs areaw cols adv mul div areah rows lead mul div 2 copy gt { exch } if pop def
+/cw fs adv mul def  /ch fs lead mul def
 /gx sx sw cw cols mul sub 2 div add def                    % the grid's left edge, centred
 /gtop sy sh add sh ch rows mul sub 2 div sub def           % and its top
 /cx sx sw 2 div add def  /cy sy sh 2 div add def
@@ -78,7 +80,7 @@ fontname findfont 1 scalefont setfont (M) stringwidth pop /adv exch def
   /ru gtop rr 0.5 add ch mul sub cy sub sh 2 div div def           % +1 at the top .. -1 at the bottom
   /ry cy sh 2 div ru ru dup dup mul mul curve 0.5 mul mul sub mul add def
   gsave
-    cx ry fs 0.3 mul sub translate
+    cx ry fs bl mul sub translate
     1 curve ru ru mul mul sub 1 scale
     gx cx sub [ rr now 24 mul floor ] hash01 0.5 sub 0.5 mul add 0 moveto
     rs show
@@ -92,7 +94,7 @@ fontname findfont 1 scalefont setfont (M) stringwidth pop /adv exch def
   /ru gtop rr 0.5 add ch mul sub cy sub sh 2 div div def
   /ry cy sh 2 div ru ru dup dup mul mul curve 0.5 mul mul sub mul add def
   gsave
-    cx ry fs 0.3 mul sub translate
+    cx ry fs bl mul sub translate
     1 curve ru ru mul mul sub 1 scale
     gx cx sub cc cw mul add  fs -0.22 mul  cw 0.92 mul  fs 0.98 mul  rectfill
   grestore

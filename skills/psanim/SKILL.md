@@ -154,7 +154,7 @@ is too low: an entrance is three tweens, a diagram is arithmetic. The
 | `pkchart` | `plotframe`, `plotaxes`, `bars`, `hbars`, `plotline`, `serieslabels`, `tracer`, `donut`; dashboards: `stattile`, `dial`, `horizon`, `sparkline`, `heatmap`, `statuslight` | [explain.md](references/explain.md) |
 | `pkink` | tapered strokes, `revealalong`, `around`, gradients | [ink.md](references/ink.md) |
 | `pkfigure` | a rig for characters that dance: `dancepose` from a beat, `squashed`, `limb`, `eye`, `mouth`, `spring` | [figure.md](references/figure.md) |
-| `pkpixel` | a pixel font for dot-matrix work: `7 pixelfont`, then `pixelcols` and `pixeltext` give a character's or a line's dot columns as bit masks; the LED matrix, LED sign and dot-matrix printer entries share it | [vocabulary-libraries.md](references/vocabulary-libraries.md) |
+| `pkpixel` | a pixel font for dot-matrix work: `7 pixelfont`, then `pixelcols` and `pixeltext` give a character's or a line's dot columns as bit masks; the LED matrix, LED sign and dot-matrix printer entries share it. `/Phosphor pixelface` loads one of PSCat's pixel faces (terminal, printer, LED) | [type.md](references/type.md#pixel-faces-terminals-printers-led-signs), [vocabulary-libraries.md](references/vocabulary-libraries.md) |
 
 The way of working they assume: **draw each thing at rest, in a box, in
 theme colours; then say when it arrives and by what motion.** Start from

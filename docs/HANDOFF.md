@@ -45,9 +45,11 @@ Working and tested on macOS (Apple silicon):
   merged in `integration-0.2`; the merge commits say what met what.
 - PSCat: a git dependency on `feature/0.8.0`, pinned at `d385971` by
   `Cargo.lock`. The host API (PSCatLabs/pscat#1410) is merged there.
-  psanim uses none of 0.8.0's additions yet; PSCatLabs/pscat#1488 lists
-  them (line numbers in errors, the UTF-8 check, Unicode text, pixel
-  fonts).
+  PSCatLabs/pscat#1488 lists 0.8.0's additions (line numbers in errors,
+  the UTF-8 check, Unicode text, pixel fonts). psanim uses the pixel fonts
+  (#101): pkpixel's `pixelface` loads them, `pixelfont` reads their
+  bitmaps, the terminal, dotmatrix and ledmatrix entries take one as an
+  option, and the gallery's Boot Sequence shows all three.
 
 ## Decisions worth knowing before changing things
 

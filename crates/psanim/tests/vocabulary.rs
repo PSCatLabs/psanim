@@ -335,6 +335,10 @@ fn no_pscat_library_redefines_a_psanim_word() {
         ("jersey", "artkit"),
         ("hangul", "artkit"),
         ("noiseref", ""),
+        ("fonts/phosphor", ""),
+        ("fonts/pinpoint", ""),
+        ("fonts/diode7", ""),
+        ("fonts/diode5", ""),
     ];
     let mut clashes = Vec::new();
     for (lib, needs) in libs {
