@@ -40,7 +40,7 @@ now pkink's `paintplan`, which this film was the model for:
   The first cut of the film did this arithmetic by hand, about 40 lines;
   with `paintplan` it is a plan of dictionaries and two calls. Every one
   of the 1140 frames is byte-identical to the hand-written version's at
-  30 fps (and at `--fps` 24 and 60, below).
+  30 fps, and under `--fps` to within one frame (below).
 - **Strokes as data**, as in Chalk Proof: in setup every path (lettering
   from `sgpath`, formulas from `mkpath` and `mkalign`, the diagram) is
   split into its subpaths, one stroke each, because `/From` and `/To`
