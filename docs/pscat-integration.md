@@ -68,7 +68,7 @@ Only the supported, documented API (`docs.rs` surface), nothing hidden:
 | cancel a render | `Interp::set_interrupt`, `PsError::Interrupted` | yes |
 | encode PNGs, lay out contact sheets | `Page::to_png`, `pscat::sheet` | |
 | roll frames back | the PostScript operators `save` / `restore` | |
-| know whether a transparency group is open | the PostScript operators `begingroup` / `endgroup`, wrapped by the prelude | |
+| know whether a transparency group is open | nothing yet: PSCatLabs/pscat#1494 (see below) | wanted |
 
 ## The PSCat changes
 
@@ -111,54 +111,10 @@ Found while building psanim, not needed to ship it:
 
 - **Group opacity and blend as PostScript operators.** Done in 0.8.0:
   `begingroup` / `endgroup`. See below for how psanim lives with them.
-- **A host query for open transparency groups.** While a group is open
-  `swap_canvas` exchanges the page below the group's layer, so a host
-  that draws layers by swapping must not do so inside one; but nothing
-  in the host API says whether one is open. psanim counts them itself
-  (below).
-
-## Transparency groups and psanim's layers
-
-What PSCat does with a group open, as a host sees it (PSCat's
-`docs/guides/library.md`, and checked by `crates/psanim/tests/groups.rs`):
-the program paints on the group's layer; `canvas_premultiplied_rgba8`,
-`pages`, `page`, `into_last_page` and `swap_canvas` all act on the page
-below that layer, and the group composites onto whatever page is there
-at `endgroup`; the end of a run (and an uncaught error) closes open
-groups with their marks kept; an interrupt drops them, leaving the page
-whole; `swap_canvas` inside a pattern's `PaintProc` hands the page back.
-
-So a psanim layer opened inside a group would be swapped in *below* the
-group and never painted on: its effect is lost, and the group composites
-onto the layer page instead of the frame. Before #109 that happened
-silently (`faded` and `blurred` inside a group drew at full strength and
-sharp; `vignette` and `filmgrain` turned the frame white, the clip mask
-they paint landing in the group).
-
-psanim's answer, all in psanim:
-
-- the prelude's `begingroup` / `endgroup` run PSCat's and tell the engine,
-  which keeps one stack of open layers and groups (`Ctx::nest`);
-- a layer or pixel effect refuses to open while a group is innermost
-  (`groupnesting`, naming the word); `faded` and `blended` (`/normal`,
-  `/multiply`) run as a group of their own there instead, keeping a
-  layer's rules: the caller's alpha and blend mode go to the marks
-  inside (a group would start them at 1 and `/Normal` and composite at
-  the caller's alpha), and the graphics state the body leaves outlasts
-  it (`gstate currentgstate` before `endgroup`, `setgstate` after);
-- a layer's body must close the groups it opens and no others
-  (`groupnesting`); a frame must close its groups (`unclosedgroup`,
-  beside `unclosedlayer`);
-- the stack is cleared at the start of every frame, so a frame that
-  failed or was interrupted with a group open leaves nothing behind (the
-  next frame is byte-identical to a fresh movie's, tested in all three
-  modes).
-
-The limit: psanim sees only groups opened and closed through those two
-names, so one that `erasepage`, `showpage` or a `restore` ends is still
-counted open (the frame then fails with `unclosedgroup`), and one opened
-by `systemdict /begingroup get exec` is not counted at all. A host query
-in PSCat would remove both.
+- **A host query for open transparency groups** (PSCatLabs/pscat#1494).
+  While a group is open `swap_canvas` exchanges the page below the
+  group's layer, so a host that draws layers by swapping must not do so
+  inside one; nothing in 0.8.0's supported API says whether one is open.
 - **Virtual files**: a host serving `(name) run` from memory.
 - **A host `image`**: painting host pixels under the current CTM.
 - **Source positions for procedure bodies**, which would turn the
@@ -166,3 +122,67 @@ in PSCat would remove both.
 - **Dropping an `Interp` during thread-local teardown panics** (the name
   interner's thread-local can be destroyed first). Observed in a test of
   `psanim-wasm`; hosts should drop interpreters explicitly.
+
+## Transparency groups and psanim's layers
+
+What PSCat does with a group open, as a host sees it (PSCat's
+`docs/guides/library.md`; the parts psanim relies on are checked by
+`crates/psanim/tests/groups.rs`): the program paints on the group's
+layer; `canvas_premultiplied_rgba8`, `pages`, `page`, `into_last_page`
+and `swap_canvas` all act on the page below that layer, and the group
+composites onto whatever page is there at `endgroup`; the end of a run
+(and an uncaught error) closes open groups with their marks kept; an
+interrupt drops them, leaving the page whole; `swap_canvas` inside a
+pattern's `PaintProc` hands the page back.
+
+So a psanim layer opened inside a group is swapped in *below* the group
+and never painted on: its effect is lost, and the group composites onto
+the layer page instead of the frame. `faded` and `blurred` inside a group
+draw at full strength and sharp; `vignette` and `filmgrain` turn the frame
+white (the clip mask they paint lands in the group). A group *inside* a
+psanim layer or motion is fine.
+
+What psanim does about it:
+
+- `begingroup` and `endgroup` are PSCat's operators, untouched. (A first
+  attempt counted groups by wrapping them in the prelude. It could not be
+  made safe: an `endgroup` in a pattern's `PaintProc` closes nothing at
+  the page's level, and `//begingroup` must stay an operator.)
+- Every question about groups goes through `crates/psanim/src/groups.rs`:
+  `groups_open` (how many are open at the page's level) and
+  `innermost_group` (which one is innermost). They are asked before a
+  layer or pixel effect opens, at the end of a layer's, motion's or
+  grouped fade's body, and at the end of a frame's run (`.framedone`,
+  before PSCat would close a group left open).
+- With an answer, a layer or pixel effect refuses to open inside a group
+  (`groupnesting`, naming the word); `faded` and `blended` (`/normal`,
+  `/multiply`) run as a group of their own (`.groupfaded` in the
+  prelude) by a layer's rules: the caller's alpha and blend mode go to
+  the marks inside, the graphics state the body leaves outlasts it, gsave
+  levels included (taken off before `endgroup` and put back after), and a
+  body that `grestore`s past its start is refused; a body must leave its
+  fade's own group innermost, checked by identity; a frame must close
+  its groups (`unclosedgroup`).
+- **Pending pscat#1494:** PSCat 0.8.0 cannot answer, so both functions
+  report no group, which is how psanim behaved before groups existed.
+  The checks are written and the tests that need an answer are ignored
+  with that reason. What can be tested without it is: `.groupfaded`'s
+  rules (called directly), the next frame after an error or interrupt
+  with a group open (byte-identical to a fresh movie's, all three
+  modes), groups inside layers and motions, and parallel renders.
+
+What psanim needs from PSCat, as host API on `Interp`:
+
+- `fn open_group_count(&self) -> usize`: the transparency groups open at
+  the page's level (those whose layer stands between the program's
+  painting and the page `swap_canvas` exchanges), counted as the
+  interpreter does: any `begingroup` counts, however it was called, and
+  a group ended by `endgroup`, `erasepage`, `showpage`, `copypage`, a
+  `restore` or an error does not. An `endgroup` inside a pattern's
+  `PaintProc` does not change it unless it closes a page-level group
+  (which PSCat says it cannot). Callable from inside a host operator.
+- `fn innermost_group_id(&self) -> Option<u64>`: an identifier of the
+  innermost page-level open group, unique among the groups the
+  interpreter has opened (an opened-ever counter at its `begingroup`
+  would do), `None` when none is open. The same group gives the same
+  value while it stays open, and a group opened later never reuses it.

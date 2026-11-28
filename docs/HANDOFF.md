@@ -47,10 +47,12 @@ Working and tested on macOS (Apple silicon):
   `Cargo.lock`. The host API (PSCatLabs/pscat#1410) is merged there.
   PSCatLabs/pscat#1488 lists 0.8.0's additions (line numbers in errors,
   the UTF-8 check, Unicode text, pixel fonts, transparency groups).
-  Transparency groups (`begingroup` / `endgroup`) work in movies beside
-  psanim's layers since #109: the prelude wraps them so the engine knows
-  one is open, and a layer that cannot work inside one says so
-  (`groupnesting`); `docs/pscat-integration.md` has the rules.
+  Transparency groups (`begingroup` / `endgroup`, PSCat's own operators)
+  work in movies, inside psanim's layers and motions. A psanim layer
+  inside a group loses its effect; psanim asks whether a group is open
+  in one place, `crates/psanim/src/groups.rs`, which waits on PSCat's
+  host query (PSCatLabs/pscat#1494) and answers "none" until then.
+  `docs/pscat-integration.md` has the rules and what is pending.
 
 ## Decisions worth knowing before changing things
 

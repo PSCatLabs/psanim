@@ -97,7 +97,7 @@ with `--signals`. In the browser the same call is `engine.recordSignal(name, t, 
 
 `psanim::Error` is data: `phase` (load, setup, frame *k*, step *n*),
 `kind` (a PostScript error name, or `declaration`, `options`,
-`stackleft`, `unclosedlayer`, `unclosedgroup`, `groupnesting`), `command`, `line` (setup only),
+`stackleft`, `unclosedlayer`, and once PSCat reports open transparency groups (pscat#1494) `unclosedgroup` and `groupnesting`), `command`, `line` (setup only),
 `backtrace` (the program's procedures, innermost first, with the failing
 element marked), `stack` (the operands it was looking at), `hint`, and
 `printed` (what a failing frame printed before it failed; `printed` in

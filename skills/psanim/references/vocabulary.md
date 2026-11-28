@@ -504,7 +504,7 @@ Replace the current path by the outline of a stroke along it whose width follows
 
 `-  beginlayer  -`
 
-Start drawing on a separate transparent layer. The graphics state is unchanged. Not inside a PSCat begingroup (groupnesting).
+Start drawing on a separate transparent layer. The graphics state is unchanged. Not inside a PSCat begingroup, where what it draws is lost.
 
 ### `endlayer`
 
@@ -534,25 +534,25 @@ Add a soft halo around everything on the current layer: a blurred copy added bac
 
 `alpha proc  faded  -`
 
-Draw proc as one group at opacity alpha. Unlike setalpha, overlapping shapes inside do not show through each other. Inside a PSCat begingroup it runs as a group itself.
+Draw proc as one group at opacity alpha. Unlike setalpha, overlapping shapes inside do not show through each other. Not inside a PSCat begingroup, where the fade is lost: give the group an /Alpha instead.
 
 ### `blended`
 
 `alpha /mode proc  blended  -`
 
-Draw proc as a group composited with a blend mode. Inside a PSCat begingroup only /normal and /multiply work (as a group); /add and /screen are groupnesting.
+Draw proc as a group composited with a blend mode. Not inside a PSCat begingroup, where the blend is lost: give the group a /Blend instead.
 
 ### `blurred`
 
 `radius proc  blurred  -`
 
-Draw proc out of focus. The blur stays inside the clip in force when it begins (a within box, a rectclip, any clip path). Not inside a PSCat begingroup (groupnesting): put the group inside proc.
+Draw proc out of focus. The blur stays inside the clip in force when it begins (a within box, a rectclip, any clip path). Not inside a PSCat begingroup, where the effect is lost: put the group inside proc.
 
 ### `glowing`
 
 `radius strength proc  glowing  -`
 
-Draw proc with a halo of light. Try 8 1 for solid shapes, 24 1.6 for thin strokes. The halo stays inside the clip in force when it begins. Not inside a PSCat begingroup (groupnesting): put the group inside proc.
+Draw proc with a halo of light. Try 8 1 for solid shapes, 24 1.6 for thin strokes. The halo stays inside the clip in force when it begins. Not inside a PSCat begingroup, where the effect is lost: put the group inside proc.
 
 ### `crossfade`
 
