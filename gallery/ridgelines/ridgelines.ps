@@ -1,0 +1,165 @@
+%!PS
+% Poster: 11.5
+% RIDGELINES: five ranges of hills at dawn, each one translucent thing.
+%
+% A range is forty overlapping peaks. Painted with `setalpha`, each peak
+% is translucent on its own and every overlap shows as a darker seam; in
+% the first seconds that is what you see, and then the seams heal, range
+% by range, far to near, as each range becomes one transparency group:
+% the peaks are opaque inside it and the range composites once, at one
+% alpha, so the sky and the ranges behind show through it evenly. Fog
+% banks of overlapping puffs drift between the ranges the same way. The
+% sun comes up, the colours warm, the drift slows to a stop, and the
+% title rises and holds.
+%
+% Techniques
+%   - `begingroup` / `endgroup` (PSCat's transparency groups): each range
+%     and each fog bank is drawn opaque inside a group with an `/Alpha`;
+%     the overlaps inside it cannot darken.
+%   - the heal: marks at alpha m inside a group at alpha a/m, m tweened
+%     from a (each peak on its own: seams) to 1 (one group: none), so a
+%     single peak keeps the same strength throughout.
+%   - `faded` inside a group: the fog fades in; inside a group psanim
+%     runs `faded` as a group of its own.
+%   - a group inside a motion: the title `enters` with `/rise`, and its
+%     rule and letters are one group. (A motion inside a group is
+%     refused while it moves: the group goes inside.)
+%   - `glowing` on the sun, outside any group.
+% Everything is a pure function of `now`.
+<< /Size [1280 720] /Duration 16 /FPS 30 /Background [0.07 0.08 0.16]
+   /Title (Ridgelines)
+   /Description (Five translucent ranges of hills at dawn, each drawn as one transparency group: the seams where its peaks overlap heal as it becomes one.)
+>> animation
+
+/pkmotion use
+
+% ---- palette ----
+/setc { aload pop setrgbcolor } def
+/skytop0 [0.07 0.08 0.18] def  /skytop1 [0.30 0.36 0.58] def
+/skylow0 [0.26 0.20 0.34] def  /skylow1 [0.98 0.70 0.52] def
+% each range: far (pale, faint) to near (dark, nearly solid)
+/rcol [ [0.62 0.56 0.72] [0.47 0.42 0.62] [0.33 0.29 0.50] [0.21 0.18 0.36] [0.10 0.08 0.20] ] def
+/ralpha [ 0.38 0.50 0.62 0.76 0.92 ] def
+/rbase  [ 410 330 250 165 70 ] def      % where each range's peaks stand
+/rhigh  [ 110 130 150 175 200 ] def     % how tall its tallest peak is
+/rspeed [ 6 11 18 28 44 ] def           % drift, units a second (parallax)
+/PERIOD 1760 def                        % a range repeats every PERIOD units
+/NPEAK 40 def
+
+% ---- time ----
+% How far everything has drifted: slowing from the start to a stop at 15.5.
+/drift { 0 15.5 /quad-out tween 7.75 mul } def
+% x p wrap -> x modulo p, in 0..p (mod is for integers)
+/wrap { exch 1 index div dup floor sub mul } def
+% The dawn, 0..1.
+/dawn { 0.5 13 /sine-inout tween } def
+
+% ---- sky ----
+/sky {
+  /lo dawn skylow0 skylow1 between def
+  /hi dawn skytop0 skytop1 between def
+  << /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 0 720] /Extend [true true]
+     /Function << /FunctionType 2 /Domain [0 1] /C0 lo /C1 hi /N 1 >> >> shfill
+} def
+
+% ---- the sun ----
+/sun {
+  0.8 14 /cubic-out tween 260 480 between /sy exch def
+  dawn [0.98 0.55 0.36] [1.0 0.86 0.62] between setc
+  26 0.9 { 905 sy 54 0 360 arc fill } glowing
+} def
+
+% ---- one range ----
+% i peaks: the path of every peak of range i, already offset by its drift.
+/peak { % x b h w -> one closed peak
+  /w exch def /h exch def /b exch def /x exch def
+  x w sub b 40 sub moveto
+  x w 0.62 mul sub b h 0.58 mul add lineto
+  x w 0.22 mul sub b h 0.80 mul add lineto
+  x b h add lineto
+  x w 0.30 mul add b h 0.66 mul add lineto
+  x w 0.55 mul add b h 0.72 mul add lineto
+  x w add b 40 sub lineto closepath
+} def
+/peaks { % i -> fills each peak (the caller has chosen colour and alpha)
+  /ri exch def
+  /off drift rspeed ri get mul def
+  0 1 NPEAK 1 sub {
+    /j exch def
+    /x j PERIOD NPEAK div mul [ri j 1] hash01 30 mul add off sub
+       PERIOD wrap 240 sub def
+    x -240 ge x 1520 le and {
+      x rbase ri get
+      [ri j 2] hash01 0.55 mul 0.40 add rhigh ri get mul
+      [ri j 3] hash01 70 mul 90 add
+      peak fill
+    } if
+  } for
+  0 0 1280 rbase ri get 40 sub rectfill      % the range's body below the peaks
+} def
+% i range -> range i, its seams healing as it becomes one group
+/range {
+  /ri exch def
+  % m: each peak's own alpha. At m = a every peak is translucent on its
+  % own (seams); at m = 1 the group carries all of a (none).
+  /a ralpha ri get def
+  1.2 ri 0.55 mul add dup 1.9 add /cubic-inout tween a 1 between /m exch def
+  rcol ri get setc
+  << /Alpha a m div >> begingroup
+    m setalpha ri peaks
+  endgroup
+} def
+
+% ---- fog: overlapping puffs, one group each bank ----
+/fog { % i y -> a fog bank in front of range i
+  /fy exch def /fi exch def
+  /off drift rspeed fi get mul 1.3 mul def
+  << /Alpha 0.42 >> begingroup
+    % `faded` inside a group runs as a group of its own: the bank fades in.
+    2.5 fi 0.6 mul add dup 2.5 add /sine-inout tween {
+      dawn [0.70 0.66 0.84] [1.0 0.90 0.84] between setc
+      0 1 21 {
+        /j exch def
+        j 90 mul [fi j] hash01 60 mul add off sub 1980 wrap 350 sub
+        fy [fi j 1] hash01 20 mul add
+        [fi j 2] hash01 60 mul 90 add
+        gsave 3 1 roll translate 1 0.24 scale 0 0 3 -1 roll 0 360 arc fill grestore
+      } for
+    } faded
+  endgroup
+} def
+
+% ---- caption and title ----
+/caption {
+  /Helvetica findfont 20 scalefont setfont
+  1 1 1 setrgbcolor
+  0.6 1.0 /sine-out tween 4.0 4.6 /sine-in tween 1 exch sub mul {
+    60 40 moveto (each peak with its own alpha: every overlap is a seam) show
+  } faded
+  4.4 5.0 /sine-out tween 8.0 9.0 /sine-in tween 1 exch sub mul {
+    60 40 moveto (each range one group, one alpha: the overlaps are gone) show
+  } faded
+} def
+/title {
+  10.4 [/rise 1.4 /cubic-out] {
+    << /Alpha 0.82 >> begingroup
+      1 0.97 0.92 setrgbcolor
+      /Palatino-Roman findfont 84 scalefont setfont
+      640 560 moveto (Ridgelines) showcenter
+      /Helvetica findfont 18 scalefont setfont
+      640 522 moveto (five ranges, five groups, one alpha each) showcenter
+    endgroup
+  } enters
+} def
+
+/scene {
+  sky
+  sun
+  0 range  0 366 fog
+  1 range
+  2 range  2 236 fog
+  3 range
+  4 range
+  caption
+  title
+} def
