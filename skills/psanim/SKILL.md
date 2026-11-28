@@ -80,7 +80,11 @@ psanim render movie.ps -o movie.mp4    # 5. the film (also .webm, .gif, or a dir
    `true charpath`), then `0 u trimpath stroke` shows the first `u` of it.
 5. **Layers group.** `alpha { ... } faded` fades a whole drawing as one
    thing; `radius strength { ... } glowing` adds light; `[...] reel`
-   joins clips with dissolves, wipes and pushes.
+   joins clips with dissolves, wipes and pushes. PSCat's own
+   `<< /Alpha a >> begingroup ... endgroup` fades as one thing too; a
+   psanim layer (`blurred`, `glowing`, a moving motion) must not open
+   inside one: put the group inside the layer
+   ([pitfalls](references/pitfalls.md), `groupnesting`).
 
 ## Rules that save a debugging round
 

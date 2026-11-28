@@ -610,3 +610,19 @@ fn groups_inside_a_component() {
         assert_eq!(e.kind, "groupnesting", "{e}");
     }
 }
+
+/// The documented limit: psanim counts `begingroup` and `endgroup`, and
+/// does not see a group that PSCat ends behind its back. `erasepage`
+/// ends it (its marks kept, then erased); psanim still counts it open,
+/// and says so at the end of the frame rather than drawing something
+/// wrong.
+#[test]
+fn a_group_ended_by_erasepage_is_still_counted_open() {
+    let e = error(
+        Mode::Pure,
+        "",
+        &format!("<< /Alpha 0.5 >> begingroup {SHAPES} erasepage"),
+        3,
+    );
+    assert_eq!(e.kind, "unclosedgroup", "{e}");
+}

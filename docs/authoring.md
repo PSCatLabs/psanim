@@ -121,7 +121,11 @@ gsave 2 3 /quad-out tween { 1 setgray fill } faded grestore        % the fill fa
 
 `trimpath` keeps a fraction of whatever path is current. `faded` draws
 its body as one translucent group; `glowing` and `blurred` are its
-siblings.
+siblings. PSCat's transparency groups (`<< /Alpha 0.5 >> begingroup ...
+endgroup`) do the same as `faded` and may sit inside any of them; the
+other way round only `faded` and `blended` work (they become groups
+themselves), and the rest stop the frame with `groupnesting`, because a
+layer opened inside a group would never see the group's marks.
 
 ## The loop
 

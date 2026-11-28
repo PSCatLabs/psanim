@@ -68,6 +68,7 @@ Only the supported, documented API (`docs.rs` surface), nothing hidden:
 | cancel a render | `Interp::set_interrupt`, `PsError::Interrupted` | yes |
 | encode PNGs, lay out contact sheets | `Page::to_png`, `pscat::sheet` | |
 | roll frames back | the PostScript operators `save` / `restore` | |
+| know whether a transparency group is open | the PostScript operators `begingroup` / `endgroup`, wrapped by the prelude | |
 
 ## The PSCat changes
 
@@ -108,9 +109,52 @@ PSCat's source tree. Until then the Rust crate API is, by PSCat's own
 
 Found while building psanim, not needed to ship it:
 
-- **Group opacity and blend as PostScript operators.** psanim implements
-  layers in the host with `swap_canvas`. A PSCat-level transparency group
-  would let SVG and PDF output carry them too.
+- **Group opacity and blend as PostScript operators.** Done in 0.8.0:
+  `begingroup` / `endgroup`. See below for how psanim lives with them.
+- **A host query for open transparency groups.** While a group is open
+  `swap_canvas` exchanges the page below the group's layer, so a host
+  that draws layers by swapping must not do so inside one; but nothing
+  in the host API says whether one is open. psanim counts them itself
+  (below).
+
+## Transparency groups and psanim's layers
+
+What PSCat does with a group open, as a host sees it (PSCat's
+`docs/guides/library.md`, and checked by `crates/psanim/tests/groups.rs`):
+the program paints on the group's layer; `canvas_premultiplied_rgba8`,
+`pages`, `page`, `into_last_page` and `swap_canvas` all act on the page
+below that layer, and the group composites onto whatever page is there
+at `endgroup`; the end of a run (and an uncaught error) closes open
+groups with their marks kept; an interrupt drops them, leaving the page
+whole; `swap_canvas` inside a pattern's `PaintProc` hands the page back.
+
+So a psanim layer opened inside a group would be swapped in *below* the
+group and never painted on: its effect is lost, and the group composites
+onto the layer page instead of the frame. Before #109 that happened
+silently (`faded` and `blurred` inside a group drew at full strength and
+sharp; `vignette` and `filmgrain` turned the frame white, the clip mask
+they paint landing in the group).
+
+psanim's answer, all in psanim:
+
+- the prelude's `begingroup` / `endgroup` run PSCat's and tell the engine,
+  which keeps one stack of open layers and groups (`Ctx::nest`);
+- a layer or pixel effect refuses to open while a group is innermost
+  (`groupnesting`, naming the word); `faded` and `blended` (`/normal`,
+  `/multiply`) run as a group of their own there instead;
+- a layer's body must close the groups it opens and no others
+  (`groupnesting`); a frame must close its groups (`unclosedgroup`,
+  beside `unclosedlayer`);
+- the stack is cleared at the start of every frame, so a frame that
+  failed or was interrupted with a group open leaves nothing behind (the
+  next frame is byte-identical to a fresh movie's, tested in all three
+  modes).
+
+The limit: psanim sees only groups opened and closed through those two
+names, so one that `erasepage`, `showpage` or a `restore` ends is still
+counted open (the frame then fails with `unclosedgroup`), and one opened
+by `systemdict /begingroup get exec` is not counted at all. A host query
+in PSCat would remove both.
 - **Virtual files**: a host serving `(name) run` from memory.
 - **A host `image`**: painting host pixels under the current CTM.
 - **Source positions for procedure bodies**, which would turn the

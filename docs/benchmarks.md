@@ -134,6 +134,31 @@ thousand particles a frame render faster than real time on one core.
 A `glowing` around the whole call adds one layer (a few ms), not one per
 particle.
 
+## Transparency groups against `faded`
+
+A PSCat group (`<< /Alpha 0.5 >> begingroup ... endgroup`) against psanim's
+layer (`0.5 { ... } faded`) around the same drawing, at 1280x720, `psanim
+bench` (median ms a frame, three runs each, all shown), measured on
+2026-11-27 on the same M4 while other jobs were running (load average
+about 42), so the numbers are loose and only their ratios mean much.
+
+| The drawing | Bare | `faded` | Group | `faded` inside a group |
+|---|---|---|---|---|
+| nothing | | 0.68 to 0.73 | 0.42 to 0.44 | |
+| one full-canvas `rectfill` | | 1.9 to 2.4 | 4.1 to 5.6 | |
+| one full-canvas `rectfill` at `0.5 setalpha` inside | | | 7.5 to 8.1 | |
+| 24 discs of radius 150, overlapping | 3.5 to 5.4 | 6.6 to 11.9 | 24.6 to 29.5 | 20.3 to 32.3 |
+
+Reading it: an empty group is cheaper than an empty layer (PSCat skips
+the rows the layer left transparent), but painting inside a group costs
+more than painting on a psanim layer, about twice for one fill and
+three times for two dozen large overlapping ones. Why was not
+measured; PSCat's design note says a group's layer keeps its own 16-bit
+shadow, which is a likely place to look. So
+for a fade alone `faded` stays the cheaper choice in a movie; a group is
+for what `faded` cannot do. The probes are one-line movies; to repeat,
+write the scene and run `psanim bench`.
+
 ## What these numbers are not
 
 - Not a comparison with other animation systems: none was run.

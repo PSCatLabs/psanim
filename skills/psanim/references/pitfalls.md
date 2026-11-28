@@ -52,6 +52,52 @@ then the layer's own opacity applies to the result. `0.5 setalpha` before
 `0.8 { ... } faded` gives 0.4. Set `1 setalpha` before a layer unless you
 mean it.
 
+## `groupnesting`, or `faded` versus a transparency group
+
+PSCat has its own group opacity: `<< /Alpha 0.5 >> begingroup ... endgroup`
+draws everything inside opaque on a layer of its own and composites it
+once, so where two shapes inside overlap the overlap is no darker. That
+is what `0.5 { ... } faded` does too, and on psanim's pixels the two agree
+to one level in 255. Either works for a fade; the group can also set
+`/Blend /Multiply` and nests 64 deep (psanim's layers, 16). `faded` is
+cheaper per frame (about half the time for a full-canvas fade, measured
+in `docs/benchmarks.md`) and is what `blurred`, `glowing` and the motions
+are made of.
+
+```postscript
+<< /Alpha 0.5 >> begingroup
+  1 0.3 0.2 setrgbcolor 260 180 80 0 360 arc fill
+  0.2 0.5 1 setrgbcolor 380 180 80 0 360 arc fill   % the overlap is no darker
+endgroup
+```
+
+What must not be done: **a psanim layer inside a group.** psanim draws
+`blurred`, `glowing`, `blended /add` and `/screen`, `beginlayer`, the pixel
+effects (`blurlayer`, `glowlayer`, `vignette`, `filmgrain`) and a motion
+while it moves on a layer of its own by swapping the canvas, and inside a
+group the program is painting on the group's layer, which psanim cannot
+reach. So these stop the frame with `groupnesting`, naming the word. Put
+the group inside the effect, or close it first:
+
+```postscript partial
+<< >> begingroup 6 1 { petals } glowing endgroup      % groupnesting
+6 1 { << /Alpha 0.6 >> begingroup petals endgroup } glowing   % right
+```
+
+`faded` and `blended` with `/normal` or `/multiply` are the exceptions:
+inside a group they run as groups of their own, and give the same
+picture as outside one. A motion inside a group draws while it is absent
+or at rest (no layer is needed) and fails only while it moves, so check
+with `psanim check --all`; write `t /rise { begingroup ... endgroup } enters`.
+
+Also `groupnesting`: a layer's body (`faded`, `blurred`, a motion's) that
+leaves a group open, or, inside a group, a `faded` body that closes a
+group it did not open. A frame that ends with a group open is
+`unclosedgroup`. Every `begingroup` needs its `endgroup` in the same
+procedure. psanim counts `begingroup` and `endgroup`; a group that
+`erasepage`, `showpage` or a `restore` ends behind its back is not seen,
+so do not end one that way.
+
 ## `stackunderflow` in a combinator
 
 Operands in the wrong order. The procedure is always last:

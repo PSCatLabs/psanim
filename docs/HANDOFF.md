@@ -45,9 +45,12 @@ Working and tested on macOS (Apple silicon):
   merged in `integration-0.2`; the merge commits say what met what.
 - PSCat: a git dependency on `feature/0.8.0`, pinned at `d385971` by
   `Cargo.lock`. The host API (PSCatLabs/pscat#1410) is merged there.
-  psanim uses none of 0.8.0's additions yet; PSCatLabs/pscat#1488 lists
-  them (line numbers in errors, the UTF-8 check, Unicode text, pixel
-  fonts).
+  PSCatLabs/pscat#1488 lists 0.8.0's additions (line numbers in errors,
+  the UTF-8 check, Unicode text, pixel fonts, transparency groups).
+  Transparency groups (`begingroup` / `endgroup`) work in movies beside
+  psanim's layers since #109: the prelude wraps them so the engine knows
+  one is open, and a layer that cannot work inside one says so
+  (`groupnesting`); `docs/pscat-integration.md` has the rules.
 
 ## Decisions worth knowing before changing things
 
