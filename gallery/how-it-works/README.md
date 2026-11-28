@@ -25,7 +25,10 @@ A 65.9 second architecture explainer of psanim, written in psanim
 - `storyboard` / `inbeat` for the sections; every time in a section is
   local to its beat. Each section dissolves into the next (`[0.6
   /dissolve]` between beats in the storyboard), so each paints its own
-  `ground` and the progress bar is drawn after them.
+  `ground` and the progress bar is drawn after them. The section
+  headings are drawn after the beats too, each leaving by the middle of
+  the dissolve and the next arriving from there, so two headings never
+  overlap.
 - `pkdiagram` `node`, `edge` (with `pulsetrain`), `connect` + `pulse` for
   single messages timed inside a `looped` scope, `arrow` on a hand-built
   path, `circled`.

@@ -107,7 +107,6 @@
 /pg-close codebox /c boxpoint 4 sub 1060 596.25 /c boxat def
 
 /beat-program {
-  (1) (A movie is one PostScript program) header
   % close on the code while it is typed, then pull back to make room for what it draws
   gsave
     stageband rectclip
@@ -150,7 +149,6 @@
 } def
 
 /beat-clock {
-  (2) (A frame is a function of its time) header
   0.7 /pop { (clock) ck-clock << /Fill /surface /Sub (now = ) ck-tick ck-dt mul 2 fmtfixed strcat /SubInk /accent >> node } enters
   1.0 /pop { (scene) ck-scene << /Fill /accent /Ink /bg /Sub (your procedure) /SubInk /bg >> node } enters
   1.3 /pop { (frame) ck-frame << /Fill /surface /Sub (a picture) >> node } enters
@@ -198,7 +196,6 @@
 /sc-g { 0.2 5.2 ramp 6 mul } def       % the little movie's clock, 0..6 (read inside the step that starts at 5.2)
 
 /beat-scopes {
-  (3) (Time scopes re-base the clock) header
   % --- space
   0.6 /fade {
     /sc-u 1.6 3.0 /cubic-inout tween def
@@ -260,7 +257,6 @@
 } def
 
 /beat-fanout {
-  (4) (So any frame renders alone, in any order) header
   0.6 { fo-cells 0.02 { pop /f-b exch def /fade { /line ink 1.5 setlinewidth f-b 3 roundpath stroke } entering } cascade } after
   0.8 /fade { /body 24 face /muted ink fo-grid /nw boxpoint 18 add moveto (the frames of ball.ps) show } enters
   0 1 23 { /f-i exch def
@@ -302,7 +298,6 @@
 /chip { /mono 15 face << /Shape /pill /Fill /bg /Stroke /line /Ink /fg /Size 15 /Font /mono >> node } def
 
 /beat-stack {
-  (5) (The stack) header
   gsave
     stageband rectclip
     st-zoom st-whole st-detail between lookat
@@ -352,6 +347,14 @@
   } leaving } during
 } def
 
+/section-heads [
+  [ /program  (1) (A movie is one PostScript program) ]
+  [ /clock    (2) (A frame is a function of its time) ]
+  [ /scopes   (3) (Time scopes re-base the clock) ]
+  [ /fanout   (4) (So any frame renders alone, in any order) ]
+  [ /stack    (5) (The stack) ]
+] def
+
 /scene {
   % each section paints its own ground, so the one going out is covered as the
   % next dissolves in over it; the progress bar is drawn after, over both
@@ -362,5 +365,12 @@
   /fanout  { ground beat-fanout } inbeat
   /stack   { ground beat-stack } inbeat
   /summary { ground beat-summary } inbeat
+  % The section headings are drawn over the beats, not dissolved with them:
+  % each one leaves by the middle of the dissolve out of its section and
+  % the next arrives from there, so two headings never show at once.
+  section-heads {
+    aload pop 3 -1 roll beatspan 0.3 sub exch 0.3 add exch   % the beat, less half of each dissolve
+    4 2 roll [ 3 1 roll /header cvx ] cvx during
+  } forall
   progress-bar
 } def
