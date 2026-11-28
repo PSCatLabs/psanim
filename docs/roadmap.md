@@ -168,6 +168,19 @@ Roughly in order of value:
    frames; cache static layers within a render; checkpoints on disk for
    persistent paintings.
 7. **Group opacity and placed layers in PSCat itself**, so layered and
-   moving frames can export as vector.
+   moving frames can export as vector. *Where it stands (#109):* PSCat
+   0.8.0 has group opacity (`begingroup` / `endgroup`, with `/Alpha` and
+   `/Blend /Normal` or `/Multiply`), and movies can use it: a group
+   inside any psanim layer or motion works (`crates/psanim/tests/groups.rs`,
+   the gallery's *Ridgelines*). psanim asks PSCat whether a group
+   is open in one place (`crates/psanim/src/groups.rs`,
+   PSCatLabs/pscat#1494): `faded` and `blended` (`/normal`, `/multiply`)
+   inside a group run as groups (`.groupfaded`), and blur, glow, `/add`,
+   `/screen`, the pixel effects and a moving motion stop with
+   `groupnesting`. psanim's own layers still swap the canvas;
+   nothing exports as vector, since psanim writes pixels only. Placed
+   layers (a motion's pose) have no PSCat counterpart. Moving `faded`
+   onto groups everywhere was not done: a full-canvas group costs about
+   twice the layer here.
 8. **Source positions in PSCat procedures**, for line numbers in
    backtraces.

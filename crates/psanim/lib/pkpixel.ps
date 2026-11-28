@@ -243,11 +243,10 @@
   /Diode5         (lib/fonts/diode5.ps)       % LED strip, 5 rows, capitals only
 >> def
 
-% Loading a face runs PSCat's file in a dictionary of its own, so the names
-% the file defines (PhosphorDict, PinpointDict, Diode7Dict, Diode5Dict and
-% pf-variant) never land in, or overwrite, the movie's own. pf-variant is
-% kept here for `pixelvariant`; the font dictionaries need no name at draw
-% time (BuildChar reads the font dictionary it is handed).
+% Loading a face runs PSCat's file in a dictionary of its own, so the one
+% name the file defines (pf-variant, its documented entry point for making
+% a variant) never lands in, or overwrites, the movie's own. It is kept
+% here for `pixelvariant`.
 /.pxvariant null def
 /.pxcache 8 dict def                        % face name -> its columns, once per load
 

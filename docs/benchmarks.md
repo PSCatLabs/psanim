@@ -134,6 +134,49 @@ thousand particles a frame render faster than real time on one core.
 A `glowing` around the whole call adds one layer (a few ms), not one per
 particle.
 
+## Transparency groups against `faded`
+
+A PSCat group (`<< /Alpha 0.5 >> begingroup ... endgroup`) against psanim's
+layer (`0.5 { ... } faded`) around the same drawing, at 1280x720, `psanim
+bench` (median ms a frame, three runs each, all shown), measured on
+2026-11-27 on the same M4 while other jobs were running (load average
+about 42), so the numbers are loose and only their ratios mean much.
+The last column is a `faded` inside a group, which runs as a group of its
+own; it was measured with the first version of #109 and not again since
+psanim began asking PSCat whether a group is open.
+
+| The drawing | Bare | `faded` | Group | `faded` inside a group |
+|---|---|---|---|---|
+| nothing | | 0.68 to 0.73 | 0.42 to 0.44 | |
+| one full-canvas `rectfill` | | 1.9 to 2.4 | 4.1 to 5.6 | |
+| one full-canvas `rectfill` at `0.5 setalpha` inside | | | 7.5 to 8.1 | |
+| 24 discs of radius 150, overlapping | 3.5 to 5.4 | 6.6 to 11.9 | 24.6 to 29.5 | 20.3 to 32.3 |
+
+Reading it: an empty group is cheaper than an empty layer (PSCat skips
+the rows the layer left transparent), but painting inside a group costs
+more than painting on a psanim layer, about twice for one fill and
+three times for two dozen large overlapping ones. Why was not
+measured; PSCat's design note says a group's layer keeps its own 16-bit
+shadow, which is a likely place to look. So
+for a fade alone `faded` stays the cheaper choice in a movie; a group is
+for what `faded` cannot do. The probes are one-line movies; to repeat,
+write the scene and run `psanim bench`.
+
+What #109 costs a movie that uses no groups (the checks it adds: one
+`groups_open` call per layer open and close, `.framedone` per frame, a
+look at the hint slots per native operator call), main's binary against
+the branch's, alternating, one at a time, on 2026-11-27 (load average 16
+to 58, so loose):
+
+| Probe | main | #109 |
+|---|---|---|
+| Afterglow, 4 s (120 frames) rendered to PNGs on one thread, user CPU s | 23.4, 23.7, 30.3 | 22.4, 28.3, 28.7 |
+| Neon, the same | 13.9, 10.4, 12.0 | 11.4, 13.8, 13.5 |
+| 200,000 calls of `now` in one frame, `psanim bench` median ms | 11.40, 11.45, 10.87 | 11.90, 11.48, 11.18 |
+
+No difference shows through the noise; the last probe bounds the
+per-operator cost at a few nanoseconds a call at most.
+
 ## What these numbers are not
 
 - Not a comparison with other animation systems: none was run.

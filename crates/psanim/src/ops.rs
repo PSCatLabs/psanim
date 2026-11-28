@@ -14,9 +14,10 @@ use pscat::host::{PathSegment, Value};
 use pscat::{Interp, Page, PsError};
 
 use crate::ctx::{
-    ClipMask, Ctx, LayerEnd, MAX_LAYERS, MAX_SCOPES, Running, TimeScope, hash01, wiggle,
+    ClipMask, Ctx, FadeGroup, LayerEnd, MAX_LAYERS, MAX_SCOPES, Running, TimeScope, hash01, wiggle,
 };
 use crate::ease;
+use crate::groups::{groups_open, innermost_group};
 use crate::pathmath;
 use crate::plane::{self, Plane};
 use crate::raster::{self, Blend};
@@ -30,13 +31,112 @@ pub(crate) fn fail<T>(ctx: &Shared, err: PsError, hint: impl Into<String>) -> Re
     Err(err)
 }
 
+/// Fail as psanim's `groupnesting`: a layer and a transparency group were
+/// nested in a way that would draw the wrong picture.
+pub(crate) fn group_fail<T>(
+    ctx: &Shared,
+    message: impl Into<String>,
+    hint: impl Into<String>,
+) -> Result<T, PsError> {
+    ctx.borrow_mut().failure = Some(("groupnesting", message.into()));
+    fail(ctx, PsError::Rangecheck, hint)
+}
+
+/// Refuse to open a layer, or to work on the canvas's pixels, while a
+/// transparency group is open: the program is painting on the group's
+/// layer, and a canvas swap would exchange the page below it, so the
+/// effect would be lost and the group would composite onto the wrong page.
+/// (Whether one is open is `crate::groups`'s to say.)
+pub(crate) fn refuse_in_group(i: &Interp, ctx: &Shared, who: &str, example: &str) -> OpResult {
+    if groups_open(i) == 0 {
+        return Ok(());
+    }
+    group_fail(
+        ctx,
+        format!("{who} cannot run inside begingroup ... endgroup"),
+        format!(
+            "psanim draws this on a layer of its own, and inside a transparency group the program paints on the group's layer, which psanim cannot reach: the effect would be lost. Write it with the group inside the effect, or closed before it: {example}. For opacity alone, `faded` works inside a group (it becomes a group itself)."
+        ),
+    )
+}
+
+/// Fail when a group opened inside `who`'s body is still open as it ends.
+/// A psanim layer only ever opens with no group open, so any group open
+/// now was opened inside it.
+pub(crate) fn refuse_unclosed_inside(i: &Interp, ctx: &Shared, who: &str) -> OpResult {
+    if groups_open(i) == 0 {
+        return Ok(());
+    }
+    unclosed_inside(ctx, who)
+}
+
+fn unclosed_inside(ctx: &Shared, who: &str) -> OpResult {
+    group_fail(
+        ctx,
+        format!("a transparency group opened inside {who} was not closed inside it"),
+        "end each begingroup with endgroup inside the same body: a group left open escapes the effect and composites onto the page below it",
+    )
+}
+
+/// `faded` or `blended` while a transparency group is open: run the body as
+/// a group of its own, which composites where the program is painting
+/// (the open group's layer). Leaves the group's dictionary and `true` for
+/// the prelude's `.groupfaded`.
+fn begin_as_group(i: &mut Interp, ctx: &Shared, end: &LayerEnd) -> OpResult {
+    let mut entries = vec![("Alpha".to_string(), Value::Real(end.opacity))];
+    match end.blend {
+        Blend::Normal => {}
+        Blend::Multiply => entries.push(("Blend".to_string(), Value::Name("Multiply".into()))),
+        Blend::Add | Blend::Screen => {
+            return group_fail(
+                ctx,
+                "`blended` with /add or /screen cannot run inside begingroup ... endgroup",
+                "a transparency group blends only /normal and /multiply, and psanim's own blend modes need a layer of their own, which a group's marks never reach. Put the group inside it instead (`1 /add { << >> begingroup ... endgroup } blended`), or close the group first.",
+            );
+        }
+    }
+    i.push_value(&Value::Dict(entries))?;
+    i.push_bool(true);
+    ctx.borrow_mut().fades.push(FadeGroup {
+        who: end.who,
+        opened: None,
+    });
+    Ok(())
+}
+
 pub(crate) fn reg<F>(interp: &mut Interp, ctx: &Shared, name: &str, f: F)
 where
     F: Fn(&mut Interp, &Shared) -> OpResult + 'static,
 {
     let ctx = ctx.clone();
+    let op: Rc<str> = name.into();
     interp
-        .register_operator(name, move |i| f(i, &ctx))
+        .register_operator(name, move |i| {
+            // A hint or failure describes the error this call raises, and
+            // nothing later: one a `stopped` caught must not be read as the
+            // diagnosis of the error that finally escapes.
+            {
+                let mut c = ctx.borrow_mut();
+                if c.hint_op.is_some() || c.hint.is_some() || c.failure.is_some() {
+                    c.hint = None;
+                    c.failure = None;
+                    c.hint_op = None;
+                }
+            }
+            let r = f(i, &ctx);
+            if let Err(e) = &r {
+                let mut c = ctx.borrow_mut();
+                if c.hint.is_some() || c.failure.is_some() {
+                    // The command the interpreter will name for this error:
+                    // the operator, or for `undefined` the missing name.
+                    c.hint_op = Some(match e {
+                        PsError::Undefined(n) => n.as_str().into(),
+                        _ => op.clone(),
+                    });
+                }
+            }
+            r
+        })
         .expect("psanim's operator names are valid and few");
 }
 
@@ -335,6 +435,12 @@ pub(crate) fn with_canvas_pixels(
     ctx: &Shared,
     f: impl FnOnce(&mut [u8], usize, usize, &mut Vec<u8>),
 ) -> OpResult {
+    refuse_in_group(
+        i,
+        ctx,
+        "`blurlayer`, `glowlayer`, `vignette` or `filmgrain`",
+        "`<< /Alpha 0.5 >> begingroup ... endgroup 4 blurlayer`",
+    )?;
     let (w, h) = i.canvas_size();
     let spare = ctx.borrow_mut().spare.take();
     let spare = match spare {
@@ -356,7 +462,10 @@ pub(crate) fn with_canvas_pixels(
     Ok(())
 }
 
-pub(crate) fn begin_layer(i: &mut Interp, ctx: &Shared) -> OpResult {
+/// Open a layer for `who` (a phrase naming the word, for an error) and
+/// `example` (how to write it with the group inside).
+pub(crate) fn begin_layer(i: &mut Interp, ctx: &Shared, who: &str, example: &str) -> OpResult {
+    refuse_in_group(i, ctx, who, example)?;
     if ctx.borrow().layers.len() >= MAX_LAYERS {
         return fail(
             ctx,
@@ -379,8 +488,14 @@ pub(crate) fn begin_layer(i: &mut Interp, ctx: &Shared) -> OpResult {
 }
 
 /// Start a layer whose ending is decided now and applied by `.layerend`.
-fn begin_pending(i: &mut Interp, ctx: &Shared, end: LayerEnd) -> OpResult {
-    begin_layer(i, ctx)?;
+fn begin_pending(
+    i: &mut Interp,
+    ctx: &Shared,
+    end: LayerEnd,
+    who: &str,
+    example: &str,
+) -> OpResult {
+    begin_layer(i, ctx, who, example)?;
     ctx.borrow_mut().pending.push(end);
     Ok(())
 }
@@ -391,6 +506,7 @@ const PLAIN: LayerEnd = LayerEnd {
     blur: 0.0,
     glow: (0.0, 0.0),
     clip: None,
+    who: "`faded`",
 };
 
 /// The clip `.clipmask` captured for the effect about to begin, or none.
@@ -403,6 +519,13 @@ fn take_clip(ctx: &Shared) -> Option<ClipMask> {
 /// on a fresh layer, and true; or false when the clip is empty and there
 /// is nothing to paint.
 fn mask_begin(i: &mut Interp, ctx: &Shared) -> OpResult {
+    if groups_open(i) > 0 {
+        // The effect asking for the mask refuses to run here, naming
+        // itself; painting the mask would mark the group's layer.
+        ctx.borrow_mut().clip_taken = Some(None);
+        i.push_bool(false);
+        return Ok(());
+    }
     let (w, h) = i.canvas_size();
     let path = i.current_path()?;
     let mut b = [
@@ -446,7 +569,12 @@ fn mask_begin(i: &mut Interp, ctx: &Shared) -> OpResult {
         i.push_bool(false);
         return Ok(());
     }
-    begin_layer(i, ctx)?;
+    begin_layer(
+        i,
+        ctx,
+        "`blurred`, `glowing`, `blurlayer`, `glowlayer`, `vignette` or `filmgrain`",
+        "`4 { << /Alpha 0.5 >> begingroup ... endgroup } blurred`",
+    )?;
     i.push_numbers(&[x0, y0, x1 - x0, y1 - y0]);
     i.push_bool(true);
     Ok(())
@@ -510,13 +638,17 @@ fn blend_named(ctx: &Shared, name: &str) -> Result<Blend, PsError> {
     }
 }
 
-fn end_layer(i: &mut Interp, ctx: &Shared, opacity: f64, blend: Blend) -> OpResult {
-    let Some(mut below) = ctx.borrow_mut().layers.pop() else {
+fn end_layer(i: &mut Interp, ctx: &Shared, opacity: f64, blend: Blend, who: &str) -> OpResult {
+    if ctx.borrow().layers.is_empty() {
         return fail(
             ctx,
             PsError::Rangecheck,
             "endlayer without a matching beginlayer",
         );
+    }
+    refuse_unclosed_inside(i, ctx, who)?;
+    let Some(mut below) = ctx.borrow_mut().layers.pop() else {
+        return fail(ctx, PsError::Rangecheck, "a layer is missing");
     };
     raster::composite(
         below.premultiplied_rgba8_mut(),
@@ -1329,26 +1461,45 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     });
 
     // --- layers -----------------------------------------------------------------
-    reg(interp, ctx, "beginlayer", begin_layer);
+    reg(interp, ctx, "beginlayer", |i, ctx| {
+        begin_layer(
+            i,
+            ctx,
+            "`beginlayer`",
+            "`beginlayer << /Alpha 0.5 >> begingroup ... endgroup 1 endlayer`",
+        )
+    });
     // The native halves of faded / blended / blurred / glowing: take the
-    // operands now, so the body runs with the caller's stack on top.
+    // operands now, so the body runs with the caller's stack on top. Each
+    // leaves a boolean: true when the body is to run as a transparency
+    // group (faded and blended inside one), with the group's dictionary
+    // under it.
     reg(interp, ctx, ".fadebegin", |i, ctx| {
         let opacity = i.pop_f64()?;
-        begin_pending(i, ctx, LayerEnd { opacity, ..PLAIN })
+        let end = LayerEnd { opacity, ..PLAIN };
+        if groups_open(i) > 0 {
+            return begin_as_group(i, ctx, &end);
+        }
+        begin_pending(i, ctx, end, "`faded`", "")?;
+        i.push_bool(false);
+        Ok(())
     });
     reg(interp, ctx, ".blendbegin", |i, ctx| {
         let name = i.pop_name()?;
         let opacity = i.pop_f64()?;
         let blend = blend_named(ctx, &name)?;
-        begin_pending(
-            i,
-            ctx,
-            LayerEnd {
-                opacity,
-                blend,
-                ..PLAIN
-            },
-        )
+        let end = LayerEnd {
+            opacity,
+            blend,
+            who: "`blended`",
+            ..PLAIN
+        };
+        if groups_open(i) > 0 {
+            return begin_as_group(i, ctx, &end);
+        }
+        begin_pending(i, ctx, end, "`blended`", "")?;
+        i.push_bool(false);
+        Ok(())
     });
     reg(interp, ctx, ".blurbegin", |i, ctx| {
         let blur = i.pop_f64()? * ctx.borrow().unit_scale();
@@ -1359,9 +1510,14 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             LayerEnd {
                 blur,
                 clip,
+                who: "`blurred`",
                 ..PLAIN
             },
-        )
+            "`blurred`",
+            "`4 { << /Alpha 0.5 >> begingroup ... endgroup } blurred`",
+        )?;
+        i.push_bool(false);
+        Ok(())
     });
     reg(interp, ctx, ".glowbegin", |i, ctx| {
         let (strength, radius) = (i.pop_f64()?, i.pop_f64()?);
@@ -1373,9 +1529,14 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             LayerEnd {
                 glow: (radius, strength),
                 clip,
+                who: "`glowing`",
                 ..PLAIN
             },
-        )
+            "`glowing`",
+            "`8 1 { << /Alpha 0.5 >> begingroup ... endgroup } glowing`",
+        )?;
+        i.push_bool(false);
+        Ok(())
     });
     reg(interp, ctx, ".maskbegin", mask_begin);
     reg(interp, ctx, ".maskend", mask_end);
@@ -1387,6 +1548,8 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 "a layer combinator ended without having begun",
             );
         };
+        let who = end.who;
+        refuse_unclosed_inside(i, ctx, who)?;
         let px = ctx.borrow().px_scale;
         let (cw, ch) = i.canvas_size();
         let rect = ctx.borrow().effect_rect(cw as usize, ch as usize);
@@ -1416,24 +1579,116 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             }
             ctx.borrow_mut().recycle_mask(clip);
         }
-        end_layer(i, ctx, end.opacity, end.blend)
+        end_layer(i, ctx, end.opacity, end.blend, who)
     });
     reg(interp, ctx, "endlayer", |i, ctx| {
         let opacity = i.pop_f64()?;
-        end_layer(i, ctx, opacity, Blend::Normal)
+        end_layer(
+            i,
+            ctx,
+            opacity,
+            Blend::Normal,
+            "`beginlayer` ... `endlayer`",
+        )
     });
     reg(interp, ctx, "endlayerblend", |i, ctx| {
         let name = i.pop_name()?;
         let opacity = i.pop_f64()?;
         let blend = blend_named(ctx, &name)?;
-        end_layer(i, ctx, opacity, blend)
+        end_layer(i, ctx, opacity, blend, "`beginlayer` ... `endlayerblend`")
+    });
+    // `.groupfaded` (the prelude) runs a `faded` or `blended` body as a
+    // transparency group: these note the group it opened, and check at the
+    // end that the body left that group the innermost one, neither closing
+    // it (an `endgroup` in the body) nor leaving one of its own open.
+    reg(interp, ctx, ".groupopened", |i, ctx| {
+        let now = (groups_open(i), innermost_group(i));
+        let mut c = ctx.borrow_mut();
+        match c.fades.last_mut() {
+            Some(f) if f.opened.is_none() => f.opened = Some(now),
+            // `.groupfaded` called on its own (the tests do): a fade.
+            _ => c.fades.push(FadeGroup {
+                who: "`faded`",
+                opened: Some(now),
+            }),
+        }
+        Ok(())
+    });
+    reg(interp, ctx, ".groupbodydone", |i, ctx| {
+        let Some(f) = ctx.borrow().fades.last().cloned() else {
+            return fail(
+                ctx,
+                PsError::Rangecheck,
+                ".groupbodydone outside .groupfaded",
+            );
+        };
+        let (count, id) = f.opened.unwrap_or((0, None));
+        let (now, now_id) = (groups_open(i), innermost_group(i));
+        if now > count {
+            return unclosed_inside(ctx, f.who);
+        }
+        if now < count || now_id != id {
+            return group_fail(
+                ctx,
+                format!(
+                    "the body of {} closed a transparency group it did not open",
+                    f.who
+                ),
+                "an endgroup belongs in the same procedure as its begingroup: inside a group, `faded` runs its body as a group of its own, and an endgroup in the body closes that one instead",
+            );
+        }
+        Ok(())
+    });
+    // The end of a frame's scene (or overlay), inside its run: a group
+    // still open there is a misplaced `endgroup`. (PSCat would close it at
+    // the end of the run, with its marks; the check must come before.)
+    reg(interp, ctx, ".framedone", |i, ctx| {
+        let open = groups_open(i);
+        if open == 0 {
+            return Ok(());
+        }
+        ctx.borrow_mut().failure = Some((
+            "unclosedgroup",
+            format!("{open} transparency group(s) opened with begingroup were never closed"),
+        ));
+        fail(
+            ctx,
+            PsError::Rangecheck,
+            "every begingroup needs an endgroup in the same frame, in the same procedure",
+        )
+    });
+    reg(interp, ctx, ".groupfadedone", |_, ctx| {
+        ctx.borrow_mut().fades.pop();
+        Ok(())
+    });
+    // `.groupfaded` found that the body ran `grestore` past the graphics
+    // state it began with: a group's start is a floor it cannot pass.
+    reg(interp, ctx, ".groupgrestored", |_, ctx| {
+        let who = ctx.borrow().fades.last().map_or("`faded`", |f| f.who);
+        group_fail(
+            ctx,
+            format!("the body of {who} ran grestore past the graphics state it began with"),
+            "inside a transparency group, `faded` and `blended` run as a group of their own, and the start of a group is a floor `grestore` cannot pass. Pair every grestore in the body with a gsave in the body.",
+        )
     });
     // The native halves of blurlayer and glowlayer, after `.clipmask`.
     reg(interp, ctx, ".blurlayer", |i, ctx| {
+        refuse_in_group(
+            i,
+            ctx,
+            "`blurlayer`",
+            "`<< >> begingroup ... endgroup 4 blurlayer`",
+        )?;
         let radius = i.pop_f64()?;
         spread_layer(i, ctx, radius, None)
     });
     reg(interp, ctx, ".glowlayer", |i, ctx| {
+        refuse_in_group(
+            i,
+            ctx,
+            "`glowlayer`",
+            "`<< >> begingroup ... endgroup 8 1 glowlayer`",
+        )?;
         let (strength, radius) = (i.pop_f64()?, i.pop_f64()?);
         spread_layer(i, ctx, radius, Some(strength))
     });
@@ -1441,6 +1696,12 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     // work within the component's box and hand back what the clip in force
     // (a rotated box's own outline) leaves outside it.
     reg(interp, ctx, ".vignette", |i, ctx| {
+        refuse_in_group(
+            i,
+            ctx,
+            "`vignette`",
+            "`<< >> begingroup ... endgroup 0.5 vignette`",
+        )?;
         let amount = i.pop_f64()?.clamp(0.0, 1.0);
         let clip = take_clip(ctx);
         let (cw, ch) = i.canvas_size();
@@ -1473,6 +1734,12 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         Ok(())
     });
     reg(interp, ctx, ".filmgrain", |i, ctx| {
+        refuse_in_group(
+            i,
+            ctx,
+            "`filmgrain`",
+            "`<< >> begingroup ... endgroup 0.2 filmgrain`",
+        )?;
         let amount = i.pop_f64()?.clamp(0.0, 1.0);
         let clip = take_clip(ctx);
         let (seed, frame) = {

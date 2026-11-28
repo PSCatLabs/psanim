@@ -101,7 +101,11 @@ test contents, not starting points.
    `true charpath`), then `0 u trimpath stroke` shows the first `u` of it.
 5. **Layers group.** `alpha { ... } faded` fades a whole drawing as one
    thing; `radius strength { ... } glowing` adds light; `[...] reel`
-   joins clips with dissolves, wipes and pushes.
+   joins clips with dissolves, wipes and pushes. PSCat's own
+   `<< /Alpha a >> begingroup ... endgroup` fades as one thing too; a
+   `faded` inside one works; `blurred`, `glowing` and a moving motion do
+   not and stop the frame with `groupnesting`: put the group inside the
+   layer ([pitfalls](references/pitfalls.md)).
 
 ## Rules that save a debugging round
 

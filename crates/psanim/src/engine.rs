@@ -1116,7 +1116,7 @@ impl Movie {
                         c.canvas = Canvas::Overlay;
                     }
                     let program = format!(
-                        "clear cleardictstack grestoreall initgraphics {} srand {overlay}",
+                        "clear cleardictstack grestoreall initgraphics {} srand {overlay} .framedone",
                         self.meta.seed
                     );
                     let drawn = self
@@ -1283,7 +1283,10 @@ impl Movie {
         if fresh_canvas {
             p.push_str(&self.ground());
         }
-        p.push_str(&format!("{} srand {}", self.meta.seed, self.scene));
+        p.push_str(&format!(
+            "{} srand {} .framedone",
+            self.meta.seed, self.scene
+        ));
         p
     }
 
@@ -1530,6 +1533,22 @@ fn describe(interp: &mut Interp, ctx: &Rc<RefCell<Ctx>>, phase: Phase, err: &PsE
         (Some(c), _, _) => format!("{} in `{c}`", d.name),
         (None, _, _) => d.name.to_string(),
     };
+    // An operator that knew better than the PostScript error's name, if
+    // the error is the one it raised (a `stopped` may have caught that one
+    // and a different error escaped since).
+    let (failure, hint) = {
+        let mut c = ctx.borrow_mut();
+        let ours = c
+            .hint_op
+            .take()
+            .is_some_and(|op| d.command.as_deref() == Some(&*op));
+        let (f, h) = (c.failure.take(), c.hint.take());
+        if ours { (f, h) } else { (None, None) }
+    };
+    if let Some((kind, message)) = failure {
+        e.kind = kind.to_string();
+        e.message = message;
+    }
     // The program's own procedures; the prelude's plumbing (a combinator's
     // `{ exec .timepop }`) would only be noise between them.
     e.backtrace = d
@@ -1560,11 +1579,7 @@ fn describe(interp: &mut Interp, ctx: &Rc<RefCell<Ctx>>, phase: Phase, err: &PsE
     stack.reverse();
     e.stack = stack;
     interp.clear_operands();
-    e.hint = ctx
-        .borrow_mut()
-        .hint
-        .take()
-        .or_else(|| explain(d.name, d.command.as_deref()));
+    e.hint = hint.or_else(|| explain(d.name, d.command.as_deref()));
     e
 }
 

@@ -45,7 +45,8 @@ pub struct Error {
     pub phase: Phase,
     /// A short machine-readable kind: a PostScript error name
     /// (`undefined`, `typecheck`, `limitexceeded`, `interrupt`, ...) or one
-    /// of psanim's own (`declaration`, `options`, `unclosedlayer`).
+    /// of psanim's own (`declaration`, `options`, `unclosedlayer`,
+    /// `unclosedgroup`, `groupnesting`).
     pub kind: String,
     /// The offending PostScript command, when the interpreter knows it.
     pub command: Option<String>,

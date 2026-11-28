@@ -115,6 +115,9 @@ pub(crate) struct Ctx {
     /// its body is done. Kept here, not on the operand stack, so the body
     /// runs with the caller's operands on top.
     pub pending: Vec<LayerEnd>,
+    /// Each `faded` / `blended` running its body as a transparency group
+    /// (because one was open around it), innermost last.
+    pub fades: Vec<FadeGroup>,
     /// The pose each open motion will place its layer under.
     pub poses: Vec<crate::motion::Pose>,
     /// Viewports opened by `within` and `fitted`: the width and height the
@@ -171,6 +174,15 @@ pub(crate) struct Ctx {
     /// A plain-language explanation an operator leaves before it fails,
     /// picked up by the engine for the error report.
     pub hint: Option<String>,
+    /// psanim's own kind and message for the error an operator is about
+    /// to raise, in place of the PostScript error's name (`groupnesting`
+    /// says more than `rangecheck`).
+    pub failure: Option<(&'static str, String)>,
+    /// The command the error that left `hint` / `failure` names (the
+    /// operator, or the missing name of an `undefined`): they describe an
+    /// error only if it is the one that escapes (a `stopped` may have
+    /// caught theirs).
+    pub hint_op: Option<std::rc::Rc<str>>,
 }
 
 /// One open component: its own clock, length, seed and parameters.
@@ -215,6 +227,18 @@ pub(crate) struct LayerEnd {
     pub glow: (f64, f64),
     /// For a blur or glow, the clip in force when it began, if it clips.
     pub clip: Option<ClipMask>,
+    /// The word that began it, for an error: `faded`, `blurred`, ...
+    pub who: &'static str,
+}
+
+/// A `faded` or `blended` run as a transparency group: who it is, and the
+/// group it opened, to check at its end that the body left that group the
+/// innermost one (see `crate::groups`).
+#[derive(Clone, Debug)]
+pub(crate) struct FadeGroup {
+    pub who: &'static str,
+    /// Groups open, and the innermost, once its own group was open.
+    pub opened: Option<(usize, Option<crate::groups::GroupId>)>,
 }
 
 pub(crate) const MAX_SCOPES: usize = 256;
@@ -242,6 +266,7 @@ impl Ctx {
             canvas: Canvas::Fresh,
             layers: Vec::new(),
             pending: Vec::new(),
+            fades: Vec::new(),
             poses: Vec::new(),
             views: Vec::new(),
             spare: None,
@@ -262,6 +287,8 @@ impl Ctx {
             base_dir: None,
             measured_reels: Vec::new(),
             hint: None,
+            failure: None,
+            hint_op: None,
         }
     }
 
@@ -367,6 +394,7 @@ impl Ctx {
             self.recycle_mask(m);
         }
         self.poses.clear();
+        self.fades.clear();
         self.views.clear();
         self.comps.clear();
         self.particles.clear();
@@ -375,6 +403,8 @@ impl Ctx {
         self.planes.clear();
         self.beat_sides.clear();
         self.hint = None;
+        self.failure = None;
+        self.hint_op = None;
     }
 }
 

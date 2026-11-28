@@ -522,7 +522,7 @@ Replace the current path by the outline of a stroke along it whose width follows
 
 `-  beginlayer  -`
 
-Start drawing on a separate transparent layer. The graphics state is unchanged.
+Start drawing on a separate transparent layer. The graphics state is unchanged. Not inside a PSCat begingroup (groupnesting).
 
 ### `endlayer`
 
@@ -552,25 +552,25 @@ Add a soft halo around everything on the current layer: a blurred copy added bac
 
 `alpha proc  faded  -`
 
-Draw proc as one group at opacity alpha. Unlike setalpha, overlapping shapes inside do not show through each other.
+Draw proc as one group at opacity alpha. Unlike setalpha, overlapping shapes inside do not show through each other. Inside a PSCat begingroup it runs as a group of its own; giving the outer group an /Alpha is cheaper.
 
 ### `blended`
 
 `alpha /mode proc  blended  -`
 
-Draw proc as a group composited with a blend mode.
+Draw proc as a group composited with a blend mode. Inside a PSCat begingroup, /normal and /multiply run as a group of their own; /add and /screen stop with groupnesting.
 
 ### `blurred`
 
 `radius proc  blurred  -`
 
-Draw proc out of focus. The blur stays inside the clip in force when it begins (a within box, a rectclip, any clip path).
+Draw proc out of focus. The blur stays inside the clip in force when it begins (a within box, a rectclip, any clip path). Not inside a PSCat begingroup (groupnesting): put the group inside proc.
 
 ### `glowing`
 
 `radius strength proc  glowing  -`
 
-Draw proc with a halo of light. Try 8 1 for solid shapes, 24 1.6 for thin strokes. The halo stays inside the clip in force when it begins.
+Draw proc with a halo of light. Try 8 1 for solid shapes, 24 1.6 for thin strokes. The halo stays inside the clip in force when it begins. Not inside a PSCat begingroup (groupnesting): put the group inside proc.
 
 ### `crossfade`
 

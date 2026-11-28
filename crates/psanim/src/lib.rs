@@ -53,6 +53,7 @@ mod ctx;
 pub mod ease;
 mod engine;
 mod error;
+mod groups;
 pub mod motion;
 mod ops;
 mod paint;

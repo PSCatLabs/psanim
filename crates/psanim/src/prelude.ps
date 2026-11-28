@@ -149,10 +149,48 @@
 % --- layers ------------------------------------------------------------------
 % The body of each runs with the caller's operands on top: the opacity,
 % radius and so on are taken first and kept by the engine.
-/faded   { exch   .fadebegin  exec .layerend } bind def      % alpha proc           draw proc as a group at one opacity
-/blended { 3 1 roll .blendbegin exec .layerend } bind def    % alpha /mode proc     ... with a blend mode
-/blurred { exch   .clipmask .blurbegin  exec .layerend } bind def    % radius proc          draw proc out of focus
-/glowing { 3 1 roll .clipmask .glowbegin  exec .layerend } bind def  % radius strength proc draw proc with a halo
+%
+% PSCat's own `begingroup` / `endgroup` are left as they are. While a group
+% is open the program paints on the group's layer and the canvas psanim
+% would swap is the page below it, so a psanim layer cannot work there: the
+% native halves refuse with `groupnesting`, except that `faded` and
+% `blended` (/normal, /multiply) run their body as a group of their own
+% (their native half leaves the group's dictionary and true).
+%
+% proc dict .groupfaded -   run proc as a transparency group, by a layer's
+% rules: its marks get the caller's alpha and blend mode (a group would
+% start them at 1 and /Normal, and composite at the caller's alpha), and
+% the graphics state it leaves outlasts it, gsave levels included (where
+% `endgroup` would put back the state `begingroup` had and drop the levels
+% opened since). Two flatness values mark the group's own start (a floor
+% `grestore` stops at) and the level the body begins at, so the levels the
+% body left open can be taken off, kept, and put back after `endgroup`.
+/.groupfaded {
+  currentalpha currentblendmode currentflat
+  1 setalpha /Normal setblendmode 76.375 setflat
+  4 -1 roll begingroup
+  87.625 setflat gsave
+  setflat setblendmode setalpha
+  .groupopened
+  exec
+  .groupbodydone
+  gstate currentgstate
+  0 {
+    grestore
+    currentflat 87.625 sub abs 0.001 lt { exit } if
+    currentflat 76.375 sub abs 0.001 lt { .groupgrestored } if
+    dup 64 ge { .groupgrestored } if
+    gstate currentgstate exch 1 add
+  } loop
+  endgroup
+  { setgstate gsave } repeat
+  setgstate
+  .groupfadedone
+} bind def
+/faded   { exch   .fadebegin  { .groupfaded } { exec .layerend } ifelse } bind def   % alpha proc           draw proc as a group at one opacity
+/blended { 3 1 roll .blendbegin { .groupfaded } { exec .layerend } ifelse } bind def % alpha /mode proc     ... with a blend mode
+/blurred { exch   .clipmask .blurbegin pop exec .layerend } bind def     % radius proc          draw proc out of focus
+/glowing { 3 1 roll .clipmask .glowbegin pop exec .layerend } bind def   % radius strength proc draw proc with a halo
 /blurlayer { .clipmask .blurlayer } bind def                         % radius               blur the layer so far
 /glowlayer { .clipmask .glowlayer } bind def                         % radius strength      add a halo to it
 /vignette { .clipmask .vignette } bind def                           % amount               darken toward the corners
