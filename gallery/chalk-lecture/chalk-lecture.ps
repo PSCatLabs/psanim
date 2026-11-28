@@ -110,7 +110,7 @@ board            % in setup: makes the board the chalk's surface (the paint is n
 /sth th sin def /cth th cos def
 /px 368 def /py 565 def /len 310 def /rb 17 def
 /bx px len sth mul add def /by py len cth mul sub def
-/mg 185 def                                 % the weight's arrow
+/mg 215 def                                 % the weight's arrow
 /tx bx mg sth mul cth mul sub def /ty by mg sth mul sth mul sub def   % its part along the arc
 
 /pen  << /Width 2.6 /Hand 0.6 >> def
@@ -157,7 +157,7 @@ newpath 0 1 6 { 7 div /f exch def
   f [tx ty] [bx by mg sub] between aload pop moveto
   f 0.08 add [tx ty] [bx by mg sub] between aload pop lineto } for
 /white thin 900 item
-newpath bx by moveto tx ty lineto tx ty 180 th add arrowhead /pink pen dr item
+newpath bx rb cth mul sub by rb sth mul sub moveto tx ty lineto tx ty 180 th add arrowhead /pink pen dr item   % from the bob's edge
 newpath (mg\\sin\\theta) tx 128 sub ty 44 sub lab /pink txt wr item
 0.4 pause
 % the arc the bob swings on

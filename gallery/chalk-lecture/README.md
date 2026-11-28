@@ -41,13 +41,14 @@ The structure was chosen by measuring it (see the numbers below):
   declared 30, and `fps`, the overlay's `frame` and `dt`, and `dt` in
   setup are the output's (PSCatLabs/psanim#122); a rule built on them
   either keeps a stroke early or lets it vanish for a frame. Checked at
-  `--fps` 24, 25, 30000/1001, 30 and 60, rendering 0 to 4 s, 15 to 19 s
-  and 30 to 34.5 s with the stick left out (`--param nostick=1`): no
-  pixel gets darker by more than 40 levels from one frame to the next
-  (the largest drop is 37 levels, as at the declared rate). The earlier
-  rule, built on the overlay's `frame` and `dt`, lost chalk for a frame
-  on 14, 8, 2 and 13 pairs of frames in the first 4 s at 24, 25,
-  30000/1001 and 60.
+  `--fps` 24, 25, 29.97, 60 and 120 (the CLI takes a decimal, not
+  30000/1001), rendering the 0.45 s around the end of eight strokes
+  spread through the film (the first, the last, which ends exactly on a
+  step, and six between) with the stick left out (`--param nostick=1`):
+  the chalk in the stroke's area never goes down from one output frame to
+  the next beyond texture noise (at most 0.03% of the stroke's ink, at
+  120). The earlier rule, built on the overlay's `frame` and `dt`, lost
+  19 to 26% of it for a frame on the four strokes tried at 60.
 - **Strokes as data**, as in Chalk Proof: in setup every path (lettering
   from `sgpath`, formulas from `mkpath` and `mkalign`, the diagram) is
   split into its subpaths, one stroke each, because `/From` and `/To`
