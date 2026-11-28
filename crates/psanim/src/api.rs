@@ -1809,7 +1809,7 @@ pub const API: &[ApiEntry] = &[
         "pkink",
         "revealband",
         "u0 u1 width proc  revealband  -",
-        "Like `revealalong`, for the stretch of the path between u0 and u1 only. On a persistent canvas give it where the pen was a frame ago and where it is now, so a translucent medium is laid down once and not again on every frame.",
+        "Like `revealalong`, for the stretch of the path between u0 and u1 only. On a persistent canvas, `paintplan` (a stroke kept once, whole, and shown in progress in the overlay) is exact where pieces laid frame by frame are not: they can leave seams or extra ink at their joins.",
     ),
     e(
         "pkink",
