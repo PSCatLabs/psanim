@@ -1,0 +1,277 @@
+%!PS
+% Poster: 36
+% Chalk Lecture
+%
+% The simple pendulum, worked on a green board in thirty-three seconds
+% of chalk. A pivot, a string and a bob are drawn, the angle and the
+% weight on the bob; the weight is split, and the part along the arc
+% gives Newton's law for the swing. For small angles sin theta is
+% theta, the equation is a harmonic oscillator, and its period is
+% T = 2 pi sqrt(L/g): about two seconds for a metre of string.
+%
+% Techniques
+%   - Every stroke of the chalk is grown, not revealed: the stroke in
+%     progress is drawn each frame with `/From 0 /To u`, which PSCat
+%     0.8.0 made exact (behind the tip, what is drawn never changes).
+%   - Persistent canvas, with the stroke in progress in `overlay`. The
+%     board is painted once, on frame 0; a stroke is painted onto the
+%     board once, whole, on the frame it is finished, and until then is
+%     regrown from 0 in `overlay`, which is shown and never kept. Chalk
+%     is not opaque, so regrowing it on the kept canvas would lay the
+%     same stroke down again every frame.
+%   - Strokes as data, as in Chalk Proof: every path (lettering from
+%     sgpath, formulas from mkpath, the diagram) is split in setup into
+%     its subpaths, one per stroke, each with its own times. A hand's
+%     pace: each stroke takes a moment plus its length over a speed, and
+%     the chalk is lifted for a time that grows with the distance to the
+%     next stroke.
+%   - The commit is by frame number, not by comparing `now dt sub` with
+%     an end time: in floating point a boundary can fall in two frames'
+%     intervals, and a stroke painted twice comes out heavier
+%     (PSCatLabs/psanim#121). Frames are counted at the declared rate,
+%     named once as `rate`: rendered at another `--fps`, the scene still
+%     steps at the declared rate while `fps` and the overlay's `frame`
+%     and `dt` are the output's (PSCatLabs/psanim#122). The overlay asks
+%     whether the scene has kept a stroke yet, by the scene's own steps,
+%     and shows it (at most whole) until it has.
+%   - `--param oneshot=1` paints the finished board on frame 0 from the
+%     same strokes: the reference the last frame is compared with.
+/rate 30 def                     % the declared frame rate, used below to count the scene's steps
+<< /Size [1280 720] /Duration 38 /FPS rate /Persist true
+   /Background [0.20 0.13 0.08]
+   /Title (Chalk Lecture)
+   /Description (The simple pendulum worked on a green board: the diagram, the force along the arc, the small-angle step and the period, every stroke of the chalk grown as a hand would draw it.)
+>> animation
+
+(lib/artkit.ps) run (lib/paintkit.ps) run (lib/drykit.ps) run
+(lib/handscript.ps) run (lib/strokeglyphs.ps) run (lib/drychalk.ps) run
+(lib/mathkit.ps) run
+
+/oneshot /oneshot 0 param cvi 1 eq def
+/nostick /nostick 0 param cvi 1 eq def        % for tests: the chalk without the stick
+
+% ------------------------------------------------------------ the board
+/ghost {
+  (\\nabla \\cdot E = \\rho / \\epsilon_0) 560 250 << /Size 40 /Seed 9 >> mkpath
+  (last week) 150 110 << /Size 30 >> sgpath
+} def
+/board { 28 40 1224 652 << /Surface /greenboard /Tray 14 /Ghost /ghost load >> dcboard } def
+board            % in setup: makes the board the chalk's surface (the paint is not kept)
+
+% ------------------------------------------------------- strokes as data
+% The current path -> an array of procedures, one per subpath.
+/capture {
+  mark [
+  { /cp-y exch def /cp-x exch def ] cvx [ cp-x cp-y /moveto cvx }
+  { /lineto cvx } { /curveto cvx } { /closepath cvx } pathforall
+  ] cvx
+  counttomark array astore exch pop
+  dup length 1 sub 1 exch getinterval
+} def
+
+/strokes 1200 array def /nstrokes 0 def
+/tcur 1.0 def                       % when the hand is next free
+/lastxy null def                    % where the chalk last left the board
+/pause { /tcur exch tcur add def } def
+
+% A hand's pace. A stroke takes `settle` plus its length over the speed;
+% between strokes the chalk is off the board for `lift` plus the
+% distance over `travel`.
+/settle 0.03 def /lift 0.035 def /travel 2400 def
+
+% /colour opts speed item -    the current path becomes strokes, one per
+% subpath, written one after another from when the hand is free.
+/item {
+  /it-speed exch def /it-opts exch def /it-col exch def
+  capture newpath {
+    /it-p exch def
+    newpath it-p
+    pathlength /it-len exch def
+    0 pathpoint pop /it-y0 exch def /it-x0 exch def
+    1 pathpoint pop /it-y1 exch def /it-x1 exch def newpath
+    lastxy null ne {
+      lastxy aload pop it-y0 sub dup mul exch it-x0 sub dup mul add sqrt
+      travel div lift add pause
+    } if
+    /it-t1 tcur settle add it-len it-speed div add def
+    strokes nstrokes <<
+      /t0 tcur /t1 it-t1
+      /col it-col /opts it-opts /path /it-p load
+      /xy0 [it-x0 it-y0] /xy1 [it-x1 it-y1]
+    >> put
+    /nstrokes nstrokes 1 add def
+    /tcur it-t1 def
+    /lastxy [it-x1 it-y1] def
+  } forall
+} def
+
+% ------------------------------------------------------------- the plan
+/th 28 def                                  % the drawn angle, degrees
+/sth th sin def /cth th cos def
+/px 368 def /py 565 def /len 310 def /rb 17 def
+/bx px len sth mul add def /by py len cth mul sub def
+/mg 215 def                                 % the weight's arrow
+/tx bx mg sth mul cth mul sub def /ty by mg sth mul sth mul sub def   % its part along the arc
+
+/pen  << /Width 2.6 /Hand 0.6 >> def
+/thin << /Width 1.8 /Hand 0.4 /Strength 0.45 >> def
+/txt  << /Width 2.0 >> def
+/wr 300 def                         % writing speed, units a second
+/dr 620 def                         % drawing speed
+/lab { << /Size 30 /Seed 7 /Irregular 0.5 >> mkpath } def
+/arrowhead {  % x y angle ->   two short strokes back from a tip
+  /ah-a exch def /ah-y exch def /ah-x exch def
+  ah-x ah-a 155 add cos 15 mul add ah-y ah-a 155 add sin 15 mul add moveto ah-x ah-y lineto
+  ah-x ah-a 205 add cos 15 mul add ah-y ah-a 205 add sin 15 mul add lineto
+} def
+
+% the heading
+newpath (The simple pendulum) 90 622 << /Size 42 /Seed 2 >> sgpath /white txt wr item
+newpath 86 606 moveto 470 610 lineto /white << /Width 2.4 /Hand 0.7 >> dr item
+0.5 pause
+
+% the support and the vertical through the pivot
+newpath px 110 sub py moveto px 110 add py lineto /white pen dr item
+newpath 0 1 8 { 25 mul px 100 sub add /hx exch def hx py 2 add moveto hx 16 add py 20 add lineto } for
+/white thin 900 item
+0.2 pause
+newpath py 8 sub -16 py len sub 24 add { /dy exch def px dy moveto px dy 9 sub lineto } for
+/white thin 900 item
+0.3 pause
+% the string, then the bob
+newpath px py moveto px len rb sub sth mul add py len rb sub cth mul sub lineto /white pen dr item
+newpath bx by rb 90 th add dup 360 add arc /white pen dr item
+0.3 pause
+% the angle and the length
+newpath px py 78 270 270 th add arc /yellow pen dr item
+newpath (\\theta) px 270 th 2 div add cos 104 mul add 9 sub py 270 th 2 div add sin 104 mul add 12 sub lab
+/yellow txt wr item
+newpath (L) px len 0.52 mul sth mul add cth 22 mul add 6 sub py len 0.52 mul cth mul sub sth 22 mul add 6 sub lab
+/white txt wr item
+0.5 pause
+% the weight, and the part of it along the arc
+newpath bx by moveto bx by mg sub lineto bx by mg sub 270 arrowhead /blue pen dr item
+newpath (mg) bx 14 add by mg sub 4 add lab /blue txt wr item
+0.4 pause
+newpath 0 1 6 { 7 div /f exch def
+  f [tx ty] [bx by mg sub] between aload pop moveto
+  f 0.08 add [tx ty] [bx by mg sub] between aload pop lineto } for
+/white thin 900 item
+newpath bx rb cth mul sub by rb sth mul sub moveto tx ty lineto tx ty 180 th add arrowhead /pink pen dr item   % from the bob's edge
+newpath (mg\\sin\\theta) tx 128 sub ty 44 sub lab /pink txt wr item
+0.4 pause
+% the arc the bob swings on
+newpath -34 5 34 { 270 add /a exch def
+  px a cos len mul add py a sin len mul add moveto px py len a a 2.6 add arc } for
+/white thin 900 item
+0.7 pause
+
+% the algebra
+/eqx 836 def
+newpath (Newton, along the arc:) 650 600 << /Size 30 /Seed 5 >> sgpath /white txt wr item
+0.4 pause
+newpath [ (m L \\ddot\\theta &= -m g \\sin\\theta) ] eqx 528
+  << /Size 36 /Seed 11 >> mkalign pop /white << /Width 2.3 >> wr item
+0.7 pause
+newpath (for small θ,) 650 452 << /Size 30 /Seed 13 >> sgpath /pink txt wr item
+newpath (\\sin\\theta \\approx \\theta) 812 452 << /Size 32 /Seed 14 >> mkpath /pink txt wr item
+0.7 pause
+newpath [ (\\ddot\\theta &= -\\frac{g}{L}\\,\\theta)
+          (\\theta(t) &= \\theta_0 \\cos \\omega t, \\quad \\omega = \\sqrt{g/L}) ] eqx 372
+  << /Size 36 /Seed 17 /Leading 2.4 >> mkalign pop /white << /Width 2.3 >> wr item
+0.8 pause
+newpath (T = \\frac{2\\pi}{\\omega} = 2\\pi\\sqrt{\\frac{L}{g}}) 736 172 << /Size 46 /Seed 21 >> mkpath
+/white << /Width 3.0 /Strength 0.7 >> wr item
+0.4 pause
+% the box, a side at a time
+/bx0 702 def /by0 104 def /bx1 1100 def /by1 252 def
+[ [bx0 by0 bx1 by0] [bx1 by0 bx1 by1] [bx1 by1 bx0 by1] [bx0 by1 bx0 by0] ] {
+  aload pop newpath 4 2 roll moveto lineto /yellow << /Width 3 /Hand 0.8 >> dr item
+} forall
+0.6 pause
+newpath (L = 1\\,\\mathrm{m}:\\quad T \\approx 2\\,\\mathrm{s}) 766 62 << /Size 32 /Seed 23 /Irregular 0.4 >> mkpath
+/white << /Width 2.4 /Strength 0.7 >> wr item
+
+/strokes strokes 0 nstrokes getinterval def
+% The pace above is a hand's; the film keeps its proportions and fits
+% the writing into `writing` seconds after `start`, leaving a hold.
+/start 1.0 def /writing 33.0 def
+/k writing tcur start sub div def
+strokes { begin
+  /t0 t0 start sub k mul start add def
+  /t1 t1 start sub k mul start add def
+end } forall
+/writingends start writing add def
+
+% ------------------------------------------------------------- per frame
+/growto {   % u ->   the stroke (its dict open) grown to u, in its colour
+  /gu exch def
+  col dcchalkcolor
+  newpath path opts dup length 2 add dict copy dup /From 0 put dup /To gu put dcchalk
+} def
+/whole { col dcchalkcolor newpath path opts dcchalk } def
+% The scene's steps are frames of the declared rate. `keptat` is the step
+% that keeps the stroke (its dict open): the first whose time is at or
+% after its end, a time within a millionth of a step of a step's time
+% counting as that step's. `stepnow` is the last step the scene has run
+% when `now` is shown (the engine's rule), in the scene or the overlay.
+/keptat { t1 rate mul 1e-6 sub ceiling cvi } def
+/stepnow { now rate mul 1e-9 add floor cvi } def
+/kept { keptat stepnow le } def      % -> bool: the stroke is on the kept canvas
+
+/scene {
+  oneshot {
+    frame 0 eq { board strokes { begin whole end } forall } if
+  } {
+    frame 0 eq { board } if
+    strokes { begin stepnow keptat eq { whole } if end } forall
+  } ifelse
+} def
+
+% The stroke in progress, regrown from 0 each frame. The hand slows a
+% little into and out of a stroke.
+/pace { dup /smooth ease 0.35 mul exch 0.65 mul add } def
+/active {   % -> true from the stroke's start until the scene has kept it
+  now t0 gt kept not and
+} def
+/uat { now t0 sub t1 t0 sub div 0 1 clamp pace } def
+
+% ---------------------------------------------------------- the stick
+/sticktints << /white [0.95 0.95 0.92] /yellow [0.96 0.88 0.45] /blue [0.55 0.72 0.90] /pink [0.95 0.62 0.68] >> def
+/stick {  % x y colour ->
+  /st-c exch def
+  nostick { pop pop } {
+  gsave
+    translate 52 rotate
+    0 0 0 setrgbcolor 0.25 setalpha
+    newpath 3 -5 moveto 64 -9 lineto 64 3 lineto 3 1 lineto closepath fill
+    1 setalpha sticktints st-c get aload pop setrgbcolor
+    newpath 0 -1 moveto 4 -5.5 lineto 62 -5.5 lineto 62 5.5 lineto 4 5.5 lineto 0 1 lineto closepath fill
+    0 0 0 setrgbcolor 0.18 setalpha
+    newpath 4 -5.5 moveto 62 -5.5 lineto 62 -1.5 lineto 4 -1.5 lineto closepath fill
+  grestore
+  } ifelse
+} def
+
+/overlay {
+  oneshot not {
+    0 1 nstrokes 1 sub { /si exch def
+      strokes si get begin
+      % a finished stroke stays here, whole, until the scene has kept it;
+      % the stick is on it only while it is being written
+      active {
+        uat growto
+        now t1 le { newpath path uat pathpoint pop newpath col stick } if
+      } if
+      now t0 le {
+        % lifted: the stick travels from where the last stroke ended
+        si 0 gt { strokes si 1 sub get /t1 get now lt } { false } ifelse {
+          strokes si 1 sub get dup /xy1 get exch /t1 get   % xy1 t1'
+          now 1 index sub t0 3 -1 roll sub div /smooth ease exch xy0 between
+          aload pop col stick
+        } if
+      } if
+      end
+    } for
+  } if
+} def
