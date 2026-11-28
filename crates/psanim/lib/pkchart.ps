@@ -474,7 +474,7 @@
   end
 } bind def
 % /role-or-font size .fontof -> font     the font `face` would select
-/.fontof { exch dup theme exch known { theme exch get } if findfont exch scalefont } bind def
+/.fontof { exch dup theme exch known { theme exch get } if findfont exch scalefont .utf8font } bind def
 % [ pts ... ] [ (name) ... ] opts serieslabels -     each series named at
 %   the end of its line, in the line's colour, the names kept clear of
 %   each other. Written right of the plot frame's box: leave room there.

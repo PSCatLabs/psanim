@@ -329,12 +329,18 @@ fn cmd_frame(rest: &[String]) -> Result<(), Fail> {
             eprintln!();
         }
     }
+    let text_warnings = movie.text_warnings();
+    if !c.json {
+        for w in &text_warnings {
+            eprintln!("warning: {w}");
+        }
+    }
     if c.json {
         println!(
             "{}",
             json!({"ok": true, "output": out, "frame": index, "time": time, "width": w, "height": h,
                    "render_seconds": elapsed, "stats": stats_json(&stats), "printed": printed.text,
-                   "output_truncated": printed.truncated})
+                   "output_truncated": printed.truncated, "warnings": text_warnings})
         );
     } else if !c.quiet {
         eprintln!(
@@ -895,6 +901,9 @@ fn cmd_check(rest: &[String]) -> Result<(), Fail> {
     }
     let slowest = samples.iter().max_by(|a, b| a.millis.total_cmp(&b.millis));
     let mean_ms = samples.iter().map(|s| s.millis).sum::<f64>() / samples.len().max(1) as f64;
+    // Text that did not draw as written: a character no font has, UTF-8 in
+    // a font that reads bytes. Said once each, whichever frames drew it.
+    warnings.extend(movie.text_warnings());
     let printed = movie.take_printed();
     if c.json {
         println!(
