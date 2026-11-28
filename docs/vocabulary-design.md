@@ -132,7 +132,7 @@ for the common case.
 | `pktype` | `showin`, `placetext`, `fitface`, `paragraph`, `kinetic`, `marker`, `typewrite`, `captions`, `credits`, `sym`, run lists (`showruns`, `morphruns`) | pkstage, pkmotion |
 | `pkdiagram` | `node`, `edge`, `connect`, `arrow`, `pulse`, `group`, `note`, `circled` | pktype |
 | `pkcode` | `codeblock`, `codelinebox`, `codediff` | native tokenizer and diff |
-| `pkchart` | `plotframe`, `plotaxes`, `bars`, `hbars`, `plotline`, `plotmark`, `plotrule`, `dots`, `donut`; for dashboards `stattile`, `dial`, `horizon`, `sparkline`, `heatmap`, `statuslight`, `panel`, `thresholdrole` | pktype |
+| `pkchart` | `plotframe`, `plotaxes`, `bars`, `hbars`, `plotline`, `plotmark`, `plotrule`, `serieslabels`, `tracer`, `dots`, `donut`; for dashboards `stattile`, `dial`, `horizon`, `sparkline`, `heatmap`, `statuslight`, `panel`, `thresholdrole` | pktype |
 | `pkink` | `revealalong`, `revealband`, `around`, `brushstroke`, `boxgradient` | pkstage |
 | `pkfigure` | `squashed`, `limb`, `eye`, `mouth`, `spring`, `dancepose`, `restpose`, `blendpose` | pkstage |
 | `pkpixel` | `pixelfont`, `pixelcols`, `pixeltext`, `pixelpicture` | none |
@@ -376,3 +376,50 @@ Rejected: a declaration key naming the movie's data file (the host
 should decide where data comes from, and a browser host has no files);
 an accumulating history inside the movie (state between frames; a host
 recording is the explicit place for it).
+
+## Names at line ends and a tracer (added for #105)
+
+Reviewers marked down lines with no name and legends the eye has to
+travel to, and authors placed names by hand with `plotpoint`, which
+leaves the author to keep names that end close together from
+overlapping.
+
+- **One call names every line.** Keeping names apart needs all of them at
+  once, so `serieslabels` takes the list of lines and the list of names,
+  in the forms `plotline` and `seriesline` already take. Line i's colour
+  is `chartroles i get` unless `/Roles` says otherwise, so the name and
+  the line agree without a legend.
+- **Moved apart by least squares, keeping order.** The names' heights are
+  fitted by pool-adjacent-violators on `y - k gap`, then clamped to the
+  frame. That moves each name as little as possible and, while the ends
+  keep their order, moves the names continuously with them, so they
+  slide rather than hop. Where two ends cross, the two names trade places
+  by a whole gap in one frame: no rule that keeps names from overlapping
+  can avoid it. That happens when names ride the drawn ends (`/Ride
+  true`) and lines cross, and also with the default if the final ends
+  are animated past each other. The default, a name fading in at its
+  line's end as the line completes, avoids it for fixed data. When more
+  names end together than fit in the frame's height, the gap shrinks
+  evenly so they stay inside.
+- **The drawn end is found on the path that is stroked.** `/Draw u` is the
+  number given to `0 u trimpath`, which measures canvas arc length, so the
+  word builds the same path and trims it; reading the data at a fraction
+  of x would put the name off the pen. `/X x` serves lines drawn up to
+  the same data x (clipped there), where all the ends share one x.
+- **No clock, no procedure.** Both words take numbers the caller computes
+  (`/Draw`, `/X`, the tracer's x), and neither runs a caller's procedure.
+- **A failure leaves nothing behind.** Each word does everything that can
+  fail (reading the data, roles, fonts, formatting) before it draws, and
+  runs under `.guarded`, which ends any dictionary it began and raises the
+  error again as from the word. A caller that stops the error finds the
+  dictionary stack and the graphics state as they were. Empty lines are
+  skipped, a line of no length drawn in part is its start, and `lineat`
+  refuses no points or x going back with a rangecheck.
+- **The tracer reads what it writes.** `lineat` reads a line straight
+  between its points. With `/XDecimals` the tracer's value is read at x as
+  written, so a moving dot never shows a year beside another year's value.
+
+Rejected: a legend word (the problem being solved); a label per
+`plotline` call (it cannot see its neighbours); a force layout (its
+result depends on an iteration count, and it does not guarantee the
+gap).
