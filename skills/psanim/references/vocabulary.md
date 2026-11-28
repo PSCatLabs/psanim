@@ -732,7 +732,7 @@ A line diff as data: an array of [ /same|/del|/add (line) oldindex newindex ] ro
 
 `[ [dur proc] [dur /transition] [dur proc] ... ]  reel  -`
 
-Play clips in order with transitions between them. A transition overlaps the end of the clip before it and the start of the clip after it. Transitions: /cut /dissolve /dip /wipe-left /wipe-right /wipe-up /wipe-down /iris /push-left /push-right /zoom. A clip need not paint a ground: clips that draw only their own subject transition over whatever the scene drew before the reel.
+Play clips in order with transitions between them. A transition overlaps the end of the clip before it and the start of the clip after it. Transitions: /cut /dissolve /dip /wipe-left /wipe-right /wipe-up /wipe-down /iris /push-left /push-right /zoom. Under /dissolve, the wipes and /iris the incoming clip is drawn over the outgoing one, which is not faded: each clip must paint its own ground (`ground`, `backdrop`), or what the incoming clip does not cover stays at full strength through the transition and vanishes at its end. /cut, /dip, /push-left, /push-right and /zoom also work with clips that draw only their own subject over whatever the scene drew before the reel.
 
 ### `reelduration`
 
@@ -886,7 +886,7 @@ The time the schedule is at, as seconds since Monday 00:00. Inside a scene of a 
 
 `[ /name seconds [seconds /transition] /name seconds ... ]  storyboard  -`
 
-Name the stretches of the film, in order. Call it before `animation` and use `storylength` for /Duration; then place things by beat name instead of by second, so retiming the film is editing one list. Between two beats the picture cuts, unless a transition is written between them: `[ /intro 4 [0.6 /dissolve] /main 8 ]`, any name in `transitions`, defined before the storyboard. As in a reel it overlaps the two beats: the next beat starts that many seconds before this one ends, so the film is shorter by it, and each beat keeps its full length and its clock. Each beat with a transition must paint its own ground (`ground` or `backdrop` first), and its `inbeat` calls come in the storyboard's order. A beat lasts at least the transitions into and out of it together.
+Name the stretches of the film, in order. Call it before `animation` and use `storylength` for /Duration; then place things by beat name instead of by second, so retiming the film is editing one list. Between two beats the picture cuts, unless a transition is written between them: `[ /intro 4 [0.6 /dissolve] /main 8 ]`, any name in `transitions`, defined before the storyboard. As in a reel it overlaps the two beats: the next beat starts that many seconds before this one ends, so the film is shorter by it, and each beat keeps its full length and its clock. Under /dissolve, the wipes and /iris each beat on either side must paint its own ground (`ground` or `backdrop` first), as a reel's clips must. The `inbeat` calls come in the storyboard's order: drawing the outgoing beat after the incoming one in a transition is an error. Draw what the beats share after all of them. A beat lasts at least the transitions into and out of it together.
 
 ### `storylength`
 

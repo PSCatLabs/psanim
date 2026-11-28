@@ -232,6 +232,27 @@ so the frame between them is empty; only `check --all` sees it. Let
 something persist across the cut (a rule, a progress bar, a heading
 that changes on the cut) or overlap the sections.
 
+## `storyboard` refuses a list that used to load
+
+`storyboard` checks its list. Two beats with one name (`[ /a 1 /a 2 ]`)
+and a name with no length after it (`[ /a 1 /b ]`) used to load: the
+first silently made a 3-second film with one `/a`, the second dropped
+`/b`. Both are errors now, naming the beat. Give each beat its own name
+and a length in seconds.
+
+## A transition between beats looks wrong
+
+- **The outgoing beat stays solid, then vanishes.** A dissolve, wipe or
+  iris draws the incoming beat over the outgoing one: a beat with no
+  ground of its own leaves the other uncovered. Start each beat that
+  has a transition with `ground` (or `backdrop`).
+- **`draw /a before /b`.** The `inbeat` calls must come in the
+  storyboard's order (and a `frombeat` of the incoming beat after both).
+- **Something drawn between the two calls ends up under the incoming
+  beat only.** `/a { } inbeat  (caption) show  /b { } inbeat` puts the
+  caption on top of `a` but under `b`, so it dissolves away with `a`.
+  This cannot be detected: draw shared things after all the beats.
+
 ## Hairlines between shapes that should touch
 
 N pieces tiling a shape (wedges of a disc, slices of a bar) show faint

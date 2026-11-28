@@ -201,16 +201,21 @@ changes; only absolute times written against the old cut move.
 Three rules make it work:
 
 - **A beat with a transition paints its own ground** (`ground`, or
-  `backdrop` with a colour), as a reel clip does: a dissolve draws the
-  outgoing beat, then the incoming one fading in over it, so the incoming
-  one must cover it.
+  `backdrop` with a colour), as a reel clip does. A dissolve, a wipe or
+  an iris draws the outgoing beat, then the incoming one over it, and
+  never fades the outgoing one: whatever the incoming beat leaves
+  uncovered stays at full strength and vanishes when the transition
+  ends. (`/dip`, the pushes and `/zoom` move or fade both sides.)
 - **Write the `inbeat` calls in the storyboard's order.** Each draws its
-  own side of the transition (the outgoing beat, then the incoming one
-  over it), so the incoming beat must be drawn second.
+  own side of the transition, so the incoming beat must be drawn second;
+  the other way round is an error, `draw /ask before /answer`.
 - **Draw what the beats share after them.** A progress bar, a frame, a
   `frombeat` element: they stay still while the beats change under them.
-  A `frombeat` body comes in with the transition into its beat and is
-  never taken away by a later one.
+  Something drawn *between* two `inbeat` calls lands on the outgoing
+  beat and under the incoming one, so it dissolves away with the
+  outgoing beat; that cannot be detected. A `frombeat` body comes in
+  with the transition into its beat and is never taken away by a later
+  one.
 
 Keep a deliberate cut a cut: a hard change of subject, a cut on the
 music, or a hand-off where one beat's figure moves to its place in the

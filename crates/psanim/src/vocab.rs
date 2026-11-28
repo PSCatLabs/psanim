@@ -476,6 +476,12 @@ fn straighten(poly: &pathmath::Poly, u: f64, anchor: f64) -> Vec<(f64, f64)> {
 /// reel, so it is no longer than either, and a beat is no shorter than the
 /// transitions into and out of it together (only two beats are ever on
 /// screen at once).
+/// `a > b` beyond rounding: durations written in decimals (0.1 + 0.2 and
+/// 0.3) are compared as the author meant them.
+fn exceeds(a: f64, b: f64) -> bool {
+    a > b + 1e-9 * a.abs().max(b.abs()).max(1.0)
+}
+
 pub(crate) fn check_storyboard(
     items: &[Value],
     is_transition: &dyn Fn(&str) -> bool,
@@ -497,23 +503,25 @@ pub(crate) fn check_storyboard(
                     .filter(|s| *s >= 0.0)
                 else {
                     return Err(format!(
-                        "storyboard: /{n} needs its length after it, in seconds (0 or more)"
+                        "storyboard: /{n} needs its length after it, in seconds (0 or more): [ ... /{n} 2 ... ]"
                     ));
                 };
                 if seen.contains(&n.as_str()) {
-                    return Err(format!("storyboard: there are two beats named /{n}"));
+                    return Err(format!(
+                        "storyboard: there are two beats named /{n}: give each beat its own name"
+                    ));
                 }
                 seen.push(n);
                 let lead = pending.take().unwrap_or(0.0);
                 if let Some((p, psecs, pin)) = prev
                     && lead > 0.0
                 {
-                    if lead > psecs || lead > secs {
+                    if exceeds(lead, psecs) || exceeds(lead, secs) {
                         return Err(format!(
                             "storyboard: the transition between /{p} and /{n} is longer than one of them"
                         ));
                     }
-                    if pin + lead > psecs {
+                    if exceeds(pin + lead, psecs) {
                         return Err(format!(
                             "storyboard: /{p} is shorter than the transitions into and out of it together"
                         ));
@@ -619,6 +627,50 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
             Ok(()) => Ok(()),
             Err(msg) => fail(ctx, PsError::Rangecheck, msg),
         }
+    });
+
+    // - .storyid id    a new id for a transition between storyboard beats
+    reg(interp, ctx, ".storyid", |i, ctx| {
+        let mut c = ctx.borrow_mut();
+        c.story_ids += 1;
+        i.push_int(c.story_ids);
+        Ok(())
+    });
+    // /from /to /kind id outgoing? .beatside -    a side of a transition
+    // between beats is about to be drawn. The incoming side must be drawn
+    // over the outgoing one, so drawing the outgoing side when this frame
+    // has drawn more incoming sides than outgoing is an error.
+    reg(interp, ctx, ".beatside", |i, ctx| {
+        let out = i.pop_bool()?;
+        let id = i.pop_f64()? as i64;
+        let kind = i.pop_name()?;
+        let to = i.pop_name()?;
+        let from = i.pop_name()?;
+        let mut c = ctx.borrow_mut();
+        let k = match c.beat_sides.iter().position(|s| s.0 == id) {
+            Some(k) => k,
+            None => {
+                c.beat_sides.push((id, 0, 0));
+                c.beat_sides.len() - 1
+            }
+        };
+        let side = &mut c.beat_sides[k];
+        if out && side.2 > side.1 {
+            drop(c);
+            return fail(
+                ctx,
+                PsError::Rangecheck,
+                format!(
+                    "draw /{from} before /{to}: the storyboard goes from /{from} to /{to} with /{kind}, and /{to} must be drawn over /{from}. Put /{from}'s inbeat before /{to}'s (and /{to}'s frombeat after both)"
+                ),
+            );
+        }
+        if out {
+            side.1 += 1;
+        } else {
+            side.2 += 1;
+        }
+        Ok(())
     });
 
     // --- viewports ----------------------------------------------------------

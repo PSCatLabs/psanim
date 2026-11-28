@@ -462,28 +462,37 @@ end
 % [ /name seconds /name seconds ... ] storyboard     name the film's beats.
 % [ /a 4 [1 /dissolve] /b 3 ] storyboard              ... with a transition between
 %   two: it overlaps them as in a reel (b starts 1 s before a ends; the film is 6 s).
-% .pk /beatx holds, for each beat with a transition, << /in [d /kind] /out [d /kind] >>.
+% .pk /beatx holds, for each beat with a transition, << /in T /out T >>, where T is
+% [w0 w1 d /kind id /from /to]: the transition's window, its length, its name, an
+% id for this frame's order check, and the beats it joins. Both beats test the
+% same window, so they agree on every frame which side of it they are on.
 /storyboard {
   dup .storycheck                    % checked before a dictionary is opened
-  8 dict begin
+  12 dict begin
     /sb-a exch def /sb-t 0 def
     sb-a length 2 idiv 1 add dict /sb-d exch def
     4 dict /sb-x exch def  /sb-n null def  /sb-l null def  /sb-p null def
+    /sb-w null def  /sb-ls 0 def     % the end of the last transition; the last beat's start
     sb-a {
       dup type /arraytype eq { /sb-p exch def } {         % [d /kind]: into the next beat
       dup type /nametype eq { /sb-n exch def } {          % /name ...
         /sb-s exch def                                     % ... seconds
         sb-p null ne {
-          /sb-t sb-t sb-p 0 get sub def                    % it starts d earlier
+          % it starts d earlier, but never before the beat it overlaps nor
+          % inside the transition before (rounding: .storycheck allows 0.1 + 0.2 in 0.3)
+          sb-t sb-p 0 get sub  sb-ls max  sb-w null ne { sb-w max } if
+          [ 1 index sb-t sb-p aload pop .storyid sb-l sb-n ] /sb-T exch def
+          /sb-w sb-t def  /sb-t exch def
           sb-l /out sb-n /in 2 {
             /sb-k exch def /sb-b exch def
             sb-x sb-b known not { sb-x sb-b 2 dict put } if
-            sb-x sb-b get sb-k sb-p put
+            sb-x sb-b get sb-k sb-T put
           } repeat
           /sb-p null def
         } if
-        sb-d sb-n [ sb-t  sb-s sb-t add ] put
-        /sb-t sb-t sb-s add def
+        sb-s sb-t add  sb-w null ne { sb-w max } if  /sb-e exch def
+        sb-d sb-n [ sb-t sb-e ] put
+        /sb-ls sb-t def  /sb-t sb-e def
         /sb-l sb-n def
       } ifelse } ifelse
     } forall
@@ -518,6 +527,7 @@ end
 % time, its body is one side of it (A with nothing for B, or nothing for A with
 % B) on the clock it always has, so a transition that draws A and then B
 % (all of `transitions` do) is split between the two beats' `inbeat` calls.
+% `.beatside` checks the two are drawn in that order.
 /.beatplay {
   12 dict begin
     /bp-in exch def /bp-p exch def /bp-n exch def
@@ -527,19 +537,20 @@ end
     % the body as plain `inbeat` or `frombeat` runs it
     bp-in { [ bp-s bp-e /bp-p load /during cvx ] } { [ bp-s /bp-p load /after cvx ] } ifelse cvx /bp-c exch def
     /bp-r null def
-    bp-x /in known {
-      bp-x /in get aload pop /bp-k exch def /bp-d exch def
-      bp-t bp-s sub bp-d div /bp-u exch def
-      bp-u 0 ge bp-u 1 lt and { /bp-r [ {} /bp-c load bp-u bp-k ] def } if
-    } if
-    bp-r null eq bp-in and bp-x /out known and {
-      bp-x /out get aload pop /bp-k exch def /bp-d exch def
-      bp-t bp-e bp-d sub sub bp-d div /bp-u exch def
-      bp-u 0 ge bp-u 1 lt and { /bp-r [ /bp-c load {} bp-u bp-k ] def } if
-    } if
-    bp-r null eq { /bp-c load false } { bp-r aload pop true } ifelse
+    % T outgoing? .bpside -    set bp-r if now is in T's window
+    /.bpside {
+      /bp-o exch def /bp-T exch def
+      bp-T 0 get bp-t le  bp-t bp-T 1 get lt  and {
+        bp-t bp-T 0 get sub bp-T 2 get div /bp-u exch def
+        bp-o { [ /bp-c load {} bp-u bp-T 3 get ] } { [ {} /bp-c load bp-u bp-T 3 get ] } ifelse
+          [ bp-T 5 get bp-T 6 get bp-T 3 get bp-T 4 get bp-o ] 2 array astore /bp-r exch def
+      } if
+    } def
+    bp-x /in known { bp-x /in get false .bpside } if
+    bp-r null eq bp-in and bp-x /out known and { bp-x /out get true .bpside } if
+    bp-r null eq { /bp-c load false } { bp-r aload pop exch aload pop 5 -1 roll aload pop true } ifelse
   end                                % the body runs with no dictionary open
-  { [ 5 1 roll transitions exch get /exec cvx ] cvx } if
+  { .beatside [ 5 1 roll transitions exch get /exec cvx ] cvx } if
   globally
 } bind def
 
