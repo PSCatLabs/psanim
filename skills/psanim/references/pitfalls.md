@@ -184,7 +184,10 @@ about 3 to 6 ms each; paintkit watercolour strokes, tens of ms each.
 Cures, in order:
 
 1. Move anything that does not depend on time into setup (loading
-   libraries, building arrays of points, L-system strings).
+   libraries, building arrays of points, L-system strings, fonts that
+   come from files: `/crt /Phosphor pixelface def`, `/Diode7 pixelfont`).
+   A frame starts from the VM as setup left it, so whatever a scene loads
+   it loads again every frame.
 2. Fewer, larger layers: one `glowing` around many shapes, not one per
    shape.
 3. Preview at `--scale 0.5`; render final frames on all cores (the
@@ -253,12 +256,40 @@ bytes drew PostScript's curly ’ and ‘. Type the curly characters you want:
 `(it’s)`, `(“quoted”)`, `(‘single’)`. Code keeps the straight ones, which
 is what code means.
 
+## My pixel font came out as Helvetica
+
+`/Phosphor findfont` (or Pinpoint, Diode) before the face's file has run
+gives a substitute font, with no error, and keeps it under the face's
+name. Load it with `/Phosphor pixelface` (pkpixel) in setup, which
+replaces the substitute with the face; see [type.md](type.md#pixel-faces-terminals-printers-led-signs).
+
 ## Single blank frames between sections
 
 One section fades out by its end and the next fades in from its start,
 so the frame between them is empty; only `check --all` sees it. Let
 something persist across the cut (a rule, a progress bar, a heading
 that changes on the cut) or overlap the sections.
+
+## `storyboard` refuses a list that used to load
+
+`storyboard` checks its list. Two beats with one name (`[ /a 1 /a 2 ]`)
+and a name with no length after it (`[ /a 1 /b ]`) used to load: the
+first silently made a 3-second film with one `/a`, the second dropped
+`/b`. Both are errors now, naming the beat. Give each beat its own name
+and a length in seconds.
+
+## A transition between beats looks wrong
+
+- **The outgoing beat stays solid, then vanishes.** A dissolve, wipe or
+  iris draws the incoming beat over the outgoing one: a beat with no
+  ground of its own leaves the other uncovered. Start each beat that
+  has a transition with `ground` (or `backdrop`).
+- **`draw /a before /b`.** The `inbeat` calls must come in the
+  storyboard's order (and a `frombeat` of the incoming beat after both).
+- **Something drawn between the two calls ends up under the incoming
+  beat only.** `/a { } inbeat  (caption) show  /b { } inbeat` puts the
+  caption on top of `a` but under `b`, so it dissolves away with `a`.
+  This cannot be detected: draw shared things after all the beats.
 
 ## Hairlines between shapes that should touch
 

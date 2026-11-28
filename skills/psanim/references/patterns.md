@@ -478,9 +478,14 @@ total from `reelduration`.
 ```
 
 Transitions: `/cut /dissolve /dip /wipe-left /wipe-right /wipe-up
-/wipe-down /iris /push-left /push-right /zoom`. A clip need not paint a
-ground: draw the shared world first, then `film reel` with clips that
-draw only type or a subject, and they transition over it. In a
+/wipe-down /iris /push-left /push-right /zoom`. Under `/dissolve`, the
+wipes and `/iris` the incoming clip is drawn over the outgoing one,
+which is not faded: give each clip its own ground, as above, or what the
+incoming clip leaves uncovered stays at full strength and vanishes when
+the transition ends. With `/cut /dip /push-left /push-right /zoom` a
+clip need not paint a ground: draw the shared world first, then `film
+reel` with clips that draw only type or a subject. The same holds for
+transitions between storyboard beats. In a
 `sequence`, `null` in place of a procedure is a pause. Fade a clip's own text
 out before its transition (see "Enter, hold, leave") so two captions
 never overlap in a dissolve.

@@ -541,6 +541,24 @@ fn vocabulary() -> impl Iterator<Item = &'static str> {
 
 fn explain(kind: &str, command: Option<&str>) -> Option<String> {
     Some(match (kind, command) {
+        (
+            "rangecheck" | "invalidfont" | "typecheck",
+            Some(c @ ("pixelface" | "pixelfont" | "pixelvariant")),
+        ) => {
+            let faces: Vec<String> = crate::vocab::pixel_faces()
+                .iter()
+                .map(|(n, _)| format!("/{n}"))
+                .collect();
+            let other = match c {
+                "pixelfont" => "5, 7 or 9 for psanim's own fonts, or ",
+                "pixelface" => "a font that exists (/Courier-Bold), or ",
+                _ => "",
+            };
+            format!(
+                "`{c}` takes {other}one of PSCat's pixel faces: {}. Check the spelling: an unknown name is an error here, not a substitute font.",
+                faces.join(" ")
+            )
+        }
         ("undefined", Some(name))
             if crate::api::lookup(name)
                 .and_then(|e| crate::api::library_of(e.category))

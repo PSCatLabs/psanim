@@ -230,6 +230,12 @@ heading that `swapped`s exactly on the beat, or a figure that moves
 from its place in one beat to its place in the next (`u placeA placeB
 between`, with times from `/name beat`).
 
+To dissolve, wipe or push from one beat to the next instead of cutting,
+write a transition between them, as in a reel: `[ /title 2.5 [0.6
+/dissolve] /build 4 ]`. It overlaps the two beats (the film is 0.6 s
+shorter), and each beat with one paints its own `ground`; see
+[storytelling.md](storytelling.md#join-two-beats-with-a-transition).
+
 `/name { } inbeat` runs the body during the beat (clock from 0, `span`
 the beat's length); `/name { } frombeat` from its start to the end of the
 film. `/name beat` is its start time and `/name beatspan` its start and

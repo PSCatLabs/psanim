@@ -1,0 +1,117 @@
+%!PS
+% Poster: 22
+% Boot Sequence
+%
+% A machine room comes up in the dark. A video terminal warms up and runs its
+% power-on test in Phosphor; the operator logs in and sends a status report to
+% the printer, which prints it in Pinpoint on green-bar paper; then the status
+% board above them lights in Diode7, and the film rests on the three devices,
+% each labelled in Diode5.
+%
+% Techniques
+%   - PSCat 0.8.0's four pixel faces, each through psanim's catalog: the
+%     /terminal shows its session in /Phosphor (`/Font`), the /dotmatrix prints
+%     Pinpoint's bitmaps dot by dot (`/Face`), the /ledmatrix lights Diode7's
+%     (`/Font`). The labels are plain `show` in /Diode5, loaded by `pixelface`.
+%   - One session plan times everything: the printer starts at the mark where
+%     the print command is entered, the board where it is told to light, and
+%     the camera moves between them (`lookat` on a box that `keyframes` moves).
+%   - The session waits as long as the printer takes, and the film lasts until
+%     the board and the labels have arrived, plus the closing hold.
+
+% ---- the faces: the one place this film names them (the labels are these names) ---
+/crtface   /Phosphor def
+/printface /Pinpoint-Draft def
+/boardface /Diode7 def
+/labelface /Diode5 def
+
+% ---- the report the printer prints, and how long it takes -----------------------
+% (the blank lines at the end feed the report up into view)
+/report (PSCAT/80 SYSTEM STATUS      RUN 0001\n----------------------------------------\nCRT0   video terminal 8x16     ONLINE\nLPT1   9-pin dot matrix        ONLINE\nLED0   status board 112x8      ONLINE\nMEMORY 640K                    OK\n----------------------------------------\nAll systems nominal.\n\n\n\n\n\n\n\n) def
+/pr /dotmatrix << /Seed 4 /Params << /Text report /Face printface /Quality /Draft
+    /Tear /none /Speed 90 /Top 1 /Start 0.3 /Hold 0 >> >> instance
+/printdur /pr componentduration def
+
+% ---- what the terminal does: the boot, then two commands ------------------------
+/session [
+  [/wait 0.9]
+  [/out (PSCAT/80 ROM MONITOR V0.8.0\n\(C\) 2026 PSCATLABS)]
+  [/wait 0.5]
+  [/progress (MEMORY TEST    64K\nMEMORY TEST   128K\nMEMORY TEST   256K\nMEMORY TEST   384K\nMEMORY TEST   512K\nMEMORY TEST   640K OK) 0.22]
+  [/wait 0.3]
+  [/out (DETECTING DEVICES)]
+  [/lines (  CRT0 VIDEO 8X16 ....... OK\n  LPT1 DOT MATRIX 9-PIN .. OK\n  LED0 STATUS BOARD ..... OK) 0.45]
+  [/wait 0.4]
+  [/out (BOOTING FROM DISK 0 ...)]
+  [/wait 1.0]
+  [/out ( \npscat/80 ready.)]
+  [/prompt (login: )]
+  [/type (operator) << /Think 0.4 >>]
+  [/prompt ($ )]
+  [/type (status > lpt1) << /Think 0.6 >>]
+  [/mark /print]
+  [/out (printing status on lpt1)]
+  [/wait printdur 0.6 sub]
+  [/out (lpt1: done)]
+  [/type (board on) << /Think 0.4 >>]
+  [/mark /board]
+  [/out (led0: all systems nominal)]
+] 11 << /Prompt ($ ) /Typos 0.03 >> sessionplan def
+/tprint session /print planmark def
+/tboard session /board planmark def
+% the board: "SYSTEM ONLINE" for a moment, then the last message for good. A wipe
+% takes the ledmatrix entry 0.9 s in and 0.7 of that out (its /fxdur).
+/online 1.2 def  /dark 0.3 def  /wipein 0.9 def
+/settled tboard 0.1 add wipein add online add wipein 0.7 mul add dark add wipein add def
+/tlabels settled 0.8 sub def                                     % the labels arrive with it
+/finish settled 3 add def                                        % then the picture holds
+
+<< /Size [1280 720] /Duration finish /FPS 30 /Seed 3 /Background [0.025 0.027 0.032]
+   /Title (Boot Sequence)
+   /Description (A video terminal boots in Phosphor, prints a status report in Pinpoint on a dot-matrix printer, and lights an LED status board in Diode7: PSCat's pixel faces through psanim's catalog.)
+>> animation
+/pkstage use
+
+/tty /terminal << /Seed 2 /Params << /Plan session /Font crtface /Phosphor /green
+    /Rows 13 /Cols 32 /PowerOn 0.8 /Hold 600 /Grain 0.06 >> >> instance
+/board /ledmatrix << /Params << /Font boardface /Grid [112 8] /Pitch 10 /Look /sign
+    /Repeat false /Between dark
+    /Items [ [ (SYSTEM ONLINE) /wipe online /green ]
+             [ (ALL SYSTEMS NOMINAL) /wipe 600 /amber ] ] >> >> instance
+/labelfont labelface pixelface def                               % loaded once, here
+
+% ---- the room: boxes ---------------------------------------------------------------
+/boardbox [ 60 576 1160 120 ] def
+/termbox  [ 40 40 640 480 ] def
+/printbox [ 720 40 540 480 ] def
+/onscreen termbox 24 inset def                                   % the first shot: the screen
+/onpaper  [ 750 60 480 290 ] def                                 % the second: the paper at the print head
+/wide     [ 0 0 1280 720 ] def
+/move 2.0 def                                                    % seconds a camera move takes
+
+% box /face [r g b] label: the face's name under a device, in Diode5 and its colour
+/label {
+  3 dict begin /c exch def 32 string cvs /s exch def /b exch def
+  labelfont 20 scalefont setfont
+  c aload pop setrgbcolor
+  b 0 get b 2 get 2 div add s stringwidth pop 2 div sub  b 1 get 30 sub moveto s show
+  end
+} def
+
+/scene {
+  % the camera: the screen, then the paper while it prints, then the room
+  [ 0 onscreen
+    tprint 0.1 add onscreen  tprint move add onpaper /cubic-inout
+    tboard 1.8 sub onpaper  tboard 0.2 sub wide /cubic-inout ] keyframes /cam exch def
+  gsave
+    cam lookat
+    /tty   << /Box termbox /After /hold >> place
+    /pr    << /At tprint 0.4 add /Box printbox /Before /hold /After /hold >> place
+    /board << /At tboard 0.1 add /Box boardbox /After /hold >> place
+    tlabels tlabels 0.8 add /quad-out tween {
+      termbox  crtface [0.3 1 0.5] label
+      printbox printface [0.85 0.85 0.8] label
+      boardbox boardface [1 0.7 0.15] label
+    } faded
+  grestore
+} def

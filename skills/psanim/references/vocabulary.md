@@ -6,7 +6,7 @@ Stack effects read left to right, topmost operand last, as in the PostScript Lan
 
 Easings (for `ease`, `tween`, `keyframes`): linear smooth smoother quad-in quad-out quad-inout cubic-in cubic-out cubic-inout quart-in quart-out quart-inout quint-in quint-out quint-inout sine-in sine-out sine-inout expo-in expo-out expo-inout circ-in circ-out circ-inout back-in back-out back-inout elastic-in elastic-out elastic-inout bounce-in bounce-out bounce-inout spring hold
 
-Transitions (for `reel`): cut dissolve dip wipe-left wipe-right wipe-up wipe-down iris push-left push-right zoom
+Transitions (for `reel` and `storyboard`): cut dissolve dip wipe-left wipe-right wipe-up wipe-down iris push-left push-right zoom
 
 ## Declaring the movie
 
@@ -744,7 +744,7 @@ A line diff as data: an array of [ /same|/del|/add (line) oldindex newindex ] ro
 
 `[ [dur proc] [dur /transition] [dur proc] ... ]  reel  -`
 
-Play clips in order with transitions between them. A transition overlaps the end of the clip before it and the start of the clip after it. Transitions: /cut /dissolve /dip /wipe-left /wipe-right /wipe-up /wipe-down /iris /push-left /push-right /zoom. A clip need not paint a ground: clips that draw only their own subject transition over whatever the scene drew before the reel.
+Play clips in order with transitions between them. A transition overlaps the end of the clip before it and the start of the clip after it. Transitions: /cut /dissolve /dip /wipe-left /wipe-right /wipe-up /wipe-down /iris /push-left /push-right /zoom. Under /dissolve, the wipes and /iris the incoming clip is drawn over the outgoing one, which is not faded: each clip must paint its own ground (`ground`, `backdrop`), or what the incoming clip does not cover stays at full strength through the transition and vanishes at its end. /cut, /dip, /push-left, /push-right and /zoom also work with clips that draw only their own subject over whatever the scene drew before the reel.
 
 ### `reelduration`
 
@@ -756,7 +756,7 @@ The total length of a reel array: the clips' durations added up, minus the trans
 
 `-  transitions  dict`
 
-The dictionary of transitions. To define your own, put a procedure there: `transitions /t-shutter { ... } put`, then use `[dur /t-shutter]` in a reel. Name it with a `t-` prefix, or define it before the reel is measured with reelduration: otherwise reelduration counts the entry as a clip, and loading the movie fails, naming it. It is called with `procA procB u`: draw the frame that is u (0 to 1, linear) of the way from A to B. A and B are ready-made procedures that draw each clip with its own clock still running; call them inside gsave/grestore with whatever clip, transform or layer the transition needs.
+The dictionary of transitions. To define your own, put a procedure there: `transitions /t-shutter { ... } put`, then use `[dur /t-shutter]` in a reel (or between a storyboard's beats, defined before the storyboard). Name it with a `t-` prefix, or define it before the reel is measured with reelduration: otherwise reelduration counts the entry as a clip, and loading the movie fails, naming it. It is called with `procA procB u`: draw the frame that is u (0 to 1, linear) of the way from A to B. A and B are ready-made procedures that draw each clip with its own clock still running; call them inside gsave/grestore with whatever clip, transform or layer the transition needs. Between storyboard beats each beat's `inbeat` draws its own side (A with an empty B, then an empty A with B), so a transition used there must draw A's part and then B's part, neither depending on the other, as every built-in one does.
 
 ## Parameters, signals and events
 
@@ -896,15 +896,15 @@ The time the schedule is at, as seconds since Monday 00:00. Inside a scene of a 
 
 ### `storyboard`
 
-`[ /name seconds /name seconds ... ]  storyboard  -`
+`[ /name seconds [seconds /transition] /name seconds ... ]  storyboard  -`
 
-Name the stretches of the film, in order. Call it before `animation` and use `storylength` for /Duration; then place things by beat name instead of by second, so retiming the film is editing one list.
+Name the stretches of the film, in order. Call it before `animation` and use `storylength` for /Duration; then place things by beat name instead of by second, so retiming the film is editing one list. Between two beats the picture cuts, unless a transition is written between them: `[ /intro 4 [0.6 /dissolve] /main 8 ]`, any name in `transitions`, defined before the storyboard. As in a reel it overlaps the two beats: the next beat starts that many seconds before this one ends, so the film is shorter by it, and each beat keeps its full length and its clock. Under /dissolve, the wipes and /iris each beat on either side must paint its own ground (`ground` or `backdrop` first), as a reel's clips must. The `inbeat` calls come in the storyboard's order: drawing the outgoing beat after the incoming one in a transition is an error. Draw what the beats share after all of them. A beat lasts at least the transitions into and out of it together.
 
 ### `storylength`
 
 `-  storylength  seconds`
 
-The total length of the storyboard.
+The total length of the storyboard: the beats added up, less the transitions between them.
 
 ### `beat`
 
@@ -916,19 +916,19 @@ The movie time at which the named beat starts. Add to it for a moment inside the
 
 `/name  beatspan  a b`
 
-The start and end of the named beat, on the movie's clock: operands for `during` at the top level of a scene.
+The start and end of the named beat, on the movie's clock: operands for `during` at the top level of a scene. With a transition the spans of two beats overlap by its length.
 
 ### `inbeat`
 
 `/name proc  inbeat  -`
 
-Run proc during the named beat, with the clock starting from 0 at the beat's start and `span` its length, whatever time scopes are open.
+Run proc during the named beat, with the clock starting from 0 at the beat's start and `span` its length, whatever time scopes are open. In a transition into or out of the beat, proc is that side of it: the incoming beat drawn over the outgoing one, both on their own clocks.
 
 ### `frombeat`
 
 `/name proc  frombeat  -`
 
-Run proc from the start of the named beat to the end of the film, with the clock starting from 0 there: for something a beat introduces that then stays.
+Run proc from the start of the named beat to the end of the film, with the clock starting from 0 there: for something a beat introduces that then stays. It comes in with the transition into the beat, if there is one, and no later transition takes it away.
 
 ### `script`
 

@@ -75,7 +75,7 @@ pub use engine::{
 pub use error::{Error, Phase, TraceLine};
 pub use ops::TRANSITIONS;
 pub use signals::Signals;
-pub use vocab::LIBRARIES;
+pub use vocab::{LIBRARIES, pixel_faces};
 
 /// The PSCat types that appear in this crate's API, re-exported so a host
 /// needs only one dependency.

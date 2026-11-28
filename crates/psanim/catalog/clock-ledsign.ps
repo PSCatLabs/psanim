@@ -20,6 +20,7 @@
 /Scroll 14 param /scroll exch def           % dot columns per second the text moves left (0 holds it still)
 /Gap 12 param /gap exch def                 % blank dot columns between one showing of the time and the next
 /Panel 1 param /panel exch def              % 1 paints the sign's dark housing, 0 leaves the dots on whatever is there
+/Font 7 param dup type /stringtype eq { cvn } if /fontsel exch def  % 7: psanim's 7-row pixel font; /Diode7: PSCat's LED face (its digits and colon)
 
 << /midnight << /bg [0.05 0.07 0.12] /ink [0.42 0.86 1.0]  /dim [0.12 0.17 0.25] /hot [1.0 0.45 0.40] >>
    /amber    << /bg [0.07 0.04 0.02] /ink [1.0 0.62 0.10] /dim [0.18 0.11 0.05] /hot [1.0 0.85 0.40] >>
@@ -28,9 +29,9 @@
 >> theme get /pal exch def
 /role { pal exch get aload pop setrgbcolor } def
 
-% ---- the font: the digits and the colon of psanim's 7-row pixel font (pkpixel) -------
+% ---- the font: the digits and the colon of psanim's 7-row pixel font (pkpixel), or a face's -------
 /pkpixel use
-/fnt 7 pixelfont def
+/fnt fontsel pixelfont def
 /line 200 array def                         % the dot columns of one showing of the time
 /n 0 def
 /put1 { /pm exch def line n pm put /n n 1 add def } def     % mask : append a column
