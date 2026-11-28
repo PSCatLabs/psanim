@@ -1363,9 +1363,12 @@ impl Movie {
     /// the overlay (each frame shown) and for a checkpoint (each seek). Left
     /// to that, a step's translucent fill came out a level apart depending
     /// on whether the frames before it were shown, so a movie played and
-    /// the same movie sought to a frame differed. Dropping the shadow before
-    /// every step makes the kept canvas the same however it was reached;
-    /// within a step the shadow still serves (a wash's own layers).
+    /// the same movie sought to a frame differed. So the shadow is dropped
+    /// wherever one of those paths might: before every step of a movie with
+    /// an overlay, and before each step a checkpoint starts from in one
+    /// without. A movie without an overlay keeps it between checkpoints,
+    /// so a faint veil laid every step still fades all the way (8 bits
+    /// alone stall it once a step would move a pixel under half a level).
     fn settle_canvas(&mut self, phase: Phase) -> Result<(), Error> {
         let spare = match self.spare.take() {
             Some(p) => p,
@@ -1404,7 +1407,9 @@ impl Movie {
         }
         if self.meta.mode == Mode::Persistent {
             let phase = Phase::Frame { index: tick, time };
-            self.settle_canvas(phase)?;
+            if self.overlay.is_some() || tick.is_multiple_of(self.checkpoint_every) {
+                self.settle_canvas(phase)?;
+            }
             self.exec(phase, "cleardictstack save")?;
             let guard = self.pop_save(phase)?;
             self.begin(Running::Frame, tick as i64, time, dt);

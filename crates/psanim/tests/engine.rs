@@ -1930,20 +1930,29 @@ fn a_persistent_canvas_is_the_same_played_or_sought() {
     // shadow of the page, which showing a frame's overlay (or seeking from
     // a checkpoint) drops. The kept canvas must not depend on that.
     let src =
-        "<< /Size [32 16] /Duration 3 /FPS 10 /Persist true /Background [0.9 0.9 0.9] >> animation
-        /scene { 0.1 0.4 0.3 setrgbcolor 0.07 setalpha 0 0 32 16 rectfill } def
+        "<< /Size [32 16] /Duration 8 /FPS 10 /Persist true /Background [0.9 0.9 0.9] >> animation
+        /scene { 0.1 0.4 0.3 setrgbcolor 0.07 setalpha newpath 0 0 moveto 32 0 lineto 32 16 lineto 0 16 lineto closepath fill } def
         /overlay { } def";
     let mut played = Movie::load(src, &Options::default()).unwrap();
-    for k in 0..29 {
+    for k in 0..79 {
         played.render_frame(k).unwrap();
     }
-    let a = played.render_frame(29).unwrap().premultiplied.to_vec();
+    let a = played.render_frame(79).unwrap().premultiplied.to_vec();
     let mut sought = Movie::load(src, &Options::default()).unwrap();
-    assert_eq!(sought.render_frame(29).unwrap().premultiplied, &a[..]);
-    // And without an overlay, the same pixels.
-    let mut bare = Movie::load(&src.replace("/overlay { } def", ""), &Options::default()).unwrap();
-    for k in 0..29 {
+    assert_eq!(sought.render_frame(79).unwrap().premultiplied, &a[..]);
+    // Without an overlay too, across a checkpoint (every 2 s here). By
+    // 6 s a step moves a pixel under half a level: 8 bits alone stall.
+    // A veil over the past and a moving mark, as modes.md's trail.
+    let bare_src = "<< /Size [64 36] /Duration 8 /FPS 10 /Persist true /Background [0.96 0.94 0.88] >> animation
+        /scene { 0.96 0.94 0.88 setrgbcolor 0.04 setalpha 0 0 64 36 rectfill 1 setalpha
+          0.1 0.2 0.5 setrgbcolor 32 now 150 mul cos 24 mul add 18 now 210 mul sin 12 mul add 3 0 360 arc fill } def";
+    let mut bare = Movie::load(bare_src, &Options::default()).unwrap();
+    for k in 0..79 {
         bare.render_frame(k).unwrap();
     }
-    assert_eq!(bare.render_frame(29).unwrap().premultiplied, &a[..]);
+    let b = bare.render_frame(79).unwrap().premultiplied.to_vec();
+    let mut cold = Movie::load(bare_src, &Options::default()).unwrap();
+    assert_eq!(cold.render_frame(79).unwrap().premultiplied, &b[..]);
+    cold.render_frame(65).unwrap(); // back: from the checkpoint at 6 s
+    assert_eq!(cold.render_frame(79).unwrap().premultiplied, &b[..]);
 }
