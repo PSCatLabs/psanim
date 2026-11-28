@@ -177,11 +177,15 @@ Something was painted on the kept canvas twice.
 
 - **An "it ended this frame" test on times.** `now dt sub t lt now t ge
   and` looks true on exactly one frame. In floating point `now dt sub`
-  is not exactly the last frame's `now`, so it can be true on two. To do
-  a thing once, compare frame numbers: `frame t dt div 1e-6 sub ceiling
-  cvi eq`, in the scene (`dt`, not `fps`: under `--fps` a persistent
-  scene still steps at the declared rate, while `fps`, and `dt` in
-  setup, report the output's).
+  is not exactly the last frame's `now`, so it can be true on two
+  (PSCatLabs/psanim#121). To do a thing once, compare step numbers at
+  the declared rate, named once (`/rate 30 def` before the declaration,
+  `/FPS rate` in it): `now rate mul 1e-9 add floor cvi t rate mul 1e-6
+  sub ceiling cvi eq`, the first step at or after `t` (a `t` within a
+  millionth of a step after a step's time counts as that step's). Not
+  `fps` or `dt`: under `--fps` a persistent scene still steps at the
+  declared rate while `fps`, the overlay's `frame` and `dt`, and `dt` in
+  setup are the output's (PSCatLabs/psanim#122).
 - **A growing stroke regrown on the kept canvas.** Chalk and other
   translucent media stack. Keep it once when it is finished and grow it
   in `overlay` (ink.md, "Dry media").

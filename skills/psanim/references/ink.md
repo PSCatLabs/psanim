@@ -117,18 +117,32 @@ whole, and regrow the one in progress where nothing is kept:
 2. In `overlay` (shown, never kept), while it is in progress, draw it
    `/From 0 /To u`.
 
-Find "the one frame" by frame number, not by testing whether the end
-time falls between `now dt sub` and `now`: in floating point `now dt
-sub` is not exactly the last frame's `now`, so that test can be true on
-two frames, and a stroke painted twice is heavier. Count frames with
-the scene's `dt`, not `fps`: rendered with `--fps`, a persistent scene
-still steps at the declared rate (`frame` and `dt` in the scene are the
-declared ones) while `fps`, and `dt` in setup, report the output rate. With this split, the Chalk Lecture's
-last frame matches the board painted in one go to the pixel.
+Count in the scene's own steps, which are frames of the declared rate,
+and name that rate once (`rate` below):
+
+- **Keep a stroke on one step, found by number.** Not by testing whether
+  its end falls between `now dt sub` and `now`: in floating point `now
+  dt sub` is not exactly the last frame's `now`, so that test can be
+  true on two frames, and a stroke painted twice is heavier
+  (PSCatLabs/psanim#121). `t rate mul 1e-6 sub ceiling cvi` is the first
+  step whose time is at or after `t`, except that a `t` less than a
+  millionth of a step after a step's time counts as that step's.
+- **In the overlay, ask whether the scene has kept it yet.** Rendered
+  with `--fps`, the overlay runs at the output rate while the kept
+  canvas still advances at the declared one, and `fps`, `frame` and
+  `dt` there (and `dt` in setup) are the output's (PSCatLabs/psanim#122).
+  The last step the scene has run when `now` is shown is `now rate mul
+  1e-9 add floor cvi`. Until that reaches the stroke's step, draw it in
+  the overlay, at most whole; otherwise it vanishes for a frame between
+  the end of its growth and its keeping.
+
+With this split, the Chalk Lecture's last frame matches the board
+painted in one go to the pixel, at its own rate and under `--fps`.
 
 ```postscript
 %!PS
-<< /Size [640 360] /Duration 4 /FPS 30 /Persist true /Background [0.17 0.25 0.21] >> animation
+/rate 30 def                    % the declared frame rate, named once
+<< /Size [640 360] /Duration 4 /FPS rate /Persist true /Background [0.17 0.25 0.21] >> animation
 (lib/artkit.ps) run (lib/paintkit.ps) run (lib/drykit.ps) run
 (lib/handscript.ps) run (lib/strokeglyphs.ps) run (lib/drychalk.ps) run
 << /Surface /greenboard >> dksurface
@@ -137,23 +151,24 @@ last frame matches the board painted in one go to the pixel.
   [ 0.1 1.4 { 100 120 moveto 540 130 lineto } ]
   [ 1.6 3.2 { 320 200 80 270 630 arc } ]
 ] def
-/doneat { dt div 1e-6 sub ceiling cvi } def       % the first frame at or after a time
+/keptat { rate mul 1e-6 sub ceiling cvi } def     % end time -> the step that keeps the stroke
+/stepnow { now rate mul 1e-9 add floor cvi } def  % the last step the scene has run
 /chalkto { % u {path} ->
   /cp exch def /cu exch def
   /white dcchalkcolor newpath cp << /Width 4 /Hand 0.6 /From 0 /To cu >> dcchalk
 } def
 /scene {                       % kept: each stroke once, whole, when it is done
   plan { aload pop /cp exch def /t1 exch def pop
-    frame t1 doneat eq { 1 /cp load chalkto } if } forall
+    stepnow t1 keptat eq { 1 /cp load chalkto } if } forall
 } def
-/overlay {                     % shown, not kept: the stroke in progress, grown
+/overlay {                     % shown, not kept: a stroke from its start until it is kept
   plan { aload pop /cp exch def /t1 exch def /t0 exch def
-    now t0 gt frame t1 doneat lt and {
-      now t0 sub t1 t0 sub div /cp load chalkto } if } forall
+    now t0 gt stepnow t1 keptat lt and {
+      now t0 sub t1 t0 sub div 0 1 clamp /cp load chalkto } if } forall
 } def
 ```
 
-`gallery/chalk-lecture/` is a whole lecture written this way, 264
+`gallery/chalk-lecture/` is a whole lecture written this way, 265
 strokes in order with a hand's pace and a stick of chalk.
 
 On a **persistent** canvas, repainting the first `u` of a stroke every

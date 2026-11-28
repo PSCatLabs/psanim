@@ -27,13 +27,17 @@
 %     next stroke.
 %   - The commit is by frame number, not by comparing `now dt sub` with
 %     an end time: in floating point a boundary can fall in two frames'
-%     intervals, and a stroke painted twice comes out heavier. Frames
-%     are counted with the scene's `dt`: rendered at another `--fps`, the
-%     scene still steps at the declared rate, while `fps` (and `dt` in
-%     setup) report the output's.
+%     intervals, and a stroke painted twice comes out heavier
+%     (PSCatLabs/psanim#121). Frames are counted at the declared rate,
+%     named once as `rate`: rendered at another `--fps`, the scene still
+%     steps at the declared rate while `fps` and the overlay's `frame`
+%     and `dt` are the output's (PSCatLabs/psanim#122). The overlay asks
+%     whether the scene has kept a stroke yet, by the scene's own steps,
+%     and shows it (at most whole) until it has.
 %   - `--param oneshot=1` paints the finished board on frame 0 from the
 %     same strokes: the reference the last frame is compared with.
-<< /Size [1280 720] /Duration 38 /FPS 30 /Persist true
+/rate 30 def                     % the declared frame rate, used below to count the scene's steps
+<< /Size [1280 720] /Duration 38 /FPS rate /Persist true
    /Background [0.20 0.13 0.08]
    /Title (Chalk Lecture)
    /Description (The simple pendulum worked on a green board: the diagram, the force along the arc, the small-angle step and the period, every stroke of the chalk grown as a hand would draw it.)
@@ -44,6 +48,7 @@
 (lib/mathkit.ps) run
 
 /oneshot /oneshot 0 param cvi 1 eq def
+/nostick /nostick 0 param cvi 1 eq def        % for tests: the chalk without the stick
 
 % ------------------------------------------------------------ the board
 /ghost {
@@ -103,9 +108,9 @@ board            % in setup: makes the board the chalk's surface (the paint is n
 % ------------------------------------------------------------- the plan
 /th 28 def                                  % the drawn angle, degrees
 /sth th sin def /cth th cos def
-/px 330 def /py 560 def /len 290 def /rb 20 def
+/px 368 def /py 565 def /len 310 def /rb 17 def
 /bx px len sth mul add def /by py len cth mul sub def
-/mg 160 def                                 % the weight's arrow
+/mg 185 def                                 % the weight's arrow
 /tx bx mg sth mul cth mul sub def /ty by mg sth mul sth mul sub def   % its part along the arc
 
 /pen  << /Width 2.6 /Hand 0.6 >> def
@@ -130,7 +135,7 @@ newpath px 110 sub py moveto px 110 add py lineto /white pen dr item
 newpath 0 1 8 { 25 mul px 100 sub add /hx exch def hx py 2 add moveto hx 16 add py 20 add lineto } for
 /white thin 900 item
 0.2 pause
-newpath py 8 sub -16 py 268 sub { /dy exch def px dy moveto px dy 9 sub lineto } for
+newpath py 8 sub -16 py len sub 24 add { /dy exch def px dy moveto px dy 9 sub lineto } for
 /white thin 900 item
 0.3 pause
 % the string, then the bob
@@ -162,30 +167,30 @@ newpath -34 5 34 { 270 add /a exch def
 0.7 pause
 
 % the algebra
-/eqx 870 def
+/eqx 836 def
 newpath (Newton, along the arc:) 650 600 << /Size 30 /Seed 5 >> sgpath /white txt wr item
 0.4 pause
 newpath [ (m L \\ddot\\theta &= -m g \\sin\\theta) ] eqx 528
   << /Size 36 /Seed 11 >> mkalign pop /white << /Width 2.3 >> wr item
 0.7 pause
 newpath (for small θ,) 650 452 << /Size 30 /Seed 13 >> sgpath /pink txt wr item
-newpath (\\sin\\theta \\approx \\theta) 830 452 << /Size 32 /Seed 14 >> mkpath /pink txt wr item
+newpath (\\sin\\theta \\approx \\theta) 812 452 << /Size 32 /Seed 14 >> mkpath /pink txt wr item
 0.7 pause
 newpath [ (\\ddot\\theta &= -\\frac{g}{L}\\,\\theta)
           (\\theta(t) &= \\theta_0 \\cos \\omega t, \\quad \\omega = \\sqrt{g/L}) ] eqx 372
   << /Size 36 /Seed 17 /Leading 2.4 >> mkalign pop /white << /Width 2.3 >> wr item
 0.8 pause
-newpath (T = \\frac{2\\pi}{\\omega} = 2\\pi\\sqrt{\\frac{L}{g}}) 770 172 << /Size 46 /Seed 21 >> mkpath
+newpath (T = \\frac{2\\pi}{\\omega} = 2\\pi\\sqrt{\\frac{L}{g}}) 736 172 << /Size 46 /Seed 21 >> mkpath
 /white << /Width 3.0 /Strength 0.7 >> wr item
 0.4 pause
 % the box, a side at a time
-/bx0 736 def /by0 104 def /bx1 1134 def /by1 252 def
+/bx0 702 def /by0 104 def /bx1 1100 def /by1 252 def
 [ [bx0 by0 bx1 by0] [bx1 by0 bx1 by1] [bx1 by1 bx0 by1] [bx0 by1 bx0 by0] ] {
   aload pop newpath 4 2 roll moveto lineto /yellow << /Width 3 /Hand 0.8 >> dr item
 } forall
 0.6 pause
-newpath (L = 1\\,\\mathrm{m}:\\quad T \\approx 2\\,\\mathrm{s}) 830 66 << /Size 26 /Seed 23 /Irregular 0.5 >> mkpath
-/white txt wr item
+newpath (L = 1\\,\\mathrm{m}:\\quad T \\approx 2\\,\\mathrm{s}) 766 62 << /Size 32 /Seed 23 /Irregular 0.4 >> mkpath
+/white << /Width 2.4 /Strength 0.7 >> wr item
 
 /strokes strokes 0 nstrokes getinterval def
 % The pace above is a hand's; the film keeps its proportions and fits
@@ -205,25 +210,29 @@ end } forall
   newpath path opts dup length 2 add dict copy dup /From 0 put dup /To gu put dcchalk
 } def
 /whole { col dcchalkcolor newpath path opts dcchalk } def
-% The one frame that keeps the stroke (its dict open): the first at or
-% after its end. Worked out in the scene, where `dt` is the declared
-% frame's length even when the film is rendered at another `--fps`.
-/keptat { t1 dt div 1e-6 sub ceiling cvi } def
+% The scene's steps are frames of the declared rate. `keptat` is the step
+% that keeps the stroke (its dict open): the first whose time is at or
+% after its end, a time within a millionth of a step of a step's time
+% counting as that step's. `stepnow` is the last step the scene has run
+% when `now` is shown (the engine's rule), in the scene or the overlay.
+/keptat { t1 rate mul 1e-6 sub ceiling cvi } def
+/stepnow { now rate mul 1e-9 add floor cvi } def
+/kept { keptat stepnow le } def      % -> bool: the stroke is on the kept canvas
 
 /scene {
   oneshot {
     frame 0 eq { board strokes { begin whole end } forall } if
   } {
     frame 0 eq { board } if
-    strokes { begin frame keptat eq { whole } if end } forall
+    strokes { begin stepnow keptat eq { whole } if end } forall
   } ifelse
 } def
 
 % The stroke in progress, regrown from 0 each frame. The hand slows a
 % little into and out of a stroke.
 /pace { dup /smooth ease 0.35 mul exch 0.65 mul add } def
-/active {   % -> true while the stroke (its dict open) is on the board, not yet kept
-  now t0 gt frame keptat lt and
+/active {   % -> true from the stroke's start until the scene has kept it
+  now t0 gt kept not and
 } def
 /uat { now t0 sub t1 t0 sub div 0 1 clamp pace } def
 
@@ -231,6 +240,7 @@ end } forall
 /sticktints << /white [0.95 0.95 0.92] /yellow [0.96 0.88 0.45] /blue [0.55 0.72 0.90] /pink [0.95 0.62 0.68] >> def
 /stick {  % x y colour ->
   /st-c exch def
+  nostick { pop pop } {
   gsave
     translate 52 rotate
     0 0 0 setrgbcolor 0.25 setalpha
@@ -240,23 +250,27 @@ end } forall
     0 0 0 setrgbcolor 0.18 setalpha
     newpath 4 -5.5 moveto 62 -5.5 lineto 62 -1.5 lineto 4 -1.5 lineto closepath fill
   grestore
+  } ifelse
 } def
 
 /overlay {
   oneshot not {
     0 1 nstrokes 1 sub { /si exch def
       strokes si get begin
+      % a finished stroke stays here, whole, until the scene has kept it;
+      % the stick is on it only while it is being written
       active {
         uat growto
-        newpath path uat pathpoint pop newpath col stick
-      } {
+        now t1 le { newpath path uat pathpoint pop newpath col stick } if
+      } if
+      now t0 le {
         % lifted: the stick travels from where the last stroke ended
-        si 0 gt { now t0 le now strokes si 1 sub get /t1 get gt and } { false } ifelse {
+        si 0 gt { strokes si 1 sub get /t1 get now lt } { false } ifelse {
           strokes si 1 sub get dup /xy1 get exch /t1 get   % xy1 t1'
           now 1 index sub t0 3 -1 roll sub div /smooth ease exch xy0 between
           aload pop col stick
         } if
-      } ifelse
+      } if
       end
     } for
   } if

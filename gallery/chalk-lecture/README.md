@@ -25,14 +25,29 @@ The structure was chosen by measuring it (see the numbers below):
   then it is regrown from 0 each frame in `overlay`, which is shown and
   never kept. Chalk is not opaque: regrown on the kept canvas, a stroke
   is laid down again on every frame it spans and ends heavier.
-- **The commit is by frame number.** `now dt sub` is not exactly the
-  previous frame's `now` in floating point, so a test like "the end
-  time lies between `now dt sub` and `now`" can be true on two frames,
-  and that stroke is painted twice. Frames are counted with the
-  scene's `dt`, not `fps`: rendered with `--fps 20`, a persistent scene
-  still steps at the declared 30 (`frame` and `dt` in the scene are the
-  declared ones) but `fps`, and `dt` in setup, say 20, and a commit
-  frame computed from them comes early.
+- **The commit is by step number.** The scene's steps are frames of
+  the declared rate, named once in the program (`rate`). A stroke is
+  kept on step `t1 rate mul 1e-6 sub ceiling cvi`: the first whose time
+  is at or after its end (an end within a millionth of a step after a
+  step's time counts as that step's). Not by testing whether the end
+  lies between `now dt sub` and `now`: in floating point `now dt sub`
+  is not exactly the previous frame's `now`, so that test can be true
+  on two frames and the stroke is painted twice (PSCatLabs/psanim#121).
+- **The overlay asks whether the scene has kept a stroke yet**, by the
+  scene's steps: the last step run when `now` is shown is `now rate mul
+  1e-9 add floor cvi`. Until it reaches the stroke's step, the overlay
+  draws the stroke, at most whole. Rendered with `--fps`, the overlay
+  runs at the output rate while the kept canvas advances at the
+  declared 30, and `fps`, the overlay's `frame` and `dt`, and `dt` in
+  setup are the output's (PSCatLabs/psanim#122); a rule built on them
+  either keeps a stroke early or lets it vanish for a frame. Checked at
+  `--fps` 24, 25, 30000/1001, 30 and 60, rendering 0 to 4 s, 15 to 19 s
+  and 30 to 34.5 s with the stick left out (`--param nostick=1`): no
+  pixel gets darker by more than 40 levels from one frame to the next
+  (the largest drop is 37 levels, as at the declared rate). The earlier
+  rule, built on the overlay's `frame` and `dt`, lost chalk for a frame
+  on 14, 8, 2 and 13 pairs of frames in the first 4 s at 24, 25,
+  30000/1001 and 60.
 - **Strokes as data**, as in Chalk Proof: in setup every path (lettering
   from `sgpath`, formulas from `mkpath` and `mkalign`, the diagram) is
   split into its subpaths, one stroke each, because `/From` and `/To`
@@ -47,11 +62,14 @@ The structure was chosen by measuring it (see the numbers below):
 
 On the authoring machine (macOS, arm64), which was heavily
 loaded by other work at the time (load average 10 to 40): treat these
-as loose.
+as loose. The first check was rerun after the diagram was enlarged and
+the algebra moved left; the other numbers are from the first cut of the
+board, which had one stroke fewer.
 
 - **The last frame against the same board painted in one go** (`--param
   oneshot=1` paints every stroke whole on frame 0): identical, 0 of
-  921,600 pixels differ.
+  921,600 pixels differ, at the declared 30 fps and with `--fps 24` and
+  `--fps 60`.
 - **The same film with the stroke in progress regrown in `scene`**, on
   the kept canvas: 13,648 pixels differ, by up to 63 levels, and the
   chalk carries 5.8% more ink than the board painted in one go.

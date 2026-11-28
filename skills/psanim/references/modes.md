@@ -123,7 +123,8 @@ feedback. Draw only what is new this frame.
 - `rand` is reseeded the same way every frame, so call `srand` yourself
   when a mark's texture must not depend on which frame draws it.
 - Inside the scene, `now dt sub` is the previous frame's time (to
-  rounding: to act once, compare `frame` numbers, pitfalls.md): an
+  rounding, PSCatLabs/psanim#121: to act once, compare step numbers,
+  pitfalls.md): an
   incremental painter needs both ends of the frame's interval.
 - **Seeking is not free.** A frame is reached by painting every frame
   before it since the last checkpoint, and checkpoints live only as long
