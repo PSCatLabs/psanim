@@ -2879,3 +2879,63 @@ fn a_text_heavy_frame_stays_far_inside_the_step_limit() {
     eprintln!("text-heavy frame: {steps} steps");
     assert!(steps > 0 && steps < 100_000, "{steps}");
 }
+
+#[test]
+fn chart_names_and_readouts_read_utf8_like_face() {
+    // serieslabels and tracer choose their fonts the way `face` does, so a
+    // UTF-8 name or suffix is read as UTF-8, not as stray byte codes.
+    let mut m = load(
+        "/scene { [0 0 120 100] [0 4] [0 10] plotframe
+           /s [ [0 2] [4 8] ] def
+           [ s [ [0 5] [4 3] ] ] [ (Zürich) (Γενεύη) ] << /Size 8 >> serieslabels
+           s 2 << /Suffix (°C) /Size 8 >> tracer
+           s 3 << /Prefix (€) /Size 8 >> tracer } def",
+    );
+    m.render_at(0.0).unwrap_or_else(|e| panic!("{e}"));
+    assert!(m.text_warnings().is_empty(), "{:?}", m.text_warnings());
+}
+
+#[test]
+fn morphruns_pairs_and_measures_utf8_terms() {
+    // A UTF-8 term measures what it draws and pairs with its equal: the
+    // same `π` in both lines slides instead of fading out and in.
+    let out = truths(
+        "",
+        "/body 20 face [ (π) ] runwidth (π) stringwidth pop eq ==
+         [ (π) ] runwidth /Helvetica findfont 20 scalefont setfont (π) stringwidth pop eq ==",
+    );
+    assert_eq!(out, ["true", "false"]);
+    let lines = "[ [ (2πr ≈ ) [/it (x)] ] [ [/it (x)] ( ≈ 2πr) ] ]";
+    let mut m = load(&format!(
+        "/scene {{ 1 setgray /body 14 face 100 60 moveto {lines} now 4 div morphruns }} def"
+    ));
+    for k in 0..=8 {
+        m.render_at(k as f64 * 0.5)
+            .unwrap_or_else(|e| panic!("{e}"));
+    }
+    assert!(m.text_warnings().is_empty(), "{:?}", m.text_warnings());
+}
+
+#[test]
+fn pixel_faces_stay_byte_fonts() {
+    // The pixel faces draw from their own tables: `unicodefont` and `face`
+    // leave them as they are, so their text is unchanged and steps by byte.
+    let mut a = load(
+        "/scene { 1 setgray /Phosphor pixelface 16 scalefont setfont 4 40 moveto (READY.) show } def",
+    );
+    let mut b = load(
+        "/scene { 1 setgray /Phosphor pixelface pop /Phosphor 16 face 4 40 moveto (READY.) show } def",
+    );
+    let mut c = load(
+        "/scene { 1 setgray /Phosphor pixelface unicodefont 16 scalefont setfont 4 40 moveto (READY.) show } def",
+    );
+    let pa = pixels(&mut a, 0.0);
+    assert!(pa.iter().any(|v| *v > 0));
+    assert!(pixels(&mut b, 0.0) == pa && pixels(&mut c, 0.0) == pa);
+    let out = truths(
+        "",
+        "/Phosphor pixelface pop /Phosphor 16 face 4 4 moveto
+         currentfont /FontType get == (é) 0.5 typed length ==",
+    );
+    assert_eq!(out, ["3", "1"]);
+}
