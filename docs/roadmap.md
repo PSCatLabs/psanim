@@ -68,8 +68,13 @@ What psanim does not do today, stated plainly, and what would come next.
 - pkchart has no stacked or grouped bars, no log scales, no unit charts,
   and ticks re-pick abruptly while a range animates.
 - pkdiagram has no automatic layout: boxes are placed by the author.
-- Storyboard beats cut; there is no transition between beats as there is
-  between a reel's clips.
+- A transition between storyboard beats (`[ /a 4 [0.6 /dissolve] /b 6 ]
+  storyboard`) works as a reel's does, with the same conditions: each
+  beat on either side paints its own ground, its `inbeat` calls come in
+  the storyboard's order, and a transition of one's own draws the
+  outgoing side and then the incoming one, neither depending on the
+  other (every built-in one does). A beat body that fails inside a
+  transition's layer leaves the layer open, as in a reel.
 - The code tokenizer is a highlighter, not a parser: one keyword list
   per language, no nested or multi-line strings.
 
@@ -98,26 +103,25 @@ agent with the report it came from (summarised in
    pairing a term with two (one 3 becoming two halves).
 3. **Soft and ragged reveals**: a feathered or noisy edge for `spotlight`,
    wipes and wash fronts, which now cut hard.
-4. **Transitions between storyboard beats**, reusing the reel's.
-5. **Typography**: tracking as an option of `kinetic` and as a motion
+4. **Typography**: tracking as an option of `kinetic` and as a motion
    ("tracks out"); text fitted by cap height with the box it ends up in
    returned; a flow layout (stack lines top-down with gaps) so fitted
    lines place their neighbours; vertical and rotated text in a box;
    outline type as a state.
-6. **Charts**: unit charts (a waffle of cells), stacked and grouped
+5. **Charts**: unit charts (a waffle of cells), stacked and grouped
    bars, a ruler outside a plot frame. Done: names at line ends kept
    clear of each other (`serieslabels`) and a tracer with its readout
    (`tracer`, `lineat`), #105; cross-fading ticks (`plotaxes /Fade`).
-7. **Diagrams**: a layered layout for graphs given as data; a section
+6. **Diagrams**: a layered layout for graphs given as data; a section
    header / lower-third word; labels along curved edges.
-8. **Motion**: vector motions when a pivot is given (no rasterization);
+7. **Motion**: vector motions when a pivot is given (no rasterization);
    motion along the text's own axis under rotation; per-contour
    `morphpath`.
-9. **Diagnostics**: `check` warning on non-ASCII bytes shown in a text
+8. **Diagnostics**: `check` warning on non-ASCII bytes shown in a text
    font, on text drawn outside the canvas, and on type below a legible
    size; marking intended cuts so `check --all` can be fully clean;
    naming the procedure that left operands on the stack.
-10. **A review loop.** Blind review found what authors did not (holds
+9. **A review loop.** Blind review found what authors did not (holds
    that are not holds, dead time, faint text) and authors score
    themselves 7 to 8 whatever the film. `check` could measure some of it
    (frames changing during a stated hold, a second with nothing

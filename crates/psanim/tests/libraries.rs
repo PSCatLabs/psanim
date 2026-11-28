@@ -285,6 +285,394 @@ fn a_storyboard_names_beats_and_places_bodies_in_them() {
     assert!(e.to_string().contains("no beat /b"), "{e}");
 }
 
+/// A storyboard movie (40x20, 10 fps) with two beats that draw a picture of
+/// their own over a backdrop, joined by `entry` (empty for a plain cut).
+fn story_movie(entry: &str, scene: &str) -> Movie {
+    Movie::load(
+        &format!(
+            "[ /a 2 {entry} /b 2 ] storyboard
+             << /Size [40 20] /Duration storylength /FPS 10 >> animation
+             /pa {{ 1 0 0 backdrop 1 1 1 setrgbcolor 4 4 now 4 mul add 8 8 rectfill }} def
+             /pb {{ 0 0 1 backdrop 1 1 0 setrgbcolor 30 10 3 now add 0 360 arc fill }} def
+             /scene {{ {scene} }} def"
+        ),
+        &Options::default(),
+    )
+    .unwrap_or_else(|e| panic!("{e}"))
+}
+
+#[test]
+fn a_storyboard_without_transitions_plays_as_during_and_after() {
+    // The plain storyboard draws exactly what the same beats written as
+    // `during` and `after` on the movie's clock draw.
+    let mut sb = story_movie(
+        "",
+        "/a { pa } inbeat /b { pb } inbeat /b { 0 setgray 0 0 3 3 rectfill } frombeat",
+    );
+    let mut hand = story_movie(
+        "",
+        "0 2 { pa } during 2 4 { pb } during 2 { 0 setgray 0 0 3 3 rectfill } after",
+    );
+    for t in [0.0, 0.7, 1.9, 2.0, 3.3] {
+        assert_eq!(pixels(&mut sb, t), pixels(&mut hand, t), "t = {t}");
+    }
+}
+
+#[test]
+fn a_transition_overlaps_the_beats_beside_it_as_in_a_reel() {
+    // b starts 1 s before a ends: a 0..2, b 1..3, and the film is 3 s.
+    let mut m = story_movie(
+        "[1 /dissolve]",
+        "/a beatspan == == /b beatspan == == storylength ==
+         /a { (A) print now == span == } inbeat
+         /b { (B) print now == span == } inbeat",
+    );
+    assert_eq!(m.meta().duration, 3.0);
+    m.take_output();
+    // In the transition both bodies run, each on its own beat's clock.
+    m.render_at(1.5).unwrap();
+    let out = m.take_output();
+    assert!(out.contains('A') && out.contains('B'), "{out}");
+    assert_eq!(
+        nums(&out.replace(['A', 'B'], " ")),
+        [2.0, 0.0, 3.0, 1.0, 3.0, 1.5, 2.0, 0.5, 2.0],
+        "{out}"
+    );
+    // Outside it, one.
+    m.render_at(0.5).unwrap();
+    let out = m.take_output();
+    assert!(out.contains('A') && !out.contains('B'), "{out}");
+    m.render_at(2.5).unwrap();
+    let out = m.take_output();
+    assert!(!out.contains('A') && out.contains('B'), "{out}");
+}
+
+#[test]
+fn every_transition_between_beats_is_the_reels() {
+    for name in psanim::TRANSITIONS {
+        let entry = format!("[1 /{name}]");
+        let mut sb = story_movie(&entry, "/a { pa } inbeat /b { pb } inbeat");
+        let mut reel = story_movie(
+            &entry,
+            &format!("[ [2 {{ pa }}] [1 /{name}] [2 {{ pb }}] ] reel"),
+        );
+        for t in [0.0, 1.0, 1.2, 1.5, 1.8, 2.0, 2.6] {
+            assert!(
+                pixels(&mut sb, t) == pixels(&mut reel, t),
+                "{name} at t = {t}"
+            );
+        }
+        // The transition's ends are the plain frames, its middle neither.
+        let mut a = story_movie("", "0 2 { pa } during");
+        let mut b = story_movie("", "1 3 { pb } during");
+        let start = pixels(&mut sb, 1.0);
+        let mid = pixels(&mut sb, 1.5);
+        let end = pixels(&mut sb, 2.0);
+        assert!(start == pixels(&mut a, 1.0), "{name}: u = 0 is beat a");
+        assert!(end == pixels(&mut b, 2.0), "{name}: u = 1 is beat b");
+        // (a cut is a at u < 0.5 and b from 0.5)
+        if *name != "cut" {
+            assert!(mid != pixels(&mut a, 1.5), "{name}: the middle is not a");
+            assert!(mid != pixels(&mut b, 1.5), "{name}: the middle is not b");
+        }
+    }
+}
+
+#[test]
+fn a_transition_of_ones_own_joins_beats_when_defined_before_the_storyboard() {
+    let src = |scene: &str| {
+        format!(
+            "transitions /halves {{ pop exch gsave 0 0 20 20 rectclip exec grestore gsave 20 0 20 20 rectclip exec grestore }} put
+             [ /a 2 [1 /halves] /b 2 ] storyboard
+             << /Size [40 20] /Duration storylength /FPS 10 >> animation
+             /scene {{ {scene} }} def"
+        )
+    };
+    let mut sb = Movie::load(
+        &src("/a { 1 0 0 backdrop } inbeat /b { 0 0 1 backdrop } inbeat"),
+        &Options::default(),
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    let mut reel = Movie::load(
+        &src("[ [2 { 1 0 0 backdrop }] [1 /halves] [2 { 0 0 1 backdrop }] ] reel"),
+        &Options::default(),
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    let mid = pixels(&mut sb, 1.5);
+    assert!(mid == pixels(&mut reel, 1.5));
+    // the left half is a, the right half b
+    assert_eq!(&mid[(10 * 40 + 5) * 4..][..4], [255, 0, 0, 255]);
+    assert_eq!(&mid[(10 * 40 + 35) * 4..][..4], [0, 0, 255, 255]);
+}
+
+#[test]
+fn frombeat_comes_in_with_its_beat_and_is_not_taken_away() {
+    // /b's frombeat dissolves in with b (from 1 s), and stays through the
+    // wipe from b to c.
+    let src = "[ /a 2 [1 /dissolve] /b 2 [1 /wipe-right] /c 2 ] storyboard
+        << /Size [40 20] /Duration storylength /FPS 10 >> animation
+        /scene { /b { 1 1 1 setrgbcolor 0 0 40 20 rectfill (F) print now == } frombeat } def";
+    let mut m = Movie::load(src, &Options::default()).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(m.meta().duration, 4.0);
+    m.take_output();
+    let half = pixels(&mut m, 1.5);
+    assert!(
+        half[0] > 100 && half[0] < 160,
+        "half way in: {:?}",
+        &half[..4]
+    );
+    assert_eq!(nums(&m.take_output()), [0.5]);
+    for t in [2.0, 2.5, 3.5] {
+        assert!(pixels(&mut m, t).iter().all(|c| *c == 255), "t = {t}");
+    }
+    assert!(pixels(&mut m, 0.5).chunks(4).all(|p| p[..3] == [0, 0, 0]));
+}
+
+#[test]
+fn a_bad_storyboard_or_beat_body_leaves_no_dictionary_open() {
+    // An error leaves its operands, as an operator's does: `cleartomark` takes them.
+    for (bad, says) in [
+        ("[ /a 1 [0.5 /nosuch] /b 1 ]", "not a transition"),
+        ("[ [0.5 /dissolve] /a 1 ]", "between two beats"),
+        ("[ /a 1 [0.5 /dissolve] ]", "no beat after it"),
+        ("[ /a 1 [2 /dissolve] /b 3 ]", "longer than one of them"),
+        (
+            "[ /a 1 [0.5 /dissolve] [0.5 /dip] /b 1 ]",
+            "between two beats",
+        ),
+        (
+            "[ /a 2 [1 /dissolve] /b 1.5 [1 /dip] /c 2 ]",
+            "shorter than the transitions",
+        ),
+        ("[ /a 1 /a 2 ]", "two beats named /a"),
+        ("[ /a 1 /b ]", "/b needs its length"),
+        ("[ /a 1 [0 /dissolve] /b 1 ]", "more than 0 seconds"),
+        ("[ /a 1 (b) 2 ]", "the entries are"),
+    ] {
+        let mut m = Movie::load(
+            &format!("<< /Size [20 20] /Duration 1 >> animation /scene {{ {bad} storyboard }} def"),
+            &Options::default(),
+        )
+        .unwrap();
+        let e = m.render_at(0.0).map(|_| ()).expect_err(bad);
+        assert!(e.to_string().contains(says), "{bad}: {e}");
+        let mut m = Movie::load(
+            &format!(
+                "<< /Size [20 20] /Duration 1 >> animation
+                 /scene {{ countdictstack == mark {{ {bad} storyboard }} stopped == cleartomark countdictstack == }} def"
+            ),
+            &Options::default(),
+        )
+        .unwrap();
+        m.take_output();
+        m.render_at(0.0).unwrap();
+        let out = m.take_output();
+        let n = nums(&out);
+        assert!(out.contains("true") && n[0] == n[1], "{bad}: {out}");
+    }
+    // A beat's body that fails in the transition leaves none open either.
+    // (Inside a transition that draws it in a layer, the layer stays open,
+    // as it does for a failing body in a reel or in `faded`: a cut has none.)
+    let mut m = story_movie(
+        "[1 /cut]",
+        "countdictstack == mark { /a { nosuchword } inbeat } stopped == cleartomark countdictstack ==
+         mark { /b { nosuchword } inbeat } stopped == cleartomark countdictstack ==",
+    );
+    m.take_output();
+    for t in [1.2, 1.7] {
+        m.render_at(t).unwrap();
+        let out = m.take_output();
+        let n = nums(&out);
+        assert_eq!(out.matches("true").count(), 1, "{out}");
+        assert!(n[0] == n[1] && n[1] == n[2], "{out}");
+    }
+    // In a dissolve the outgoing side is drawn outside any layer: a body
+    // failing there leaves nothing open.
+    let mut m = story_movie(
+        "[1 /dissolve]",
+        "countdictstack == mark { /a { nosuchword } inbeat } stopped == cleartomark countdictstack ==",
+    );
+    m.take_output();
+    m.render_at(1.5).unwrap();
+    let out = m.take_output();
+    let n = nums(&out);
+    assert!(out.contains("true") && n[0] == n[1], "{out}");
+    // Uncaught, the incoming side's failure inside the dissolve's layer is
+    // reported as itself, not as the layer left open.
+    let mut m = story_movie("[1 /dissolve]", "/a { pa } inbeat /b { nosuchword } inbeat");
+    let e = m.render_at(1.5).map(|_| ()).expect_err("fails");
+    assert!(e.to_string().contains("nosuchword"), "{e}");
+}
+
+/// Which of the bodies `/a`, `/b`, `/c`, ... print at each frame of `m`.
+fn bodies_at(m: &mut Movie, t: f64) -> String {
+    m.take_output();
+    m.render_at(t).unwrap_or_else(|e| panic!("t = {t}: {e}"));
+    m.take_output().split_whitespace().collect()
+}
+
+#[test]
+fn transitions_written_in_decimals_fit_the_beats_they_fill() {
+    // 0.1 + 0.2 is more than 0.3 in floating point; the author meant them to fit.
+    let src = |scene: &str| {
+        format!(
+            "[ /a 1 [0.1 /dissolve] /b 0.3 [0.2 /dissolve] /c 1 ] storyboard
+             << /Size [40 20] /Duration storylength /FPS 30 >> animation
+             /scene {{ {scene} }} def"
+        )
+    };
+    let mut m = Movie::load(
+        &src("/a { (a) = } inbeat /b { (b) = } inbeat /c { (c) = } inbeat"),
+        &Options::default(),
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    assert!((m.meta().duration - 2.0).abs() < 1e-9);
+    // Never three beats at once, at any frame (b's transitions in and out
+    // meet at 1.0), and two only inside a transition.
+    for k in 0..60 {
+        let t = f64::from(k) / 30.0;
+        let on = bodies_at(&mut m, t);
+        let two = (0.9 - 1e-9..1.0).contains(&t) || (1.0 - 1e-9..1.2 - 1e-9).contains(&t);
+        assert_eq!(on.len(), if two { 2 } else { 1 }, "t = {t}: {on}");
+    }
+    // And it is the reel of the same clips, frame for frame.
+    let draw = "/pa { 1 0 0 backdrop } def /pb { 0 1 0 backdrop } def /pc { 0 0 1 backdrop } def ";
+    let mut sb = Movie::load(
+        &src(&format!(
+            "{draw} /a {{ pa }} inbeat /b {{ pb }} inbeat /c {{ pc }} inbeat"
+        )),
+        &Options::default(),
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    let mut reel = Movie::load(
+        &src(&format!(
+            "{draw} [ [1 {{ pa }}] [0.1 /dissolve] [0.3 {{ pb }}] [0.2 /dissolve] [1 {{ pc }}] ] reel"
+        )),
+        &Options::default(),
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    for k in 0..60 {
+        let t = f64::from(k) / 30.0;
+        assert!(pixels(&mut sb, t) == pixels(&mut reel, t), "t = {t}");
+    }
+}
+
+#[test]
+fn consecutive_transitions_over_many_beats_are_the_reels() {
+    let beats = "[ /a 1.5 [0.5 /dissolve] /b 1 [0.5 /wipe-left] /c 1.2 [0.4 /push-right] /d 1 [0.3 /zoom] /e 1 ]";
+    let draw =
+        "/p { setrgbcolor 0 0 40 20 rectfill 1 1 1 setrgbcolor now 10 mul 5 8 8 rectfill } def";
+    let load = |scene: &str| {
+        Movie::load(
+            &format!(
+                "{beats} storyboard
+                 << /Size [40 20] /Duration storylength /FPS 30 >> animation
+                 {draw} /scene {{ {scene} }} def"
+            ),
+            &Options::default(),
+        )
+        .unwrap_or_else(|e| panic!("{e}"))
+    };
+    let mut sb = load(
+        "/a { 1 0 0 p } inbeat /b { 0 1 0 p } inbeat /c { 0 0 1 p } inbeat
+         /d { 1 1 0 p } inbeat /e { 0 1 1 p } inbeat",
+    );
+    let mut reel = load(
+        "[ [1.5 { 1 0 0 p }] [0.5 /dissolve] [1 { 0 1 0 p }] [0.5 /wipe-left] [1.2 { 0 0 1 p }]
+           [0.4 /push-right] [1 { 1 1 0 p }] [0.3 /zoom] [1 { 0 1 1 p }] ] reel",
+    );
+    let len = sb.meta().duration;
+    assert!((len - (5.7 - 1.7)).abs() < 1e-9, "{len}");
+    let mut k = 0;
+    while f64::from(k) / 30.0 < len {
+        let t = f64::from(k) / 30.0;
+        assert!(pixels(&mut sb, t) == pixels(&mut reel, t), "t = {t}");
+        k += 1;
+    }
+}
+
+#[test]
+fn beats_drawn_out_of_order_in_a_transition_are_an_error() {
+    let mut m = story_movie("[1 /dissolve]", "/b { pb } inbeat /a { pa } inbeat");
+    let e = m.render_at(1.5).map(|_| ()).expect_err("out of order");
+    assert!(e.to_string().contains("draw /a before /b"), "{e}");
+    // Outside the transition the order does not matter.
+    m.render_at(0.5).unwrap();
+    m.render_at(2.5).unwrap();
+    // A frombeat of the incoming beat drawn first is out of order too.
+    let mut m = story_movie(
+        "[1 /dissolve]",
+        "/b { 0 setgray 0 0 3 3 rectfill } frombeat /a { pa } inbeat /b { pb } inbeat",
+    );
+    assert!(m.render_at(1.5).is_err());
+    // Not an error: a plain storyboard in any order; the beats drawn twice
+    // in order (two viewports, a nested scope); a component instance's own
+    // storyboard with the same beat names.
+    let mut m = story_movie("", "/b { pb } inbeat /a { pa } inbeat");
+    m.render_at(1.9).unwrap();
+    let mut m = story_movie(
+        "[1 /dissolve]",
+        "[0 0 20 20] { /a { pa } inbeat /b { pb } inbeat } within
+         [20 0 20 20] { 0 5 { /a { pa } inbeat /b { pb } inbeat } during } within",
+    );
+    m.render_at(1.5).unwrap();
+    let mut m = Movie::load(
+        "[ /a 2 [1 /dissolve] /b 2 ] storyboard
+         << /Size [40 20] /Duration storylength /FPS 10 >> animation
+         /inner << /Size [20 20] /Duration 3
+           /Setup { [ /a 2 [1 /dissolve] /b 2 ] storyboard }
+           /Scene { /a { 1 0 0 backdrop } inbeat /b { 0 0 1 backdrop } inbeat } >> component
+         /one /inner << >> instance
+         /scene { /a { 0 1 0 backdrop } inbeat /one << /Box [0 0 20 20] >> place
+                  /b { 1 1 0 backdrop } inbeat } def",
+        &Options::default(),
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    m.render_at(1.5).unwrap();
+}
+
+#[test]
+fn a_plain_storyboard_in_a_component_or_set_again_is_unchanged() {
+    // In a component instance: its beats on its own clock, as `during`.
+    let comp = |scene: &str| {
+        Movie::load(
+            &format!(
+                "<< /Size [40 20] /Duration 4 /FPS 10 >> animation
+                 /inner << /Size [40 20] /Duration 4
+                   /Setup {{ [ /x 1.5 /y 2.5 ] storyboard }}
+                   /Scene {{ {scene} }} >> component
+                 /one /inner << >> instance
+                 /scene {{ /one << /Box [0 0 40 20] >> place }} def"
+            ),
+            &Options::default(),
+        )
+        .unwrap_or_else(|e| panic!("{e}"))
+    };
+    let mut sb =
+        comp("/x { 1 0 0 backdrop now 10 mul 0 4 4 rectfill } inbeat /y { 0 0 1 backdrop } inbeat");
+    let mut hand = comp(
+        "0 1.5 { 1 0 0 backdrop now 10 mul 0 4 4 rectfill } during 1.5 4 { 0 0 1 backdrop } during",
+    );
+    for t in [0.2, 1.4, 1.5, 3.0] {
+        assert!(pixels(&mut sb, t) == pixels(&mut hand, t), "t = {t}");
+    }
+    // A storyboard set again replaces the first, transitions and all.
+    let mut m = Movie::load(
+        "[ /a 2 [1 /dissolve] /b 2 ] storyboard
+         [ /a 2 /b 2 ] storyboard
+         << /Size [40 20] /Duration storylength /FPS 10 >> animation
+         /scene { /b beat == storylength == /a { (A) print } inbeat /b { (B) print } inbeat } def",
+        &Options::default(),
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(m.meta().duration, 4.0);
+    m.take_output();
+    m.render_at(1.5).unwrap();
+    let out = m.take_output();
+    assert!(out.contains('A') && !out.contains('B'), "{out}");
+    assert_eq!(nums(&out.replace(['A', 'B'], " ")), [2.0, 4.0], "{out}");
+}
+
 #[test]
 fn cascade_hands_each_item_its_index_and_a_later_clock() {
     let out = eval_at("", "[ 10 20 30 ] 0.5 { exch == == now == } cascade", 2.0);
