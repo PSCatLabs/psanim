@@ -1108,8 +1108,9 @@ impl Movie {
     fn check_layers(&mut self, phase: Phase) -> Result<(), Error> {
         let open = self.ctx.borrow().layers.len();
         if open == 0 {
-            return Ok(());
+            return self.check_groups(phase);
         }
+        self.ctx.borrow_mut().nest.clear();
         // Put the frame's own canvas back so the next frame starts sound.
         let base = self.ctx.borrow_mut().layers.drain(..).next();
         if let Some(base) = base {
@@ -1123,6 +1124,33 @@ impl Movie {
         .hint(
             "every beginlayer needs an `alpha endlayer`; `alpha { ... } faded` pairs them for you",
         ))
+    }
+
+    /// A frame must close the transparency groups it opens, as it must
+    /// close its layers. PSCat has already composited a group left open
+    /// (the end of a run ends it, with its marks kept), so the picture is
+    /// whole; but a group left open is a misplaced `endgroup` more often
+    /// than not, and in a layer's body it would have escaped the layer.
+    fn check_groups(&mut self, phase: Phase) -> Result<(), Error> {
+        let open = {
+            let mut c = self.ctx.borrow_mut();
+            let n = c
+                .nest
+                .iter()
+                .filter(|n| **n == crate::ctx::Nest::Group)
+                .count();
+            c.nest.clear();
+            n
+        };
+        if open == 0 {
+            return Ok(());
+        }
+        Err(Error::new(
+            phase,
+            "unclosedgroup",
+            format!("{open} transparency group(s) opened with begingroup were never closed"),
+        )
+        .hint("every begingroup needs an endgroup in the same frame, in the same procedure"))
     }
 
     /// The PostScript that draws one frame: a clean graphics state, the
@@ -1338,6 +1366,11 @@ fn describe(interp: &mut Interp, ctx: &Rc<RefCell<Ctx>>, phase: Phase, err: &PsE
         (Some(c), _, _) => format!("{} in `{c}`", d.name),
         (None, _, _) => d.name.to_string(),
     };
+    // An operator that knew better than the PostScript error's name.
+    if let Some((kind, message)) = ctx.borrow_mut().failure.take() {
+        e.kind = kind.to_string();
+        e.message = message;
+    }
     // The program's own procedures; the prelude's plumbing (a combinator's
     // `{ exec .timepop }`) would only be noise between them.
     e.backtrace = d

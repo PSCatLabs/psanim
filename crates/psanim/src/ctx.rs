@@ -74,6 +74,13 @@ pub(crate) struct Ctx {
     /// its body is done. Kept here, not on the operand stack, so the body
     /// runs with the caller's operands on top.
     pub pending: Vec<LayerEnd>,
+    /// What is open, outermost first: psanim's layers and the program's
+    /// transparency groups (`begingroup`), in the order they were opened.
+    /// PSCat does not say whether a group is open, and while one is, a
+    /// canvas swap exchanges the page below it, not what the program is
+    /// painting on; so the prelude's `begingroup` and `endgroup` report
+    /// here, and a layer refuses to open inside a group.
+    pub nest: Vec<Nest>,
     /// The pose each open motion will place its layer under.
     pub poses: Vec<crate::motion::Pose>,
     /// Viewports opened by `within` and `fitted`: the width and height the
@@ -124,6 +131,10 @@ pub(crate) struct Ctx {
     /// A plain-language explanation an operator leaves before it fails,
     /// picked up by the engine for the error report.
     pub hint: Option<String>,
+    /// psanim's own kind and message for the error an operator is about
+    /// to raise, in place of the PostScript error's name (`groupnesting`
+    /// says more than `rangecheck`).
+    pub failure: Option<(&'static str, String)>,
 }
 
 /// One open component: its own clock, length, seed and parameters.
@@ -168,6 +179,19 @@ pub(crate) struct LayerEnd {
     pub glow: (f64, f64),
     /// For a blur or glow, the clip in force when it began, if it clips.
     pub clip: Option<ClipMask>,
+    /// For a `faded` or `blended` run as a transparency group (because a
+    /// group was open around it): how many entries [`Ctx::nest`] holds
+    /// once its own group is open.
+    pub group: Option<usize>,
+}
+
+/// One entry of [`Ctx::nest`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Nest {
+    /// A psanim layer: the canvas was swapped for a fresh page.
+    Layer,
+    /// A PSCat transparency group, opened by `begingroup`.
+    Group,
 }
 
 pub(crate) const MAX_SCOPES: usize = 256;
@@ -191,6 +215,7 @@ impl Ctx {
             scopes: Vec::new(),
             layers: Vec::new(),
             pending: Vec::new(),
+            nest: Vec::new(),
             poses: Vec::new(),
             views: Vec::new(),
             spare: None,
@@ -209,6 +234,7 @@ impl Ctx {
             base_dir: None,
             measured_reels: Vec::new(),
             hint: None,
+            failure: None,
         }
     }
 
@@ -288,6 +314,7 @@ impl Ctx {
             self.recycle_mask(m);
         }
         self.poses.clear();
+        self.nest.clear();
         self.views.clear();
         self.comps.clear();
         self.particles.clear();
@@ -295,6 +322,14 @@ impl Ctx {
         self.cell_work = 0.0;
         self.planes.clear();
         self.hint = None;
+        self.failure = None;
+    }
+
+    /// True while a transparency group is the innermost thing open: what
+    /// the program paints goes to the group's layer, which no host can
+    /// reach, so a psanim layer or pixel effect cannot work here.
+    pub fn in_group(&self) -> bool {
+        self.nest.last() == Some(&Nest::Group)
     }
 }
 

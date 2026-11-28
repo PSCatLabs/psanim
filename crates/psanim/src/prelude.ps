@@ -146,13 +146,30 @@
 % [ dur proc dur proc ... ] sequence: play the procs one after another.
 /sequence   { .sequence   { exec .timepop } if } bind def
 
+% --- transparency groups -----------------------------------------------------
+% PSCat's `begingroup` / `endgroup`, with psanim told of each: psanim's
+% layers swap the canvas, and while a group is open the canvas is the page
+% below the group's layer, so a layer opened there would lose its effect.
+% Knowing, a layer refuses to open inside a group with an error that says
+% so, and `faded` / `blended` run as groups of their own there. A group
+% closed behind psanim's back (`erasepage`, `showpage`, a `restore` past it,
+% or PSCat's operator called from systemdict) is not seen.
+/.sysbegingroup systemdict /begingroup get def
+/.sysendgroup   systemdict /endgroup   get def
+/.begingroup { .sysbegingroup .groupopened } bind def          % dict
+/.endgroup   { .groupclosing .sysendgroup } bind def           % -
+/begingroup /.begingroup load def
+/endgroup   /.endgroup   load def
+
 % --- layers ------------------------------------------------------------------
 % The body of each runs with the caller's operands on top: the opacity,
-% radius and so on are taken first and kept by the engine.
-/faded   { exch   .fadebegin  exec .layerend } bind def      % alpha proc           draw proc as a group at one opacity
-/blended { 3 1 roll .blendbegin exec .layerend } bind def    % alpha /mode proc     ... with a blend mode
-/blurred { exch   .clipmask .blurbegin  exec .layerend } bind def    % radius proc          draw proc out of focus
-/glowing { 3 1 roll .clipmask .glowbegin  exec .layerend } bind def  % radius strength proc draw proc with a halo
+% radius and so on are taken first and kept by the engine. The native half
+% leaves true when the body is to run as a transparency group instead (a
+% `faded` or `blended` inside one), with the group's dictionary under it.
+/faded   { exch   .fadebegin  { .begingroup } if exec .layerend { .endgroup } if } bind def   % alpha proc           draw proc as a group at one opacity
+/blended { 3 1 roll .blendbegin { .begingroup } if exec .layerend { .endgroup } if } bind def % alpha /mode proc     ... with a blend mode
+/blurred { exch   .clipmask .blurbegin pop exec .layerend pop } bind def     % radius proc          draw proc out of focus
+/glowing { 3 1 roll .clipmask .glowbegin pop exec .layerend pop } bind def   % radius strength proc draw proc with a halo
 /blurlayer { .clipmask .blurlayer } bind def                         % radius               blur the layer so far
 /glowlayer { .clipmask .glowlayer } bind def                         % radius strength      add a halo to it
 /vignette { .clipmask .vignette } bind def                           % amount               darken toward the corners

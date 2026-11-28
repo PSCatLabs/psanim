@@ -11,7 +11,8 @@ use pscat::{Interp, PsError};
 
 use crate::motion::{self, Kind, Pose, Spec};
 use crate::ops::{
-    OpResult, Shared, begin_layer, ease_named, fail, flat_path, reg, with_canvas_pixels,
+    OpResult, Shared, begin_layer, close_layer_nest, ease_named, fail, flat_path, reg,
+    with_canvas_pixels,
 };
 use crate::raster::{self, Placement};
 use crate::{code, pathmath};
@@ -604,7 +605,12 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         } else if pose.at_rest() {
             1
         } else {
-            begin_layer(i, ctx)?;
+            begin_layer(
+                i,
+                ctx,
+                "a motion while it moves (`enters`, `entering`, `leaving`, `emphasized`, ...)",
+                "`t /rise { << /Alpha 0.5 >> begingroup ... endgroup } enters`",
+            )?;
             ctx.borrow_mut().poses.push(pose);
             2
         };
@@ -619,6 +625,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 "a motion ended without having begun",
             );
         };
+        close_layer_nest(ctx, "a motion's body")?;
         let px = ctx.borrow().px_scale;
         let (w, h) = i.canvas_size();
         let (w, h) = (w as usize, h as usize);
