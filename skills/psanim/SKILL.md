@@ -117,7 +117,9 @@ test contents, not starting points.
 - **Combinators take their procedure last**: `0 2 { ... } during`.
 - **Stack discipline**: a body must leave the stack as it found it. Use
   a local dictionary for names (`8 dict begin ... end`) so recursion and
-  nesting do not clobber them.
+  nesting do not clobber them: a helper that does `/i exch def` changes
+  the `i` of the loop that called it ([pitfalls.md](references/pitfalls.md),
+  "Nested procedures share names").
 - **Randomness**: `rand` is reseeded identically every frame, so a random
   layout holds still. For a per-item constant use `i hash01` (0..1,
   stable). For smooth drift use `key freq amp wiggle`.
@@ -255,8 +257,8 @@ number still passes `check`). So:
 |---|---|
 | cut up the page | `canvasbox 7 vmin inset`, `box fx fy fw fh subbox`, `box n gap cols`, `box n gap rows`, `box nc nr gap cells`, `box /c boxpoint` |
 | set colour and font | `/fg ink` (`/muted /accent /accent2 /accent3 /good /bad /bg /surface /line`), `/title 6 vmin face` (`/body /mono /display /serif`), `ground` |
-| put text in a box | `(text) box /c showin` (`/w` left, `/e` right), `(text) box /title fitface`, `(text) box << /Align /center >> paragraph` |
-| bring a thing on | `/pop { ... } entering` in a script step; `t /pop { ... } enters` at a time |
+| put text in a box | `(text) box /c showin` (`/w` left, `/e` right), `(text) box /title fitface`, `(text) box << /Align /center >> paragraph`; join strings with `(a) (b) strcat` |
+| bring a thing on | `/pop { ... } entering` in a script step; `t /pop { ... } enters` at a time (inside, the clock starts from 0 at t) |
 | take it off | `/rise /fade { ... } staged` inside `thenfor` or `inbeat`; `a b /rise /fade { ... } onstage` |
 | call attention | `t /shake { ... } emphasized`, `box amount spotlight`, `(text) box /ne u note`, `box circled 0 u trimpath stroke` |
 | one after another | `{ 0.6 { ... } then  0.3 wait  2 { ... } thenfor } script` |
@@ -285,6 +287,14 @@ From blind reviews of finished films, the defects that recur:
   box of modest height (10 to 12% of the page), not the page's width.
 - **A state that contradicts the story.** If a thing is ruled out, it
   must lose its highlight as well as dim.
+- **Reading time with nothing changing.** A long still hold while text
+  is read feels slow: bring a long text on a line at a time, at about
+  0.25 s a word, so something arrives while it is read, and keep the
+  rest after it short.
+- **Text swapped through an empty frame.** When one caption replaces
+  another in the same place, start the new one while the old one fades,
+  and do not let the finished picture lose a caption it needs: give
+  each one a place of its own.
 - **Things that collide while moving.** A large `/drop` or `/zoom`
   passes through whatever is above or around it: look at three frames
   inside every big entrance.

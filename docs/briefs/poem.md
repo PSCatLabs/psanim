@@ -14,7 +14,7 @@ film, with the same content, beats and length.
 
 The poem is Matsuo Basho's haiku of 1686 (*furu ike ya / kawazu
 tobikomu / mizu no oto*), which is in the public domain. The English
-below is a word-for-word rendering written for this brief, not a
+below is a literal rendering written for this brief, not a
 published translation. Use it exactly as written, in ASCII.
 
 - Heading: `Basho's old pond`

@@ -1521,7 +1521,7 @@ pub const API: &[ApiEntry] = &[
         "pkdiagram",
         "node",
         "(label) box opts  node  -",
-        "Draw a labelled node filling a box. opts is a fill role (/surface, /accent) or << /Fill /surface /Stroke /line /Ink /fg /Shape /box /Sub (second line) /Size s /Font /title >>; shapes: /box /pill /circle /diamond /cylinder /plain. The label is sized to fit.",
+        "Draw a labelled node filling a box. opts is a fill role (/surface, /accent) or << /Fill /surface /Stroke /line /Ink /fg /Shape /box /Sub (second line) /Size s /Font /title >>; shapes: /box /pill /circle /diamond /cylinder /plain. The label is sized to fit; /Size, like every size, is in canvas units (`4 vmin`, not 4).",
     ),
     e(
         "pkdiagram",
