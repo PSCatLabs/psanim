@@ -29,9 +29,10 @@ newpath 60 120 moveto 200 330 420 20 580 240 curveto
 
 `u width { ... } revealalong` runs a body clipped to a band along the
 first `u` of the current path. The body draws a whole mark in any medium
-(a paintkit stroke, chalk, a hatched ribbon, a gradient) and only the
-part the pen has reached shows. This is how a textured stroke, which
-cannot be trimmed, is made to draw itself.
+(a paintkit stroke, a hatched ribbon, a gradient) and only the
+part the pen has reached shows. This is how a textured stroke that
+cannot be trimmed (a paint stroke) is made to draw itself. Chalk,
+crayon and charcoal can do better: they grow (below).
 
 ```postscript
 ground
@@ -48,8 +49,127 @@ newpath 70 180 moveto 220 300 400 60 570 180 curveto
 ```
 
 With paintkit, put the brush call in the body and make it the same
-stroke on every frame: `seed srand` before it for the presets that draw
-from `rand`, and a constant `/Seed` in its options where it takes one.
+stroke on every frame: `N srand` immediately before the call pins every
+paint preset. `/Seed` is ignored by the presets that draw from `rand`
+(the brushes); it pins only `pkwash` and `pkpaper`.
+
+Dry media (chalk, crayon, charcoal, drykit's `dkstroke`) do not need a
+clip: they grow. See the next section.
+
+## Dry media: grow the stroke itself
+
+`dcchalk`, `dkstroke`, `dycrayon` and `dhstroke` take `/From` and `/To`
+(0 to 1, along each subpath). Since PSCat 0.8.0, `/From 0 /To u` with a
+growing `u` is exact: the part already drawn keeps every pixel from
+frame to frame (only the last dozen widths or so behind the tip move), and
+`/To 1` is the whole stroke. The stroke lands, tires and lifts where
+the whole one does, which a clip over a whole stroke cannot show.
+
+```postscript
+%!PS
+<< /Size [640 360] /Duration 3 /FPS 30 /Background [0.17 0.25 0.21] >> animation
+(lib/artkit.ps) run (lib/paintkit.ps) run (lib/drykit.ps) run
+(lib/handscript.ps) run (lib/strokeglyphs.ps) run (lib/drychalk.ps) run
+<< /Surface /greenboard >> dksurface
+/scene {
+  /white dcchalkcolor
+  newpath 140 120 moveto 260 260 380 80 500 230 curveto
+  << /Width 4 /Hand 0.6 /From 0 /To 0.1 2.5 /linear tween >> dcchalk
+} def
+```
+
+- **Grow from 0, never in pieces.** Drawing `/From prev /To now` each
+  frame onto a kept canvas is not exact: each piece's round end is
+  painted again by the next ones, and the anti-aliased clip gains
+  coverage on every repaint. PSCat measured the ink of such a stroke
+  against the whole one at 1.001 to 1.006 times at the default touch,
+  1.09 to 1.32 at `/Touch 0.5` and about 1.85 at `/Touch 0.3` for 300
+  pieces (PSCatLabs/pscat#1487).
+- **One stroke, one subpath.** `/From` and `/To` cut every subpath of
+  the path at once, so `/To 0.5` on a word grows all its letters
+  together. To write in order, split the path into subpaths
+  (`pathforall`) and give each its own times. `/Corners /separate` cuts
+  a box into four strokes that also grow together: draw each side as
+  its own path.
+- **Seeds.** The stroking words (`dcchalk`, `dkstroke`, `dycrayon`,
+  `dhstroke`) take nothing from your `rand`: with no `/Seed` a stroke's
+  texture is seeded from its first point's position on the canvas, so
+  a stroke drawn alone is the same as in a whole board drawn at once.
+  With `/Seed` each subpath's seed comes from it and the subpath's
+  index (`dcchalk`: `Seed + 7919 i`), so splitting a path changes the
+  seeds: leave it out, or give each stroke its own. `sgpath` and
+  `mkpath` take their jitter from their own `/Seed`. drycrayon's path
+  builders (`dywobble`, `dyscribble`, `dyloop` ...) do draw from
+  artkit's `frnd`: build those paths in setup, or `N srand` first.
+- **Cost.** A grown part costs about its share of the stroke's ink,
+  plus working out the whole stroke's profile. One stroke a frame is
+  cheap; a whole board redrawn every frame is not (seconds a frame).
+
+### On a persistent canvas
+
+Regrowing a stroke from 0 on the kept canvas lays it down again every
+frame: chalk is not opaque, so it comes out heavier (on the Chalk
+Lecture film, 5.8% more ink and up to 63 levels off over 13,648 pixels,
+against the same board painted in one go). Keep each stroke once,
+whole, and regrow the one in progress where nothing is kept:
+
+1. In `scene`, on the one frame a stroke is finished, draw it whole.
+2. In `overlay` (shown, never kept), while it is in progress, draw it
+   `/From 0 /To u`.
+
+Count in the scene's own steps, which are frames of the declared rate,
+and name that rate once (`rate` below):
+
+- **Keep a stroke on one step, found by number.** Not by testing whether
+  its end falls between `now dt sub` and `now`: in floating point `now
+  dt sub` is not exactly the last frame's `now`, so that test can be
+  true on two frames, and a stroke painted twice is heavier
+  (PSCatLabs/psanim#121). `t rate mul 1e-6 sub ceiling cvi` is the first
+  step whose time is at or after `t`, except that a `t` less than a
+  millionth of a step after a step's time counts as that step's.
+- **In the overlay, ask whether the scene has kept it yet.** Rendered
+  with `--fps`, the overlay runs at the output rate while the kept
+  canvas still advances at the declared one, and `fps`, `frame` and
+  `dt` there (and `dt` in setup) are the output's (PSCatLabs/psanim#122).
+  The last step the scene has run when `now` is shown is `now rate mul
+  1e-9 add floor cvi`. Until that reaches the stroke's step, draw it in
+  the overlay, at most whole; otherwise it vanishes for a frame between
+  the end of its growth and its keeping.
+
+With this split, the Chalk Lecture's last frame matches the board
+painted in one go to the pixel, at its own rate and under `--fps`.
+
+```postscript
+%!PS
+/rate 30 def                    % the declared frame rate, named once
+<< /Size [640 360] /Duration 4 /FPS rate /Persist true /Background [0.17 0.25 0.21] >> animation
+(lib/artkit.ps) run (lib/paintkit.ps) run (lib/drykit.ps) run
+(lib/handscript.ps) run (lib/strokeglyphs.ps) run (lib/drychalk.ps) run
+<< /Surface /greenboard >> dksurface
+% [start end {path}]: one subpath each, one after another
+/plan [
+  [ 0.1 1.4 { 100 120 moveto 540 130 lineto } ]
+  [ 1.6 3.2 { 320 200 80 270 630 arc } ]
+] def
+/keptat { rate mul 1e-6 sub ceiling cvi } def     % end time -> the step that keeps the stroke
+/stepnow { now rate mul 1e-9 add floor cvi } def  % the last step the scene has run
+/chalkto { % u {path} ->
+  /cp exch def /cu exch def
+  /white dcchalkcolor newpath cp << /Width 4 /Hand 0.6 /From 0 /To cu >> dcchalk
+} def
+/scene {                       % kept: each stroke once, whole, when it is done
+  plan { aload pop /cp exch def /t1 exch def pop
+    stepnow t1 keptat eq { 1 /cp load chalkto } if } forall
+} def
+/overlay {                     % shown, not kept: a stroke from its start until it is kept
+  plan { aload pop /cp exch def /t1 exch def /t0 exch def
+    now t0 gt stepnow t1 keptat lt and {
+      now t0 sub t1 t0 sub div 0 1 clamp /cp load chalkto } if } forall
+} def
+```
+
+`gallery/chalk-lecture/` is a whole lecture written this way, 265
+strokes in order with a hand's pace and a stick of chalk.
 
 On a **persistent** canvas, repainting the first `u` of a stroke every
 frame is harmless for opaque ink and wrong for a translucent wash: each
