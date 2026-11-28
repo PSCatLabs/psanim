@@ -87,9 +87,15 @@ agent with the report it came from (summarised in
    and Heron each wrote this from scratch (about 60 lines each).
    `revealband` is its first brick.
 2. **Equations as objects.** Run lists set a line and bring it in term
-   by term. Missing: matching terms between two lines so one equation
-   *becomes* the next (terms slide, cancel, appear), and mathkit's TeX
-   layout exposed per term so it can be used the same way.
+   by term, and `morphruns` (#104) makes one line become the next: terms
+   are paired by content in order or by tag (`[/as /key run]`), slide,
+   cross-fade when a tag joins different glyphs, and leave or arrive;
+   a chain of lines is one progress number, and a tagged term can hold
+   still (an aligned derivation). Still missing: mathkit's TeX layout
+   exposed per term so displayed formulas (radicals, big fractions,
+   matrices) can be matched the same way; colour per term inside a run
+   list (today a term is marked by drawing over its `runbox`); and
+   pairing a term with two (one 3 becoming two halves).
 3. **Soft and ragged reveals**: a feathered or noisy edge for `spotlight`,
    wipes and wash fronts, which now cut hard.
 4. **Transitions between storyboard beats**, reusing the reel's.
