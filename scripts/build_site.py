@@ -402,7 +402,7 @@ def build_reference():
 # The order of the page: a curated sequence. A piece not named here goes after
 # these, alphabetically, so a new piece shows up at the end until it is placed.
 GALLERY_ORDER = [
-    "orrery", "afterglow", "paper-boat", "tidewater", "murmuration", "taiji", "chalk-proof", "chalk-lecture",
+    "orrery", "afterglow", "paper-boat", "tidewater", "murmuration", "taiji", "chalk-proof", "chalk-lecture", "evening-harbour",
     "tesseract", "lissajous", "halftone", "neon", "ripple", "letter", "epicycles", "one-frame",
     "birthday", "canon", "circle-area", "complete-the-square", "end-credits", "fresh", "heron", "how-it-works",
     "buildfarm", "morph-clock", "campfire", "ship-it", "salt-roads", "twiddle", "departures",

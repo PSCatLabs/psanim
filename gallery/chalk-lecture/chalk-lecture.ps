@@ -13,31 +13,25 @@
 %   - Every stroke of the chalk is grown, not revealed: the stroke in
 %     progress is drawn each frame with `/From 0 /To u`, which PSCat
 %     0.8.0 made exact (behind the tip, what is drawn never changes).
-%   - Persistent canvas, with the stroke in progress in `overlay`. The
-%     board is painted once, on frame 0; a stroke is painted onto the
-%     board once, whole, on the frame it is finished, and until then is
-%     regrown from 0 in `overlay`, which is shown and never kept. Chalk
-%     is not opaque, so regrowing it on the kept canvas would lay the
-%     same stroke down again every frame.
+%   - Persistent canvas, scheduled by pkink's `paintplan`. The board is
+%     painted once, on frame 0; each stroke is kept on the board once,
+%     whole, on the step that finishes it (`paintkept`), and until then
+%     is regrown from 0 in `overlay` (`paintlive`), which is shown and
+%     never kept. Chalk is not opaque, so regrowing it on the kept canvas
+%     would lay the same stroke down again every frame. The plan counts
+%     the scene's own steps, so it is exact at any `--fps`
+%     (PSCatLabs/psanim#121, #122 were why this was once done by hand).
 %   - Strokes as data, as in Chalk Proof: every path (lettering from
 %     sgpath, formulas from mkpath, the diagram) is split in setup into
 %     its subpaths, one per stroke, each with its own times. A hand's
 %     pace: each stroke takes a moment plus its length over a speed, and
 %     the chalk is lifted for a time that grows with the distance to the
 %     next stroke.
-%   - The commit is by frame number, not by comparing `now dt sub` with
-%     an end time: in floating point a boundary can fall in two frames'
-%     intervals, and a stroke painted twice comes out heavier
-%     (PSCatLabs/psanim#121). Frames are counted at the declared rate,
-%     named once as `rate`: rendered at another `--fps`, the scene still
-%     steps at the declared rate while `fps` and the overlay's `frame`
-%     and `dt` are the output's (PSCatLabs/psanim#122). The overlay asks
-%     whether the scene has kept a stroke yet, by the scene's own steps,
-%     and shows it (at most whole) until it has.
+%   - The stick of chalk is at `painttip` while a stroke is written, and
+%     travels between strokes while it is lifted.
 %   - `--param oneshot=1` paints the finished board on frame 0 from the
-%     same strokes: the reference the last frame is compared with.
-/rate 30 def                     % the declared frame rate, used below to count the scene's steps
-<< /Size [1280 720] /Duration 38 /FPS rate /Persist true
+%     same plan (`paintall`): the reference the last frame is compared with.
+<< /Size [1280 720] /Duration 38 /FPS 30 /Persist true
    /Background [0.20 0.13 0.08]
    /Title (Chalk Lecture)
    /Description (The simple pendulum worked on a green board: the diagram, the force along the arc, the small-angle step and the period, every stroke of the chalk grown as a hand would draw it.)
@@ -46,6 +40,7 @@
 (lib/artkit.ps) run (lib/paintkit.ps) run (lib/drykit.ps) run
 (lib/handscript.ps) run (lib/strokeglyphs.ps) run (lib/drychalk.ps) run
 (lib/mathkit.ps) run
+/pkink use
 
 /oneshot /oneshot 0 param cvi 1 eq def
 /nostick /nostick 0 param cvi 1 eq def        % for tests: the chalk without the stick
@@ -204,37 +199,27 @@ end } forall
 /writingends start writing add def
 
 % ------------------------------------------------------------- per frame
-/growto {   % u ->   the stroke (its dict open) grown to u, in its colour
-  /gu exch def
-  col dcchalkcolor
-  newpath path opts dup length 2 add dict copy dup /From 0 put dup /To gu put dcchalk
+% The hand slows a little into and out of a stroke.
+/pace { dup /smooth ease 0.35 mul exch 0.65 mul add } def
+% u colour opts chalk -     the stroke (its path is current) grown to u
+/chalk {
+  /ch-o exch def /ch-c exch def /ch-u exch def
+  ch-c dcchalkcolor
+  ch-u 1 ge { ch-o } { ch-o dup length 2 add dict copy dup /From 0 put dup /To ch-u put } ifelse
+  dcchalk
 } def
-/whole { col dcchalkcolor newpath path opts dcchalk } def
-% The scene's steps are frames of the declared rate. `keptat` is the step
-% that keeps the stroke (its dict open): the first whose time is at or
-% after its end, a time within a millionth of a step of a step's time
-% counting as that step's. `stepnow` is the last step the scene has run
-% when `now` is shown (the engine's rule), in the scene or the overlay.
-/keptat { t1 rate mul 1e-6 sub ceiling cvi } def
-/stepnow { now rate mul 1e-9 add floor cvi } def
-/kept { keptat stepnow le } def      % -> bool: the stroke is on the kept canvas
+% The strokes as paintplan's: kept whole on the step that ends them,
+% regrown from 0 in the overlay until then.
+/plan [ strokes { begin
+  << /At t0 /Until t1 /Path /path load /Ease /pace load
+     /Paint [ col opts /chalk cvx ] cvx
+     /col col /xy0 xy0 /xy1 xy1 >>
+end } forall ] paintplan def
 
 /scene {
-  oneshot {
-    frame 0 eq { board strokes { begin whole end } forall } if
-  } {
-    frame 0 eq { board } if
-    strokes { begin stepnow keptat eq { whole } if end } forall
-  } ifelse
+  frame 0 eq { board oneshot { plan paintall } if } if
+  oneshot not { plan paintkept } if
 } def
-
-% The stroke in progress, regrown from 0 each frame. The hand slows a
-% little into and out of a stroke.
-/pace { dup /smooth ease 0.35 mul exch 0.65 mul add } def
-/active {   % -> true from the stroke's start until the scene has kept it
-  now t0 gt kept not and
-} def
-/uat { now t0 sub t1 t0 sub div 0 1 clamp pace } def
 
 % ---------------------------------------------------------- the stick
 /sticktints << /white [0.95 0.95 0.92] /yellow [0.96 0.88 0.45] /blue [0.55 0.72 0.90] /pink [0.95 0.62 0.68] >> def
@@ -255,23 +240,17 @@ end } forall
 
 /overlay {
   oneshot not {
-    0 1 nstrokes 1 sub { /si exch def
-      strokes si get begin
-      % a finished stroke stays here, whole, until the scene has kept it;
-      % the stick is on it only while it is being written
-      active {
-        uat growto
-        now t1 le { newpath path uat pathpoint pop newpath col stick } if
-      } if
-      now t0 le {
-        % lifted: the stick travels from where the last stroke ended
-        si 0 gt { strokes si 1 sub get /t1 get now lt } { false } ifelse {
-          strokes si 1 sub get dup /xy1 get exch /t1 get   % xy1 t1'
-          now 1 index sub t0 3 -1 roll sub div /smooth ease exch xy0 between
-          aload pop col stick
-        } if
-      } if
-      end
+    plan paintlive
+    % the stick on the stroke being written
+    plan painttip { plan /Strokes get exch get /col get exch pop stick } if
+    % lifted: the stick travels from where the last stroke ended
+    /ss plan /Strokes get def
+    1 1 ss length 1 sub { /si exch def
+      ss si 1 sub get /Until get dup now lt ss si get /At get now ge and {
+        ss si 1 sub get /xy1 get exch   % xy1 t1'
+        now 1 index sub ss si get /At get 3 -1 roll sub div /smooth ease exch ss si get /xy0 get between
+        aload pop ss si get /col get stick
+      } { pop } ifelse
     } for
   } if
 } def

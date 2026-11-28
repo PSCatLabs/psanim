@@ -123,6 +123,19 @@ Full reasoning in `docs/architecture.md`.
     same mask fixes them, but a 12-item cascade then measured +3.9 ms a
     frame inside a `within` (+1.0 ms unclipped), so that is a follow-up.
 
+14. **A persistent movie counts its own steps** (#107, #121, #122). Its
+    scene steps at the declared FPS whatever `--fps` it is shown at;
+    `steprate`, `stepnow` and `t stepat` say so in setup, the scene and
+    the overlay alike (`fps` stays the rate frames are shown at). Every
+    step starts from the canvas's 8-bit pixels: PSCat's 16-bit shadow of
+    composited fills is dropped first, because the overlay and the
+    checkpoints drop it anyway, and a canvas that kept it only sometimes
+    differed by a level between playing and seeking. pkink's `paintplan`
+    is built on both: each stroke kept once, whole, on the step that
+    finishes it (each unit composited from 8-bit pixels too), the strokes
+    in progress regrown in the overlay. The last frame is the board
+    painted in one go, at any rate.
+
 ## How the gallery was made, and what it taught
 
 Two pieces (`epicycles`, `one-frame`) were written by hand while building
@@ -208,7 +221,7 @@ built; `docs/roadmap.md` ranks it.
 
 ## Next steps
 
-`docs/roadmap.md`, in two lists. For the vocabulary: a stroke scheduler
-for painting over time, equations that transform, soft reveal edges. For
+`docs/roadmap.md`, in two lists. For the vocabulary: equations that
+transform, soft reveal edges (the stroke scheduler is `paintplan`). For
 the engine: get the PSCat branch reviewed and merged; a Worker-based
 browser player; an MCP server over the CLI's JSON.
