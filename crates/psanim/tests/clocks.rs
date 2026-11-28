@@ -3,6 +3,17 @@
 
 use psanim::{Movie, Options, Param};
 
+/// The name pkpixel's table gives the face in PSCat's `lib/fonts/{file}.ps`
+/// (the first, if the file defines several), without the slash.
+fn face(file: &str) -> &'static str {
+    let path = format!("lib/fonts/{file}.ps");
+    psanim::pixel_faces()
+        .into_iter()
+        .find(|(_, f)| *f == path)
+        .map(|(n, _)| n)
+        .unwrap_or_else(|| panic!("no face for {path} in pkpixel's table"))
+}
+
 const CLOCKS: &[&str] = &[
     "clock-analog",
     "clock-digital",
@@ -109,4 +120,19 @@ fn every_theme_draws_every_clock() {
             seen.push(px);
         }
     }
+}
+
+#[test]
+fn the_led_sign_clock_can_be_set_in_the_diode7_face() {
+    let src = psanim::catalog::source("clock-ledsign").unwrap();
+    let mut opts = Options::default();
+    opts.params.insert("Scroll".into(), Param::Number(0.0));
+    opts.params.insert("Start".into(), Param::parse("10:00:00"));
+    let mut own = Movie::load(src, &opts).unwrap();
+    opts.params
+        .insert("Font".into(), Param::Text(face("diode7").into()));
+    let mut face = Movie::load(src, &opts).unwrap();
+    // Diode7's zero is slashed and pkpixel's is not: the same time, other dots.
+    assert_ne!(at(&mut own, 0.0), at(&mut face, 0.0));
+    assert_eq!(at(&mut face, 0.0), at(&mut face, 0.0));
 }

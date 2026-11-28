@@ -566,7 +566,7 @@ pub const API: &[ApiEntry] = &[
         "text",
         "typed",
         "string u  typed  string",
-        "The first u (0..1) of the string, by characters: a typewriter reveal.",
+        "The first u (0..1) of the string, by the characters the current font draws: a typewriter reveal. In a font that reads UTF-8 (any `face` font) a character is a whole grapheme, so a letter and its accent, a flag or an emoji sequence are never cut; in a font that reads bytes it is a byte, as PostScript has it.",
     ),
     e(
         "text",
@@ -612,9 +612,21 @@ pub const API: &[ApiEntry] = &[
     ),
     e(
         "text",
+        "charcount",
+        "string  charcount  n",
+        "How many characters the string has read as UTF-8 text, as a reader counts them: its grapheme clusters, so an accented letter, a flag, a skin-toned or ZWJ emoji is one; a byte that is not part of a well-formed sequence counts as one; ASCII is its length. It looks at the text only, not the current font: the words that draw (`typed`, `eachglyph`, `eachspaced`, `eachonpath`, `spacedwidth`, `kinetic`'s /glyphs) step the way the current font reads, which for a font chosen with findfont is by byte.",
+    ),
+    e(
+        "text",
+        "unicodefont",
+        "font  unicodefont  font'",
+        "A copy of the font that reads its strings as UTF-8: accents, Greek, Cyrillic, signs and colour emoji, with the characters its face lacks taken from PSCat's fallback faces. `face` does this already; this is for a font chosen with findfont: `/Helvetica findfont unicodefont 24 scalefont setfont`. Symbol, ZapfDingbats and Type 3 fonts come back unchanged. Korean, Japanese, Chinese, Thai, Arabic, the Indic scripts and others have no glyphs yet: they draw an empty box, and `check` names each.",
+    ),
+    e(
+        "text",
         "eachglyph",
         "string proc  eachglyph  -",
-        "Run proc once per character with `(c) i` on the stack (the character as a one-character string, and its index) and the current point at that character's origin. The font must be set. proc consumes both operands; `{ pop show }` reproduces show. The current point is set afresh before each call, so proc may move it, build paths and paint; graphics state it changes (colour, CTM) stays changed, so wrap transforms in gsave/grestore.",
+        "Run proc once per character with `(c) i` on the stack (the character as a string, and its index; a character is a whole grapheme in a font that reads UTF-8, a byte in one that reads bytes) and the current point at that character's origin. The font must be set. proc consumes both operands; `{ pop show }` reproduces show. The current point is set afresh before each call, so proc may move it, build paths and paint; graphics state it changes (colour, CTM) stays changed, so wrap transforms in gsave/grestore.",
     ),
     e(
         "text",
@@ -638,7 +650,7 @@ pub const API: &[ApiEntry] = &[
         "reel",
         "reel",
         "[ [dur proc] [dur /transition] [dur proc] ... ]  reel  -",
-        "Play clips in order with transitions between them. A transition overlaps the end of the clip before it and the start of the clip after it. Transitions: /cut /dissolve /dip /wipe-left /wipe-right /wipe-up /wipe-down /iris /push-left /push-right /zoom. A clip need not paint a ground: clips that draw only their own subject transition over whatever the scene drew before the reel.",
+        "Play clips in order with transitions between them. A transition overlaps the end of the clip before it and the start of the clip after it. Transitions: /cut /dissolve /dip /wipe-left /wipe-right /wipe-up /wipe-down /iris /push-left /push-right /zoom. Under /dissolve, the wipes and /iris the incoming clip is drawn over the outgoing one, which is not faded: each clip must paint its own ground (`ground`, `backdrop`), or what the incoming clip does not cover stays at full strength through the transition and vanishes at its end. /cut, /dip, /push-left, /push-right and /zoom also work with clips that draw only their own subject over whatever the scene drew before the reel.",
     ),
     e(
         "reel",
@@ -650,7 +662,7 @@ pub const API: &[ApiEntry] = &[
         "reel",
         "transitions",
         "-  transitions  dict",
-        "The dictionary of transitions. To define your own, put a procedure there: `transitions /t-shutter { ... } put`, then use `[dur /t-shutter]` in a reel. Name it with a `t-` prefix, or define it before the reel is measured with reelduration: otherwise reelduration counts the entry as a clip, and loading the movie fails, naming it. It is called with `procA procB u`: draw the frame that is u (0 to 1, linear) of the way from A to B. A and B are ready-made procedures that draw each clip with its own clock still running; call them inside gsave/grestore with whatever clip, transform or layer the transition needs.",
+        "The dictionary of transitions. To define your own, put a procedure there: `transitions /t-shutter { ... } put`, then use `[dur /t-shutter]` in a reel (or between a storyboard's beats, defined before the storyboard). Name it with a `t-` prefix, or define it before the reel is measured with reelduration: otherwise reelduration counts the entry as a clip, and loading the movie fails, naming it. It is called with `procA procB u`: draw the frame that is u (0 to 1, linear) of the way from A to B. A and B are ready-made procedures that draw each clip with its own clock still running; call them inside gsave/grestore with whatever clip, transform or layer the transition needs. Between storyboard beats each beat's `inbeat` draws its own side (A with an empty B, then an empty A with B), so a transition used there must draw A's part and then B's part, neither depending on the other, as every built-in one does.",
     ),
     e(
         "input",
@@ -782,14 +794,14 @@ pub const API: &[ApiEntry] = &[
     e(
         "story",
         "storyboard",
-        "[ /name seconds /name seconds ... ]  storyboard  -",
-        "Name the stretches of the film, in order. Call it before `animation` and use `storylength` for /Duration; then place things by beat name instead of by second, so retiming the film is editing one list.",
+        "[ /name seconds [seconds /transition] /name seconds ... ]  storyboard  -",
+        "Name the stretches of the film, in order. Call it before `animation` and use `storylength` for /Duration; then place things by beat name instead of by second, so retiming the film is editing one list. Between two beats the picture cuts, unless a transition is written between them: `[ /intro 4 [0.6 /dissolve] /main 8 ]`, any name in `transitions`, defined before the storyboard. As in a reel it overlaps the two beats: the next beat starts that many seconds before this one ends, so the film is shorter by it, and each beat keeps its full length and its clock. Under /dissolve, the wipes and /iris each beat on either side must paint its own ground (`ground` or `backdrop` first), as a reel's clips must. The `inbeat` calls come in the storyboard's order: drawing the outgoing beat after the incoming one in a transition is an error. Draw what the beats share after all of them. A beat lasts at least the transitions into and out of it together.",
     ),
     e(
         "story",
         "storylength",
         "-  storylength  seconds",
-        "The total length of the storyboard.",
+        "The total length of the storyboard: the beats added up, less the transitions between them.",
     ),
     e(
         "story",
@@ -801,19 +813,19 @@ pub const API: &[ApiEntry] = &[
         "story",
         "beatspan",
         "/name  beatspan  a b",
-        "The start and end of the named beat, on the movie's clock: operands for `during` at the top level of a scene.",
+        "The start and end of the named beat, on the movie's clock: operands for `during` at the top level of a scene. With a transition the spans of two beats overlap by its length.",
     ),
     e(
         "story",
         "inbeat",
         "/name proc  inbeat  -",
-        "Run proc during the named beat, with the clock starting from 0 at the beat's start and `span` its length, whatever time scopes are open.",
+        "Run proc during the named beat, with the clock starting from 0 at the beat's start and `span` its length, whatever time scopes are open. In a transition into or out of the beat, proc is that side of it: the incoming beat drawn over the outgoing one, both on their own clocks.",
     ),
     e(
         "story",
         "frombeat",
         "/name proc  frombeat  -",
-        "Run proc from the start of the named beat to the end of the film, with the clock starting from 0 there: for something a beat introduces that then stays.",
+        "Run proc from the start of the named beat to the end of the film, with the clock starting from 0 there: for something a beat introduces that then stays. It comes in with the transition into the beat, if there is one, and no later transition takes it away.",
     ),
     e(
         "story",
@@ -1185,7 +1197,7 @@ pub const API: &[ApiEntry] = &[
         "pkstage",
         "face",
         "/role size  face  -",
-        "Select a font by theme role at a size: /title /body /mono /display /serif. Any font name works too (`/Palatino-Italic 30 face`).",
+        "Select a font by theme role at a size: /title /body /mono /display /serif. Any font name works too (`/Palatino-Italic 30 face`). The font reads its strings as UTF-8 (`unicodefont`), so `(Grüße 👋)` shows as written; Symbol and ZapfDingbats keep their own codes.",
     ),
     e(
         "pkstage",
@@ -1293,7 +1305,7 @@ pub const API: &[ApiEntry] = &[
         "pktype",
         "sym",
         "/name  sym  -",
-        "Show a mathematical sign or Greek letter at the current point at the current font's size, keeping the font: /neq /le /ge /approx /pm /times /div /dot /infinity /degree /arrow /larrow /uparrow /downarrow /implies /sum /product /sqrt /integral /in /bullet, and /alpha /beta /gamma /delta /epsilon /theta /lambda /mu /pi /rho /sigma /tau /phi /omega /Delta /Sigma /Pi /Omega. The text fonts have no such characters: a non-ASCII character in a string shows as a blank. `(kiwi ) show /neq sym ( plum) show`.",
+        "Show a mathematical sign or Greek letter at the current point at the current font's size, keeping the font: /neq /le /ge /approx /pm /times /div /dot /infinity /degree /arrow /larrow /uparrow /downarrow /implies /sum /product /sqrt /integral /in /bullet /minus (a true minus sign, wider than the hyphen), and /alpha /beta /gamma /delta /epsilon /theta /lambda /mu /pi /rho /sigma /tau /phi /omega /Delta /Sigma /Pi /Omega. A font chosen with `face` also takes the sign typed into the string as UTF-8; `sym` sets it in Symbol's design and works in any font. `(kiwi ) show /neq sym ( plum) show`.",
     ),
     e(
         "pktype",
@@ -1311,7 +1323,7 @@ pub const API: &[ApiEntry] = &[
         "pktype",
         "showruns",
         "runs  showruns  -",
-        "Show a line of mixed type at the current point, in the current font and colour. A run list is an array of (text), /name (a sign from `symbols`: /pi /times ...), [/it (r)] (italic, as variables are set), [/sup x], [/sub x] and [/frac a b]: `[ (Area = ) /pi [/it (r)] [/sup (2)] ] showruns`.",
+        "Show a line of mixed type at the current point, in the current font and colour. A run list is an array of (text), /name (a sign from `symbols`: /pi /times ...), [/it (r)] (italic, as variables are set), [/sup x], [/sub x] and [/frac a b]: `[ (Area = ) /pi [/it (r)] [/sup (2)] ] showruns`. [/as /key run] tags a term for `morphruns` and draws as the run; an array of runs, `[ /minus (5) ]`, is a group set as one term.",
     ),
     e(
         "pktype",
@@ -1324,6 +1336,12 @@ pub const API: &[ApiEntry] = &[
         "runwidth",
         "runs  runwidth  w",
         "The width of a run list in the current font, for centring it.",
+    ),
+    e(
+        "pktype",
+        "morphruns",
+        "[ runs runs ... ] s  morphruns  -    or  [ runs ... ] s /align|opts  morphruns  -",
+        "One equation becoming the next, at the current point. s goes from 0 (the first line, exactly as `showruns` sets it) to n-1 (the last): between k and k+1, terms of line k slide to their places in line k+1, terms with no partner fade away and new ones fade in. A term matches the first unmatched equal term of the other line, so the second x stays the second x; tag terms `[/as /key run]` to pair them otherwise, or to pair terms that look different (`[/as /n (+ 6)]` becoming `[/as /n (- 6)]` slides and cross-fades). No clock: make s with `keyframes`, holding each line, `[1 0  2.5 1 /cubic-inout  5 1  6.5 2 /cubic-inout] keyframes`. opts: /Align /left /center /right (or /l /c /r), or a tag every line has, whose centre then stays on the current point (an aligned derivation); /Arc 1 (terms crossing lift apart; 0 for straight); /Rise 0.25 (ems a leaving or arriving term drifts). Keeps the current point.",
     ),
     e(
         "pktype",
@@ -1693,6 +1711,24 @@ pub const API: &[ApiEntry] = &[
     ),
     e(
         "pkchart",
+        "serieslabels",
+        "[ pts ... ] [ (name) ... ] opts  serieslabels  -",
+        "Name each line at its end, in its colour, so no legend is needed: the names are moved apart where lines end close together (in order, as little as possible, with a short leader when one is moved) and kept within the frame's height; when more names end together than fit in it, the gap between them shrinks evenly so they stay inside (and overlap). Names slide as the ends move, as long as the ends keep their order; where two ends cross, their names trade places. Each pts is what `plotline` takes ([ [x y] ... ]) or `seriesline` takes ([ y ... ]). Line i is in role i of /Roles: stroke it with `chartroles i get ink`. opts: << /Roles chartroles /Draw u (or [ u ... ], one per line: how much is drawn, the number given to `0 u trimpath`) /X x (instead: the lines are drawn up to data x, e.g. clipped there) /Ride false (true: each name rides its line's drawn end; otherwise it fades in at the end as the line completes) /Size 3 vmin /Face /title /Gap (between baselines, 1.2 x /Size) /Pad (from the line's end, 0.7 x /Size) /Leader true >>. An empty series is skipped. Names are written right of the frame's box: inset the box to leave room for them.",
+    ),
+    e(
+        "pkchart",
+        "tracer",
+        "pts x opts  tracer  -",
+        "A point riding a line at data x, read between the data points: a dot on the line, a dashed drop to the x axis and its value beside it (to the left near the frame's right edge). Tween x to move it. opts: << /Along false (true: x is the drawn fraction, as for `0 u trimpath`, so the tracer leads the pen) /Role /accent /Radius 0.9 vmin /Size 3 vmin /Draw u (brought in, 0..1) /Decimals 0 /Prefix () /Suffix () (the value, as `fmtnum` writes it) /XDecimals n (write x before the value, as `fmtfixed` does: a year; the value is then the line's at x as written, so the pair shown is a true reading while the dot glides) /Drop true /Readout true /Plate true (a backing in /bg under the readout, so it reads over lines) >>. An empty series draws nothing.",
+    ),
+    e(
+        "pkchart",
+        "lineat",
+        "pts x  lineat  y",
+        "The line through the points read at data x: straight between data points, the end value beyond either end. pts as for `plotline` or `seriesline`; the points must be in increasing x (equal x is a step), and no points, or x going back, is a rangecheck. For a readout of your own: `pts year lineat 1 fmtnum show`.",
+    ),
+    e(
+        "pkchart",
         "chartroles",
         "-  chartroles  [ /role ... ]",
         "The roles marks cycle through when none are given.",
@@ -1831,9 +1867,21 @@ pub const API: &[ApiEntry] = &[
     ),
     e(
         "pkpixel",
+        "pixelvariant",
+        "/new /face dials  pixelvariant  -",
+        "Define /new as a copy of a pixel face with its dials changed: `/Round /Phosphor << /DotShape /round /DotSize 0.85 >> pixelvariant`. Dials: /DotShape /square or /round, /DotSize (fraction of the pitch, up to 4), /ScanGap (0 to below 1, square marks), /Interpolate (true adds dots between neighbours, round marks). The faces' own `pf-variant`, without its name in your dictionaries. Once, in setup; then `/Round findfont`.",
+    ),
+    e(
+        "pkpixel",
         "pixelfont",
         "rows  pixelfont  font",
-        "A pixel font of 5, 7 or 9 rows, as a dictionary from character code to the character's columns (see `pixelcols`). The 7-row font has capitals, digits, lower case with descenders held to the last row and punctuation; the 5-row font has capitals, digits and punctuation; the 9-row font is the 7-row one with the descenders of g j p q y hanging below the baseline. Build it once, in setup.",
+        "A pixel font of 5, 7 or 9 rows, as a dictionary from character code to the character's columns (see `pixelcols`). The 7-row font has capitals, digits, lower case with descenders held to the last row and punctuation; the 5-row font has capitals, digits and punctuation; the 9-row font is the 7-row one with the descenders of g j p q y hanging below the baseline. Given the name of one of PSCat's pixel faces instead of a number (`/Diode7 pixelfont`; see `pixelface`), the same from that face's bitmaps: printable ASCII, a monospaced face's glyphs padded to its cell, psanim's degree sign lent. `font /Rows get` is the height in rows. Build it once, in setup (a face's columns are kept after the first call there; in a scene they are rebuilt every frame).",
+    ),
+    e(
+        "pkpixel",
+        "pixelface",
+        "name  pixelface  font",
+        "`findfont` for PSCat's pixel faces, which `findfont` does not load by name (it hands back a substitute): the first call runs the face's file (lib/fonts/...) in a dictionary of its own, so nothing the file defines (pf-variant, PhosphorDict ...) lands among the movie's names; later calls find it. The faces: /Phosphor and /Phosphor-Scan (an 8x16 video terminal), /Pinpoint-Draft and /Pinpoint-NLQ (a 9-pin dot-matrix printer), /Diode7 and /Diode5 (LED signs). Another name must be a font that exists: a misspelt one is an error, not Helvetica. Call it in setup and keep the font (`/crt /Phosphor pixelface def`, then `crt 32 scalefont setfont` in the scene): called in the scene it loads the file again every frame. Printable ASCII only. The names are kept in one table in pkpixel.",
     ),
     e(
         "pkpixel",

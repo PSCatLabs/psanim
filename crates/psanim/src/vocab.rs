@@ -66,6 +66,31 @@ pub const LIBRARIES: &[(&str, &str, &str)] = &[
     ),
 ];
 
+/// PSCat's pixel faces as pkpixel names them, with the file that defines
+/// each: read from the `.pxfaces` table in `lib/pkpixel.ps`, the one place
+/// the names are kept.
+pub fn pixel_faces() -> Vec<(&'static str, &'static str)> {
+    let src = LIBRARIES
+        .iter()
+        .find(|l| l.0 == "pkpixel")
+        .map(|l| l.1)
+        .unwrap_or_default();
+    let Some(start) = src.find("/.pxfaces <<") else {
+        return Vec::new();
+    };
+    src[start..]
+        .lines()
+        .skip(1)
+        .take_while(|l| !l.trim_start().starts_with(">>"))
+        .filter_map(|l| {
+            let l = l.trim_start().strip_prefix('/')?;
+            let (name, rest) = l.split_once(char::is_whitespace)?;
+            let file = rest.trim_start().strip_prefix('(')?.split_once(')')?.0;
+            Some((name, file))
+        })
+        .collect()
+}
+
 fn spec_from(i: &mut Interp, ctx: &Shared) -> Result<Spec, PsError> {
     let v = i.pop_value()?;
     match Spec::parse(&v) {
@@ -91,6 +116,36 @@ fn split_text(bytes: &[u8]) -> String {
 }
 
 /// `value` with `decimals` places, optionally grouped in thousands.
+/// Where each character of a string starts, as byte offsets, with the
+/// string's length last (so character `k` is `offsets[k]..offsets[k + 1]`).
+///
+/// `utf8`: the string is read as UTF-8, as a Unicode-mode font draws it.
+/// Then a character is what a reader counts as one, an extended grapheme
+/// cluster (UAX #29): an accent stays on its letter, and a flag, a skin
+/// tone, a keycap or a ZWJ family stays whole. A byte that is not part of a
+/// well-formed sequence is a character of its own, as PSCat draws it (one
+/// replacement glyph), so one stray byte never changes how the rest of the
+/// string is cut. Otherwise (a byte font) every byte is a character.
+pub fn char_offsets(s: &[u8], utf8: bool) -> Vec<usize> {
+    if !utf8 || s.is_ascii() {
+        return (0..=s.len()).collect();
+    }
+    use unicode_segmentation::UnicodeSegmentation;
+    let mut v = Vec::new();
+    let mut at = 0;
+    for chunk in s.utf8_chunks() {
+        let valid = chunk.valid();
+        v.extend(valid.grapheme_indices(true).map(|(k, _)| at + k));
+        at += valid.len();
+        for _ in chunk.invalid() {
+            v.push(at);
+            at += 1;
+        }
+    }
+    v.push(s.len());
+    v
+}
+
 pub fn format_number(value: f64, decimals: i64, grouped: bool) -> String {
     let d = decimals.clamp(0, 9) as usize;
     let s = format!("{:.*}", d, value.abs());
@@ -472,6 +527,96 @@ fn straighten(poly: &pathmath::Poly, u: f64, anchor: f64) -> Vec<(f64, f64)> {
     out
 }
 
+/// A storyboard is `/name seconds` pairs, with `[seconds /transition]`
+/// between two of them. A transition overlaps the beats beside it, as in a
+/// reel, so it is no longer than either, and a beat is no shorter than the
+/// transitions into and out of it together (only two beats are ever on
+/// screen at once).
+/// `a > b` beyond rounding: durations written in decimals (0.1 + 0.2 and
+/// 0.3) are compared as the author meant them.
+fn exceeds(a: f64, b: f64) -> bool {
+    a > b + 1e-9 * a.abs().max(b.abs()).max(1.0)
+}
+
+pub(crate) fn check_storyboard(
+    items: &[Value],
+    is_transition: &dyn Fn(&str) -> bool,
+) -> Result<(), String> {
+    const SHAPE: &str =
+        "storyboard: the entries are /name seconds, with [seconds /transition] between two beats";
+    let mut seen: Vec<&str> = Vec::new();
+    // The beat before (name, seconds, the transition into it), and a
+    // transition waiting for the beat after it.
+    let mut prev: Option<(&str, f64, f64)> = None;
+    let mut pending: Option<f64> = None;
+    let mut k = 0;
+    while k < items.len() {
+        match &items[k] {
+            Value::Name(n) => {
+                let Some(secs) = items
+                    .get(k + 1)
+                    .and_then(|v| v.as_f64())
+                    .filter(|s| *s >= 0.0)
+                else {
+                    return Err(format!(
+                        "storyboard: /{n} needs its length after it, in seconds (0 or more): [ ... /{n} 2 ... ]"
+                    ));
+                };
+                if seen.contains(&n.as_str()) {
+                    return Err(format!(
+                        "storyboard: there are two beats named /{n}: give each beat its own name"
+                    ));
+                }
+                seen.push(n);
+                let lead = pending.take().unwrap_or(0.0);
+                if let Some((p, psecs, pin)) = prev
+                    && lead > 0.0
+                {
+                    if exceeds(lead, psecs) || exceeds(lead, secs) {
+                        return Err(format!(
+                            "storyboard: the transition between /{p} and /{n} is longer than one of them"
+                        ));
+                    }
+                    if exceeds(pin + lead, psecs) {
+                        return Err(format!(
+                            "storyboard: /{p} is shorter than the transitions into and out of it together"
+                        ));
+                    }
+                }
+                prev = Some((n, secs, lead));
+                k += 2;
+            }
+            Value::Array(a) => {
+                let [d, Value::Name(t)] = a.as_slice() else {
+                    return Err(SHAPE.into());
+                };
+                let Some(d) = d.as_f64().filter(|d| *d > 0.0) else {
+                    return Err(format!(
+                        "storyboard: a transition [seconds /{t}] lasts more than 0 seconds"
+                    ));
+                };
+                if !is_transition(t) {
+                    return Err(format!(
+                        "storyboard: /{t} is not a transition (a key of `transitions`; define your own before the storyboard)"
+                    ));
+                }
+                if prev.is_none() || pending.is_some() {
+                    return Err(format!(
+                        "storyboard: the transition [{d} /{t}] must come between two beats"
+                    ));
+                }
+                pending = Some(d);
+                k += 1;
+            }
+            _ => return Err(SHAPE.into()),
+        }
+    }
+    if pending.is_some() {
+        return Err("storyboard: the last entry is a transition with no beat after it".into());
+    }
+    Ok(())
+}
+
 pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     // --- libraries ----------------------------------------------------------
     reg(interp, ctx, ".libsource", |i, ctx| {
@@ -515,6 +660,73 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 "the storyboard has no beat /{name}. Declare beats with [ /name seconds ... ] storyboard, before `animation`."
             ),
         )
+    });
+
+    // array .storycheck -    the checks `storyboard` makes before it opens a
+    // dictionary, so a malformed storyboard leaves none open.
+    reg(interp, ctx, ".storycheck", |i, ctx| {
+        let Value::Array(items) = i.pop_value()? else {
+            return fail(
+                ctx,
+                PsError::Typecheck,
+                "storyboard takes an array: [ /name seconds [seconds /transition] /name seconds ... ]",
+            );
+        };
+        let known: Vec<String> = match i.lookup("transitions") {
+            Some(Value::Dict(entries)) => entries.into_iter().map(|(k, _)| k).collect(),
+            _ => crate::ops::TRANSITIONS
+                .iter()
+                .map(|t| t.to_string())
+                .collect(),
+        };
+        match check_storyboard(&items, &|n| known.iter().any(|k| k == n)) {
+            Ok(()) => Ok(()),
+            Err(msg) => fail(ctx, PsError::Rangecheck, msg),
+        }
+    });
+
+    // - .storyid id    a new id for a transition between storyboard beats
+    reg(interp, ctx, ".storyid", |i, ctx| {
+        let mut c = ctx.borrow_mut();
+        c.story_ids += 1;
+        i.push_int(c.story_ids);
+        Ok(())
+    });
+    // /from /to /kind id outgoing? .beatside -    a side of a transition
+    // between beats is about to be drawn. The incoming side must be drawn
+    // over the outgoing one, so drawing the outgoing side when this frame
+    // has drawn more incoming sides than outgoing is an error.
+    reg(interp, ctx, ".beatside", |i, ctx| {
+        let out = i.pop_bool()?;
+        let id = i.pop_f64()? as i64;
+        let kind = i.pop_name()?;
+        let to = i.pop_name()?;
+        let from = i.pop_name()?;
+        let mut c = ctx.borrow_mut();
+        let k = match c.beat_sides.iter().position(|s| s.0 == id) {
+            Some(k) => k,
+            None => {
+                c.beat_sides.push((id, 0, 0));
+                c.beat_sides.len() - 1
+            }
+        };
+        let side = &mut c.beat_sides[k];
+        if out && side.2 > side.1 {
+            drop(c);
+            return fail(
+                ctx,
+                PsError::Rangecheck,
+                format!(
+                    "draw /{from} before /{to}: the storyboard goes from /{from} to /{to} with /{kind}, and /{to} must be drawn over /{from}. Put /{from}'s inbeat before /{to}'s (and /{to}'s frombeat after both)"
+                ),
+            );
+        }
+        if out {
+            side.1 += 1;
+        } else {
+            side.2 += 1;
+        }
+        Ok(())
     });
 
     // --- viewports ----------------------------------------------------------
@@ -766,6 +978,25 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let mut a = i.pop_string()?;
         a.extend_from_slice(&b);
         i.push_string(&a);
+        Ok(())
+    });
+    // (str) charcount -> n          characters of UTF-8 text (see `char_offsets`)
+    reg(interp, ctx, "charcount", |i, _| {
+        let s = i.pop_string()?;
+        i.push_int(char_offsets(&s, true).len() as i64 - 1);
+        Ok(())
+    });
+    // (str) utf8 .charoffsets -> [0 ... length]   where each character starts,
+    // read as UTF-8 or as bytes
+    reg(interp, ctx, ".charoffsets", |i, _| {
+        let utf8 = i.pop_bool()?;
+        let s = i.pop_string()?;
+        i.push_value(&Value::Array(
+            char_offsets(&s, utf8)
+                .into_iter()
+                .map(|k| Value::Int(k as i64))
+                .collect(),
+        ))?;
         Ok(())
     });
     reg(interp, ctx, "fmtnum", |i, _| {

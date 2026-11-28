@@ -120,6 +120,12 @@ pub(crate) struct Ctx {
     /// Planes opened by `onplane`, innermost last: where the plane is, and
     /// the CTM (as `currentmatrix` gives it) the plane's coordinates are in.
     pub planes: Vec<(crate::plane::Plane, [f64; 6])>,
+    /// The next id `storyboard` gives a transition between beats.
+    pub story_ids: i64,
+    /// For each storyboard transition drawn in this moment: its id, and how
+    /// many times its outgoing and its incoming side were drawn, so a
+    /// side drawn out of order is an error rather than a wrong picture.
+    pub beat_sides: Vec<(i64, u32, u32)>,
     /// The directory relative component paths are read from: the movie
     /// file's own, when the host knows it.
     pub base_dir: Option<std::path::PathBuf>,
@@ -231,6 +237,8 @@ impl Ctx {
             cell_work: 0.0,
             cells: crate::ca::Cache::default(),
             planes: Vec::new(),
+            story_ids: 0,
+            beat_sides: Vec::new(),
             base_dir: None,
             measured_reels: Vec::new(),
             hint: None,
@@ -322,6 +330,7 @@ impl Ctx {
         self.gust_work = 0.0;
         self.cell_work = 0.0;
         self.planes.clear();
+        self.beat_sides.clear();
         self.hint = None;
         self.failure = None;
         self.hint_op = None;

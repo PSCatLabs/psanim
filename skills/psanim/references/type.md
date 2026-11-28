@@ -16,7 +16,9 @@ Scene bodies below run on a 640x360 canvas, 4 seconds, libraries loaded.
 - [Marking a word](#marking-a-word)
 - [Numbers that count](#numbers-that-count)
 - [Typing](#typing)
+- [Text in any language](#text-in-any-language)
 - [Emoji](#emoji)
+- [Pixel faces: terminals, printers, LED signs](#pixel-faces-terminals-printers-led-signs)
 - [Captions](#captions)
 - [End credits](#end-credits)
 - [Mathematics](#mathematics)
@@ -209,12 +211,80 @@ planmark` (see [catalog.md](catalog.md)).
 } def
 ```
 
+## Text in any language
+
+A font chosen with `face` reads its strings as UTF-8: write the text as it
+is, in a `.ps` file saved as UTF-8. Accented Latin, Greek, Cyrillic, signs
+(→ ≠ ± €) and colour emoji (👋🏽 🇯🇵 👨‍👩‍👧, flags, skin tones, keycaps and
+ZWJ sequences joined) draw from the font's own face or from PSCat's
+fallback faces, and `stringwidth` measures what `show` draws, so
+`showin`, `fitface`, `paragraph`, `kinetic` and `captions` place it right.
+
+```postscript
+ground /title 40 face /fg ink
+(Grüße · Привет · Γειά σου) [40 220 560 80] /c showin
+/body 30 face /accent ink
+(¡Hola! 👋🏽  café ☕  1 → 2  🇫🇷 🇧🇷 🇺🇦) [40 120 560 60] /c showin
+```
+
+The words that step through a string by character (`typed`, `typewrite`,
+`eachglyph`, `eachspaced`, `eachonpath`, `spacedwidth`, `kinetic`'s
+`/glyphs`, the karaoke in `captions`, the code block's `/Reveal`) step
+the way the current font reads. In a `face` font that is by what a reader
+calls a character, the string's grapheme clusters: `é` (one code point or
+`e` and a combining accent), `🇫🇷` and `👨‍👩‍👧` are one each, and these
+words do not cut them. A byte that is not well-formed UTF-8 is a
+character of its own (PSCat draws it as one replacement box). In a font
+chosen with `findfont`, which reads bytes, they step by byte, as they
+always did. `(text) charcount` counts the text's characters as UTF-8,
+whatever the font. Cutting a string yourself with `getinterval` can still
+split a character: cut with `typed` instead.
+
+```postscript
+ground /display 56 face /fg ink
+(Olá 👋🏽 🌍) [40 140 560 100] /c placetext (Olá 👋🏽 🌍) /glyphs 0.12 /pop kinetic
+/body 26 face /muted ink 60 80 moveto (Ωμέγα 🧑🏽‍💻) 0 3 /linear tween typewrite
+```
+
+**Where it stops.** Korean, Japanese, Chinese, Thai, Arabic, the Indic
+scripts, Armenian, Georgian and Ethiopic have no face in the chain: each
+of their characters draws as an empty box, and `psanim check` (and
+`frame`) says which, once per character. Hebrew draws, but left to right:
+PSCat does no shaping or bidi. Fallback
+faces are regular weight, so a bold title's accented capital that comes
+from a fallback is lighter than its neighbours.
+
+A font chosen with `findfont` still reads bytes, one character each, as
+PostScript always has. `/Helvetica findfont unicodefont 24 scalefont
+setfont` makes it read UTF-8; `check` warns when UTF-8 text is shown in a
+font that reads bytes. Symbol and ZapfDingbats keep their codes (`sym`
+relies on that), and so does a font that states which it wants.
+
+**Moving a film from before UTF-8 text.** Two things read differently in
+a `face` font, on purpose:
+
+- `'` and `` ` `` are the typewriter apostrophe and the grave accent, as
+  in Unicode, where a byte font draws the curly ’ and ‘ of PostScript's
+  standard encoding. For curly quotes, type them: `(it’s “here”)`.
+- A Latin-1 escape such as `(caf\351)` is not UTF-8: it draws a
+  replacement box and `check` warns. Write the character itself
+  (`(café)`), or keep the font reading bytes by choosing it with
+  `findfont`.
+
+`check` and `frame` report text warnings; `render` and `sheet` do not, so
+run `check` on a film before rendering it.
+
+The emoji art is Twemoji (CC-BY 4.0): a film that shows it should say so,
+for example in its README: "Emoji graphics by Twemoji (Twitter, Inc and
+other contributors), CC BY 4.0".
+
 ## Emoji
 
-Real Unicode emoji need font support PSCat does not have yet, so psanim
-draws twelve of its own: `emojinames` lists them (smile laugh wink sad cool
-heart thumbsup party fire check rocket eyes). They are flat, round and in
-one style, and paint in their own colours.
+`face` fonts draw real colour emoji (above). psanim also draws twelve of
+its own, which predate them: `emojinames` lists them (smile laugh wink sad
+cool heart thumbsup party fire check rocket eyes). They are flat, round and
+in one style, paint in their own colours, and scale to any size without a
+font.
 
 `/name emoji` draws one as if it were a letter of the current font: sized
 to it, sitting on its baseline, and the current point moves past it.
@@ -246,6 +316,76 @@ ground /body 22 face /fg ink
 
 A conversation of text messages, with these in it, is the `chat` entry of
 the [catalog](catalog.md).
+
+## Pixel faces: terminals, printers, LED signs
+
+PSCat has four pixel fonts, six faces, for things made of dots:
+
+| Face | What it is | One font pixel on one unit at |
+|---|---|---|
+| `/Phosphor`, `/Phosphor-Scan` | a video terminal, 8x16 cell, square pixels (`-Scan` leaves a dark gap between scan lines) | 16 |
+| `/Pinpoint-Draft`, `/Pinpoint-NLQ` | a 9-pin dot-matrix printer, round dots (`-NLQ` adds a dot between neighbours) | 9 |
+| `/Diode7` | an LED sign, 7 lamps high and a descender row, proportional | 8 |
+| `/Diode5` | an LED strip, 5 lamps high, capitals only | 5 |
+
+`findfont` does not load them by name: asked for one that was never
+loaded, it quietly gives you Helvetica. `/name pixelface` (pkpixel) is
+`findfont` that loads the face's file first, and fails on a name that is
+neither a face nor a font that exists. **Call it in setup and keep the
+font**; in the scene only scale it. A frame starts from the VM as setup
+left it, so a face first asked for in the scene is loaded again every
+frame (about 30 ms a frame for Phosphor, measured on a busy machine, against
+0.2 ms when it was loaded in setup). Size a face at a whole multiple of the
+number in the table and its pixels land on whole units.
+
+```postscript
+%!PS
+<< /Size [1280 720] /Duration 4 /FPS 30 /Background [0.03 0.04 0.05] >> animation
+/pkpixel use
+/crt  /Phosphor pixelface def                   % in setup: loads lib/fonts/phosphor.ps once
+/lamp /Diode7 pixelface def
+/scene {
+  0.3 1 0.5 setrgbcolor  crt 48 scalefont setfont         % 3 units a pixel
+  80 560 moveto (READY.) show
+  80 490 moveto (LOAD "BOOT",8) 0 now 0.12 div cvi 13 min getinterval show
+  1 0.25 0.1 setrgbcolor lamp 64 scalefont setfont         % 8 units a lamp
+  80 200 moveto (ALL SYSTEMS GO) show
+} def
+```
+
+They are printable ASCII only: no block cursor (draw a rectangle), no
+degree sign, no box drawing. The colour is the current colour, so a face
+glows under `glowing` like any drawing. The dials (dot shape, dot size,
+scan gap, in-between dots) are set by making a variant once, in setup:
+`/Phosphor-Round /Phosphor << /DotShape /round /DotSize 0.85 >> pixelvariant`,
+then `/Phosphor-Round findfont` in the scene.
+
+`pixelface` runs a face's file in a dictionary of its own. Running the file
+yourself, `(lib/fonts/phosphor.ps) run`, defines its names in your current
+dictionary and overwrites any of yours with the same name. They are
+`pf-variant` (all four files) and `PhosphorDict`, `PinpointDict`,
+`Diode7Dict`, `Diode5Dict` (one each); with `pixelface` you need not avoid
+them.
+
+Each face's bitmaps are also data. `/Diode7 pixelfont` gives them as the
+column masks `pixelcols` and `pixeltext` read (the same shape as pkpixel's
+own 5, 7 and 9 row fonts, `font /Rows get` the height), for lighting LEDs
+or striking pins one at a time. Build it in setup too: in a scene the face is
+loaded and converted every frame (about 15 ms).
+
+The catalog's devices take a face:
+
+- `/terminal` with `/Font /Phosphor` sets its session in the face (default
+  Courier-Bold).
+- `/dotmatrix` with `/Face /Pinpoint-Draft` prints Pinpoint's letters, 7
+  dots wide on the same 9 pins; `/Quality` still chooses one pass or two.
+- `/ledmatrix` with `/Font /Diode7` or `/Diode5` lights the face's lamps;
+  Diode7's lower case needs a grid 8 rows high for its descenders.
+- `/clock-ledsign` with `/Font /Diode7` shows the time in Diode7's digits.
+
+The face names live in one table at the top of pkpixel, so a rename
+touches one line there. The gallery's *Boot Sequence* uses all three
+devices.
 
 ## Captions
 
@@ -347,15 +487,16 @@ false` turns it off.
 
 ## Mathematics
 
-The text fonts have no pi, no arrows, no "not equal": **a non-ASCII
-character in a string shows as a blank, silently.** `/name sym` shows a
-sign from the Symbol font at the current size (`/neq /le /ge /approx
+A `face` font takes a sign typed into the string (`(2πr)`, `(a ≠ b)`).
+`/name sym` shows one from the Symbol font at the current size, in
+Symbol's design and in any font (`/neq /le /ge /approx
 /times /dot /arrow /infinity /pi /theta /Sigma` ... the list is in
 `psanim api sym`).
 
 A line of mathematics is a **run list**: an array of `(text)`, `/name`
 (a sign), `[/it (r)]` (italic, as variables are set), `[/sup x]`,
-`[/sub x]` and `[/frac a b]`. `showruns` sets it; `runs i showrun` sets
+`[/sub x]` and `[/frac a b]` (and, for `morphruns` below, `[/as /key
+run]` and groups). `showruns` sets it; `runs i showrun` sets
 one term where the line puts it, so an equation arrives term by term;
 `runs i runbox` is a term's box, for a ring, a marker or a pulse that
 ties it to the picture.
@@ -375,8 +516,66 @@ ground /serif 34 face
 eq 4 runbox eq 6 runbox boxunion circled 0 2.8 3.5 /cubic-inout tween trimpath stroke
 ```
 
-For displayed formulas beyond this (integrals, matrices, aligned
-derivations), PSCat's `lib/mathkit.ps` lays a TeX subset out as stroke
+### One equation becoming the next
+
+`[ line line ... ] s morphruns` draws a derivation. `s` runs from 0 to
+the number of lines less one: at a whole number it is that line exactly,
+as `showruns` would set it; between, the terms that carry over slide to
+their new places, terms with no partner fade away and new ones fade in.
+The word owns no clock: make `s` with `keyframes`, giving each line a
+hold and each move an easing.
+
+```postscript
+/X [/it (x)] def  /EQ [/as /eq ( = )] def
+/lines [
+  [ (2) X [/as /n ( + 6)] EQ (10) ]
+  [ (2) X EQ (10) [/as /n [( ) /minus ( 6)]] ]
+  [ (2) X EQ (4) ]
+  [ X EQ (2) ]
+] def
+ground /serif 40 face /fg ink
+320 180 moveto
+lines [ 0.3 0  0.9 1 /cubic-inout  1.6 1  2.2 2 /cubic-inout  2.6 2  3.2 3 /cubic-inout ] keyframes
+/eq morphruns
+```
+
+How terms are paired:
+
+- **By content, in order.** A term goes to the first term of the next
+  line that is the same and not yet taken, so the first x stays the
+  first x and the second the second.
+- **By tag.** `[/as /key run]` draws as the run and is paired with the
+  term of the same tag in the next line, whatever either shows. Tag a
+  term to pair it out of order, or to let it change on the way: above,
+  `+ 6` crosses the equals sign and becomes `- 6`, its glyphs
+  cross-fading as it moves.
+- **A group is one term.** An array of runs, `[ ( ) /minus ( 6) ]`,
+  moves as one piece. `/minus` is a true minus sign; the hyphen in a
+  string is too short.
+
+The third operand is optional: `/left` (the default), `/center` or
+`/right` aligns every line on the current point, or a tag that every
+line has keeps that term's centre on it, as `/eq` keeps the equals sign
+still above (an aligned derivation). As a dictionary: `<< /Align /center
+/Arc 0 /Rise 0.25 >>`, where `/Arc 0` moves terms in straight lines
+(by default a term lifts or dips a little in proportion to how far it
+goes, so terms that cross do not overprint) and `/Rise` is how far, in
+ems, a leaving term rises and an arriving one comes up from.
+
+A tagged term that crosses a term held still passes through it: in the
+example the `+ 6` slides across the equals sign. Where that reads badly,
+leave the term untagged in one of the two lines, and it fades out on one
+side while its negative fades in on the other.
+
+Matching is by term, so split a line where you want things to move
+separately: `( + 6)` moves as one, `( + ) (6)` as two. To mark a term
+of a line while it holds, move to where the line starts and use
+`runbox`; with `/eq` alignment the start is the current point less the
+width of the runs before the equals sign and half its own. The gallery
+film `gallery/complete-the-square/complete-the-square.ps` derives a
+quadratic's roots in six moves this way.
+
+For displayed formulas beyond this (integrals, matrices), PSCat's `lib/mathkit.ps` lays a TeX subset out as stroke
 paths (see the psart skill); a path takes `trimpath` and any motion.
 
 ## Hierarchy

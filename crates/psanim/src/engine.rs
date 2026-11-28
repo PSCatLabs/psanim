@@ -391,6 +391,67 @@ pub struct Movie {
     overlay: Option<String>,
     /// Simulation ticks the last render had to apply.
     last_ticks: u64,
+    /// UTF-8 text shown in a font that reads bytes, one per font, kept
+    /// across runs (PSCat forgets its findings when the next run starts).
+    byte_font_text: ByteFontReport,
+}
+
+/// UTF-8 text a program showed in a font that reads one character per byte.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ByteFontText {
+    font: String,
+    characters: Vec<char>,
+    more: bool,
+    line: Option<usize>,
+}
+
+/// The most fonts [`Movie::text_warnings`] names for UTF-8 shown in a byte font.
+const MAX_BYTE_FONTS: usize = 5;
+
+/// The most further fonts counted by name past [`MAX_BYTE_FONTS`].
+const MAX_BYTE_FONTS_COUNTED: usize = 1024;
+
+/// UTF-8 text shown in byte fonts over a movie's life: the first fonts by
+/// name, and how many more there were.
+#[derive(Clone, Debug, Default)]
+struct ByteFontReport {
+    fonts: Vec<ByteFontText>,
+    /// Fonts past the first [`MAX_BYTE_FONTS`], by name.
+    more: std::collections::BTreeSet<String>,
+    /// The most fonts one run had that PSCat itself did not name.
+    unnamed: usize,
+}
+
+impl ByteFontReport {
+    /// How many fonts past the named ones showed UTF-8 text: at least this many.
+    fn more_fonts(&self) -> usize {
+        self.more.len().max(self.unnamed)
+    }
+}
+
+/// Add what the interpreter's last run found of UTF-8 text in byte fonts.
+/// `lines`: the run was the program's own text, so a line number means
+/// something (a frame runs the engine's one-line driver).
+fn collect_byte_font_text(interp: &Interp, into: &mut ByteFontReport, lines: bool) {
+    let report = interp.utf8_text_findings();
+    into.unnamed = into.unnamed.max(report.more_fonts);
+    for f in report.fonts {
+        if into.fonts.iter().any(|k| k.font == f.font) {
+            continue;
+        }
+        if into.fonts.len() >= MAX_BYTE_FONTS {
+            if into.more.len() < MAX_BYTE_FONTS_COUNTED {
+                into.more.insert(f.font);
+            }
+            continue;
+        }
+        into.fonts.push(ByteFontText {
+            font: f.font,
+            characters: f.characters,
+            more: f.more_characters,
+            line: f.line.filter(|_| lines),
+        });
+    }
 }
 
 /// The vocabulary's native operators that a program is likely to shadow
@@ -480,6 +541,24 @@ fn vocabulary() -> impl Iterator<Item = &'static str> {
 
 fn explain(kind: &str, command: Option<&str>) -> Option<String> {
     Some(match (kind, command) {
+        (
+            "rangecheck" | "invalidfont" | "typecheck",
+            Some(c @ ("pixelface" | "pixelfont" | "pixelvariant")),
+        ) => {
+            let faces: Vec<String> = crate::vocab::pixel_faces()
+                .iter()
+                .map(|(n, _)| format!("/{n}"))
+                .collect();
+            let other = match c {
+                "pixelfont" => "5, 7 or 9 for psanim's own fonts, or ",
+                "pixelface" => "a font that exists (/Courier-Bold), or ",
+                _ => "",
+            };
+            format!(
+                "`{c}` takes {other}one of PSCat's pixel faces: {}. Check the spelling: an unknown name is an error here, not a substitute font.",
+                faces.join(" ")
+            )
+        }
         ("undefined", Some(name))
             if crate::api::lookup(name)
                 .and_then(|e| crate::api::library_of(e.category))
@@ -622,6 +701,8 @@ impl Movie {
         )?;
         run(&mut interp, &ctx, Phase::Setup, PRELUDE)?;
         run(&mut interp, &ctx, Phase::Setup, source)?;
+        let mut byte_font_text = ByteFontReport::default();
+        collect_byte_font_text(&interp, &mut byte_font_text, true);
         // `reelduration` guessed which names were transitions; everything is
         // defined now, so a wrong guess is an error, not a longer film.
         crate::ops::check_measured_reels(&interp, &ctx).map_err(|msg| {
@@ -759,6 +840,7 @@ impl Movie {
             last_steps: 0,
             output: setup_output,
             output_truncated: setup_truncated,
+            byte_font_text,
             kept: None,
             overlay,
             last_ticks: 0,
@@ -920,6 +1002,7 @@ impl Movie {
                     text: self.output.clone(),
                     truncated: self.output_truncated,
                 };
+                e.text_warnings = self.text_warnings();
                 return Err(e);
             }
         };
@@ -1030,6 +1113,7 @@ impl Movie {
 
     fn exec(&mut self, phase: Phase, program: &str) -> Result<(), Error> {
         let r = run(&mut self.interp, &self.ctx, phase, program);
+        collect_byte_font_text(&self.interp, &mut self.byte_font_text, false);
         let printed = self.interp.captured_stdout();
         if !printed.is_empty() {
             push_output(&mut self.output, &mut self.output_truncated, printed);
@@ -1086,6 +1170,41 @@ impl Movie {
 
     /// Like [`take_output`](Movie::take_output), saying whether the text
     /// was cut at 64 KB.
+    /// What went wrong with text so far, one line each, for `check` and
+    /// `frame` to report: a character no font had (PSCat drew its `.notdef`
+    /// box), a font PSCat stood in for, and UTF-8 text shown in a font that
+    /// reads bytes (stray accents or blanks). Each is said once for the
+    /// movie's life, however many frames drew it; empty when all is well.
+    pub fn text_warnings(&self) -> Vec<String> {
+        let mut out: Vec<String> = self
+            .interp
+            .font_warnings()
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .map(|l| l.strip_prefix("pscat: warning: ").unwrap_or(l).to_string())
+            .collect();
+        for f in &self.byte_font_text.fonts {
+            let chars: Vec<String> = f.characters.iter().map(char::to_string).collect();
+            out.push(format!(
+                "UTF-8 text ({}{}) shown in /{}, a font that reads one byte per character, so it draws stray accents or blanks{}. Select the font with `face`, or make it read UTF-8: /{} findfont unicodefont 24 scalefont setfont",
+                chars.join(" "),
+                if f.more { " ..." } else { "" },
+                f.font,
+                f.line.map(|l| format!(" (line {l})")).unwrap_or_default(),
+                f.font
+            ));
+        }
+        let more = self.byte_font_text.more_fonts();
+        if more > 0 {
+            out.push(format!(
+                "UTF-8 text was also shown in at least {more} more font{} that read{} one byte per character (not named here)",
+                if more == 1 { "" } else { "s" },
+                if more == 1 { "s" } else { "" }
+            ));
+        }
+        out
+    }
+
     pub fn take_printed(&mut self) -> Printed {
         Printed {
             text: std::mem::take(&mut self.output),
@@ -1272,6 +1391,9 @@ fn configure(interp: &mut Interp, ctx: &Rc<RefCell<Ctx>>, options: &Options) -> 
     crate::ops::install(interp, ctx);
     interp.quiet_stderr();
     interp.capture_stdout();
+    // UTF-8 shown in a byte font draws stray accents; say so (it changes
+    // nothing drawn and no step count).
+    interp.set_utf8_text_check(true);
     interp.set_interrupt(options.interrupt.clone());
     if let Some(roots) = &options.read_roots {
         interp

@@ -1,0 +1,124 @@
+%!PS
+% Poster: 0
+% psanim's logo, and the movie that makes every version of it.
+%
+% The mark is a tween: an amber tile with an ease-in-out curve cut through it,
+% and the current point at its end. In the film the point is scrubbed back to
+% the start and plays forward again, drawing the curve as it goes, with its
+% last few frames left behind as onion skins: bunched where the ease is slow,
+% spread where it is fast. Frame 0 is the resting mark, so the still and the
+% favicon are frames of this film. scripts/build_logo.sh renders them all.
+%
+%   --param form=lockup   the mark and the word "psanim" (the default)
+%   --param form=mark     the mark alone, 512 square
+%   --param form=icon     the tile alone, edge to edge, 416 square (favicons)
+%   --param form=social   the lockup and a line, 1280x640
+%   --param ground=dark   (default: the site's ground), light (white), github
+%                         (GitHub's dark page, #0d1117) or transparent
+
+/logo-form /form (lockup) param def
+/logo-ground /ground (dark) param def
+/form-is { logo-form eq } def            % (name) form-is -> bool
+/ground-is { logo-ground eq } def
+
+% A value not in the list stops the movie with an error that names the allowed ones.
+% The message is the error itself: printing in setup is dropped while psanim reads
+% the declaration, so a printed message would not be seen.
+/one-of { % value [allowed ...] (message) -> -
+  3 1 roll false exch { 2 index eq or } forall exch pop
+  { pop } {
+    cvn cvx exec } ifelse } def
+logo-form [(lockup) (mark) (icon) (social)]
+  (--param form must be lockup, mark, icon or social) one-of
+logo-ground [(dark) (light) (github) (transparent)]
+  (--param ground must be dark, light, github or transparent) one-of
+
+/logo-size
+  (mark) form-is { [512 512] } {
+  (icon) form-is { [416 416] } {
+  (social) form-is { [1280 640] } { [1140 400] } ifelse } ifelse } ifelse def
+
+<< /Size logo-size /Duration 4.4 /FPS 30 /Loop true
+   /Background
+     (transparent) ground-is { /transparent } {
+     (light) ground-is { [1 1 1] } {
+     (github) ground-is { [13 255 div 17 255 div 23 255 div] } { [0.043 0.051 0.071] } ifelse } ifelse } ifelse
+   /Title (The psanim logo)
+   /Description (The psanim logo: an amber tile with an ease-in-out curve cut through it and the current point at its end. The point is scrubbed back to the start and plays forward again, leaving onion skins that bunch where the ease is slow; it rests where it began, so the still is a frame of the film.)
+>> animation
+
+% ---- colours ------------------------------------------------------------------
+/tile-rgb   [1.0 0.788 0.302] def          % amber, the site's --amber
+/groove-rgb [0.043 0.051 0.071] def        % the site's ground
+/point-rgb  [0.980 0.451 0.380] def        % coral
+/word-rgb (light) ground-is { [0.071 0.082 0.110] } { [0.925 0.914 0.882] } ifelse def
+/line-rgb (light) ground-is { [0.38 0.40 0.45] } { [0.604 0.635 0.706] } ifelse def
+/rgb { aload pop setrgbcolor } def
+
+% ---- the mark, drawn in a 512 square -------------------------------------------
+/x0 140 def /y0 148 def /x1 372 def /y1 364 def     % the curve's ends
+/ease-path { newpath x0 y0 moveto 296 y0 216 y1 x1 y1 curveto } def
+/tile-path {                                        % a rounded square, 416 wide
+  newpath 152 48 moveto
+  464 48 464 464 104 arcto 4 { pop } repeat
+  464 464 48 464 104 arcto 4 { pop } repeat
+  48 464 48 48 104 arcto 4 { pop } repeat
+  48 48 464 48 104 arcto 4 { pop } repeat closepath } def
+/groove-w 58 def
+/ring-r 62 def /core-r 34 def
+
+% ---- the motion: where the point is, 0 (start) .. 1 (end), at time t -----------
+/rest-s 1.7 def       % at rest
+/back-s 0.7 def       % scrubbed back to the start
+/beat-s 0.1 def       % a beat at the start
+/play-s 1.4 def       % plays forward, drawing the curve; then rests again
+/skin 0.07 def       % seconds between onion skins
+/skins 4 def
+/play-from rest-s back-s add beat-s add def   % when the forward play starts
+/at-u { % t -> u
+  dup rest-s lt { pop 1 } {
+  rest-s sub dup back-s lt { back-s div /cubic-inout ease 1 exch sub } {
+  back-s sub dup beat-s lt { pop 0 } {
+  beat-s sub play-s div /cubic-inout ease } ifelse } ifelse } ifelse } def
+
+/logomark {
+  gsave
+  /u now at-u def
+  tile-rgb rgb tile-path fill
+  groove-rgb rgb groove-w setlinewidth 1 setlinecap
+  u 0.001 gt { ease-path 0 u trimpath stroke } if
+  % onion skins: where the point was a few frames ago, while it plays forward.
+  % They bunch where the ease is slow and spread where it is fast.
+  now play-from ge {
+    skins -1 1 { /k exch def
+      ease-path now k skin mul sub play-from max at-u pathpoint pop /sy exch def /sx exch def
+      point-rgb rgb 1 k skins 1 add div sub 0.85 mul setalpha
+      newpath sx sy core-r 0.62 mul 0 360 arc fill
+    } for
+  } if
+  1 setalpha
+  ease-path u pathpoint pop /py exch def /px exch def
+  groove-rgb rgb newpath px py ring-r 0 360 arc fill
+  point-rgb rgb newpath px py core-r 0 360 arc fill
+  grestore
+} def
+
+% ---- the word -------------------------------------------------------------------
+% AvantGarde-Demi at 190: x-height 105, centred on the tile's middle (y 200).
+/wordmark { word-rgb rgb /AvantGarde-Demi 190 selectfont 384 147 moveto (psanim) show } def
+/lockup {                                  % in a 1140x400 box
+  gsave 52 52 translate 296 512 div dup scale logomark grestore
+  wordmark
+} def
+
+/scene {
+  (mark) form-is { logomark } if
+  (icon) form-is { -48 -48 translate logomark } if
+  (lockup) form-is { lockup } if
+  (social) form-is {
+    gsave 71 150 translate lockup
+    line-rgb rgb /AvantGarde-Book 40 selectfont
+    390 40 moveto (animation, written as PostScript) show
+    grestore
+  } if
+} def

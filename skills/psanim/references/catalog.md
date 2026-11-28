@@ -96,6 +96,7 @@ The time on a scrolling LED sign: a 5 by 7 dot matrix with unlit dots faintly vi
 
 | Param | Default | Meaning |
 |---|---|---|
+| /Font | `7` | 7: psanim's 7-row pixel font; /Diode7: PSCat's LED face (its digits and colon) |
 | /Gap | `12` | blank dot columns between one showing of the time and the next |
 | /Panel | `1` | 1 paints the sign's dark housing, 0 leaves the dots on whatever is there |
 | /Scroll | `14` | dot columns per second the text moves left (0 holds it still) |
@@ -224,6 +225,7 @@ A dot-matrix printer on tractor-feed paper: the head sweeps across laying down e
 | /BannerSpeed | `400` | characters a second while a banner is printing (it is printed in a fast mode) |
 | /Bidirectional | `true` | true: prints on the way back too; false: returns blank to the left each line |
 | /Cols | `40` | characters across the paper (longer lines wrap) |
+| /Face | `null` | null: psanim's own 9-pin font (5 dots wide); /Pinpoint-Draft or /Pinpoint-NLQ: PSCat's 9-pin face (7 dots wide, the same pins); /Quality still chooses the passes |
 | /Feed | `0.14` | seconds a line feed takes |
 | /Hold | `1.2` | seconds to rest at the end |
 | /Ink | `0.4` | 0 to 1: how uneven the ribbon is (dots paler in streaks); 0 is perfectly even |
@@ -342,7 +344,7 @@ A grid of round LEDs with a pixel font: a scrolling marquee, a ticker, a news si
 | /Colour | `/amber` | /red /amber /green /white /blue, or [r g b] |
 | /Cols | `0` | LEDs across, instead of /Grid's (for --param, which cannot give an array) |
 | /Effect | `/marquee` | /scroll /marquee /static /drop /wipe /sparkle /flash /fade |
-| /Font | `0` | rows of the pixel font, 5 or 7 (0: by the grid) |
+| /Font | `0` | rows of the pixel font, 5 or 7 (0: by the grid), or a PSCat pixel face: /Diode7 or /Diode5 |
 | /Gap | `16` | blank LEDs between one marquee round and the next |
 | /Glow | `1` | halo round lit LEDs, 0 for none |
 | /Grid | `[48 7]` | LEDs across and down |
@@ -517,7 +519,7 @@ An old video terminal: phosphor text with glow, scanlines, a bowed screen, persi
 | /Bezel | `true` | the monitor's frame (false: only the screen) |
 | /Cols | `50` | characters across |
 | /Curve | `0.035` | how much the glass bows |
-| /Font | `/Courier-Bold` | a monospace face: the one parameter a bitmap terminal font will replace |
+| /Font | `/Courier-Bold` | a monospace face; /Phosphor (or /Phosphor-Scan) is PSCat's 8x16 terminal face, loaded on demand |
 | /Glow | `1` | phosphor bloom, 0 for none |
 | /Grain | `0.1` | 0 to 1: film grain and flicker |
 | /Hold | `1.5` | seconds to rest on the last screen |

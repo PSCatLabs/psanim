@@ -73,6 +73,9 @@ pub struct Error {
     /// What the frame printed (`==`, `print`) before it failed, when it
     /// was a frame that failed: often the clue. The movie keeps it too.
     pub printed: crate::engine::Printed,
+    /// What had gone wrong with text before a frame failed (see
+    /// [`crate::Movie::text_warnings`]): a missing glyph can be the clue.
+    pub text_warnings: Vec<String>,
 }
 
 /// One procedure that was running when an error happened.
@@ -100,6 +103,7 @@ impl Error {
             stack: Vec::new(),
             backtrace: Vec::new(),
             printed: crate::engine::Printed::default(),
+            text_warnings: Vec::new(),
         }
     }
 
@@ -155,6 +159,9 @@ impl Error {
                     .into(),
             );
         }
+        if !self.text_warnings.is_empty() {
+            m.insert("text_warnings".into(), self.text_warnings.clone().into());
+        }
         if !self.printed.text.is_empty() {
             m.insert("printed".into(), self.printed.text.clone().into());
             if self.printed.truncated {
@@ -191,6 +198,9 @@ impl fmt::Display for Error {
         }
         if let Some(h) = &self.hint {
             write!(f, "\n  hint: {h}")?;
+        }
+        for w in &self.text_warnings {
+            write!(f, "\n  text warning: {w}")?;
         }
         Ok(())
     }

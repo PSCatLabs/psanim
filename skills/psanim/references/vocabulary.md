@@ -6,7 +6,7 @@ Stack effects read left to right, topmost operand last, as in the PostScript Lan
 
 Easings (for `ease`, `tween`, `keyframes`): linear smooth smoother quad-in quad-out quad-inout cubic-in cubic-out cubic-inout quart-in quart-out quart-inout quint-in quint-out quint-inout sine-in sine-out sine-inout expo-in expo-out expo-inout circ-in circ-out circ-inout back-in back-out back-inout elastic-in elastic-out elastic-inout bounce-in bounce-out bounce-inout spring hold
 
-Transitions (for `reel`): cut dissolve dip wipe-left wipe-right wipe-up wipe-down iris push-left push-right zoom
+Transitions (for `reel` and `storyboard`): cut dissolve dip wipe-left wipe-right wipe-up wipe-down iris push-left push-right zoom
 
 ## Declaring the movie
 
@@ -504,7 +504,7 @@ Replace the current path by the outline of a stroke along it whose width follows
 
 `-  beginlayer  -`
 
-Start drawing on a separate transparent layer. The graphics state is unchanged. Not inside a PSCat begingroup, where what it draws is lost.
+Start drawing on a separate transparent layer. The graphics state is unchanged. Not inside a PSCat begingroup (groupnesting).
 
 ### `endlayer`
 
@@ -534,25 +534,25 @@ Add a soft halo around everything on the current layer: a blurred copy added bac
 
 `alpha proc  faded  -`
 
-Draw proc as one group at opacity alpha. Unlike setalpha, overlapping shapes inside do not show through each other. Not inside a PSCat begingroup, where the fade is lost: give the group an /Alpha instead.
+Draw proc as one group at opacity alpha. Unlike setalpha, overlapping shapes inside do not show through each other. Inside a PSCat begingroup it runs as a group of its own; giving the outer group an /Alpha is cheaper.
 
 ### `blended`
 
 `alpha /mode proc  blended  -`
 
-Draw proc as a group composited with a blend mode. Not inside a PSCat begingroup, where the blend is lost: give the group a /Blend instead.
+Draw proc as a group composited with a blend mode. Inside a PSCat begingroup, /normal and /multiply run as a group of their own; /add and /screen stop with groupnesting.
 
 ### `blurred`
 
 `radius proc  blurred  -`
 
-Draw proc out of focus. The blur stays inside the clip in force when it begins (a within box, a rectclip, any clip path). Not inside a PSCat begingroup, where the effect is lost: put the group inside proc.
+Draw proc out of focus. The blur stays inside the clip in force when it begins (a within box, a rectclip, any clip path). Not inside a PSCat begingroup (groupnesting): put the group inside proc.
 
 ### `glowing`
 
 `radius strength proc  glowing  -`
 
-Draw proc with a halo of light. Try 8 1 for solid shapes, 24 1.6 for thin strokes. The halo stays inside the clip in force when it begins. Not inside a PSCat begingroup, where the effect is lost: put the group inside proc.
+Draw proc with a halo of light. Try 8 1 for solid shapes, 24 1.6 for thin strokes. The halo stays inside the clip in force when it begins. Not inside a PSCat begingroup (groupnesting): put the group inside proc.
 
 ### `crossfade`
 
@@ -598,7 +598,7 @@ Run proc with its painting laid on a plane in 3D and seen in perspective: fill, 
 
 `string u  typed  string`
 
-The first u (0..1) of the string, by characters: a typewriter reveal.
+The first u (0..1) of the string, by the characters the current font draws: a typewriter reveal. In a font that reads UTF-8 (any `face` font) a character is a whole grapheme, so a letter and its accent, a flag or an emoji sequence are never cut; in a font that reads bytes it is a byte, as PostScript has it.
 
 ### `typingplan`
 
@@ -642,11 +642,23 @@ What a character grid shows at time t: its rows (at most `rows`, top to bottom; 
 
 Show the string centred horizontally on the current point.
 
+### `charcount`
+
+`string  charcount  n`
+
+How many characters the string has read as UTF-8 text, as a reader counts them: its grapheme clusters, so an accented letter, a flag, a skin-toned or ZWJ emoji is one; a byte that is not part of a well-formed sequence counts as one; ASCII is its length. It looks at the text only, not the current font: the words that draw (`typed`, `eachglyph`, `eachspaced`, `eachonpath`, `spacedwidth`, `kinetic`'s /glyphs) step the way the current font reads, which for a font chosen with findfont is by byte.
+
+### `unicodefont`
+
+`font  unicodefont  font'`
+
+A copy of the font that reads its strings as UTF-8: accents, Greek, Cyrillic, signs and colour emoji, with the characters its face lacks taken from PSCat's fallback faces. `face` does this already; this is for a font chosen with findfont: `/Helvetica findfont unicodefont 24 scalefont setfont`. Symbol, ZapfDingbats and Type 3 fonts come back unchanged. Korean, Japanese, Chinese, Thai, Arabic, the Indic scripts and others have no glyphs yet: they draw an empty box, and `check` names each.
+
 ### `eachglyph`
 
 `string proc  eachglyph  -`
 
-Run proc once per character with `(c) i` on the stack (the character as a one-character string, and its index) and the current point at that character's origin. The font must be set. proc consumes both operands; `{ pop show }` reproduces show. The current point is set afresh before each call, so proc may move it, build paths and paint; graphics state it changes (colour, CTM) stays changed, so wrap transforms in gsave/grestore.
+Run proc once per character with `(c) i` on the stack (the character as a string, and its index; a character is a whole grapheme in a font that reads UTF-8, a byte in one that reads bytes) and the current point at that character's origin. The font must be set. proc consumes both operands; `{ pop show }` reproduces show. The current point is set afresh before each call, so proc may move it, build paths and paint; graphics state it changes (colour, CTM) stays changed, so wrap transforms in gsave/grestore.
 
 ### `spacedwidth`
 
@@ -732,7 +744,7 @@ A line diff as data: an array of [ /same|/del|/add (line) oldindex newindex ] ro
 
 `[ [dur proc] [dur /transition] [dur proc] ... ]  reel  -`
 
-Play clips in order with transitions between them. A transition overlaps the end of the clip before it and the start of the clip after it. Transitions: /cut /dissolve /dip /wipe-left /wipe-right /wipe-up /wipe-down /iris /push-left /push-right /zoom. A clip need not paint a ground: clips that draw only their own subject transition over whatever the scene drew before the reel.
+Play clips in order with transitions between them. A transition overlaps the end of the clip before it and the start of the clip after it. Transitions: /cut /dissolve /dip /wipe-left /wipe-right /wipe-up /wipe-down /iris /push-left /push-right /zoom. Under /dissolve, the wipes and /iris the incoming clip is drawn over the outgoing one, which is not faded: each clip must paint its own ground (`ground`, `backdrop`), or what the incoming clip does not cover stays at full strength through the transition and vanishes at its end. /cut, /dip, /push-left, /push-right and /zoom also work with clips that draw only their own subject over whatever the scene drew before the reel.
 
 ### `reelduration`
 
@@ -744,7 +756,7 @@ The total length of a reel array: the clips' durations added up, minus the trans
 
 `-  transitions  dict`
 
-The dictionary of transitions. To define your own, put a procedure there: `transitions /t-shutter { ... } put`, then use `[dur /t-shutter]` in a reel. Name it with a `t-` prefix, or define it before the reel is measured with reelduration: otherwise reelduration counts the entry as a clip, and loading the movie fails, naming it. It is called with `procA procB u`: draw the frame that is u (0 to 1, linear) of the way from A to B. A and B are ready-made procedures that draw each clip with its own clock still running; call them inside gsave/grestore with whatever clip, transform or layer the transition needs.
+The dictionary of transitions. To define your own, put a procedure there: `transitions /t-shutter { ... } put`, then use `[dur /t-shutter]` in a reel (or between a storyboard's beats, defined before the storyboard). Name it with a `t-` prefix, or define it before the reel is measured with reelduration: otherwise reelduration counts the entry as a clip, and loading the movie fails, naming it. It is called with `procA procB u`: draw the frame that is u (0 to 1, linear) of the way from A to B. A and B are ready-made procedures that draw each clip with its own clock still running; call them inside gsave/grestore with whatever clip, transform or layer the transition needs. Between storyboard beats each beat's `inbeat` draws its own side (A with an empty B, then an empty A with B), so a transition used there must draw A's part and then B's part, neither depending on the other, as every built-in one does.
 
 ## Parameters, signals and events
 
@@ -884,15 +896,15 @@ The time the schedule is at, as seconds since Monday 00:00. Inside a scene of a 
 
 ### `storyboard`
 
-`[ /name seconds /name seconds ... ]  storyboard  -`
+`[ /name seconds [seconds /transition] /name seconds ... ]  storyboard  -`
 
-Name the stretches of the film, in order. Call it before `animation` and use `storylength` for /Duration; then place things by beat name instead of by second, so retiming the film is editing one list.
+Name the stretches of the film, in order. Call it before `animation` and use `storylength` for /Duration; then place things by beat name instead of by second, so retiming the film is editing one list. Between two beats the picture cuts, unless a transition is written between them: `[ /intro 4 [0.6 /dissolve] /main 8 ]`, any name in `transitions`, defined before the storyboard. As in a reel it overlaps the two beats: the next beat starts that many seconds before this one ends, so the film is shorter by it, and each beat keeps its full length and its clock. Under /dissolve, the wipes and /iris each beat on either side must paint its own ground (`ground` or `backdrop` first), as a reel's clips must. The `inbeat` calls come in the storyboard's order: drawing the outgoing beat after the incoming one in a transition is an error. Draw what the beats share after all of them. A beat lasts at least the transitions into and out of it together.
 
 ### `storylength`
 
 `-  storylength  seconds`
 
-The total length of the storyboard.
+The total length of the storyboard: the beats added up, less the transitions between them.
 
 ### `beat`
 
@@ -904,19 +916,19 @@ The movie time at which the named beat starts. Add to it for a moment inside the
 
 `/name  beatspan  a b`
 
-The start and end of the named beat, on the movie's clock: operands for `during` at the top level of a scene.
+The start and end of the named beat, on the movie's clock: operands for `during` at the top level of a scene. With a transition the spans of two beats overlap by its length.
 
 ### `inbeat`
 
 `/name proc  inbeat  -`
 
-Run proc during the named beat, with the clock starting from 0 at the beat's start and `span` its length, whatever time scopes are open.
+Run proc during the named beat, with the clock starting from 0 at the beat's start and `span` its length, whatever time scopes are open. In a transition into or out of the beat, proc is that side of it: the incoming beat drawn over the outgoing one, both on their own clocks.
 
 ### `frombeat`
 
 `/name proc  frombeat  -`
 
-Run proc from the start of the named beat to the end of the film, with the clock starting from 0 there: for something a beat introduces that then stays.
+Run proc from the start of the named beat to the end of the film, with the clock starting from 0 there: for something a beat introduces that then stays. It comes in with the transition into the beat, if there is one, and no later transition takes it away.
 
 ### `script`
 

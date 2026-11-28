@@ -15,6 +15,7 @@ seconds, libraries loaded; `%!PS` blocks are whole movies.
 - [Cause and effect](#cause-and-effect)
 - [Single out a detail](#single-out-a-detail)
 - [Summarize](#summarize)
+- [Join two beats with a transition](#join-two-beats-with-a-transition)
 - [Planning a film](#planning-a-film)
 
 ## The grammar of an explainer
@@ -47,7 +48,7 @@ canvasbox 10 vmin inset 0.42 splitx /pic exch def /words exch def
   0.8 { /display 34 face /fg ink words /nw boxpoint 34 sub moveto
         (Time scope) /glyphs 0.03 /mask-up kinetic } then
   1.0 { /body 15 face /muted ink
-        (a procedure's clock, re-based: the way translate re-bases space)
+        (a procedure’s clock, re-based: the way translate re-bases space)
         words 0 -60 shifted << /Leading 1.5 >> /lines 0.15 /rise kineticparagraph } then
   0.4 { /pop { (now = 0) pic 150 60 /c placed << /Fill /accent /Ink /bg >> node } entering } then
 } script
@@ -165,6 +166,61 @@ ground
   } entering
 } cascade
 ```
+
+## Join two beats with a transition
+
+Between storyboard beats the picture cuts. Where a cut is only a cut
+because nothing else was available, write a transition between the two
+beats, as between a reel's clips: any name in `transitions`.
+
+```postscript
+%!PS
+[ /ask 3  [0.8 /dissolve]  /answer 3  [0.6 /push-left]  /recap 2.5 ] storyboard
+<< /Size [640 360] /Duration storylength /FPS 30 >> animation
+/pkstage use /pkmotion use
+/scene {
+  % a beat with a transition paints its own ground, first
+  /ask    { ground /title 34 face /fg ink 320 170 moveto (Why is the sky blue?) showcenter } inbeat
+  /answer { ground /body 22 face /fg ink
+            0.3 /rise { 320 190 moveto (short waves scatter more) showcenter } enters
+            /accent ink 1.2 /pop { 320 130 24 disc } enters } inbeat
+  /recap  { ground /title 30 face /accent ink 320 170 moveto (Rayleigh scattering) showcenter } inbeat
+  % drawn after the beats, so it stays put through every transition
+  /accent ink 0 0 width progress mul 4 rectfill
+} def
+```
+
+What it does to time is what a reel does: the transition **overlaps**
+the beats beside it. `answer` starts 0.8 s before `ask` ends, so
+`/answer beat` is 2.2, the film is 3 + 3 + 2.5 - 0.8 - 0.6 = 7.1 s, and
+`storylength` says so. Every beat keeps its full length and its own
+clock: in the dissolve `ask`'s body sees `now` 2.2 to 3 and `answer`'s
+0 to 0.8, so neither is drawn outside its beat. Inside a beat nothing
+changes; only absolute times written against the old cut move.
+
+Three rules make it work:
+
+- **A beat with a transition paints its own ground** (`ground`, or
+  `backdrop` with a colour), as a reel clip does. A dissolve, a wipe or
+  an iris draws the outgoing beat, then the incoming one over it, and
+  never fades the outgoing one: whatever the incoming beat leaves
+  uncovered stays at full strength and vanishes when the transition
+  ends. (`/dip`, the pushes and `/zoom` move or fade both sides.)
+- **Write the `inbeat` calls in the storyboard's order.** Each draws its
+  own side of the transition, so the incoming beat must be drawn second;
+  the other way round is an error, `draw /ask before /answer`.
+- **Draw what the beats share after them.** A progress bar, a frame, a
+  `frombeat` element: they stay still while the beats change under them.
+  Something drawn *between* two `inbeat` calls lands on the outgoing
+  beat and under the incoming one, so it dissolves away with the
+  outgoing beat; that cannot be detected. A `frombeat` body comes in
+  with the transition into its beat and is never taken away by a later
+  one.
+
+Keep a deliberate cut a cut: a hard change of subject, a cut on the
+music, or a hand-off where one beat's figure moves to its place in the
+next. Transitions cost the overlap's length and the drawing of two
+beats at once.
 
 ## Planning a film
 

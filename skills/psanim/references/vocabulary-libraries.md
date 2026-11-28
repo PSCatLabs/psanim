@@ -178,7 +178,7 @@ The colour u of the way from one role (or [r g b]) to another: `/muted /accent 1
 
 `/role size  face  -`
 
-Select a font by theme role at a size: /title /body /mono /display /serif. Any font name works too (`/Palatino-Italic 30 face`).
+Select a font by theme role at a size: /title /body /mono /display /serif. Any font name works too (`/Palatino-Italic 30 face`). The font reads its strings as UTF-8 (`unicodefont`), so `(Grüße 👋)` shows as written; Symbol and ZapfDingbats keep their own codes.
 
 ### `ground`
 
@@ -294,7 +294,7 @@ Show the string so that it ends at the current point: right-aligned, which keeps
 
 `/name  sym  -`
 
-Show a mathematical sign or Greek letter at the current point at the current font's size, keeping the font: /neq /le /ge /approx /pm /times /div /dot /infinity /degree /arrow /larrow /uparrow /downarrow /implies /sum /product /sqrt /integral /in /bullet, and /alpha /beta /gamma /delta /epsilon /theta /lambda /mu /pi /rho /sigma /tau /phi /omega /Delta /Sigma /Pi /Omega. The text fonts have no such characters: a non-ASCII character in a string shows as a blank. `(kiwi ) show /neq sym ( plum) show`.
+Show a mathematical sign or Greek letter at the current point at the current font's size, keeping the font: /neq /le /ge /approx /pm /times /div /dot /infinity /degree /arrow /larrow /uparrow /downarrow /implies /sum /product /sqrt /integral /in /bullet /minus (a true minus sign, wider than the hyphen), and /alpha /beta /gamma /delta /epsilon /theta /lambda /mu /pi /rho /sigma /tau /phi /omega /Delta /Sigma /Pi /Omega. A font chosen with `face` also takes the sign typed into the string as UTF-8; `sym` sets it in Symbol's design and works in any font. `(kiwi ) show /neq sym ( plum) show`.
 
 ### `symwidth`
 
@@ -312,7 +312,7 @@ The signs `sym` knows, by name, as strings in the Symbol font.
 
 `runs  showruns  -`
 
-Show a line of mixed type at the current point, in the current font and colour. A run list is an array of (text), /name (a sign from `symbols`: /pi /times ...), [/it (r)] (italic, as variables are set), [/sup x], [/sub x] and [/frac a b]: `[ (Area = ) /pi [/it (r)] [/sup (2)] ] showruns`.
+Show a line of mixed type at the current point, in the current font and colour. A run list is an array of (text), /name (a sign from `symbols`: /pi /times ...), [/it (r)] (italic, as variables are set), [/sup x], [/sub x] and [/frac a b]: `[ (Area = ) /pi [/it (r)] [/sup (2)] ] showruns`. [/as /key run] tags a term for `morphruns` and draws as the run; an array of runs, `[ /minus (5) ]`, is a group set as one term.
 
 ### `showrun`
 
@@ -325,6 +325,12 @@ Show only run i of a run list, at the place it has in the line that starts at th
 `runs  runwidth  w`
 
 The width of a run list in the current font, for centring it.
+
+### `morphruns`
+
+`[ runs runs ... ] s  morphruns  -    or  [ runs ... ] s /align|opts  morphruns  -`
+
+One equation becoming the next, at the current point. s goes from 0 (the first line, exactly as `showruns` sets it) to n-1 (the last): between k and k+1, terms of line k slide to their places in line k+1, terms with no partner fade away and new ones fade in. A term matches the first unmatched equal term of the other line, so the second x stays the second x; tag terms `[/as /key run]` to pair them otherwise, or to pair terms that look different (`[/as /n (+ 6)]` becoming `[/as /n (- 6)]` slides and cross-fades). No clock: make s with `keyframes`, holding each line, `[1 0  2.5 1 /cubic-inout  5 1  6.5 2 /cubic-inout] keyframes`. opts: /Align /left /center /right (or /l /c /r), or a tag every line has, whose centre then stays on the current point (an aligned derivation); /Arc 1 (terms crossing lift apart; 0 for straight); /Rise 0.25 (ems a leaving or arriving term drifts). Keeps the current point.
 
 ### `runbox`
 
@@ -704,6 +710,24 @@ A reference line across the plot frame at a data value: << /Y 50 (or /X v) /Labe
 
 Mark a data point: a dot, dashed drop lines to both axes, and a label on a leader line. opts: << /Label (23 people) /Side /ne /Draw u /Drop true /Role /accent /Radius r /Size s >> (/Side is where the label sits: /n /s /e /w /ne /nw /se /sw; /Size defaults to 3 vmin). The one-call form of the annotation every data story needs.
 
+### `serieslabels`
+
+`[ pts ... ] [ (name) ... ] opts  serieslabels  -`
+
+Name each line at its end, in its colour, so no legend is needed: the names are moved apart where lines end close together (in order, as little as possible, with a short leader when one is moved) and kept within the frame's height; when more names end together than fit in it, the gap between them shrinks evenly so they stay inside (and overlap). Names slide as the ends move, as long as the ends keep their order; where two ends cross, their names trade places. Each pts is what `plotline` takes ([ [x y] ... ]) or `seriesline` takes ([ y ... ]). Line i is in role i of /Roles: stroke it with `chartroles i get ink`. opts: << /Roles chartroles /Draw u (or [ u ... ], one per line: how much is drawn, the number given to `0 u trimpath`) /X x (instead: the lines are drawn up to data x, e.g. clipped there) /Ride false (true: each name rides its line's drawn end; otherwise it fades in at the end as the line completes) /Size 3 vmin /Face /title /Gap (between baselines, 1.2 x /Size) /Pad (from the line's end, 0.7 x /Size) /Leader true >>. An empty series is skipped. Names are written right of the frame's box: inset the box to leave room for them.
+
+### `tracer`
+
+`pts x opts  tracer  -`
+
+A point riding a line at data x, read between the data points: a dot on the line, a dashed drop to the x axis and its value beside it (to the left near the frame's right edge). Tween x to move it. opts: << /Along false (true: x is the drawn fraction, as for `0 u trimpath`, so the tracer leads the pen) /Role /accent /Radius 0.9 vmin /Size 3 vmin /Draw u (brought in, 0..1) /Decimals 0 /Prefix () /Suffix () (the value, as `fmtnum` writes it) /XDecimals n (write x before the value, as `fmtfixed` does: a year; the value is then the line's at x as written, so the pair shown is a true reading while the dot glides) /Drop true /Readout true /Plate true (a backing in /bg under the readout, so it reads over lines) >>. An empty series draws nothing.
+
+### `lineat`
+
+`pts x  lineat  y`
+
+The line through the points read at data x: straight between data points, the end value beyond either end. pts as for `plotline` or `seriesline`; the points must be in increasing x (equal x is a step), and no points, or x going back, is a rangecheck. For a readout of your own: `pts year lineat 1 fmtnum show`.
+
 ### `chartroles`
 
 `-  chartroles  [ /role ... ]`
@@ -854,11 +878,23 @@ The pose u of the way from a to b: numbers in between, anything else (the eyes) 
 
 Load with `/pkpixel use`.
 
+### `pixelvariant`
+
+`/new /face dials  pixelvariant  -`
+
+Define /new as a copy of a pixel face with its dials changed: `/Round /Phosphor << /DotShape /round /DotSize 0.85 >> pixelvariant`. Dials: /DotShape /square or /round, /DotSize (fraction of the pitch, up to 4), /ScanGap (0 to below 1, square marks), /Interpolate (true adds dots between neighbours, round marks). The faces' own `pf-variant`, without its name in your dictionaries. Once, in setup; then `/Round findfont`.
+
 ### `pixelfont`
 
 `rows  pixelfont  font`
 
-A pixel font of 5, 7 or 9 rows, as a dictionary from character code to the character's columns (see `pixelcols`). The 7-row font has capitals, digits, lower case with descenders held to the last row and punctuation; the 5-row font has capitals, digits and punctuation; the 9-row font is the 7-row one with the descenders of g j p q y hanging below the baseline. Build it once, in setup.
+A pixel font of 5, 7 or 9 rows, as a dictionary from character code to the character's columns (see `pixelcols`). The 7-row font has capitals, digits, lower case with descenders held to the last row and punctuation; the 5-row font has capitals, digits and punctuation; the 9-row font is the 7-row one with the descenders of g j p q y hanging below the baseline. Given the name of one of PSCat's pixel faces instead of a number (`/Diode7 pixelfont`; see `pixelface`), the same from that face's bitmaps: printable ASCII, a monospaced face's glyphs padded to its cell, psanim's degree sign lent. `font /Rows get` is the height in rows. Build it once, in setup (a face's columns are kept after the first call there; in a scene they are rebuilt every frame).
+
+### `pixelface`
+
+`name  pixelface  font`
+
+`findfont` for PSCat's pixel faces, which `findfont` does not load by name (it hands back a substitute): the first call runs the face's file (lib/fonts/...) in a dictionary of its own, so nothing the file defines (pf-variant, PhosphorDict ...) lands among the movie's names; later calls find it. The faces: /Phosphor and /Phosphor-Scan (an 8x16 video terminal), /Pinpoint-Draft and /Pinpoint-NLQ (a 9-pin dot-matrix printer), /Diode7 and /Diode5 (LED signs). Another name must be a font that exists: a misspelt one is an error, not Helvetica. Call it in setup and keep the font (`/crt /Phosphor pixelface def`, then `crt 32 scalefont setfont` in the scene): called in the scene it loads the file again every frame. Printable ASCII only. The names are kept in one table in pkpixel.
 
 ### `pixelcols`
 

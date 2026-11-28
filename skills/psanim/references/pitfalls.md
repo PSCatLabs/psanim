@@ -229,7 +229,10 @@ about 3 to 6 ms each; paintkit watercolour strokes, tens of ms each.
 Cures, in order:
 
 1. Move anything that does not depend on time into setup (loading
-   libraries, building arrays of points, L-system strings).
+   libraries, building arrays of points, L-system strings, fonts that
+   come from files: `/crt /Phosphor pixelface def`, `/Diode7 pixelfont`).
+   A frame starts from the VM as setup left it, so whatever a scene loads
+   it loads again every frame.
 2. Fewer, larger layers: one `glowing` around many shapes, not one per
    shape.
 3. Preview at `--scale 0.5`; render final frames on all cores (the
@@ -266,9 +269,44 @@ render larger.
 
 ## A character does not appear
 
-The text fonts are ASCII. A string containing "π", "→", "≠" or any other
-non-ASCII character shows a blank for it, with no error. Use pktype's
-`/pi sym`, `/arrow sym`, `/neq sym`, or a run list (`showruns`).
+Read `psanim check`'s warnings; it names the character and the font.
+
+- **An empty box (.notdef) where a character should be**: no face has it.
+  Korean, Japanese, Chinese, Thai, Arabic, the Indic scripts, Armenian,
+  Georgian and Ethiopic are not in PSCat's fallback faces yet. `check`
+  warns `no glyph for U+AC00 (가) in /Helvetica ...`, once per character.
+  Leave the text out, or set it as a picture you draw.
+- **Stray accents or blanks**: UTF-8 text in a font chosen with
+  `findfont`, which reads one byte per character. `check` warns `UTF-8
+  text (é) shown in /Helvetica, a font that reads one byte ...`. Choose the
+  font with `face`, or `/Helvetica findfont unicodefont 24 scalefont
+  setfont`.
+- **A sign in a `sym` or run list**: Symbol reads its own codes, so write
+  `/pi sym`, not `(π) sym`.
+- **A replacement box where `é` was**: a Latin-1 escape (`(caf\351)`) in a
+  `face` font, which reads UTF-8. `check` warns `no glyph for U+FFFD`.
+  Write the character itself: `(café)`.
+- **Half an emoji, a flag as two letters**: a string cut by byte
+  (`getinterval`, `length`) can split a character. Cut with `typed` and
+  step with `eachglyph`, which take whole characters in a `face` font;
+  `charcount` counts them.
+
+`check` and `frame` print these warnings; `render` and `sheet` do not.
+
+## My apostrophes went straight
+
+In a font chosen with `face`, `'` is the straight typewriter apostrophe and
+`` ` `` the grave accent, as Unicode has them. Before UTF-8 text, the same
+bytes drew PostScript's curly ’ and ‘. Type the curly characters you want:
+`(it’s)`, `(“quoted”)`, `(‘single’)`. Code keeps the straight ones, which
+is what code means.
+
+## My pixel font came out as Helvetica
+
+`/Phosphor findfont` (or Pinpoint, Diode) before the face's file has run
+gives a substitute font, with no error, and keeps it under the face's
+name. Load it with `/Phosphor pixelface` (pkpixel) in setup, which
+replaces the substitute with the face; see [type.md](type.md#pixel-faces-terminals-printers-led-signs).
 
 ## Single blank frames between sections
 
@@ -276,6 +314,27 @@ One section fades out by its end and the next fades in from its start,
 so the frame between them is empty; only `check --all` sees it. Let
 something persist across the cut (a rule, a progress bar, a heading
 that changes on the cut) or overlap the sections.
+
+## `storyboard` refuses a list that used to load
+
+`storyboard` checks its list. Two beats with one name (`[ /a 1 /a 2 ]`)
+and a name with no length after it (`[ /a 1 /b ]`) used to load: the
+first silently made a 3-second film with one `/a`, the second dropped
+`/b`. Both are errors now, naming the beat. Give each beat its own name
+and a length in seconds.
+
+## A transition between beats looks wrong
+
+- **The outgoing beat stays solid, then vanishes.** A dissolve, wipe or
+  iris draws the incoming beat over the outgoing one: a beat with no
+  ground of its own leaves the other uncovered. Start each beat that
+  has a transition with `ground` (or `backdrop`).
+- **`draw /a before /b`.** The `inbeat` calls must come in the
+  storyboard's order (and a `frombeat` of the incoming beat after both).
+- **Something drawn between the two calls ends up under the incoming
+  beat only.** `/a { } inbeat  (caption) show  /b { } inbeat` puts the
+  caption on top of `a` but under `b`, so it dissolves away with `a`.
+  This cannot be detected: draw shared things after all the beats.
 
 ## Hairlines between shapes that should touch
 

@@ -240,7 +240,7 @@ fn each_library_alone_can_run_its_own_words() {
         ),
         (
             "pkchart",
-            "canvasbox [0 1] [0 1] plotframe << >> plotaxes [1] << >> bars 0.5 0.5 << /Label (m) >> plotmark << /Y 0.5 /Label (r) >> plotrule [1 2] canvasbox << /Center (c) >> donut",
+            "canvasbox [0 1] [0 1] plotframe << >> plotaxes [1] << >> bars 0.5 0.5 << /Label (m) >> plotmark << /Y 0.5 /Label (r) >> plotrule [1 2] canvasbox << /Center (c) >> donut [ [[0 0] [1 1]] [0.5 0.6] ] [ (a) (b) ] << /Draw 0.5 /Ride true >> serieslabels [[0 0] [1 1]] 0.5 << /XDecimals 0 >> tracer [0 1] 0.5 lineat pop",
         ),
         (
             "pkink",
@@ -335,6 +335,10 @@ fn no_pscat_library_redefines_a_psanim_word() {
         ("jersey", "artkit"),
         ("hangul", "artkit"),
         ("noiseref", ""),
+        ("fonts/phosphor", ""),
+        ("fonts/pinpoint", ""),
+        ("fonts/diode7", ""),
+        ("fonts/diode5", ""),
     ];
     let mut clashes = Vec::new();
     for (lib, needs) in libs {

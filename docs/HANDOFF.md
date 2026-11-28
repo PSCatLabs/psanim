@@ -46,13 +46,20 @@ Working and tested on macOS (Apple silicon):
 - PSCat: a git dependency on `feature/0.8.0`, pinned at `d385971` by
   `Cargo.lock`. The host API (PSCatLabs/pscat#1410) is merged there.
   PSCatLabs/pscat#1488 lists 0.8.0's additions (line numbers in errors,
-  the UTF-8 check, Unicode text, pixel fonts, transparency groups).
+  the UTF-8 check, Unicode text, pixel fonts). psanim uses the pixel fonts
+  (#101): pkpixel's `pixelface` loads them, `pixelfont` reads their
+  bitmaps, the terminal, dotmatrix and ledmatrix entries take one as an
+  option, and the gallery's Boot Sequence shows all three. It uses Unicode
+  text (`face` fonts read UTF-8 through `unicodefont`, the one place that
+  names PSCat's provisional `/PSCatUnicode` key) and the UTF-8 check
+  (`Movie::text_warnings`, reported by `check` and `frame` with PSCat's
+  missing-glyph notes).
   Transparency groups (`begingroup` / `endgroup`, PSCat's own operators)
-  work in movies, inside psanim's layers and motions. A psanim layer
-  inside a group loses its effect; psanim asks whether a group is open
-  in one place, `crates/psanim/src/groups.rs`, which waits on PSCat's
-  host query (PSCatLabs/pscat#1494) and answers "none" until then.
-  `docs/pscat-integration.md` has the rules and what is pending.
+  work in movies, inside psanim's layers and motions and around `faded`;
+  psanim asks PSCat whether a group is open in one place,
+  `crates/psanim/src/groups.rs` (`Interp::open_group_count`,
+  `innermost_group_serial`), and refuses what cannot work inside one.
+  `docs/pscat-integration.md` has the rules.
 
 ## Decisions worth knowing before changing things
 
