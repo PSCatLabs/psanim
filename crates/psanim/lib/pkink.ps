@@ -7,6 +7,9 @@
 %                              along the current path has been: a textured
 %                              stroke that draws itself
 %   n { ... } around           radial repetition
+%   strokes paintplan plan     painting over time on a persistent canvas:
+%   plan paintkept (scene), plan paintlive (overlay), plan painttip,
+%   plan paintall              see the section at the end
 /pkstage use
 
 % u width proc revealalong -     run proc clipped to a band `width` wide
@@ -77,4 +80,138 @@
 /jitter {
   exch dup [ exch 1 ] hash01 0.5 sub 2 mul 2 index mul
   exch [ exch 2 ] hash01 0.5 sub 2 mul 3 -1 roll mul
+} bind def
+
+% ------------------------------------------------------------ paintplan
+% A plan is a list of strokes, each painted over a stretch of movie time:
+%   << /Kind /along /At t /For d /Path { ... } /Paint { u -> } /Seed n
+%      /Reveal w /Ease e >>
+%   << /Kind /sweep /At t /For d /Across [a b] /Axis /x /Paint { u -> } >>
+%   << /Kind /soak  /At t /For d /Passes n /Paint { u -> } >>
+% `strokes paintplan` checks it (natively, naming the stroke and the field
+% at fault) and sorts what it lays. On a persistent canvas `paintkept` in
+% the scene lays each stroke once, whole, on the step that reaches its end
+% (each pass of a soak on its own step); `paintlive` in the overlay draws
+% the strokes in progress as far as they have got. A stroke is drawn by its
+% /Paint with u: an /along's /Path is the current path, `/From 0 /To u`
+% grows a dry medium; with /Reveal (and for a sweep) the library clips and
+% /Paint is given 1. `Seed srand` comes immediately before /Path and /Paint.
+% No dictionary is open around any procedure of the caller's.
+/paintplan { .paintplan } bind def
+
+% [depth stroke] of the procedure being run, for the check after it.
+/.paintcell [ 0 0 ] def
+% d k .paintpath d k      build stroke k's path (its /Path), checking it
+%   leaves the stack as it found it
+/.paintpath {
+  .paintcell aload pop 4 2 roll                 % d0 k0 d k
+  .paintcell 1 2 index put
+  count .paintcell exch 0 exch put
+  1 index /Path get exec
+  count .paintcell 0 get ne {
+    count .paintcell 0 get sub .paintcell 1 get exch /Path .paintbad
+  } if
+  4 2 roll .paintcell astore pop                % d k
+} bind def
+% d k u .paintpaint d k     run stroke k's /Paint with u, checking it
+%   takes u and leaves nothing
+/.paintpaint {
+  .paintcell aload pop 5 2 roll                 % d0 k0 d k u
+  .paintcell 1 3 index put
+  count 1 sub .paintcell exch 0 exch put
+  2 index /Paint get exec
+  count .paintcell 0 get ne {
+    count .paintcell 0 get sub .paintcell 1 get exch /Paint .paintbad
+  } if
+  4 2 roll .paintcell astore pop                % d k
+} bind def
+% d pass .paintseed d      srand with the stroke's /Seed (plus the pass)
+/.paintseed { 1 index /Seed get exch dup 0 lt { pop 0 } if add srand } bind def
+% d u .paintease d u'      the stroke's /Ease applied to u
+/.paintease {
+  1 index /Ease get dup null eq { pop } {
+    dup type /nametype eq { ease } { exec } ifelse
+  } ifelse
+} bind def
+% d k u pass .paintdraw -     draw stroke k as far as u (a soak: its pass)
+/.paintdraw {
+  .paintsettle gsave
+  3 index /Kind get
+  dup /soak eq { pop
+    3 index exch .paintseed pop
+    newpath .paintpaint pop pop
+  } { /sweep eq { pop                           % d k u
+    2 index /Across get aload pop               % d k u a b
+    1 index sub 3 -1 roll mul 1 index add       % d k a f
+    2 copy gt { exch } if                       % d k lo hi
+    1 index sub                                 % d k lo w
+    3 index /Axis get /x eq { -1e5 exch 2e5 } { -1e5 3 1 roll 2e5 exch } ifelse
+    rectclip newpath
+    1 index -1 .paintseed pop
+    1 .paintpaint pop pop
+  } { pop                                       % along: d k u
+    2 index -1 .paintseed pop
+    newpath 2 index 2 index .paintpath pop pop
+    2 index /Reveal get dup 0 gt {              % d k u w
+      currentlinewidth currentlinecap currentlinejoin 7 3 roll
+      setlinewidth 1 setlinecap 1 setlinejoin
+      0 exch trimpath strokepath clip newpath   % lw cap join d k
+      5 2 roll setlinejoin setlinecap setlinewidth
+      1 index -1 .paintseed pop newpath .paintpath
+      1 index -1 .paintseed pop 1 .paintpaint pop pop
+    } { pop
+      2 index -1 .paintseed pop .paintpaint pop pop
+    } ifelse
+  } ifelse } ifelse
+  grestore
+} bind def
+% plan n .paintunit -     lay unit n (a whole stroke, or a pass of a soak)
+/.paintunit {
+  1 index /US get 1 index get                   % plan n s
+  2 index /Strokes get 1 index get exch         % plan n d s
+  3 index /UP get 3 index get                   % plan n d s p
+  4 index /UU get 4 index get                   % plan n d s p uu
+  3 index /Kind get /soak eq { exch } { pop pop 1 -1 } ifelse
+  .paintdraw pop pop
+} bind def
+% plan all .paintunits -
+/.paintunits {
+  1 index /UT get exch .paintdue                % plan i j
+  1 sub 1 exch { 1 index exch .paintunit } for pop
+} bind def
+% plan paintkept -     in `scene`: lay what this step finishes, once, whole
+/paintkept { false .paintunits } bind def
+% plan paintall -      every stroke finished, in the order they are kept:
+%   the board painted in one go
+/paintall { true .paintunits } bind def
+% plan paintlive -     in `overlay`: the strokes in progress, as far as
+%   they have got, in the order they will be kept
+/paintlive {
+  dup /Kinds get 1 index /T0 get 2 index /T1 get .paintlive   % plan arr
+  0 2 2 index length 1 sub {                    % plan arr i
+    2 copy get exch 1 add 2 index exch get      % plan arr s ulin
+    3 index /Strokes get 2 index get exch       % plan arr s d ulin
+    .paintease 3 1 roll exch 3 -1 roll          % plan arr d s u
+    -1 .paintdraw
+  } for pop pop
+} bind def
+% plan painttip x y angle k true | false     where the tip of the stroke
+%   being drawn is: on an /along's path, at a sweep's front (half way up
+%   or across the canvas); k is the stroke's index
+/painttip {
+  dup /Kinds get 1 index /T0 get 2 index /T1 get .painttip   % plan s u | plan -1
+  dup -1 eq { pop pop false } {
+    1 index 3 index /Strokes get exch get exch  % plan s d u
+    .paintease
+    1 index /Kind get /along eq {
+      gsave
+        1 index -1 .paintseed pop newpath 1 index 3 index .paintpath pop pop
+        pathpoint
+      grestore                                  % plan s d x y a
+    } {
+      1 index /Across get aload pop 1 index sub 3 -1 roll mul add
+      1 index /Axis get /x eq { height 2 div 0 } { width 2 div exch 90 } ifelse
+    } ifelse
+    6 -3 roll pop exch pop true
+  } ifelse
 } bind def

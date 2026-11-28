@@ -1836,6 +1836,36 @@ pub const API: &[ApiEntry] = &[
         "A small steady offset within amount either way, fixed by key: the hand-set unevenness of a row of marks. The same key always gives the same offset.",
     ),
     e(
+        "pkink",
+        "paintplan",
+        "[ stroke ... ]  paintplan  plan",
+        "A stroke scheduler for painting over time, in setup: each stroke a dictionary << /Kind /At t /For d /Paint { u -> } /Seed n ... >>, painted from movie time t for d seconds. Kinds: /along (default: /Path { ... } builds its path, the current path when /Paint runs; /Paint draws the stroke as far as u, as `/From 0 /To u` grows a dry medium; with /Reveal w the library reveals it through a band w wide along the path and /Paint gets 1), /sweep (/Across [a b]: the whole of /Paint shown up to a front moving from a to b, across x, or up y with /Axis /y; /Paint gets 1), /soak (/Passes n: n passes laid one over another, evenly over the time, /Paint given (k+1)/n for pass k). /Ease, a name or a procedure, paces an /along or a /sweep. /Seed (default the stroke's index + 1; a soak's pass k uses Seed + k) is given to `srand` immediately before /Path and before /Paint, which pins every paintkit preset; it does not set pkwash's or pkpaper's own /Seed. Keys with a small first letter are the author's, kept (`plan /Strokes get k get`). Errors name the stroke (counting from 0) and the field. Up to 10,000 strokes and 100,000 units (strokes and passes).",
+    ),
+    e(
+        "pkink",
+        "paintkept",
+        "plan  paintkept  -",
+        "In a persistent movie's `scene`: lay what this step finishes, once, whole (/Paint given 1, or a soak's pass), in the order the units end (ties in plan order). Each unit is laid on the one step that reaches its time, at the declared rate whatever `--fps` says, so the kept canvas is the board painted in one go (`paintall`) to the pixel. In a pure movie it draws every unit finished by now.",
+    ),
+    e(
+        "pkink",
+        "paintlive",
+        "plan  paintlive  -",
+        "In a persistent movie's `overlay` (shown, never kept): every stroke in progress, drawn from nothing as far as it has got, in the order it will be kept, and a stroke that has ended but is not yet on the kept canvas whole. Regrowing in the overlay is exact where pieces laid frame by frame are not, and nothing vanishes for a frame at any `--fps`. Soaks have nothing in progress. In a pure movie, call it after `paintkept`.",
+    ),
+    e(
+        "pkink",
+        "painttip",
+        "plan  painttip  x y angle k true | false",
+        "Where the brush is: of the strokes being drawn now (started, not ended), the one begun last; its tip on an /along's path (with the path's direction there) or the middle of a sweep's front; k is its index in the plan (`plan /Strokes get k get` for its keys). false between strokes, and for a soak. For a cursor in `overlay`: `plan painttip { pop pop 6 0 360 arc fill } if`.",
+    ),
+    e(
+        "pkink",
+        "paintall",
+        "plan  paintall  -",
+        "Every unit of the plan laid whole, in the order `paintkept` lays them: the finished board in one go, for a still, a poster or a reference to compare the last frame with.",
+    ),
+    e(
         "pkfigure",
         "squashed",
         "hop squash lean proc  squashed  -",
