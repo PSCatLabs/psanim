@@ -126,9 +126,9 @@ notes length 1 lt notes length 5 gt or
 /pm-poemdur 0 poem { pm-linegap add } forall pm-in add 1.0 add def
 /pm-notesdur 0 pm-notedurs { add } forall def
 /pm-readdur reading pm-ready pm-hold add def
-/pm-total 0.5 pm-poemdur add pm-notesdur add pm-readdur add def
+/pm-total 0.25 pm-poemdur add pm-notesdur add pm-readdur add def
 pm-total 90 gt { [ (the film would run ) pm-total cvi ( s; this template stops at 90 s: shorten the notes or the reading) ] pm-cats pm-fail } if
-[ /open 0.5  /lines pm-poemdur  /walk pm-notesdur  /close pm-readdur ] storyboard
+[ /open 0.25  /lines pm-poemdur  /walk pm-notesdur  /close pm-readdur ] storyboard
 
 << /Size [1280 720] /Duration storylength /FPS 30 >> animation
 /pktype use
@@ -140,7 +140,7 @@ look usetheme
 /pm-cardx pm-page 0 get pm-page 2 get 0.56 mul add def           % the card's column
 /pm-cardw pm-page 0 get pm-page 2 get add pm-cardx sub def
 /pm-x pm-page 0 get def
-/pm-gap 6 vmin def                                               % heading to content
+/pm-gap 7 vmin def                                               % heading to content
 
 % the heading: modest, shrunk only if it is too wide
 /heading-size 5 vmin def
@@ -150,7 +150,7 @@ heading-size 3.5 vmin lt { [ (/heading is too long; keep it under about 40 chara
 /pm-headh heading-size 0.75 mul def
 
 % the poem: one size for every line, as large as the longest allows
-/pm-cap 8.5 vmin def  /pm-floor 4 vmin def  /pm-lead 1.5 def
+/pm-cap 8.5 vmin def  /pm-floor 4 vmin def  /pm-lead 1.6 def
 /pm-room pm-page 3 get pm-headh sub pm-gap sub def               % the most the content can take
 /pm-size pm-cap def
 /serif 100 face
@@ -162,7 +162,7 @@ pm-size pm-floor lt {
     pm-long pm-size mul pm-floor div cvi 1 max ( characters in this theme’s face \(the longest has ) pm-long (\)) ] pm-cats pm-fail
 } if
 /pm-step pm-size pm-lead mul def
-/pm-poetsize 4 vmin def
+/pm-poetsize pm-size 0.6 mul 3.2 vmin max 4 vmin min def                % under the poem, smaller than it
 /body pm-poetsize face poet stringwidth pop 0.01 max pm-colw exch div pm-poetsize mul
   pm-poetsize min /pm-poetsize exch def
 pm-poetsize 3.2 vmin lt { [ (/poet is too long; keep it under about 45 characters) ] pm-cats pm-fail } if
@@ -174,7 +174,7 @@ pm-poetsize 3.2 vmin lt { [ (/poet is too long; keep it under about 45 character
 /pm-pad 3.5 vmin def
 /pm-tagsize 3.5 vmin def   /pm-tagh pm-tagsize 2.1 mul def
 /pm-quotesize 4.8 vmin def /pm-quoteh pm-quotesize 1.8 mul def
-/pm-textsize 4.2 vmin def  /pm-lineh pm-textsize 1.38 mul def
+/pm-textsize 4.6 vmin def  /pm-lineh pm-textsize 1.38 mul def
 /pm-innerw pm-cardw pm-pad 2 mul sub def
 /pm-wrap { % (text) (field) -> [ (line) ... ], every line inside the card
   /pm-field exch def /body pm-textsize face pm-innerw wraplines
@@ -228,10 +228,9 @@ pm-readlines length pm-lineh mul pm-tagh add pm-roomh gt
 /pm-wordbox { % note -> the box of its words in the poem
   /serif pm-size face dup 0 get pm-x exch pm-base moveto
   dup 0 get poem exch get exch 1 get partbox } def
-/pm-mark { % note u -> the note's words recoloured, u from /fg to /accent
-  exch dup pm-wordbox 0 get /pm-wx exch def
-  /fg /accent 4 -1 roll mixink ink
-  dup 0 get pm-base pm-wx exch moveto 1 get show } def
+/pm-mark { % note u -> the note's words in /accent, laid over the line at opacity u
+  dup 0 gt { gsave setalpha dup pm-wordbox 0 get /pm-wx exch def /accent ink
+    dup 0 get pm-base pm-wx exch moveto 1 get show grestore } { pop pop } ifelse } def
 /pm-rule { % note u -> a rule drawn on under the note's words
   exch pm-wordbox 0 -0.9 vmin shifted exch /accent ink 0.45 vmin setlinewidth underline newpath } def
 /pm-cardground { /surface ink pm-card 2 vmin roundpath fill
