@@ -361,8 +361,8 @@ show X/Z unchanged and sent the other six back.
 
 **What was changed as a result.** Both templates were revised against
 the review (these revisions are what round 2, below, reviewed blind), and against a code review of the PR that found six defects
-in validation and timing. **The revised templates have not been
-re-reviewed blind**; what follows is from `check --all`, contact sheets
+in validation and timing. What follows, written before round 2, is
+from `check --all`, contact sheets
 and full-size frames of the two brief contents, re-run through the
 revised templates.
 
@@ -522,8 +522,55 @@ handoffs, one frame with no legible text on the card (frames 335, 501
 and 682 of the brief's film): the kind of frame both reviews caught in
 the round-1 film at 13.0 s. The overlap test's false positive on the
 round-1 template shows that its measure can misfire on text that rises
-into place; the revision's card text does not move. **The third revision has not been reviewed blind.** Two
-independent blind reviews of it are to follow, in another session.
+into place; the revision's card text does not move.
+
+**Round 3: the third poem revision, two independent blind reviews**
+(2026-11-28, `out/eval7/review-summary.md`). A binary built from main
+`c85baae` (after #123). The third revision's film is `poem-basho.ps`
+rendered as is (30.4 s). Each review held four films: the third
+revision, the round-1 template's film, and the Sonnet and Haiku
+from-scratch films, all re-rendered on the new binary and all passing
+`check --all`. The two reviews ran in fresh Codex threads, each with its
+own random tags and order, and each was asked to decode frames around
+every change of text.
+
+| Film | Review 1 (overall, rank) | Review 2 (overall, rank) |
+|---|---|---|
+| Template v3 | 8, 1st ("no required revision") | 8, 1st ("can ship") |
+| Template v1 | 7, 3rd | 7, 2nd |
+| Haiku from scratch | 7, 2nd | 7, 3rd |
+| Sonnet from scratch | 6, 4th | 6, 4th |
+
+Sub-scores (fidelity, layout, legibility, pacing, motion, overall):
+
+| Film | Review 1 | Review 2 |
+|---|---|---|
+| Template v3 | 9 8 8 8 8 8 | 10 8 8 8 8 8 |
+| Template v1 | 9 6 8 7 8 7 | 10 7 7 6 8 7 |
+| Haiku from scratch | 9 7 8 6 7 7 | 10 7 7 6 6 7 |
+| Sonnet from scratch | 9 7 9 5 8 6 | 10 6 8 5 6 6 |
+
+- **The third revision ranked first in both reviews.** The two reviews
+  agree on every overall score and on first and last place; they swap
+  second and third, both at 7. Sub-scores differ by at most one, except
+  the Sonnet film's motion (8 and 6).
+- **The round-2 defects are gone.** Neither review reported an overlap,
+  a fragment or an added quotation mark.
+- **Defects still named for the third revision, all judged minor:**
+  review 1 found the outgoing "turn" note caught mid-fade as ghost text
+  at about 16.72 s, a small category label and muted attribution, and
+  the closing paragraph's last line close to the card's right padding.
+  Review 2 found an empty upper-middle area, "instant." alone on the
+  last line of the turn note, and the category label lighter than the
+  quoted words.
+- **Noise, measured again.** Over three rounds and four reviews the same
+  round-1 template film scored 7 (round 1, with the apostrophe artefact),
+  8 (round 2), and 7 and 7 (round 3). A single review is good to about a
+  point; two reviews reduce that but do not remove it.
+- **For #108:** both templates now rank first in their sets under blind
+  review: the process template's second version at 8 (round 2, one
+  review), the poem template's third version at 8 and 8 (round 3, two
+  reviews).
 
 ## What the evaluation supports
 
@@ -551,17 +598,18 @@ independent blind reviews of it are to follow, in another session.
   experiment 4, after the skill argued for it, most films used it, but
   no edit was then made to them to measure the benefit.
 - Any claim about reliability: each cell of each table is one run.
-- That templates make better films in general: in each round one
-  template's film scored above the from-scratch films and the other's
-  did not, a single review is good to about a point, and a template is
-  only as good as itself.
+- That templates make better films in general. Two templates, each
+  revised after blind review, now rank first in their sets, one on a
+  single review and one on two; that is two briefs, one run each. A
+  template is only as good as itself: the poem template's second
+  version ranked last.
 - Any claim about smaller models with and without the libraries: only
   the with-libraries arm was run on Opus, Sonnet and Haiku.
 
 ## What to run next
 
-- Two independent blind reviews of the third poem revision against the
-  same films (round 2 reviewed the second, which ranked last).
+- A second independent review of the process template's second
+  version, which has one review so far.
 
 - Each comparison five times, to see whether the differences in fix
   rounds and time are real.
