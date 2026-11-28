@@ -299,16 +299,16 @@ Non-comment lines: 163 (poem) and 188 (process) in the template films,
 **The blind review.** Overall scores, and sub-scores (fidelity, layout,
 legibility, pacing, motion, overall):
 
-| Brief | Film | Model | Template | Sub-scores | Overall | Rank |
+| Brief | Film | Model | Template | Sub-scores | Overall | Reviewer's order |
 |---|---|---|---|---|---|---|
-| poem | P | haiku | yes | 7 7 7 7 7 7 | 7 | last, with R |
-| poem | R | sonnet | yes | 7 7 7 7 7 7 | 7 | last, with P |
-| poem | Q | sonnet | no | 7 7 9 7 7 7 | 7 | second |
-| poem | S | haiku | no | 7 8 8 7 7 7 | 7 | first |
-| process | X | haiku | yes | 9 8 9 7 8 8 | 8 | first, with Z |
-| process | Z | sonnet | yes | 9 8 9 7 8 8 | 8 | first, with X |
-| process | Y | sonnet | no | 9 7 7 7 8 7 | 7 | third |
-| process | W | haiku | no | 7 7 8 7 7 7 | 7 | last |
+| poem | P | haiku | yes | 7 7 7 7 7 7 | 7 | 3rd, tied with R |
+| poem | R | sonnet | yes | 7 7 7 7 7 7 | 7 | 3rd, tied with P |
+| poem | Q | sonnet | no | 7 7 9 7 7 7 | 7 | 2nd |
+| poem | S | haiku | no | 7 8 8 7 7 7 | 7 | 1st |
+| process | X | haiku | yes | 9 8 9 7 8 8 | 8 | 1st, tied with Z |
+| process | Z | sonnet | yes | 9 8 9 7 8 8 | 8 | 1st, tied with X |
+| process | Y | sonnet | no | 9 7 7 7 8 7 | 7 | 3rd |
+| process | W | haiku | no | 7 7 8 7 7 7 | 7 | 4th |
 
 P and R are pixel-identical over all 1131 frames, X and Z over all 1339:
 with the template, the model made no difference to the film. Codex would
@@ -368,13 +368,14 @@ revised templates.
   (was 3.8), and the attribution follows the poem's size. Each note's
   explanation, and the closing reading, arrives a line at a time at about
   0.24 s a word. The next note's text rises in while the last fades, so
-  the card is never empty. A note's time follows its own length. The
-  finished picture is still for the last line's reading time plus 2.5 s.
-  The brief's film went from 37.7 s to 29.6 s; its last line arrives
-  about 4.2 s before the end (the picture was complete 10.1 s before the
-  end).
-- `process.ps`: the key step's reason is set under its line and stays.
-  The path back's sentence, with its label, has a foot line of its own
+  the card is never empty (for two or three frames at each swap the two
+  quotations overlap at partial opacity). A note's time follows its own
+  length. The finished picture is still for the last line's reading time
+  plus 2.5 s. The brief's film went from 37.7 s to 29.6 s; its picture
+  is complete 4 to 4.5 s before the end (it was 10.1 s).
+- `process.ps`: the key step's reason is set under its line, at the
+  same size as the steps' lines (W was marked down for a smaller one),
+  and stays. The path back's sentence, with its label, has a foot line of its own
   above the summary, so the finished picture keeps all three. Steps take
   0.24 s a word and half a second's rest: the brief's film went from
   44.6 s to 36.2 s, and the test step, by the template's own sums, from
@@ -385,14 +386,17 @@ revised templates.
   not spaces; the path back's label is measured and blamed by name; the
   default content works under every theme; a film over 90 s is refused.
   Each has a test that failed before its fix.
-- **Against the two from-scratch poem films** (rendered with their own
-  frozen binary): the revised template no longer has the defects that
-  ranked it last, and its card never empties, where S's did. Its poem
-  (8.5 vmin) is larger than Q's (7.2) and S's (8). It is still behind Q
-  on the size of the commentary (4.6 vmin against Q's 5) and behind S on
-  use of the page: the revised template gathers everything in the middle
-  third, with wide empty margins above and below, where S spreads the
-  poem over the full height. Whether it now ranks with or above them is
+- **Against the two from-scratch poem films** (their sheets rendered
+  with their own frozen binary, and S's card swap frame by frame): the
+  revised template no longer has the defects that ranked it last. Its
+  card never empties, where S's is empty from 12.6 to 13.0 s. Its
+  finished picture is still for the last 4 to 4.5 s, Q's for the last 8
+  to 8.5 s and S's for the last 12 to 13 s (compared frame against last
+  frame, half a second apart). Its poem (8.5 vmin) is larger than Q's
+  (7.2) and S's (8). It is still behind Q on the size of the commentary
+  (4.6 vmin against Q's 5), and behind S on use of the page: it gathers
+  heading, poem and card in the middle, with about a fifth of the height
+  empty above and below, where S spreads the poem over the full height. Whether it now ranks with or above them is
   for a second blind review to say.
 - The skill gaps the from-scratch authors reported were checked against
   the skill text. Real, and fixed: pkdiagram's `/Size` gave no unit (now

@@ -19,7 +19,8 @@
 % and accents (café). A straight ' draws as a straight typewriter
 % apostrophe. A character no face has (Japanese, Chinese, Korean, Thai,
 % Arabic, the Indic scripts) draws as an empty box, and `psanim check`
-% names it.
+% names it. The limits below count characters as written; the numbers in
+% `check`'s messages count bytes, so an accented letter counts as two there.
 
 % ============================ CONTENT: edit this ============================
 
@@ -33,8 +34,9 @@
 % The steps, in order: 3 to 8 of them. Each is
 %   [ (name) (what happens) ]
 % name:         one or two words, at most about 14 characters.
-% what happens: one line, at most about 60 characters (with 8 steps the
-%               type is smaller; `check` says if a line will not fit).
+% what happens: one line, at most about 60 characters, about 55 in the
+%               wider face of /terminal (with 8 steps the type is smaller;
+%               `check` says if a line will not fit).
 /steps [
   [ (open) (The author pushes a branch and opens a pull request.) ]
   [ (checks) (Tests and linters run on every push to the branch.) ]
@@ -44,7 +46,7 @@
 ] def
 
 % The step that matters most, counting from 0, and why: at most about 90
-% characters. It is set under that step's line when the token reaches it,
+% characters, about 80 in /terminal. It is set under that step's line when the token reaches it,
 % and stays.
 /key 2 def
 /why (Review is where a second person catches what tests cannot.) def
@@ -53,13 +55,12 @@
 %   [ from to (label) (what happens) ]
 % from, to:     step numbers, counting from 0; usually to is earlier.
 % label:        one or two words, at most about 16 characters.
-% what happens: one line, at most about 60 characters.
+% what happens: one line, at most about 60 characters, label included.
 % Write  /pathback [ ] def  for none.
 /pathback [ 2 0 (changes asked) (If the reviewer asks for changes, the author pushes again.) ] def
 
 % The closing line: what the whole picture says, at most about 70
-% characters (60 with a path back, whose line shares the foot). It stays
-% on screen to the end.
+% characters. It stays on screen to the end.
 /summary (Every change is checked by machines, then by a person.) def
 
 % ===================== nothing below here needs to change =====================
@@ -163,7 +164,7 @@ heading-size 3.6 vmin lt { [ (/heading is too long; keep it under about 45 chara
   dup 3.4 vmin lt { pop [ 3 1 roll ( is too long for one line; keep it under about ) exch ( characters) ] pr-cats pr-fail }
                   { 3 1 roll pop pop } ifelse
 } def
-/pr-sumsize summary 0 (/summary) pr-hasloop { (60) } { (70) } ifelse pr-footfit def
+/pr-sumsize summary 0 (/summary) (70) pr-footfit def
 /pr-backindent pr-hasloop { /title pr-footsize face pr-backlabel stringwidth pop pr-labelgap add } { 0 } ifelse def
 /pr-backsize pr-hasloop { pathback 3 get pr-backindent (/pathback: what happens) (60) pr-footfit } { 0 } ifelse def
 
@@ -178,7 +179,7 @@ pr-looplabels length 2 gt pr-looplabels { stringwidth pop pr-labelw gt or } fora
   /body pr-loopsize face 0 pr-looplabels { stringwidth pop max } forall pr-bulge 1.2 mul add 4 vmin add
 } { 0 } ifelse def
 
-% ---- the steps' column: as wide as the longest name needs -------------------
+% ---- the steps' column: as wide as the longest name needs at most -----------
 /title 100 face
 /pr-namew 0 steps { 0 get stringwidth pop max } forall 100 div def   % in ems
 % a long name makes the labels smaller, down to 3 vmin, before it is refused
@@ -191,7 +192,7 @@ pr-labelmax 3 vmin lt { [ (a step name is too long; keep names under about 14 ch
 /pr-textw pr-page 0 get pr-page 2 get add pr-textx sub def
 
 % ---- the key step's reason, set under its line: one or two lines ------------
-/pr-whymax 4 vmin def  /pr-whylead 1.3 def
+/pr-whymax 4.4 vmin def  /pr-whylead 1.3 def
 /pr-whylines /body pr-whymax face why pr-textw wraplines def
 pr-whylines length 2 gt pr-whylines { stringwidth pop pr-textw gt or } forall
   { [ (/why is too long for two lines beside the steps; keep it under about ) pr-textw pr-whymax div 3.5 mul cvi 1 max ( characters) ] pr-cats pr-fail } if
@@ -204,6 +205,14 @@ pr-whylines length 2 gt pr-whylines { stringwidth pop pr-textw gt or } forall
 /pr-pitch pr-bodyh pr-whyh sub pr-n div 15 vmin min def
 /pr-nodeh pr-pitch 0.78 mul 10 vmin min def
 /pr-labelsize pr-nodeh 0.5 mul pr-labelmax min 3 vmin max def   % never under 3 vmin
+% now the nodes can narrow to the labels' size, and the lines' column widen;
+% the reason, wrapped again, takes no more lines than before; the rows are
+% centred again on what it now needs
+/pr-nodew pr-namew 2.4 add pr-labelsize mul 20 vmin max def
+/pr-textx pr-nodex pr-nodew add 4 vmin add def
+/pr-textw pr-page 0 get pr-page 2 get add pr-textx sub def
+/pr-whylines /body pr-whymax face why pr-textw wraplines def
+/pr-whyh pr-whylines length pr-whymax pr-whylead mul mul def
 /pr-stack pr-pitch pr-n mul pr-whyh add def
 /pr-top pr-bodytop pr-bodyh pr-stack sub 2 div sub def
 /pr-rowtop { dup pr-pitch mul pr-top exch sub exch key gt { pr-whyh sub } if } def  % i -> top of row i
@@ -217,10 +226,11 @@ pr-whylines length 2 gt pr-whylines { stringwidth pop pr-textw gt or } forall
 /body 100 face
 steps { 1 get stringwidth pop 100 div 0.01 max pr-textw exch div pr-textsize min /pr-textsize exch def } forall
 pr-textsize 3 vmin lt {
+  0 steps { 1 get length max } forall /pr-long exch def
   [ (a step's line is too long to set at a legible size; with ) pr-n ( steps keep lines under about )
-    pr-textw 3 vmin div 2 mul cvi 1 max ( characters) ] pr-cats pr-fail
+    pr-long pr-textsize mul 3 vmin div cvi 1 max ( characters in this theme’s face \(the longest has ) pr-long (\)) ] pr-cats pr-fail
 } if
-/pr-whysize pr-whymax pr-textsize min def
+/pr-whysize pr-textsize def                                       % the same size as the steps' lines
 /pr-whyy { % k -> baseline of the reason's line k, under the key step's line
   pr-whysize pr-whylead mul mul key pr-midy pr-textsize 0.35 mul sub exch sub
   pr-whysize pr-whylead mul sub } def
