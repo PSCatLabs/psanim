@@ -61,6 +61,27 @@ psanim render movie.ps -o movie.mp4    # 5. the film (also .webm, .gif, or a dir
   `check`, `sheet` and `frame`: expect each to cost the film up to that
   moment.
 
+## Start from a template, when one fits
+
+Two everyday explainers have a finished film to start from, in
+[templates/](templates/):
+
+| the request | start from |
+|---|---|
+| explain this short poem (2 to 6 lines) | `templates/poem.ps` |
+| show me this process (3 to 8 steps, at most one path back) | `templates/process.ps` |
+
+Copy the file and change only its CONTENT block (the comments there give
+each field's limits), then `check`, `check --all` and a `sheet`, and look.
+The staging, pacing, sizes and closing hold are already done, and the
+film's length follows from the text. A `check` that fails with `content:
+...` names the field to shorten. Change the staging only if the request
+asks for something the template does not do, and say what you changed.
+With a template you need this page down to "When something fails"; the
+rest is for changing the staging. Anything else is written from scratch.
+The `poem-*.ps` and `process-*.ps` files beside the templates are their
+test contents, not starting points.
+
 ## The five ideas
 
 1. **`now` is the clock, in seconds.** At the top of `scene` it is the
@@ -306,6 +327,7 @@ detail) is in [storytelling.md](references/storytelling.md).
 | Making it good: timing, easing, composition, colour, how to review motion | [references/craft.md](references/craft.md) |
 | Stateful simulations, persistent canvases, signals, parameters, the time of day for clocks, motion blur | [references/modes.md](references/modes.md) |
 | Complete small movies to start from | [examples/](examples/) |
+| A finished explainer to fill in: a short poem, a process | [templates/](templates/) |
 
 For drawing itself (brushes, palettes, L-systems, text layout, charts),
 use the `psart` and `pscat` skills: everything they describe works inside

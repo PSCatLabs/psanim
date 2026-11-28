@@ -1,0 +1,16 @@
+%!PS
+% Test content for poem.ps: the least it takes (one short note, no attribution
+% line, a short reading); paper theme.
+% After Yosa Buson's spring sea haiku: a literal rendering written for this test.
+% `psanim check poem-buson.ps` runs poem.ps with this content.
+/tpl (poem.ps) component
+/film /tpl << /Params <<
+  /look /paper
+  /heading (Spring sea)
+  /poet ()
+  /poem [ (the spring sea) (all day long, rising, falling,) (rising, falling) ]
+  /notes [ [ 2 (rising, falling) (sound) (The words repeat like waves.) ] ]
+  /reading (A whole day in one slow motion.)
+>> >> instance
+<< /Size [1280 720] /Duration /film componentduration /FPS 30 >> animation
+/scene { /film << /After /hold >> place } def

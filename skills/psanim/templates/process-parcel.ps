@@ -1,0 +1,25 @@
+%!PS
+% Test content for process.ps: the most steps (eight), lines near their limit, a
+% long path back between two late steps; blueprint theme.
+% `psanim check process-parcel.ps` runs process.ps with it.
+/tpl (process.ps) component
+/film /tpl << /Params <<
+  /look /blueprint
+  /heading (How a parcel crosses the country in two days)
+  /steps [
+    [ (order) (A customer pays, and the shop prints a picking list for it.) ]
+    [ (pick) (A worker walks the shelves and collects every item on it.) ]
+    [ (pack) (The items are boxed, padded and weighed on a scale.) ]
+    [ (label) (A barcode label records the address and the weight.) ]
+    [ (collect) (A van takes the day's parcels to the regional depot.) ]
+    [ (sort) (Scanners read each label and route the box to a truck.) ]
+    [ (carry) (Overnight trucks drive the boxes to the local depots.) ]
+    [ (deliver) (A courier brings the parcel to the door and takes a photo.) ]
+  ]
+  /key 5
+  /why (One misread label here sends a parcel to the wrong end of the country.)
+  /loop [ 7 5 (nobody at home) (If nobody answers, the parcel goes back to be sorted again.) ]
+  /summary (Eight hands, one label, and a sorting machine in the middle.)
+>> >> instance
+<< /Size [1280 720] /Duration /film componentduration /FPS 30 >> animation
+/scene { /film << /After /hold >> place } def
