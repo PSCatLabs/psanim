@@ -70,8 +70,17 @@ fn problems(name: &str, source: &str) -> Vec<String> {
     }
     // Errors (a stack left with values is one) and blank frames: once the
     // film has shown something, every sampled frame must show something.
+    // Every frame of the first three seconds (where a short heading alone
+    // can leave the frame nearly empty), then a spread of the rest.
+    let opening = (3.0 * meta.fps) as u64;
+    let mut picks: Vec<u64> = (0..opening.min(meta.frames)).collect();
+    picks.extend(
+        psanim::sheet::spread(meta.frames, 60)
+            .into_iter()
+            .filter(|&k| k >= opening),
+    );
     let mut started = false;
-    for k in psanim::sheet::spread(meta.frames, 60) {
+    for k in picks {
         match cover(&mut m, k) {
             Err(e) => out.push(format!("{name}: frame {k}: {e}")),
             Ok(c) if c >= 0.002 => started = true,

@@ -30,8 +30,9 @@
 % characters. () for none.
 /poet (Kobayashi Issa; a literal rendering for this template) def
 
-% The poem: 2 to 6 lines, each at most about 45 characters (longer lines
-% shrink the type; past a point `check` says which line is too long).
+% The poem: 2 to 6 lines, each at most about 45 characters, about 40 in
+% the wider faces of /poster and 35 in /terminal (longer lines shrink the type;
+% past a point `check` says so).
 /poem [
   (little snail)
   (inch by inch, climb)
@@ -122,7 +123,7 @@ pm-size pm-verse 3 get poem length pm-lead mul 1 add div min /pm-size exch def
 pm-size pm-floor lt {
   0 poem { length max } forall /pm-long exch def
   [ (a line of /poem is too long to set at a legible size; keep lines under about )
-    pm-verse 2 get pm-floor div 2.1 mul cvi ( characters \(the longest has ) pm-long (\)) ] pm-cats pm-fail
+    pm-long pm-size mul pm-floor div cvi ( characters in this theme's face \(the longest has ) pm-long (\)) ] pm-cats pm-fail
 } if
 /pm-step pm-size pm-lead mul def
 % baselines: the block of lines centred in the column, the attribution under it

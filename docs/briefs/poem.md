@@ -39,7 +39,8 @@ published translation. Use it exactly as written, in ASCII.
 ## Variant A: with the template
 
 Start from `skills/psanim/templates/poem.ps`. Copy it to your film's file
-and put the content above into its CONTENT block. Do not change the
+and put the content above into its CONTENT block (lines count from 0,
+so the three notes are on lines 0, 1 and 2). Do not change the
 staging below the line "nothing below here needs to change" unless the
 film cannot meet the brief without it; if you do, report what and why.
 

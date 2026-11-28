@@ -145,9 +145,11 @@ pr-looplabels length 2 gt { [ (/loop: the label is too long; keep it under about
 
 % the steps' column: as wide as the longest name needs
 /title pr-labelsize face
-/pr-namew 0 steps { 0 get stringwidth pop max } forall def
-/pr-nodew pr-namew pr-labelsize 2.4 mul add 20 vmin max def
-pr-nodew 36 vmin gt { [ (a step name is too long; keep names under about 14 characters) ] pr-cats pr-fail } if
+/pr-namew 0 steps { 0 get stringwidth pop max } forall pr-labelsize div def   % in ems
+% a long name makes the labels smaller, down to 3 vmin, before it is refused
+/pr-labelsize pr-labelsize 36 vmin pr-namew 2.4 add div min def
+pr-labelsize 3 vmin lt { [ (a step name is too long; keep names under about 14 characters) ] pr-cats pr-fail } if
+/pr-nodew pr-namew 2.4 add pr-labelsize mul 20 vmin max def
 /pr-spinex pr-body 0 get pr-loopw add 2 vmin add def             % the line the token rides
 /pr-nodex pr-spinex 3 vmin add def
 /pr-node { % i -> the box of step i's node
