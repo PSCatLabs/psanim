@@ -166,8 +166,19 @@
 % radius and so on are taken first and kept by the engine. The native half
 % leaves true when the body is to run as a transparency group instead (a
 % `faded` or `blended` inside one), with the group's dictionary under it.
-/faded   { exch   .fadebegin  { .begingroup } if exec .layerend { .endgroup } if } bind def   % alpha proc           draw proc as a group at one opacity
-/blended { 3 1 roll .blendbegin { .begingroup } if exec .layerend { .endgroup } if } bind def % alpha /mode proc     ... with a blend mode
+% Run as a group, the body must see what it would on a layer: the caller's
+% alpha and blend mode for its marks (a group starts them at 1 and
+% /Normal, and would composite at the caller's alpha), and what it changes
+% in the graphics state (a translate, a colour, the current point) must
+% outlast it, where `endgroup` would put back the state `begingroup` had.
+% proc dict .fadegroup proc
+/.fadegroup {
+  currentalpha currentblendmode 1 setalpha /Normal setblendmode
+  3 -1 roll .begingroup setblendmode setalpha
+} bind def
+/.fadegroupend { gstate currentgstate .endgroup setgstate } bind def
+/faded   { exch   .fadebegin  { .fadegroup } if exec .layerend { .fadegroupend } if } bind def   % alpha proc           draw proc as a group at one opacity
+/blended { 3 1 roll .blendbegin { .fadegroup } if exec .layerend { .fadegroupend } if } bind def % alpha /mode proc     ... with a blend mode
 /blurred { exch   .clipmask .blurbegin pop exec .layerend pop } bind def     % radius proc          draw proc out of focus
 /glowing { 3 1 roll .clipmask .glowbegin pop exec .layerend pop } bind def   % radius strength proc draw proc with a halo
 /blurlayer { .clipmask .blurlayer } bind def                         % radius               blur the layer so far

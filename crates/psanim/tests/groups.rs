@@ -10,7 +10,9 @@
 //! - a group inside a psanim layer works, and matches the same drawing
 //!   without the group;
 //! - `faded` and `blended` (`/normal`, `/multiply`) inside a group run as
-//!   groups of their own, and match the same fade outside it;
+//!   groups of their own, and match the same fade outside it, with the
+//!   layer's graphics-state rules (the caller's alpha and blend apply to
+//!   the marks; what the body changes outlasts it);
 //! - every other layer or pixel effect inside a group is refused with
 //!   `groupnesting`, which names the word;
 //! - a body that leaves a group open, or closes one it did not open, is
@@ -18,6 +20,10 @@
 //! - after any of those, an error, or an interrupt with a group open, the
 //!   next frame is the one a fresh movie draws;
 //! - a parallel render of a movie with groups is the single-thread render.
+//!
+//! One gap stays open, as an ignored test: a group opened through
+//! `systemdict /begingroup get exec` is not counted, and PSCat has no host
+//! query that would let psanim see it.
 //!
 //! Tolerances. psanim composites a layer at 8 bits a channel
 //! (`raster::composite`); PSCat composites a group through its 16-bit
@@ -625,4 +631,68 @@ fn a_group_ended_by_erasepage_is_still_counted_open() {
         3,
     );
     assert_eq!(e.kind, "unclosedgroup", "{e}");
+}
+
+/// A `faded` run as a group behaves as the layer does: the caller's alpha
+/// and blend mode apply to the marks inside, and what the body changes in
+/// the graphics state outlasts it (a group alone would put it back).
+#[test]
+fn faded_as_a_group_keeps_the_layers_graphics_state_rules() {
+    for mode in MODES {
+        for body in [
+            format!("0.5 setalpha 0.5 {{ {SHAPES} }} faded"),
+            format!("/Multiply setblendmode 0.5 {{ {SHAPES} }} faded"),
+            format!("0.5 {{ 0 1 0 setrgbcolor 6 4 translate {SHAPES} }} faded 0 0 20 20 rectfill"),
+            "0.5 { 0.4 setalpha 10 10 moveto } faded 30 0 rlineto 0 20 rlineto closepath fill"
+                .to_string(),
+            format!("0.5 {{ 0 0 30 48 rectclip }} faded {SHAPES}"),
+            format!("0.7 /multiply {{ 5 0 translate {SHAPES} }} blended 0 0 20 20 rectfill"),
+        ] {
+            same(
+                mode,
+                "",
+                &grouped("<< >>", &body),
+                &format!("1 {{ {body} }} faded"),
+                3,
+                TOL,
+            );
+        }
+    }
+}
+
+/// The prelude's `begingroup` and `endgroup` stand in front of PSCat's
+/// (they are PSCat's words, so not in psanim's vocabulary table; the
+/// table's prelude test passes over them because they are defined with
+/// `load def`, not a `{ ... }` body).
+#[test]
+fn the_prelude_wraps_pscats_group_operators() {
+    let mut i = pscat::Interp::new();
+    i.run_str("systemdict /begingroup known systemdict /endgroup known")
+        .unwrap();
+    assert!(i.pop_bool().unwrap() && i.pop_bool().unwrap());
+    assert!(psanim::PRELUDE.contains("/begingroup /.begingroup load def"));
+    assert!(psanim::PRELUDE.contains("/endgroup   /.endgroup   load def"));
+    assert!(psanim::api::lookup("begingroup").is_none());
+}
+
+/// The gap left open. A group opened through PSCat's operator directly
+/// (not the name `begingroup`) is not counted, and PSCat gives a host no
+/// way to ask whether a group is open, so a layer opened inside it still
+/// loses its effect without a word. The right behaviour would be the same
+/// as for `begingroup`: `faded` runs as a group. Needs a host query in
+/// PSCat (for example the depth of open groups at the current level).
+#[test]
+#[ignore = "PSCat has no host query for open transparency groups; psanim cannot see a group opened through systemdict"]
+fn a_group_opened_through_systemdict_is_seen() {
+    let direct = format!(
+        "<< >> systemdict /begingroup get exec 0.5 {{ {SHAPES} }} faded systemdict /endgroup get exec"
+    );
+    same(
+        Mode::Pure,
+        "",
+        &direct,
+        &format!("0.5 {{ {SHAPES} }} faded"),
+        3,
+        TOL,
+    );
 }

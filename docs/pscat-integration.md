@@ -141,7 +141,11 @@ psanim's answer, all in psanim:
   which keeps one stack of open layers and groups (`Ctx::nest`);
 - a layer or pixel effect refuses to open while a group is innermost
   (`groupnesting`, naming the word); `faded` and `blended` (`/normal`,
-  `/multiply`) run as a group of their own there instead;
+  `/multiply`) run as a group of their own there instead, keeping a
+  layer's rules: the caller's alpha and blend mode go to the marks
+  inside (a group would start them at 1 and `/Normal` and composite at
+  the caller's alpha), and the graphics state the body leaves outlasts
+  it (`gstate currentgstate` before `endgroup`, `setgstate` after);
 - a layer's body must close the groups it opens and no others
   (`groupnesting`); a frame must close its groups (`unclosedgroup`,
   beside `unclosedlayer`);
