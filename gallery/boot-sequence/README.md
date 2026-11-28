@@ -1,6 +1,6 @@
 # Boot Sequence
 
-A 22.9 second film (1280x720, 30 fps) set in PSCat 0.8.0's pixel faces. A
+A 24.2 second film (1280x720, 30 fps) set in PSCat 0.8.0's pixel faces. A
 video terminal warms up and runs its power-on test in Phosphor; the
 operator logs in and sends a status report to the printer, and the camera
 follows it to the paper, where it prints in Pinpoint on green-bar; the
@@ -49,13 +49,26 @@ seconds after the board's last message has fully wiped in. The camera is
 `lookat` on a box that `keyframes` moves: the top of the screen, then the
 paper at the print head, then the whole room.
 
-`check --all` warns of about ten abrupt changes: they are lines appearing
-on the terminal and the printer's head striking a line on its way back,
-which is how those devices behave.
+The boot text is never cleared: it scrolls up as the session goes on, so
+the screen is full in the close-up and the last screen tells the whole
+story. Blank lines after the report feed it up into the middle of the
+paper's window.
 
-Cost: median 48 ms a frame at full size (`psanim bench`, p95 127 ms in
-the wide shot with all three devices), measured on an Apple M4
-while other builds were running, so expect less on a quiet machine.
+`check --all` warns of abrupt changes: they are lines appearing on the
+terminal, the screen scrolling a line, and the printer's head striking a
+line on its way back, which is how those devices behave.
+
+Everything that comes from a font file (the faces, their columns) is
+loaded in setup, once: in the film (`labelfont`) and inside each catalog
+entry. A face first asked for in a scene would be loaded every frame.
+The printer is made before the declaration because the session waits for
+it; with Pinpoint loaded that code takes 40 to 60 ms here, so on a busy
+machine `check` can warn that it is over its 50 ms mark.
+
+Cost: median 52 to 98 ms a frame at full size in two runs of `psanim
+bench` (p95 108 to 217 ms, in the wide shot with all three devices),
+measured on an Apple M4 at a load average of about 23 from other builds,
+so the numbers are loose; expect less on a quiet machine.
 
 ## Render
 
