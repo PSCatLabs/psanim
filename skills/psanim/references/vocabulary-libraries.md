@@ -178,7 +178,7 @@ The colour u of the way from one role (or [r g b]) to another: `/muted /accent 1
 
 `/role size  face  -`
 
-Select a font by theme role at a size: /title /body /mono /display /serif. Any font name works too (`/Palatino-Italic 30 face`).
+Select a font by theme role at a size: /title /body /mono /display /serif. Any font name works too (`/Palatino-Italic 30 face`). The font reads its strings as UTF-8 (`unicodefont`), so `(Grüße 👋)` shows as written; Symbol and ZapfDingbats keep their own codes.
 
 ### `ground`
 
@@ -294,7 +294,7 @@ Show the string so that it ends at the current point: right-aligned, which keeps
 
 `/name  sym  -`
 
-Show a mathematical sign or Greek letter at the current point at the current font's size, keeping the font: /neq /le /ge /approx /pm /times /div /dot /infinity /degree /arrow /larrow /uparrow /downarrow /implies /sum /product /sqrt /integral /in /bullet /minus (a true minus sign, wider than the hyphen), and /alpha /beta /gamma /delta /epsilon /theta /lambda /mu /pi /rho /sigma /tau /phi /omega /Delta /Sigma /Pi /Omega. The text fonts have no such characters: a non-ASCII character in a string shows as a blank. `(kiwi ) show /neq sym ( plum) show`.
+Show a mathematical sign or Greek letter at the current point at the current font's size, keeping the font: /neq /le /ge /approx /pm /times /div /dot /infinity /degree /arrow /larrow /uparrow /downarrow /implies /sum /product /sqrt /integral /in /bullet /minus (a true minus sign, wider than the hyphen), and /alpha /beta /gamma /delta /epsilon /theta /lambda /mu /pi /rho /sigma /tau /phi /omega /Delta /Sigma /Pi /Omega. A font chosen with `face` also takes the sign typed into the string as UTF-8; `sym` sets it in Symbol's design and works in any font. `(kiwi ) show /neq sym ( plum) show`.
 
 ### `symwidth`
 

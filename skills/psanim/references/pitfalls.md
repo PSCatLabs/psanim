@@ -243,9 +243,37 @@ render larger.
 
 ## A character does not appear
 
-The text fonts are ASCII. A string containing "π", "→", "≠" or any other
-non-ASCII character shows a blank for it, with no error. Use pktype's
-`/pi sym`, `/arrow sym`, `/neq sym`, or a run list (`showruns`).
+Read `psanim check`'s warnings; it names the character and the font.
+
+- **An empty box (.notdef) where a character should be**: no face has it.
+  Korean, Japanese, Chinese, Thai, Arabic, the Indic scripts, Armenian,
+  Georgian and Ethiopic are not in PSCat's fallback faces yet. `check`
+  warns `no glyph for U+AC00 (가) in /Helvetica ...`, once per character.
+  Leave the text out, or set it as a picture you draw.
+- **Stray accents or blanks**: UTF-8 text in a font chosen with
+  `findfont`, which reads one byte per character. `check` warns `UTF-8
+  text (é) shown in /Helvetica, a font that reads one byte ...`. Choose the
+  font with `face`, or `/Helvetica findfont unicodefont 24 scalefont
+  setfont`.
+- **A sign in a `sym` or run list**: Symbol reads its own codes, so write
+  `/pi sym`, not `(π) sym`.
+- **A replacement box where `é` was**: a Latin-1 escape (`(caf\351)`) in a
+  `face` font, which reads UTF-8. `check` warns `no glyph for U+FFFD`.
+  Write the character itself: `(café)`.
+- **Half an emoji, a flag as two letters**: a string cut by byte
+  (`getinterval`, `length`) can split a character. Cut with `typed` and
+  step with `eachglyph`, which take whole characters in a `face` font;
+  `charcount` counts them.
+
+`check` and `frame` print these warnings; `render` and `sheet` do not.
+
+## My apostrophes went straight
+
+In a font chosen with `face`, `'` is the straight typewriter apostrophe and
+`` ` `` the grave accent, as Unicode has them. Before UTF-8 text, the same
+bytes drew PostScript's curly ’ and ‘. Type the curly characters you want:
+`(it’s)`, `(“quoted”)`, `(‘single’)`. Code keeps the straight ones, which
+is what code means.
 
 ## My pixel font came out as Helvetica
 

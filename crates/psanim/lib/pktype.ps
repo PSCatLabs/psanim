@@ -11,8 +11,9 @@
 /fontsize { currentfont /FontMatrix get 0 get 1000 mul } bind def
 % (str) showright -      show ending at the current point
 /showright { dup stringwidth pop neg 0 rmoveto show } bind def
-% Signs the text fonts lack, from the Symbol font. A string with a
-% non-ASCII character in it shows blanks; use these.
+% Signs from the Symbol font, by name. A font chosen with `face` reads UTF-8,
+% so a sign typed into a string works too; these keep working, and set the
+% sign in Symbol's own design.
 /symbols <<
   /neq (\271) /le (\243) /ge (\263) /approx (\273) /equiv (\272) /pm (\261)
   /times (\264) /div (\270) /dot (\327) /infinity (\245) /degree (\260)
@@ -382,7 +383,7 @@ end
 } bind def
 % - .kn-count: how many units the string had, so a paragraph's stagger runs on
 /.kn-units {             % str unit -> n
-  dup /glyphs eq { pop length } { /words eq { splitwords length } { pop 1 } ifelse } ifelse
+  dup /glyphs eq { pop .fontcharcount } { /words eq { splitwords length } { pop 1 } ifelse } ifelse
 } bind def
 % (text) box opts /unit gap spec kineticparagraph -    a wrapped paragraph
 %     whose glyphs, words or lines (/lines) enter one after another
@@ -472,11 +473,11 @@ end
           cp-b /c boxpoint exch cp-w 2 div sub exch cp-size 0.36 mul sub moveto
           cp-o /Karaoke false .opt {
             /cp-p now cp-t0 sub cp-t1 cp-t0 sub 0.85 mul div def
-            /cp-n cp-text length def /cp-seen 0 def
+            /cp-n cp-text .fontcharcount def /cp-seen 0 def
             cp-text {
               pop /cp-wd exch def
               /cp-a cp-seen cp-n div def
-              /cp-seen cp-seen cp-wd length add 1 add def
+              /cp-seen cp-seen cp-wd .fontcharcount add 1 add def
               cp-p cp-seen cp-n div ge { /fg } { cp-p cp-a ge { /accent } { /muted } ifelse } ifelse ink
               cp-wd show
             } eachword

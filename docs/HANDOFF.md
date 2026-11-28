@@ -49,7 +49,11 @@ Working and tested on macOS (Apple silicon):
   the UTF-8 check, Unicode text, pixel fonts). psanim uses the pixel fonts
   (#101): pkpixel's `pixelface` loads them, `pixelfont` reads their
   bitmaps, the terminal, dotmatrix and ledmatrix entries take one as an
-  option, and the gallery's Boot Sequence shows all three.
+  option, and the gallery's Boot Sequence shows all three. It uses Unicode
+  text (`face` fonts read UTF-8 through `unicodefont`, the one place that
+  names PSCat's provisional `/PSCatUnicode` key) and the UTF-8 check
+  (`Movie::text_warnings`, reported by `check` and `frame` with PSCat's
+  missing-glyph notes).
 
 ## Decisions worth knowing before changing things
 

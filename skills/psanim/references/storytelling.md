@@ -48,7 +48,7 @@ canvasbox 10 vmin inset 0.42 splitx /pic exch def /words exch def
   0.8 { /display 34 face /fg ink words /nw boxpoint 34 sub moveto
         (Time scope) /glyphs 0.03 /mask-up kinetic } then
   1.0 { /body 15 face /muted ink
-        (a procedure's clock, re-based: the way translate re-bases space)
+        (a procedure’s clock, re-based: the way translate re-bases space)
         words 0 -60 shifted << /Leading 1.5 >> /lines 0.15 /rise kineticparagraph } then
   0.4 { /pop { (now = 0) pic 150 60 /c placed << /Fill /accent /Ink /bg >> node } entering } then
 } script

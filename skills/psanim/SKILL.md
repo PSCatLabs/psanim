@@ -246,7 +246,7 @@ number still passes `check`). So:
 | a chart | `box [x0 x1] [y0 y1] plotframe`, `<< >> plotaxes`, `[v ...] << /Grow u >> bars`, `pts plotline 0 u trimpath stroke`, `lines names << /Draw u >> serieslabels`, `pts x << >> tracer`, `x y << /Label (x) >> plotmark` |
 | a dashboard | catalog panels `/stat` `/gauge` `/horizon` `/timeseries` `/status` `/counter` reading `/Signal /cpu` from `--signals day.csv`; by hand `v box << /Thresholds [/good 70 /warn 90 /bad] >> stattile`, `/cpu 3 60 signalseries` |
 | code | `/src (...) /rust codetokens def` in setup, `src box << /Reveal u /Focus [2] >> codeblock` |
-| a sign | `/arrow sym`, `/neq sym`, `/pi sym` (a non-ASCII character in a string is a silent blank) |
+| a sign, a word in another language, emoji | type it: a `face` font reads UTF-8 (`(2πr → 👋🏽 Grüße)`); `/pi sym` for Symbol's design. Korean, Japanese, Chinese, Thai, Arabic and Indic scripts draw empty boxes, and `check` names them |
 | particles | `<< /At [x y] /Bursts [1.2] /Count 120 /Gravity 80 /Drag 1.5 >> { 1 particleu sub setalpha 0 0 3 0 360 arc fill } particles` |
 
 ### What reviewers mark down
