@@ -296,7 +296,7 @@ pm-cardy pm-cardh add pm-body 1 get pm-body 3 get add gt
     % whole, then makes way for the next
     0 1 notes length 1 sub { /pm-j exch def
       pm-notestarts pm-j get dup pm-notedurs pm-j get add {
-        notes pm-j get 0 0.4 ramp span 0.4 sub span ramp sub pm-mark
+        notes pm-j get 0 pm-tin ramp span pm-tout sub span ramp sub pm-mark
         gsave span pm-alpha setalpha pm-j pm-note grestore
       } during
     } for

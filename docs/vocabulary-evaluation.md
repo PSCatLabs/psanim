@@ -481,7 +481,7 @@ composition and keeps what round 2 did not criticise:
 - Each note comes onto the card whole: its kind, its words and its
   explanation fade in together (0.25 s), stay for their reading time
   (0.24 s a word, words and explanation) and a second more, and fade out
-  (0.2 s). The next note starts the moment the last has gone. The
+  (0.2 s); the marked words in the poem light and dim with it. The next note starts the moment the last has gone. The
   card's frame, and a rule under the kind, stay from the first note to
   the end. The reading comes in the same way, whole.
 - The card adds no quotation marks: the words appear as written, in the
@@ -495,13 +495,15 @@ composition and keeps what round 2 did not criticise:
   round-1 film down for three underlines left in it).
 - The finished picture holds for the reading's time and 2 s more, at
   least 3 s: the brief's film runs 30.4 s, its picture still for its
-  last 7.27 s (round 2's film 4.17 s, round 1's 10.10 s; all three
-  measured the same way, as the test below does).
+  last 7.27 s (round 2's film 4.17 s, round 1's 10.10 s; all three by
+  the hold test below, frames compared at 160 px wide).
 
 The defect classes are now tests in `crates/psanim/tests/templates.rs`,
-measured on frames rendered at 480 px of all seven poem films (the
-template, the brief's content as `poem-basho.ps`, five test contents; four
-of the six themes), reading the card's column:
+run on all seven poem films (the template, the brief's content as
+`poem-basho.ps`, five test contents; four of the six themes). The three
+card tests render every frame at 480 px wide and read the card's column;
+the hold test compares frames at 160 px; the quotation-mark test reads
+the template's code:
 
 | Test | Fails when | Round-2 template (main `e7f20c0`) | Round-1 template (`3ae7b11`) |
 |---|---|---|---|
@@ -512,10 +514,15 @@ of the six themes), reading the card's column:
 | `the_poem_card_adds_no_quotation_marks` | the template's code adds a quotation mark | fails (adds curly marks) | fails (adds straight marks) |
 
 The third revision passes all five. The empty-card test cannot fail on
-the round-2 template, whose defect was the opposite one; it holds the
-revision to at most two frames between notes (it has at most one) and
-would catch a blank like the 12 frames (12.60 to 13.00 s) the reviews
-found in a from-scratch film. **The third revision has not been reviewed blind.** Two
+the round-2 template, whose defect was the opposite one, nor on the
+round-1 template; it holds the revision to at most two frames between
+notes and would catch a blank like the 12 frames (12.60 to 13.00 s) the
+reviews found in a from-scratch film. The revision still has, at some
+handoffs, one frame with no legible text on the card (frames 335, 501
+and 682 of the brief's film): the kind of frame both reviews caught in
+the round-1 film at 13.0 s. The overlap test's false positive on the
+round-1 template shows that its measure can misfire on text that rises
+into place; the revision's card text does not move. **The third revision has not been reviewed blind.** Two
 independent blind reviews of it are to follow, in another session.
 
 ## What the evaluation supports
