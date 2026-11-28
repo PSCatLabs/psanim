@@ -70,7 +70,7 @@ The rate the movie steps at: for a persistent movie its declared FPS, whatever `
 
 `-  stepnow  int`
 
-The last step run at this moment: in a persistent movie's scene the step being painted (its `frame`), in its overlay the last step the kept canvas holds, in a simulation's scene the last tick applied (-1 before the first), in a pure movie the frame. In the overlay, under any `--fps`, `t stepat stepnow le` says whether the scene has painted the step that reaches t.
+The last step run at this moment: in a persistent movie's scene the step being painted (its `frame`), in its overlay the last step the kept canvas holds, in a simulation's scene the last tick applied (-1 before the first), in a pure movie the frame. In the overlay, under any `--fps`, `t stepat stepnow le` says whether the scene has painted the step that reaches t. Inside a component, the step its own clock has reached, at the movie's step rate, so a delayed, sped-up or looping instance counts its own.
 
 ### `stepat`
 

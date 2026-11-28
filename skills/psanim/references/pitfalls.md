@@ -201,7 +201,9 @@ with an `overlay` starts every step from the 8-bit pixels (the shadow is
 dropped so that playing and seeking agree), so there the trail stalls short
 of the ground: modes.md's trail, every step started from 8 bits, left
 17,806 pixels more than 10 levels off after 5 s, against 8,384 with the
-shadow kept. Veil less often with a stronger alpha
+shadow kept. (PSCatLabs/pscat#1506 asks PSCat for an explicit way to drop the shadow;
+psanim swaps the canvas out and back to do it until then.) Veil less
+often with a stronger alpha
 (`frame 4 mod 0 eq { 0.15 setalpha ... }`), or keep the veil in a movie
 without an overlay.
 

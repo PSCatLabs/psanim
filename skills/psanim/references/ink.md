@@ -186,7 +186,10 @@ is 0: how long the stroke takes, in seconds, more than 0`.
   times, native.
 - In a pure movie the same calls work, at the cost of repainting every
   finished stroke each frame: call `paintkept` then `paintlive` in
-  `scene`.
+  `scene`. So does a component (components.md): its plan runs on its
+  own clock, delayed, sped up or looping. A component has no kept
+  canvas, so placed in a persistent movie it belongs in `overlay`; in
+  the scene `paintkept` refuses.
 
 `gallery/chalk-lecture/` (265 strokes of chalk in a hand's order) and
 `gallery/evening-harbour/` (56 strokes of gouache: broad bands, sweeps, soaks, liner) are written this way.

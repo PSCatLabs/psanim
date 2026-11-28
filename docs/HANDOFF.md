@@ -137,7 +137,11 @@ Full reasoning in `docs/architecture.md`.
     step, then stalls in 8 bits (17,806 pixels left more than 10 levels
     off the ground after 5 s, against 8,384); with the rule above it
     fades as before (8,392). Movies with an overlay stalled that way
-    already (pitfalls.md). pkink's `paintplan`
+    already (pitfalls.md). The drop is a swap of the canvas out and back
+    (`Movie::settle_canvas`, and pkink's `.paintsettle` before each unit),
+    which relies on `swap_canvas` clearing the shadow; PSCatLabs/pscat#1506
+    asks PSCat to document that and add an explicit call, and using that
+    call is the follow-up. pkink's `paintplan`
     is built on both: each stroke kept once, whole, on the step that
     finishes it (each unit composited from 8-bit pixels too), the strokes
     in progress regrown in the overlay. The last frame is the board

@@ -317,6 +317,30 @@ impl Ctx {
             })
     }
 
+    /// The clock steps are counted on, as the running program sees it:
+    /// (movie time, step rate, last step reached, canvas, inside a
+    /// component). Inside a component the time is the component's own and
+    /// the step is reached on it at the movie's step rate (a component has
+    /// no kept canvas: its frames are drawn whole), so a delayed, sped-up
+    /// or looping instance counts its own steps; its canvas is `Fresh`,
+    /// unless it is being drawn into a persistent movie's kept canvas.
+    pub fn step_view(&self) -> (f64, f64, i64, Canvas, bool) {
+        match self.comps.last() {
+            Some(c) => (
+                c.t,
+                self.step_rate,
+                last_step_at(c.t, self.step_rate),
+                if self.canvas == Canvas::Kept {
+                    Canvas::Kept
+                } else {
+                    Canvas::Fresh
+                },
+                true,
+            ),
+            None => (self.global_t, self.step_rate, self.step, self.canvas, false),
+        }
+    }
+
     /// The innermost time scope: local time and window.
     pub fn scope(&self) -> TimeScope {
         self.scopes

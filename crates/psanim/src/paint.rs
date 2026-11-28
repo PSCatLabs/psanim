@@ -13,7 +13,7 @@ use pscat::host::Value;
 use pscat::{Interp, PsError};
 
 use crate::ctx::{Canvas, step_reaching};
-use crate::ops::{Shared, fail, reg, with_canvas_pixels};
+use crate::ops::{OpResult, Shared, fail, reg, with_canvas_pixels};
 
 /// The most strokes a plan may hold, and the most units (a whole stroke,
 /// or one pass of a soak) over all of them: the per-frame work is bounded
@@ -470,6 +470,19 @@ pub(crate) fn tip(
         .map(|k| (k, ((now - t0[k]) / (t1[k] - t0[k])).clamp(0.0, 1.0)))
 }
 
+/// A plan inside a component drawn into a persistent movie's kept canvas:
+/// a component has no kept canvas of its own, so the plan would be drawn
+/// whole on every step and pile up.
+fn in_kept_component(ctx: &Shared, word: &str) -> OpResult {
+    fail(
+        ctx,
+        PsError::Rangecheck,
+        format!(
+            "{word} inside a component that is drawn into a persistent movie's scene: a component has no kept canvas of its own, so its plan is drawn whole every frame and would pile up on the movie's. Place the component in the movie's `overlay`, or in a movie that is not persistent"
+        ),
+    )
+}
+
 fn pop_reals(i: &mut Interp, ctx: &Shared, word: &str) -> Result<Vec<f64>, PsError> {
     match i.pop_value()?.as_numbers() {
         Some(v) => Ok(v),
@@ -506,17 +519,18 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     reg(interp, ctx, ".paintdue", |i, ctx| {
         let all = i.pop_bool()?;
         let times = pop_reals(i, ctx, "paintkept")?;
-        let c = ctx.borrow();
-        if !all && c.canvas == Canvas::Overlay {
-            drop(c);
+        let (_, rate, step, canvas, in_comp) = ctx.borrow().step_view();
+        if !all && canvas == Canvas::Overlay {
             return fail(
                 ctx,
                 PsError::Undefined("paintkept".into()),
                 "paintkept lays strokes on the kept canvas: call it in `scene`. In `overlay` call paintlive, which shows the strokes in progress",
             );
         }
-        let (a, b) = due(&times, c.step_rate, c.step, c.canvas, all);
-        drop(c);
+        if !all && in_comp && canvas == Canvas::Kept {
+            return in_kept_component(ctx, "paintkept");
+        }
+        let (a, b) = due(&times, rate, step, canvas, all);
         i.push_int(a as i64);
         i.push_int(b as i64);
         Ok(())
@@ -526,18 +540,18 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let t1 = pop_reals(i, ctx, "paintlive")?;
         let t0 = pop_reals(i, ctx, "paintlive")?;
         let kinds = pop_kinds(i, ctx, "paintlive")?;
-        let c = ctx.borrow();
-        if c.canvas == Canvas::Kept {
-            drop(c);
+        let (now, rate, step, canvas, in_comp) = ctx.borrow().step_view();
+        if in_comp && canvas == Canvas::Kept {
+            return in_kept_component(ctx, "paintlive");
+        }
+        if canvas == Canvas::Kept {
             return fail(
                 ctx,
                 PsError::Undefined("paintlive".into()),
                 "paintlive shows the strokes in progress, which must not be kept: call it in `overlay`. In `scene` call paintkept",
             );
         }
-        let now = c.movie_clock().t;
-        let out = live(&kinds, &t0, &t1, now, c.step_rate, c.step);
-        drop(c);
+        let out = live(&kinds, &t0, &t1, now, rate, step);
         let flat: Vec<Value> = out
             .into_iter()
             .flat_map(|(k, u)| [Value::Int(k as i64), Value::Real(u)])
@@ -549,9 +563,8 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let t1 = pop_reals(i, ctx, "painttip")?;
         let t0 = pop_reals(i, ctx, "painttip")?;
         let kinds = pop_kinds(i, ctx, "painttip")?;
-        let c = ctx.borrow();
-        let found = tip(&kinds, &t0, &t1, c.movie_clock().t, c.step_rate, c.step);
-        drop(c);
+        let (now, rate, step, _, _) = ctx.borrow().step_view();
+        let found = tip(&kinds, &t0, &t1, now, rate, step);
         match found {
             Some((k, u)) => {
                 i.push_int(k as i64);
@@ -564,7 +577,10 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     // - .paintsettle -    drop PSCat's 16-bit shadow of the canvas before a
     // unit is laid, so each unit composites onto the 8-bit pixels alone:
     // laid on its own step, or with the whole board in one go, or shown in
-    // the overlay, it then gives the same pixels.
+    // the overlay, it then gives the same pixels. It swaps the canvas out
+    // and back (`with_canvas_pixels` with nothing to do), relying on
+    // `swap_canvas` clearing the shadow; PSCatLabs/pscat#1506 asks for that
+    // to be documented and for an explicit call, which is the follow-up.
     reg(interp, ctx, ".paintsettle", |i, ctx| {
         with_canvas_pixels(i, ctx, |_, _, _, _| {})
     });

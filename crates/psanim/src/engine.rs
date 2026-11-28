@@ -1376,6 +1376,12 @@ impl Movie {
     /// without. A movie without an overlay keeps it between checkpoints,
     /// so a faint veil laid every step still fades all the way (8 bits
     /// alone stall it once a step would move a pixel under half a level).
+    ///
+    /// The shadow is dropped by swapping a spare page in and straight back
+    /// out, which relies on `swap_canvas` clearing it, undocumented at the
+    /// pinned PSCat. PSCatLabs/pscat#1506 asks PSCat to document that and to
+    /// add an explicit host call to drop the shadow; replacing the swap
+    /// here (and in pkink's `.paintsettle`) with that call is the follow-up.
     fn settle_canvas(&mut self, phase: Phase) -> Result<(), Error> {
         let spare = match self.spare.take() {
             Some(p) => p,

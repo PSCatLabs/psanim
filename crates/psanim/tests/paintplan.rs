@@ -413,3 +413,135 @@ fn grown_chalk_is_exact_and_never_vanishes_at_any_rate() {
         }
     }
 }
+
+/// One plan, drawn as a pure scene: three translucent strokes over 2 s.
+const PIECE_SETUP: &str = "/pkink use
+  /line { 0 exch trimpath 0.2 0.3 0.6 setrgbcolor 0.5 setalpha 4 setlinewidth stroke } def
+  /plan [
+    << /At 0.1 /For 0.8 /Path { 4 6 moveto 60 10 lineto } /Paint /line load >>
+    << /At 0.6 /Until 1.45 /Path { 6 30 moveto 58 4 lineto } /Paint /line load >>
+    << /Kind /sweep /At 1.2 /For 0.7 /Across [2 62] /Paint { pop 0.7 0.3 0.2 setrgbcolor 0.4 setalpha 0 14 64 8 rectfill } >>
+  ] paintplan def";
+const PIECE_SCENE: &str = "plan paintkept plan paintlive";
+
+fn piece_alone() -> Movie {
+    let src = format!(
+        "<< /Size [64 36] /Duration 2 /FPS 30 /Background [1 1 1] >> animation
+         {PIECE_SETUP} /scene {{ {PIECE_SCENE} }} def"
+    );
+    Movie::load(&src, &Options::default()).unwrap_or_else(|e| panic!("{e}"))
+}
+
+fn piece_placed(opts: &str) -> Movie {
+    let src = format!(
+        "<< /Size [64 36] /Duration 12 /FPS 30 /Background [1 1 1] >> animation
+         /art << /Size [64 36] /Duration 2 /Setup {{ {PIECE_SETUP} }} /Scene {{ {PIECE_SCENE} }} >> component
+         /scene {{ /art {opts} place }} def"
+    );
+    Movie::load(&src, &Options::default()).unwrap_or_else(|e| panic!("{e}"))
+}
+
+#[test]
+fn a_plan_in_a_component_runs_on_the_components_own_clock() {
+    let mut alone = piece_alone();
+    // (placement, start, speed, whole laps before): local time t is shown
+    // at movie time start + laps * 2 / speed + t / speed.
+    let cases = [
+        ("<< /At 3 >>", 3.0, 1.0, 0.0),              // delayed
+        ("<< /At 1 /Speed 2 >>", 1.0, 2.0, 0.0),     // sped up
+        ("<< /At 3 /After /loop >>", 3.0, 1.0, 2.0), // its third time round
+    ];
+    for (opts, start, speed, laps) in cases {
+        let at = |t: f64| start + (laps * 2.0 + t) / speed;
+        let mut placed = piece_placed(opts);
+        for t in [0.3, 0.7, 1.0, 1.3, 1.6, 1.9] {
+            let want = alone.render_at(t).unwrap().premultiplied.to_vec();
+            let got = placed.render_at(at(t)).unwrap().premultiplied.to_vec();
+            let differ = want
+                .chunks(4)
+                .zip(got.chunks(4))
+                .filter(|(a, b)| a != b)
+                .count();
+            assert_eq!(differ, 0, "{opts} at local {t}: {differ} pixels differ");
+        }
+    }
+}
+
+#[test]
+fn a_component_counts_its_own_steps_and_tip() {
+    // stepnow and painttip inside a component read its own clock.
+    let src = format!(
+        "<< /Size [64 36] /Duration 12 /FPS 30 >> animation
+         /art << /Size [64 36] /Duration 2 /Setup {{ {PIECE_SETUP} }}
+            /Scene {{ (step ) print stepnow =only ( ) print plan painttip {{ 4 array astore == }} {{ (none) = }} ifelse }} >> component
+         /scene {{ /art << /At 3 >> place }} def"
+    );
+    let mut m = Movie::load(&src, &Options::default()).unwrap();
+    m.take_output();
+    m.render_at(3.5).unwrap();
+    let out = m.take_output();
+    // local 0.5 s: step 15, stroke 0 half way (0.4 of 0.8 s) along 4,6 -> 60,10
+    assert!(out.starts_with("step 15 [32.0"), "{out}");
+    assert!(out.trim_end().ends_with(" 0]"), "{out}");
+}
+
+#[test]
+fn a_plan_in_a_component_drawn_onto_a_kept_canvas_is_an_error() {
+    let src = format!(
+        "<< /Size [64 36] /Duration 4 /FPS 30 /Persist true >> animation
+         /art << /Size [64 36] /Duration 2 /Setup {{ {PIECE_SETUP} }} /Scene {{ {PIECE_SCENE} }} >> component
+         /scene {{ /art << >> place }} def"
+    );
+    let mut m = Movie::load(&src, &Options::default()).unwrap();
+    let e = frame_err(&mut m, 10);
+    assert!(
+        e.hint
+            .unwrap_or_default()
+            .contains("a component has no kept canvas"),
+        "wrong error"
+    );
+    // In the overlay it is fine.
+    let src = src.replace("/scene {", "/scene { } def /overlay {");
+    let mut m = Movie::load(&src, &Options::default()).unwrap();
+    m.render_at(1.0).unwrap();
+}
+
+/// Evening Harbour's last frame against its board painted in one go
+/// (`--param oneshot=1`), at 30 fps and at `--fps` 24 and 60. A whole
+/// render each: about a minute, so it is run on request:
+/// `cargo test --release -p psanim --test paintplan -- --ignored`.
+#[test]
+#[ignore]
+fn evening_harbour_ends_on_the_board_painted_in_one_go() {
+    let src = include_str!("../../../gallery/evening-harbour/evening-harbour.ps");
+    let load = |fps: Option<f64>, oneshot: bool| {
+        let mut params = std::collections::BTreeMap::new();
+        if oneshot {
+            params.insert("oneshot".to_string(), Param::Number(1.0));
+        }
+        Movie::load(
+            src,
+            &Options {
+                fps,
+                params,
+                ..Options::default()
+            },
+        )
+        .unwrap_or_else(|e| panic!("{e}"))
+    };
+    let board = last(&mut load(None, true));
+    for fps in [None, Some(24.0), Some(60.0)] {
+        let mut m = load(fps, false);
+        // In order, as a render does.
+        for k in 0..m.meta().frames - 1 {
+            m.render_frame(k).unwrap();
+        }
+        let got = last(&mut m);
+        let differ = got
+            .chunks(4)
+            .zip(board.chunks(4))
+            .filter(|(a, b)| a != b)
+            .count();
+        assert_eq!(differ, 0, "{differ} pixels differ at --fps {fps:?}");
+    }
+}

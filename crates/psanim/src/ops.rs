@@ -646,7 +646,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         Ok(())
     });
     reg(interp, ctx, "stepnow", |i, ctx| {
-        i.push_int(ctx.borrow().step);
+        i.push_int(ctx.borrow().step_view().2);
         Ok(())
     });
     reg(interp, ctx, "stepat", |i, ctx| {

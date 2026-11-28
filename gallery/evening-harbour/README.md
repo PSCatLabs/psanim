@@ -58,6 +58,17 @@ ran):
   frames in 19.4 s on one thread (persistent movies render in order),
   1.4 MB MP4.
 
+To rerun the first check (after a PSCat pin moves, say):
+
+```sh
+psanim frame gallery/evening-harbour/evening-harbour.ps --param oneshot=1 --frame 1259 -o one.png
+for f in 30 24 25 60; do
+  psanim frame gallery/evening-harbour/evening-harbour.ps --fps $f --at 41.999 -o last-$f.png
+done
+# each last-*.png must equal one.png pixel for pixel (premultiplied RGBA)
+cargo test --release -p psanim --test paintplan -- --ignored   # the same at 30, 24 and 60, about 2 minutes
+```
+
 ## Render
 
 ```sh
