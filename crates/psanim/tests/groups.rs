@@ -7,23 +7,29 @@
 //! exchanges the page *below* it, so a psanim layer opened inside a group
 //! would lose its effect without a word. The rules these tests hold:
 //!
-//! - a group inside a psanim layer works, and matches the same drawing
-//!   without the group;
+//! - a group inside a psanim layer or motion works, and matches the same
+//!   drawing without the group;
+//! - `begingroup` and `endgroup` are PSCat's operators, untouched
+//!   (`//begingroup` works);
 //! - `faded` and `blended` (`/normal`, `/multiply`) inside a group run as
-//!   groups of their own, and match the same fade outside it, with the
-//!   layer's graphics-state rules (the caller's alpha and blend apply to
-//!   the marks; what the body changes outlasts it);
+//!   groups of their own (`.groupfaded` in the prelude), and match the
+//!   same fade outside it, with the layer's graphics-state rules: the
+//!   caller's alpha and blend apply to the marks, and what the body
+//!   changes, gsave levels included, outlasts it;
 //! - every other layer or pixel effect inside a group is refused with
 //!   `groupnesting`, which names the word;
 //! - a body that leaves a group open, or closes one it did not open, is
 //!   `groupnesting`; a frame that leaves one open is `unclosedgroup`;
-//! - after any of those, an error, or an interrupt with a group open, the
-//!   next frame is the one a fresh movie draws;
+//! - after an error or an interrupt with a group open, the next frame is
+//!   the one a fresh movie draws;
 //! - a parallel render of a movie with groups is the single-thread render.
 //!
-//! One gap stays open, as an ignored test: a group opened through
-//! `systemdict /begingroup get exec` is not counted, and PSCat has no host
-//! query that would let psanim see it.
+//! **Pending PSCatLabs/pscat#1494.** Whether a group is open is asked of
+//! the interpreter in one place (`crates/psanim/src/groups.rs`), and PSCat
+//! 0.8.0 cannot answer yet; until it can, psanim sees no group, and
+//! behaves inside one as it did before groups existed. The tests that need
+//! the answer are `#[ignore]`d with that reason; `.groupfaded`'s own rules
+//! are tested now by calling it directly.
 //!
 //! Tolerances. psanim composites a layer at 8 bits a channel
 //! (`raster::composite`); PSCat composites a group through its 16-bit
@@ -213,6 +219,7 @@ fn a_group_inside_a_layer_matches_the_layer_without_it() {
 // --- a psanim layer inside a group -------------------------------------------------
 
 #[test]
+#[ignore = "needs PSCat to tell a host which transparency groups are open (PSCatLabs/pscat#1494); until then psanim cannot see a group"]
 fn faded_and_blended_inside_a_group_run_as_groups() {
     for mode in MODES {
         // Before the fix this drew the discs at full strength: the layer
@@ -289,6 +296,7 @@ const REFUSED: &[(&str, &str)] = &[
 ];
 
 #[test]
+#[ignore = "needs PSCat to tell a host which transparency groups are open (PSCatLabs/pscat#1494); until then psanim cannot see a group"]
 fn other_layers_and_effects_inside_a_group_are_refused_and_the_next_frame_is_clean() {
     for (body, word) in REFUSED {
         let body = body.replace("SHAPES", SHAPES);
@@ -362,6 +370,7 @@ fn a_group_inside_a_motion_matches_the_motion_without_it() {
 }
 
 #[test]
+#[ignore = "needs PSCat to tell a host which transparency groups are open (PSCatLabs/pscat#1494); until then psanim cannot see a group"]
 fn a_motion_inside_a_group_is_refused_while_it_moves() {
     for mode in MODES {
         let enters = grouped(
@@ -400,6 +409,7 @@ fn a_motion_inside_a_group_is_refused_while_it_moves() {
 // --- unbalanced groups ---------------------------------------------------------------
 
 #[test]
+#[ignore = "needs PSCat to tell a host which transparency groups are open (PSCatLabs/pscat#1494); until then psanim cannot see a group"]
 fn a_body_that_leaves_a_group_open_or_closes_one_it_did_not_open_is_an_error() {
     let open = format!("<< /Alpha 0.5 >> begingroup {SHAPES}");
     for mode in MODES {
@@ -460,6 +470,7 @@ fn a_body_that_leaves_a_group_open_or_closes_one_it_did_not_open_is_an_error() {
 }
 
 #[test]
+#[ignore = "needs PSCat to tell a host which transparency groups are open (PSCatLabs/pscat#1494); until then psanim cannot see a group"]
 fn a_group_left_open_at_the_end_of_the_scene_is_an_error_and_the_next_frame_is_clean() {
     let scene = format!(
         "frame 5 eq {{ << /Alpha 0.5 >> begingroup {SHAPES} }} {{ 0.5 {{ {SHAPES} }} faded }} ifelse"
@@ -593,6 +604,7 @@ fn a_parallel_render_with_groups_is_the_single_thread_render() {
 }
 
 #[test]
+#[ignore = "needs PSCat to tell a host which transparency groups are open (PSCatLabs/pscat#1494); until then psanim cannot see a group"]
 fn groups_inside_a_component() {
     let comp = |scene: &str| {
         format!("/part << /Size [40 30] /Duration 2 /Scene {{ {scene} }} >> component")
@@ -617,42 +629,93 @@ fn groups_inside_a_component() {
     }
 }
 
-/// The documented limit: psanim counts `begingroup` and `endgroup`, and
-/// does not see a group that PSCat ends behind its back. `erasepage`
-/// ends it (its marks kept, then erased); psanim still counts it open,
-/// and says so at the end of the frame rather than drawing something
-/// wrong.
+/// A group that `erasepage` ends is closed, as far as the interpreter is
+/// concerned, so the frame is fine. (The earlier version of this branch,
+/// which counted `begingroup` / `endgroup` in the prelude, still counted it
+/// open. Today this passes because psanim sees no group at all; with
+/// pscat#1494 it passes because the interpreter's count is right.)
 #[test]
-fn a_group_ended_by_erasepage_is_still_counted_open() {
-    let e = error(
+fn a_group_ended_by_erasepage_is_not_counted_open() {
+    frame(
         Mode::Pure,
         "",
-        &format!("<< /Alpha 0.5 >> begingroup {SHAPES} erasepage"),
+        &format!("<< /Alpha 0.5 >> begingroup {SHAPES} erasepage {SHAPES}"),
         3,
     );
-    assert_eq!(e.kind, "unclosedgroup", "{e}");
 }
 
-/// A `faded` run as a group behaves as the layer does: the caller's alpha
-/// and blend mode apply to the marks inside, and what the body changes in
-/// the graphics state outlasts it (a group alone would put it back).
+/// `.groupfaded`, the prelude procedure a `faded` or `blended` inside a
+/// group runs as, follows a layer's rules: the caller's alpha and blend
+/// mode apply to the marks inside, and what the body changes in the
+/// graphics state outlasts it, gsave levels it leaves open included. It is
+/// called directly here, inside a group, since psanim cannot yet see the
+/// group to choose it (pscat#1494).
 #[test]
 fn faded_as_a_group_keeps_the_layers_graphics_state_rules() {
-    for mode in MODES {
-        for body in [
-            format!("0.5 setalpha 0.5 {{ {SHAPES} }} faded"),
-            format!("/Multiply setblendmode 0.5 {{ {SHAPES} }} faded"),
-            format!("0.5 {{ 0 1 0 setrgbcolor 6 4 translate {SHAPES} }} faded 0 0 20 20 rectfill"),
-            "0.5 { 0.4 setalpha 10 10 moveto } faded 30 0 rlineto 0 20 rlineto closepath fill"
+    // (before, alpha, blend, body, after)
+    let cases: &[(&str, &str, &str, String, &str)] = &[
+        ("0.5 setalpha", "0.5", "", SHAPES.to_string(), ""),
+        ("/Multiply setblendmode", "0.5", "", SHAPES.to_string(), ""),
+        (
+            "",
+            "0.5",
+            "",
+            format!("0 1 0 setrgbcolor 6 4 translate {SHAPES}"),
+            "0 0 20 20 rectfill",
+        ),
+        (
+            "",
+            "0.5",
+            "",
+            "0.4 setalpha 10 10 moveto".to_string(),
+            "30 0 rlineto 0 20 rlineto closepath fill",
+        ),
+        ("", "0.5", "", "0 0 30 48 rectclip".to_string(), SHAPES),
+        (
+            "",
+            "0.7",
+            "multiply",
+            format!("5 0 translate {SHAPES}"),
+            "0 0 20 20 rectfill",
+        ),
+        // Finding 3 of the review: a gsave the body leaves open is still
+        // there after it, holding the state it saved.
+        (
+            "1 0 0 setrgbcolor",
+            "0.5",
+            "",
+            format!("gsave 0 0 1 setrgbcolor {SHAPES}"),
+            "grestore 0 0 20 20 rectfill",
+        ),
+        (
+            "1 0 0 setrgbcolor",
+            "0.5",
+            "",
+            "gsave 0 1 0 setrgbcolor 3 3 translate gsave 0 0 1 setrgbcolor 40 0 10 10 rectfill"
                 .to_string(),
-            format!("0.5 {{ 0 0 30 48 rectclip }} faded {SHAPES}"),
-            format!("0.7 /multiply {{ 5 0 translate {SHAPES} }} blended 0 0 20 20 rectfill"),
-        ] {
+            "grestore 0 0 20 20 rectfill grestore 20 0 20 20 rectfill",
+        ),
+    ];
+    for mode in MODES {
+        for (before, alpha, blend, body, after) in cases {
+            let dict = if blend.is_empty() {
+                format!("<< /Alpha {alpha} >>")
+            } else {
+                format!("<< /Alpha {alpha} /Blend /Multiply >>")
+            };
+            let layer = if blend.is_empty() {
+                format!("{alpha} {{ {body} }} faded")
+            } else {
+                format!("{alpha} /{blend} {{ {body} }} blended")
+            };
             same(
                 mode,
                 "",
-                &grouped("<< >>", &body),
-                &format!("1 {{ {body} }} faded"),
+                &grouped(
+                    "<< >>",
+                    &format!("{before} {{ {body} }} {dict} .groupfaded {after}"),
+                ),
+                &format!("1 {{ {before} {layer} {after} }} faded"),
                 3,
                 TOL,
             );
@@ -660,29 +723,149 @@ fn faded_as_a_group_keeps_the_layers_graphics_state_rules() {
     }
 }
 
-/// The prelude's `begingroup` and `endgroup` stand in front of PSCat's
-/// (they are PSCat's words, so not in psanim's vocabulary table; the
-/// table's prelude test passes over them because they are defined with
-/// `load def`, not a `{ ... }` body).
+/// The other way round cannot be had: a group's start is a floor
+/// `grestore` stops at, so a body that runs `grestore` past where it began
+/// is refused rather than drawn with the wrong state.
 #[test]
-fn the_prelude_wraps_pscats_group_operators() {
-    let mut i = pscat::Interp::new();
-    i.run_str("systemdict /begingroup known systemdict /endgroup known")
-        .unwrap();
-    assert!(i.pop_bool().unwrap() && i.pop_bool().unwrap());
-    assert!(psanim::PRELUDE.contains("/begingroup /.begingroup load def"));
-    assert!(psanim::PRELUDE.contains("/endgroup   /.endgroup   load def"));
-    assert!(psanim::api::lookup("begingroup").is_none());
+fn a_grouped_fade_whose_body_grestores_past_its_start_is_refused() {
+    for mode in MODES {
+        let e = error(
+            mode,
+            "",
+            &grouped(
+                "<< >>",
+                &format!("gsave {{ grestore {SHAPES} }} << /Alpha 0.5 >> .groupfaded grestore"),
+            ),
+            3,
+        );
+        assert_eq!(e.kind, "groupnesting", "{mode:?}: {e}");
+        assert!(e.message.contains("grestore"), "{}", e.message);
+    }
 }
 
-/// The gap left open. A group opened through PSCat's operator directly
-/// (not the name `begingroup`) is not counted, and PSCat gives a host no
-/// way to ask whether a group is open, so a layer opened inside it still
-/// loses its effect without a word. The right behaviour would be the same
-/// as for `begingroup`: `faded` runs as a group. Needs a host query in
-/// PSCat (for example the depth of open groups at the current level).
+/// Finding 2 of the review: `begingroup` and `endgroup` are PSCat's own
+/// operators, so `//begingroup` (the operator itself, bound at scan time)
+/// runs a group, as it does in any PSCat program.
 #[test]
-#[ignore = "PSCat has no host query for open transparency groups; psanim cannot see a group opened through systemdict"]
+fn begingroup_and_endgroup_are_pscats_operators() {
+    assert!(!psanim::PRELUDE.contains("/begingroup"));
+    assert!(!psanim::PRELUDE.contains("/endgroup"));
+    assert!(psanim::api::lookup("begingroup").is_none());
+    for mode in MODES {
+        same(
+            mode,
+            "",
+            &format!("<< /Alpha 0.5 >> //begingroup {SHAPES} //endgroup"),
+            &grouped("<< /Alpha 0.5 >>", SHAPES),
+            3,
+            0,
+        );
+        same(
+            mode,
+            "",
+            &format!("<< /Alpha 0.5 >> //begingroup {SHAPES} //endgroup"),
+            &format!("0.5 {{ {SHAPES} }} faded"),
+            3,
+            TOL,
+        );
+    }
+}
+
+/// A pattern whose `PaintProc` says `endgroup` with no group of its own
+/// (a no-op at the tile's level, in PSCat).
+const PATTERN: &str = "/pat << /PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 8 8] \
+    /XStep 8 /YStep 8 /PaintProc { pop endgroup 1 0 0 setrgbcolor 0 0 8 8 rectfill } >> \
+    matrix makepattern def";
+
+/// Finding 1 of the review: a pattern's `endgroup` closes nothing at the
+/// page's level, so the page's group is still open and a `faded` after it
+/// must still run as a group (the fade kept). With the prelude's counting
+/// it was lost silently.
+#[test]
+#[ignore = "needs PSCat to tell a host which transparency groups are open (PSCatLabs/pscat#1494); until then psanim cannot see a group"]
+fn a_patterns_endgroup_does_not_hide_the_pages_group() {
+    for mode in MODES {
+        same(
+            mode,
+            PATTERN,
+            &grouped(
+                "<< >>",
+                &format!("pat setpattern 0 0 64 48 rectfill 0.5 {{ {SHAPES} }} faded"),
+            ),
+            &format!("pat setpattern 0 0 64 48 rectfill 0.5 {{ {SHAPES} }} faded"),
+            3,
+            TOL,
+        );
+    }
+}
+
+/// Finding 4 of the review: the body of a grouped `faded` that closes the
+/// fade's group and opens another in its place leaves as many groups open
+/// as it found, but not the same one. Telling them apart needs the group's
+/// identity, not the count.
+#[test]
+#[ignore = "needs PSCat to tell a host which transparency groups are open (PSCatLabs/pscat#1494); until then psanim cannot see a group"]
+fn a_body_that_swaps_the_fades_group_for_another_is_refused() {
+    for mode in MODES {
+        let e = error(
+            mode,
+            "",
+            &grouped(
+                "<< >>",
+                &format!("0.5 {{ endgroup << /Alpha 0.1 >> begingroup {SHAPES} }} faded"),
+            ),
+            3,
+        );
+        assert_eq!(e.kind, "groupnesting", "{mode:?}: {e}");
+    }
+}
+
+/// Finding 5 of the review: a hint an operator left for an error that a
+/// `stopped` caught does not describe a later, different error.
+#[test]
+fn a_caught_errors_hint_does_not_describe_a_later_one() {
+    for mode in MODES {
+        let e = error(
+            mode,
+            "",
+            &format!("{{ 1 /nosuchmode {{ {SHAPES} }} blended }} stopped pop nosuchword"),
+            3,
+        );
+        assert_eq!(e.kind, "undefined", "{e}");
+        let hint = e.hint.unwrap_or_default();
+        assert!(!hint.contains("blend mode"), "{hint}");
+        assert!(hint.contains("nosuchword"), "{hint}");
+        // The hint still arrives when its error is the one that escapes.
+        let e = error(
+            mode,
+            "",
+            &format!("1 /nosuchmode {{ {SHAPES} }} blended"),
+            3,
+        );
+        assert!(e.hint.unwrap_or_default().contains("blend mode"));
+    }
+}
+
+/// Finding 5, as the review found it: the `groupnesting` a `stopped`
+/// caught must not become the kind of the `undefined` that escapes.
+#[test]
+#[ignore = "needs PSCat to tell a host which transparency groups are open (PSCatLabs/pscat#1494); until then psanim cannot see a group"]
+fn a_caught_groupnesting_does_not_describe_a_later_error() {
+    let e = error(
+        Mode::Pure,
+        "",
+        "<< >> begingroup { 2 { } blurred } stopped pop endgroup nosuchword",
+        3,
+    );
+    assert_eq!(e.kind, "undefined", "{e}");
+    assert!(!e.hint.unwrap_or_default().contains("blurred"));
+}
+
+/// A group opened through PSCat's operator by any route is a group: a
+/// `faded` inside it runs as one. (The prelude's counting could not see
+/// this one; the interpreter's will.)
+#[test]
+#[ignore = "needs PSCat to tell a host which transparency groups are open (PSCatLabs/pscat#1494); until then psanim cannot see a group"]
 fn a_group_opened_through_systemdict_is_seen() {
     let direct = format!(
         "<< >> systemdict /begingroup get exec 0.5 {{ {SHAPES} }} faded systemdict /endgroup get exec"

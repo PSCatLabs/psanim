@@ -11,7 +11,7 @@ use pscat::{Interp, PsError};
 
 use crate::motion::{self, Kind, Pose, Spec};
 use crate::ops::{
-    OpResult, Shared, begin_layer, close_layer_nest, ease_named, fail, flat_path, reg,
+    OpResult, Shared, begin_layer, ease_named, fail, flat_path, refuse_unclosed_inside, reg,
     with_canvas_pixels,
 };
 use crate::raster::{self, Placement};
@@ -625,7 +625,7 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 "a motion ended without having begun",
             );
         };
-        close_layer_nest(ctx, "a motion's body")?;
+        refuse_unclosed_inside(i, ctx, "a motion's body")?;
         let px = ctx.borrow().px_scale;
         let (w, h) = i.canvas_size();
         let (w, h) = (w as usize, h as usize);

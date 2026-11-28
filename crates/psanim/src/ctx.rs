@@ -74,13 +74,9 @@ pub(crate) struct Ctx {
     /// its body is done. Kept here, not on the operand stack, so the body
     /// runs with the caller's operands on top.
     pub pending: Vec<LayerEnd>,
-    /// What is open, outermost first: psanim's layers and the program's
-    /// transparency groups (`begingroup`), in the order they were opened.
-    /// PSCat does not say whether a group is open, and while one is, a
-    /// canvas swap exchanges the page below it, not what the program is
-    /// painting on; so the prelude's `begingroup` and `endgroup` report
-    /// here, and a layer refuses to open inside a group.
-    pub nest: Vec<Nest>,
+    /// Each `faded` / `blended` running its body as a transparency group
+    /// (because one was open around it), innermost last.
+    pub fades: Vec<FadeGroup>,
     /// The pose each open motion will place its layer under.
     pub poses: Vec<crate::motion::Pose>,
     /// Viewports opened by `within` and `fitted`: the width and height the
@@ -135,6 +131,11 @@ pub(crate) struct Ctx {
     /// to raise, in place of the PostScript error's name (`groupnesting`
     /// says more than `rangecheck`).
     pub failure: Option<(&'static str, String)>,
+    /// The command the error that left `hint` / `failure` names (the
+    /// operator, or the missing name of an `undefined`): they describe an
+    /// error only if it is the one that escapes (a `stopped` may have
+    /// caught theirs).
+    pub hint_op: Option<std::rc::Rc<str>>,
 }
 
 /// One open component: its own clock, length, seed and parameters.
@@ -179,19 +180,18 @@ pub(crate) struct LayerEnd {
     pub glow: (f64, f64),
     /// For a blur or glow, the clip in force when it began, if it clips.
     pub clip: Option<ClipMask>,
-    /// For a `faded` or `blended` run as a transparency group (because a
-    /// group was open around it): how many entries [`Ctx::nest`] holds
-    /// once its own group is open.
-    pub group: Option<usize>,
+    /// The word that began it, for an error: `faded`, `blurred`, ...
+    pub who: &'static str,
 }
 
-/// One entry of [`Ctx::nest`].
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Nest {
-    /// A psanim layer: the canvas was swapped for a fresh page.
-    Layer,
-    /// A PSCat transparency group, opened by `begingroup`.
-    Group,
+/// A `faded` or `blended` run as a transparency group: who it is, and the
+/// group it opened, to check at its end that the body left that group the
+/// innermost one (see `crate::groups`).
+#[derive(Clone, Debug)]
+pub(crate) struct FadeGroup {
+    pub who: &'static str,
+    /// Groups open, and the innermost, once its own group was open.
+    pub opened: Option<(usize, Option<crate::groups::GroupId>)>,
 }
 
 pub(crate) const MAX_SCOPES: usize = 256;
@@ -215,7 +215,7 @@ impl Ctx {
             scopes: Vec::new(),
             layers: Vec::new(),
             pending: Vec::new(),
-            nest: Vec::new(),
+            fades: Vec::new(),
             poses: Vec::new(),
             views: Vec::new(),
             spare: None,
@@ -235,6 +235,7 @@ impl Ctx {
             measured_reels: Vec::new(),
             hint: None,
             failure: None,
+            hint_op: None,
         }
     }
 
@@ -314,7 +315,7 @@ impl Ctx {
             self.recycle_mask(m);
         }
         self.poses.clear();
-        self.nest.clear();
+        self.fades.clear();
         self.views.clear();
         self.comps.clear();
         self.particles.clear();
@@ -323,13 +324,7 @@ impl Ctx {
         self.planes.clear();
         self.hint = None;
         self.failure = None;
-    }
-
-    /// True while a transparency group is the innermost thing open: what
-    /// the program paints goes to the group's layer, which no host can
-    /// reach, so a psanim layer or pixel effect cannot work here.
-    pub fn in_group(&self) -> bool {
-        self.nest.last() == Some(&Nest::Group)
+        self.hint_op = None;
     }
 }
 

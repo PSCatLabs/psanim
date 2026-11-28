@@ -1002,7 +1002,7 @@ impl Movie {
                     let guard = self.pop_save(phase)?;
                     self.begin(Running::Frame, index as i64, time, 1.0 / self.meta.fps);
                     let program = format!(
-                        "clear cleardictstack grestoreall initgraphics {} srand {overlay}",
+                        "clear cleardictstack grestoreall initgraphics {} srand {overlay} .framedone",
                         self.meta.seed
                     );
                     let drawn = self
@@ -1108,9 +1108,8 @@ impl Movie {
     fn check_layers(&mut self, phase: Phase) -> Result<(), Error> {
         let open = self.ctx.borrow().layers.len();
         if open == 0 {
-            return self.check_groups(phase);
+            return Ok(());
         }
-        self.ctx.borrow_mut().nest.clear();
         // Put the frame's own canvas back so the next frame starts sound.
         let base = self.ctx.borrow_mut().layers.drain(..).next();
         if let Some(base) = base {
@@ -1126,33 +1125,6 @@ impl Movie {
         ))
     }
 
-    /// A frame must close the transparency groups it opens, as it must
-    /// close its layers. PSCat has already composited a group left open
-    /// (the end of a run ends it, with its marks kept), so the picture is
-    /// whole; but a group left open is a misplaced `endgroup` more often
-    /// than not, and in a layer's body it would have escaped the layer.
-    fn check_groups(&mut self, phase: Phase) -> Result<(), Error> {
-        let open = {
-            let mut c = self.ctx.borrow_mut();
-            let n = c
-                .nest
-                .iter()
-                .filter(|n| **n == crate::ctx::Nest::Group)
-                .count();
-            c.nest.clear();
-            n
-        };
-        if open == 0 {
-            return Ok(());
-        }
-        Err(Error::new(
-            phase,
-            "unclosedgroup",
-            format!("{open} transparency group(s) opened with begingroup were never closed"),
-        )
-        .hint("every begingroup needs an endgroup in the same frame, in the same procedure"))
-    }
-
     /// The PostScript that draws one frame: a clean graphics state, the
     /// seed, optionally a fresh canvas, then the scene, on an empty operand
     /// stack. The scene reads the time with `now`.
@@ -1161,7 +1133,10 @@ impl Movie {
         if fresh_canvas {
             p.push_str(&self.ground());
         }
-        p.push_str(&format!("{} srand {}", self.meta.seed, self.scene));
+        p.push_str(&format!(
+            "{} srand {} .framedone",
+            self.meta.seed, self.scene
+        ));
         p
     }
 
@@ -1366,8 +1341,19 @@ fn describe(interp: &mut Interp, ctx: &Rc<RefCell<Ctx>>, phase: Phase, err: &PsE
         (Some(c), _, _) => format!("{} in `{c}`", d.name),
         (None, _, _) => d.name.to_string(),
     };
-    // An operator that knew better than the PostScript error's name.
-    if let Some((kind, message)) = ctx.borrow_mut().failure.take() {
+    // An operator that knew better than the PostScript error's name, if
+    // the error is the one it raised (a `stopped` may have caught that one
+    // and a different error escaped since).
+    let (failure, hint) = {
+        let mut c = ctx.borrow_mut();
+        let ours = c
+            .hint_op
+            .take()
+            .is_some_and(|op| d.command.as_deref() == Some(&*op));
+        let (f, h) = (c.failure.take(), c.hint.take());
+        if ours { (f, h) } else { (None, None) }
+    };
+    if let Some((kind, message)) = failure {
         e.kind = kind.to_string();
         e.message = message;
     }
@@ -1401,11 +1387,7 @@ fn describe(interp: &mut Interp, ctx: &Rc<RefCell<Ctx>>, phase: Phase, err: &PsE
     stack.reverse();
     e.stack = stack;
     interp.clear_operands();
-    e.hint = ctx
-        .borrow_mut()
-        .hint
-        .take()
-        .or_else(|| explain(d.name, d.command.as_deref()));
+    e.hint = hint.or_else(|| explain(d.name, d.command.as_deref()));
     e
 }
 
