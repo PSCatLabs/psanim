@@ -105,95 +105,95 @@ the whole one does, which a clip over a whole stroke cannot show.
   plus working out the whole stroke's profile. One stroke a frame is
   cheap; a whole board redrawn every frame is not (seconds a frame).
 
-### On a persistent canvas
+## Painting over time: `paintplan`
 
-Regrowing a stroke from 0 on the kept canvas lays it down again every
-frame: chalk is not opaque, so it comes out heavier (on the Chalk
-Lecture film, 5.8% more ink and up to 63 levels off over 13,648 pixels,
-against the same board painted in one go). Keep each stroke once,
-whole, and regrow the one in progress where nothing is kept:
+A painting or a board is a list of strokes, each painted over a stretch
+of time onto a persistent canvas (modes.md). `paintplan` takes the list
+and does the bookkeeping, which is easy to get wrong by hand:
 
-1. In `scene`, on the one frame a stroke is finished, draw it whole.
-2. In `overlay` (shown, never kept), while it is in progress, draw it
-   `/From 0 /To u`.
-
-Count in the scene's own steps, which are frames of the declared rate,
-and name that rate once (`rate` below):
-
-- **Keep a stroke on one step, found by number.** Not by testing whether
-  its end falls between `now dt sub` and `now`: in floating point `now
-  dt sub` is not exactly the last frame's `now`, so that test can be
-  true on two frames, and a stroke painted twice is heavier
-  (PSCatLabs/psanim#121). `t rate mul 1e-6 sub ceiling cvi` is the first
-  step whose time is at or after `t`, except that a `t` less than a
-  millionth of a step after a step's time counts as that step's.
-- **In the overlay, ask whether the scene has kept it yet.** Rendered
-  with `--fps`, the overlay runs at the output rate while the kept
-  canvas still advances at the declared one, and `fps`, `frame` and
-  `dt` there (and `dt` in setup) are the output's (PSCatLabs/psanim#122).
-  The last step the scene has run when `now` is shown is `now rate mul
-  1e-9 add floor cvi`. Until that reaches the stroke's step, draw it in
-  the overlay, at most whole; otherwise it vanishes for a frame between
-  the end of its growth and its keeping.
-
-With this split, the Chalk Lecture's last frame matches the board
-painted in one go to the pixel, at its own rate and under `--fps`.
+- **Each stroke is kept once, whole,** in `scene`, on the step that
+  reaches its end (`plan paintkept`). Chalk, washes and dry brush are
+  not opaque: a stroke regrown on the kept canvas every frame is laid
+  down again each time (on the Chalk Lecture film, 5.8% more ink and up
+  to 63 levels off), and built from pieces (`/From prev /To now`) it
+  gains ink at its joins, 1.09 to 1.85 times at a light `/Touch`
+  (PSCatLabs/pscat#1487).
+- **Until then it is regrown from nothing in `overlay`** (`plan
+  paintlive`), which is shown and never kept, so the growing stroke costs
+  one stroke a frame and the kept canvas stays exact.
+- **By step number, at any rate.** The scene steps at the declared FPS
+  whatever `--fps` the film is rendered at, while the overlay runs at the
+  output's; the plan counts the scene's own steps (`stepnow`, `stepat`),
+  so a stroke is kept on exactly one step and shown in the overlay on
+  every frame before it: it never vanishes for a frame, and seeking
+  (`psanim frame --at`) gives the frame playing gives.
+- **No accumulation.** The last frame is the board painted in one go
+  (`plan paintall`) to the pixel; the strokes are kept in the order they
+  end, and the overlay draws those in progress in the same order.
 
 ```postscript
 %!PS
-/rate 30 def                    % the declared frame rate, named once
-<< /Size [640 360] /Duration 4 /FPS rate /Persist true /Background [0.17 0.25 0.21] >> animation
+<< /Size [640 360] /Duration 4 /FPS 30 /Persist true /Background [0.17 0.25 0.21] >> animation
 (lib/artkit.ps) run (lib/paintkit.ps) run (lib/drykit.ps) run
 (lib/handscript.ps) run (lib/strokeglyphs.ps) run (lib/drychalk.ps) run
-<< /Surface /greenboard >> dksurface
-% [start end {path}]: one subpath each, one after another
-/plan [
-  [ 0.1 1.4 { 100 120 moveto 540 130 lineto } ]
-  [ 1.6 3.2 { 320 200 80 270 630 arc } ]
-] def
-/keptat { rate mul 1e-6 sub ceiling cvi } def     % end time -> the step that keeps the stroke
-/stepnow { now rate mul 1e-9 add floor cvi } def  % the last step the scene has run
-/chalkto { % u {path} ->
-  /cp exch def /cu exch def
-  /white dcchalkcolor newpath cp << /Width 4 /Hand 0.6 /From 0 /To cu >> dcchalk
-} def
-/scene {                       % kept: each stroke once, whole, when it is done
-  plan { aload pop /cp exch def /t1 exch def pop
-    stepnow t1 keptat eq { 1 /cp load chalkto } if } forall
-} def
-/overlay {                     % shown, not kept: a stroke from its start until it is kept
-  plan { aload pop /cp exch def /t1 exch def /t0 exch def
-    now t0 gt stepnow t1 keptat lt and {
-      now t0 sub t1 t0 sub div 0 1 clamp /cp load chalkto } if } forall
-} def
-```
-
-`gallery/chalk-lecture/` is a whole lecture written this way, 265
-strokes in order with a hand's pace and a stick of chalk.
-
-On a **persistent** canvas, repainting the first `u` of a stroke every
-frame is harmless for opaque ink and wrong for a translucent wash: each
-frame would lay the wash down again. Paint only what the pen covered
-since the last frame, with `u0 u1 width { } revealband`:
-
-```postscript
-%!PS
-<< /Size [640 360] /Duration 4 /FPS 30 /Persist true /Background [0.96 0.94 0.90] >> animation
 /pkink use
-/pen { 0.5 sub 3 div 0 1 clamp /cubic-inout ease } def      % the pen's progress at a time
-/scene {
-  now dt sub pen  now pen  2 copy lt {
-    newpath 60 120 moveto 220 330 420 30 580 240 curveto
-    60 { 0.15 setalpha 0.2 0.35 0.6 setrgbcolor 0 0 640 360 rectfill 1 setalpha } revealband
-  } { pop pop } ifelse
+<< /Surface /greenboard >> dksurface
+/chalk { % u ->   the stroke (its path is current) grown to u
+  /ch-u exch def
+  /white dcchalkcolor << /Width 4 /Hand 0.6 /From 0 /To ch-u >> dcchalk
+} def
+/plan [
+  << /At 0.1 /For 1.3 /Path { 100 120 moveto 540 130 lineto } /Paint /chalk load >>
+  << /At 1.6 /For 1.6 /Path { 320 200 80 270 630 arc } /Paint /chalk load /Ease /sine-inout >>
+] paintplan def
+/scene { plan paintkept } def        % kept: each stroke once, whole, when it is done
+/overlay {                           % shown: the strokes in progress, and the chalk's tip
+  plan paintlive
+  plan painttip { pop pop 1 0.9 0.6 setrgbcolor 4 0 360 arc fill } if
 } def
 ```
 
-A straight sweep (a wash crossing the page) wants its moving edge on
-whole pixels, or the antialiased edges of successive slivers leave faint
-seams in a translucent medium: round the edge to a multiple of 2 units.
-A bloom (a wash soaking outward) is better built from a dozen faint
-whole passes than from a growing clip.
+A stroke is a dictionary:
+
+| key | | |
+|---|---|---|
+| `/At` | seconds | when it starts (movie time) |
+| `/For` or `/Until` | seconds | how long it takes, or when it ends |
+| `/Paint` | `u -> -` | draws the stroke as far as `u`; `1` is the stroke finished, and what is kept |
+| `/Kind` | `/along` (default) | `/Path { ... }` builds its path, which is the current path when `/Paint` runs: `/From 0 /To u` grows a dry medium. With `/Reveal w` the library shows it through a band `w` wide along the path instead (a paint stroke that cannot grow), and `/Paint` gets 1 |
+| | `/sweep` | `/Across [a b]`: a front moves from a to b (across x, or up y with `/Axis /y`) and `/Paint` (given 1) shows behind it: a wash crossing the page |
+| | `/soak` | `/Passes n`: n passes laid one over another, evenly over its time, `/Paint` given (k+1)/n for pass k: a bloom that soaks outward, a glaze built up |
+| `/Seed` | integer | given to `srand` just before `/Path` and `/Paint` (pass k of a soak: Seed + k), which pins every paintkit preset; default the stroke's index + 1. pkwash and pkpaper take their own `/Seed` |
+| `/Ease` | name or `{ u -> u }` | paces an `/along` or a `/sweep` |
+| lower case | anything | yours, kept: `plan /Strokes get k get /colour get` |
+
+`plan painttip` leaves `x y angle k true` while a stroke is being drawn
+(the tip on its path, or the middle of a sweep's front; `k` its index)
+and `false` between strokes: a brush cursor in `overlay`. Errors name
+the stroke (counting from 0) and the field: `paintplan: stroke 3: /For
+is 0: how long the stroke takes, in seconds, more than 0`.
+
+- **`/Paint 1` must be where `/Paint u` was heading.** The overlay shows
+  `/Paint u` and the kept canvas gets `/Paint 1`; if they disagree the
+  stroke jumps when it is kept. Dry media grown with `/To u` agree to the
+  pixel; `trimpath` on a curve does not quite (pitfalls.md).
+- **The procedures run with no dictionary of the library's open**, in
+  their own `gsave`, after `newpath` (an `/along`: after its `/Path`),
+  and must take `u` and leave nothing: one that does not is named.
+- **Cost.** A frame pays for the strokes in progress, each drawn whole
+  up to `u`, and for the units kept on its step; finished strokes cost
+  nothing. Choosing them is a binary search and a pass over the plan's
+  times, native.
+- In a pure movie the same calls work, at the cost of repainting every
+  finished stroke each frame: call `paintkept` then `paintlive` in
+  `scene`.
+
+`gallery/chalk-lecture/` (265 strokes of chalk in a hand's order) and
+`gallery/evening-harbour/` (56 strokes of gouache: broad bands, sweeps, soaks, liner) are written this way.
+
+A straight sweep and a bloom no longer need the tricks they did by hand
+(the front on whole pixels, a dozen faint whole passes): a sweep in
+progress is shown, not kept, and kept whole once; a soak is its passes.
 
 ## A shape that unrolls
 

@@ -247,6 +247,14 @@ fn errors_name_the_stroke_and_the_field() {
             "stroke 1: /Ease",
         ),
         ("42", "stroke 1 is a number"),
+        (
+            "<< /At 0 /For 1 /Until 2 /Path { } /Paint { pop } >>",
+            "stroke 1: /Until and /For are both given",
+        ),
+        (
+            "<< /At 3 /Until 2 /Path { } /Paint { pop } >>",
+            "stroke 1: /Until is 2",
+        ),
     ];
     for (bad, want) in cases {
         let e = error_of(&format!("{ok} {bad}"));

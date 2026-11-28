@@ -178,17 +178,36 @@ Something was painted on the kept canvas twice.
 - **An "it ended this frame" test on times.** `now dt sub t lt now t ge
   and` looks true on exactly one frame. In floating point `now dt sub`
   is not exactly the last frame's `now`, so it can be true on two
-  (PSCatLabs/psanim#121). To do a thing once, compare step numbers at
-  the declared rate, named once (`/rate 30 def` before the declaration,
-  `/FPS rate` in it): `now rate mul 1e-9 add floor cvi t rate mul 1e-6
-  sub ceiling cvi eq`, the first step at or after `t` (a `t` within a
-  millionth of a step after a step's time counts as that step's). Not
-  `fps` or `dt`: under `--fps` a persistent scene still steps at the
-  declared rate while `fps`, the overlay's `frame` and `dt`, and `dt` in
-  setup are the output's (PSCatLabs/psanim#122).
+  (PSCatLabs/psanim#121). To do a thing once, compare step numbers:
+  `t stepat stepnow eq` is true on exactly one step of the scene for any
+  `t`, at any `--fps`. Not `fps` or `dt`: under `--fps` a persistent
+  scene still steps at its declared rate (`steprate`), while `fps` and
+  the overlay's `frame` and `dt` are the output's (PSCatLabs/psanim#122).
 - **A growing stroke regrown on the kept canvas.** Chalk and other
   translucent media stack. Keep it once when it is finished and grow it
-  in `overlay` (ink.md, "Dry media").
+  in `overlay`: `paintplan` does both (ink.md, "Painting over time").
+- **Pieces laid frame by frame.** `/From prev /To now` (or `revealband`)
+  onto the kept canvas paints each piece's ends again and gains ink at a
+  light touch: 1.09 to 1.85 times at `/Touch` 0.5 to 0.3
+  (PSCatLabs/pscat#1487). Regrow from 0 where nothing is kept.
+
+## A painted stroke jumps when it is finished
+
+`paintplan` shows a stroke in the overlay as `/Paint` draws it at `u`,
+and keeps `/Paint 1`. If `/Paint 1` is not where `/Paint u` was heading,
+the stroke changes on the frame it is kept.
+
+- **`trimpath` on a curve or a corner.** `0 u trimpath` flattens a curve
+  it cuts, and a cut near a corner ends square where the whole path
+  joins: the trimmed stroke is not quite the start of the whole one (a
+  pixel or two off at the tip). Dry media grown with `/From 0 /To u`
+  are exact; for a trimmed line, `flattenpath` in `/Path`, or reveal it
+  (`/Reveal w`).
+- **A random texture with no seed.** `/Seed` is given to `srand` before
+  `/Path` and `/Paint`; a procedure that seeds from `frame` or `now`
+  draws a different stroke every frame.
+- **`u` used for something other than how far.** A colour or a width
+  that follows `u` is kept at its value for 1.
 
 ## It is slow
 

@@ -24,7 +24,8 @@ pub(crate) const MAX_PASSES: i64 = 1_000;
 
 const KINDS: &[&str] = &["along", "sweep", "soak"];
 const KEYS: &[&str] = &[
-    "Kind", "At", "For", "Seed", "Paint", "Path", "Reveal", "Across", "Axis", "Passes", "Ease",
+    "Kind", "At", "For", "Until", "Seed", "Paint", "Path", "Reveal", "Across", "Axis", "Passes",
+    "Ease",
 ];
 
 const ALONG: i64 = 0;
@@ -98,11 +99,19 @@ fn check_stroke(k: usize, v: &Value) -> Result<Checked, String> {
         }
         None => return Err(at("At", "is missing: when the stroke starts, in seconds")),
     };
-    let dur = match get("For") {
-        Some(x) if x.as_f64().is_some_and(|d| d.is_finite() && d > 0.0) => {
-            x.as_f64().unwrap_or(1.0)
+    // The end: /For seconds after /At, or /Until a time (kept exactly, so a
+    // plan computed in end times keeps them).
+    let t1 = match (get("For"), get("Until")) {
+        (Some(_), Some(_)) => {
+            return Err(at(
+                "Until",
+                "and /For are both given: give one, the end time or the length",
+            ));
         }
-        Some(other) => {
+        (Some(x), None) if x.as_f64().is_some_and(|d| d.is_finite() && d > 0.0) => {
+            t0 + x.as_f64().unwrap_or(1.0)
+        }
+        (Some(other), None) => {
             return Err(at(
                 "For",
                 &format!(
@@ -111,13 +120,26 @@ fn check_stroke(k: usize, v: &Value) -> Result<Checked, String> {
                 ),
             ));
         }
-        None => {
+        (None, Some(x)) if x.as_f64().is_some_and(|e| e.is_finite() && e > t0) => {
+            x.as_f64().unwrap_or(t0 + 1.0)
+        }
+        (None, Some(other)) => {
+            return Err(at(
+                "Until",
+                &format!(
+                    "is {}: when the stroke ends, in seconds, after its /At ({t0})",
+                    show(other)
+                ),
+            ));
+        }
+        (None, None) => {
             return Err(at(
                 "For",
-                "is missing: how long the stroke takes, in seconds",
+                "is missing: how long the stroke takes, in seconds (or /Until, when it ends)",
             ));
         }
     };
+    let dur = t1 - t0;
     match get("Paint") {
         Some(p) if is_proc(p) => {}
         Some(other) => {
@@ -273,6 +295,7 @@ fn check_stroke(k: usize, v: &Value) -> Result<Checked, String> {
     put("Kind", Value::Name(kind_name.into()));
     put("At", Value::Real(t0));
     put("For", Value::Real(dur));
+    put("Until", Value::Real(t1));
     put("Seed", Value::Int(seed));
     put("Paint", get("Paint").cloned().unwrap_or(Value::Null));
     put("Path", get("Path").cloned().unwrap_or(Value::Null));
@@ -285,7 +308,7 @@ fn check_stroke(k: usize, v: &Value) -> Result<Checked, String> {
         dict,
         kind,
         t0,
-        t1: t0 + dur,
+        t1,
         passes,
     })
 }
@@ -334,7 +357,7 @@ pub(crate) fn compile(items: &[Value]) -> Result<Value, String> {
     let mut units: Vec<(f64, usize, i64)> = Vec::new();
     for (k, c) in checked.iter().enumerate() {
         for p in 0..c.passes {
-            let t = if c.kind == SOAK {
+            let t = if c.kind == SOAK && p + 1 < c.passes {
                 c.t0 + (c.t1 - c.t0) * (p + 1) as f64 / c.passes as f64
             } else {
                 c.t1
@@ -426,10 +449,23 @@ pub(crate) fn live(
 }
 
 /// The stroke whose tip is moving at `now`, and how far it has got: of
-/// those being drawn (started, not ended), the one that started last.
-pub(crate) fn tip(kinds: &[i64], t0: &[f64], t1: &[f64], now: f64) -> Option<(usize, f64)> {
+/// those being drawn (started, not ended, not yet kept), the one that
+/// started last.
+pub(crate) fn tip(
+    kinds: &[i64],
+    t0: &[f64],
+    t1: &[f64],
+    now: f64,
+    rate: f64,
+    step: i64,
+) -> Option<(usize, f64)> {
     (0..kinds.len().min(t0.len()).min(t1.len()))
-        .filter(|&k| kinds[k] != SOAK && now > t0[k] && now <= t1[k])
+        .filter(|&k| {
+            kinds[k] != SOAK
+                && now > t0[k]
+                && now <= t1[k]
+                && step_reaching(t1[k], rate).max(0) > step
+        })
         .max_by(|&a, &b| t0[a].total_cmp(&t0[b]).then(a.cmp(&b)))
         .map(|k| (k, ((now - t0[k]) / (t1[k] - t0[k])).clamp(0.0, 1.0)))
 }
@@ -513,8 +549,10 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         let t1 = pop_reals(i, ctx, "painttip")?;
         let t0 = pop_reals(i, ctx, "painttip")?;
         let kinds = pop_kinds(i, ctx, "painttip")?;
-        let now = ctx.borrow().movie_clock().t;
-        match tip(&kinds, &t0, &t1, now) {
+        let c = ctx.borrow();
+        let found = tip(&kinds, &t0, &t1, c.movie_clock().t, c.step_rate, c.step);
+        drop(c);
+        match found {
             Some((k, u)) => {
                 i.push_int(k as i64);
                 i.push_real(u);
@@ -584,6 +622,8 @@ mod tests {
         // Stroke 0 starts first but ends last.
         let live = live(&[0, 0], &[0.0, 0.2], &[2.0, 1.0], 0.5, 30.0, 15);
         assert_eq!(live.iter().map(|l| l.0).collect::<Vec<_>>(), [1, 0]);
-        assert!(tip(&[0, 0], &[0.0, 0.2], &[2.0, 1.0], 0.5).is_some_and(|t| t.0 == 1));
+        assert!(tip(&[0, 0], &[0.0, 0.2], &[2.0, 1.0], 0.5, 30.0, 15).is_some_and(|t| t.0 == 1));
+        // Ended exactly on a step, and kept on it: no tip.
+        assert!(tip(&[0], &[0.0], &[1.0], 1.0, 30.0, 30).is_none());
     }
 }
