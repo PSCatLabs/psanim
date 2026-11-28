@@ -46,8 +46,7 @@ pub struct Error {
     /// A short machine-readable kind: a PostScript error name
     /// (`undefined`, `typecheck`, `limitexceeded`, `interrupt`, ...) or one
     /// of psanim's own (`declaration`, `options`, `unclosedlayer`,
-    /// `unclosedgroup`, `groupnesting`; the last two only once PSCat
-    /// reports open transparency groups, PSCatLabs/pscat#1494).
+    /// `unclosedgroup`, `groupnesting`).
     pub kind: String,
     /// The offending PostScript command, when the interpreter knows it.
     pub command: Option<String>,

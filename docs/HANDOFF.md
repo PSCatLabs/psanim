@@ -43,7 +43,7 @@ Working and tested on macOS (Apple silicon):
   (character rigs). `<psanim-widget>` runs a movie live in a page
   (`docs/widgets.md`). Each piece of this was built on its own branch and
   merged in `integration-0.2`; the merge commits say what met what.
-- PSCat: a git dependency on `feature/0.8.0`, pinned at `d385971` by
+- PSCat: a git dependency on `feature/0.8.0`, pinned at `13fa9e6` by
   `Cargo.lock`. The host API (PSCatLabs/pscat#1410) is merged there.
   PSCatLabs/pscat#1488 lists 0.8.0's additions (line numbers in errors,
   the UTF-8 check, Unicode text, pixel fonts). psanim uses the pixel fonts

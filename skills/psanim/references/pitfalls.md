@@ -71,31 +71,30 @@ are made of. To fade a group in, tween its `/Alpha`.
 endgroup
 ```
 
-A group may go inside any psanim layer or motion body. **A psanim layer
-must not go inside a group**: `faded`, `blended`, `blurred`, `glowing`,
-`beginlayer`, the pixel effects (`blurlayer`, `glowlayer`, `vignette`,
-`filmgrain`) and a motion while it moves all draw on a layer of their own
-by swapping the canvas, and inside a group the program is painting on the
-group's layer, which psanim cannot reach: the effect is lost. Today
-nothing says so, because PSCat cannot yet tell psanim that a group is
-open (PSCatLabs/pscat#1494). Once it can, these will stop the frame with
-`groupnesting`, naming the word, and `faded` and `blended` (`/normal`,
-`/multiply`) will run as groups of their own instead. Write it the right
-way round now:
+A group may go inside any psanim layer or motion body. **Most psanim
+layers cannot go inside a group**: `blurred`, `glowing`, `beginlayer`,
+`blended` with `/add` or `/screen`, the pixel effects (`blurlayer`,
+`glowlayer`, `vignette`, `filmgrain`) and a motion while it moves all
+draw on a layer of their own by swapping the canvas, and inside a group
+the program is painting on the group's layer, which psanim cannot reach.
+They stop the frame with `groupnesting`, naming the word. `faded` and
+`blended` with `/normal` or `/multiply` do work inside a group: there
+they run as a group of their own. Put the group inside the layer:
 
 ```postscript partial
-<< >> begingroup 6 1 { petals } glowing endgroup                     % the glow is lost
+<< >> begingroup 6 1 { petals } glowing endgroup                     % groupnesting
 6 1 { << /Alpha 0.6 >> begingroup petals endgroup } glowing          % right
-<< >> begingroup 0.5 { petals } faded endgroup                       % the fade is lost
-<< /Alpha 0.5 >> begingroup petals endgroup                          % right
-<< >> begingroup 1 [/rise 0.8] { petals } enters endgroup            % no motion
+<< >> begingroup 0.5 { petals } faded endgroup                       % works: a group in a group
+<< /Alpha 0.5 >> begingroup petals endgroup                          % the same, cheaper
+<< >> begingroup 1 [/rise 0.8] { petals } enters endgroup            % groupnesting while it moves
 1 [/rise 0.8] { << /Alpha 0.6 >> begingroup petals endgroup } enters % right
 ```
 
 Every `begingroup` needs its `endgroup` in the same procedure: inside a
 layer's body (`faded`, `blurred`, a motion's), a group must close before
-the body ends, and a frame must not end with one open (that will be
-`unclosedgroup`).
+the body ends (`groupnesting`), and a frame must not end with one open
+(`unclosedgroup`). An error caught with `stopped` does not close a group
+the failing code opened, any more than it closes a `gsave`.
 
 ## `stackunderflow` in a combinator
 

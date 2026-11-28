@@ -158,14 +158,12 @@ Roughly in order of value:
    0.8.0 has group opacity (`begingroup` / `endgroup`, with `/Alpha` and
    `/Blend /Normal` or `/Multiply`), and movies can use it: a group
    inside any psanim layer or motion works (`crates/psanim/tests/groups.rs`,
-   the gallery's *Ridgelines*). A psanim layer inside a group loses its
-   effect, and psanim cannot yet see that a group is open: PSCat's host
-   query is PSCatLabs/pscat#1494. psanim asks in one place
-   (`crates/psanim/src/groups.rs`); once it can, `faded` and `blended`
-   (`/normal`, `/multiply`) inside a group run as groups (written and
-   tested, `.groupfaded`), and blur, glow, `/add`, `/screen`, the pixel
-   effects and a moving motion stop with `groupnesting` (written; tests
-   ignored until then). psanim's own layers still swap the canvas;
+   the gallery's *Ridgelines*). psanim asks PSCat whether a group
+   is open in one place (`crates/psanim/src/groups.rs`,
+   PSCatLabs/pscat#1494): `faded` and `blended` (`/normal`, `/multiply`)
+   inside a group run as groups (`.groupfaded`), and blur, glow, `/add`,
+   `/screen`, the pixel effects and a moving motion stop with
+   `groupnesting`. psanim's own layers still swap the canvas;
    nothing exports as vector, since psanim writes pixels only. Placed
    layers (a motion's pose) have no PSCat counterpart. Moving `faded`
    onto groups everywhere was not done: a full-canvas group costs about

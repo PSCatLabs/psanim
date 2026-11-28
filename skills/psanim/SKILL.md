@@ -82,8 +82,8 @@ psanim render movie.ps -o movie.mp4    # 5. the film (also .webm, .gif, or a dir
    thing; `radius strength { ... } glowing` adds light; `[...] reel`
    joins clips with dissolves, wipes and pushes. PSCat's own
    `<< /Alpha a >> begingroup ... endgroup` fades as one thing too; a
-   psanim layer (`faded`, `blurred`, `glowing`, a moving motion) must not
-   open inside one, where it loses its effect: put the group inside the
+   `faded` inside one works; `blurred`, `glowing` and a moving motion do
+   not and stop the frame with `groupnesting`: put the group inside the
    layer ([pitfalls](references/pitfalls.md)).
 
 ## Rules that save a debugging round

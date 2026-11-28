@@ -10,7 +10,7 @@ PSCat to grow, and how the two repositories are built together.
 |---|---|
 | PSCat repository | https://github.com/PSCatLabs/pscat |
 | Branch | `feature/0.8.0`, PSCat's development branch for 0.8.0 (not released) |
-| Pinned revision | `d385971`, recorded in `Cargo.lock` |
+| Pinned revision | `13fa9e6`, recorded in `Cargo.lock` |
 | PSCat version | 0.7.1 (the branch has not bumped it yet) |
 
 The host API psanim needs was developed on `feature/psanim-library-api`
@@ -68,7 +68,7 @@ Only the supported, documented API (`docs.rs` surface), nothing hidden:
 | cancel a render | `Interp::set_interrupt`, `PsError::Interrupted` | yes |
 | encode PNGs, lay out contact sheets | `Page::to_png`, `pscat::sheet` | |
 | roll frames back | the PostScript operators `save` / `restore` | |
-| know whether a transparency group is open | nothing yet: PSCatLabs/pscat#1494 (see below) | wanted |
+| know whether a transparency group is open, and which | `Interp::open_group_count`, `innermost_group_serial` (0.8.0, experimental) | yes (PSCatLabs/pscat#1494) |
 
 ## The PSCat changes
 
@@ -111,10 +111,14 @@ Found while building psanim, not needed to ship it:
 
 - **Group opacity and blend as PostScript operators.** Done in 0.8.0:
   `begingroup` / `endgroup`. See below for how psanim lives with them.
-- **A host query for open transparency groups** (PSCatLabs/pscat#1494).
-  While a group is open `swap_canvas` exchanges the page below the
-  group's layer, so a host that draws layers by swapping must not do so
-  inside one; nothing in 0.8.0's supported API says whether one is open.
+- **A host query for open transparency groups.** Done in 0.8.0
+  (PSCatLabs/pscat#1494): `open_group_count` and
+  `innermost_group_serial`. While a group is open `swap_canvas`
+  exchanges the page below the group's layer, so a host that draws layers
+  by swapping must not do so inside one.
+- **The gsave depth, and whether a capture is open** (PSCatLabs/pscat#1497):
+  psanim marks gsave levels with a flatness sentinel to put a body's
+  levels back across `endgroup`.
 - **Virtual files**: a host serving `(name) run` from memory.
 - **A host `image`**: painting host pixels under the current CTM.
 - **Source positions for procedure bodies**, which would turn the
@@ -163,13 +167,18 @@ What psanim does about it:
   body that `grestore`s past its start is refused; a body must leave its
   fade's own group innermost, checked by identity; a frame must close
   its groups (`unclosedgroup`).
-- **Pending pscat#1494:** PSCat 0.8.0 cannot answer, so both functions
-  report no group, which is how psanim behaved before groups existed.
-  The checks are written and the tests that need an answer are ignored
-  with that reason. What can be tested without it is: `.groupfaded`'s
-  rules (called directly), the next frame after an error or interrupt
-  with a group open (byte-identical to a fresh movie's, all three
-  modes), groups inside layers and motions, and parallel renders.
+- What PSCat counts: groups at the page's level, opened by any route
+  (`systemdict`, `//begingroup`, bound). A group is closed by `endgroup`,
+  `erasepage`, `showpage`, `copypage`, a `restore` past it, the end of a
+  run, an uncaught error, a limit or the interrupt flag. An error caught
+  with `stopped` does not close one. Inside a pattern's `PaintProc` both
+  queries report the page's groups. A group opened under `nulldevice` is
+  counted though it has no layer.
+- Tested (`crates/psanim/tests/groups.rs`): each refusal and conversion
+  above, the pattern and `systemdict` cases, the next frame after an
+  error or interrupt with a group open (byte-identical to a fresh
+  movie's, all three modes), groups inside layers and motions, and
+  parallel renders.
 
 What psanim needs from PSCat, as host API on `Interp`:
 

@@ -123,11 +123,9 @@ gsave 2 3 /quad-out tween { 1 setgray fill } faded grestore        % the fill fa
 its body as one translucent group; `glowing` and `blurred` are its
 siblings. PSCat's transparency groups (`<< /Alpha 0.5 >> begingroup ...
 endgroup`) do the same as `faded` and may sit inside any of them. Not the
-other way round: a psanim layer opened inside a group never sees the
-group's marks, and its effect is lost. psanim cannot yet tell that a
-group is open (PSCatLabs/pscat#1494); once it can, `faded` and `blended`
-with `/normal` or `/multiply` will run as groups there and the rest will
-stop the frame with `groupnesting`.
+other way round: a psanim layer opened inside a group cannot reach the
+group's layer. `faded` and `blended` with `/normal` or `/multiply` run
+as groups there; the rest stop the frame with `groupnesting`.
 
 ## The loop
 

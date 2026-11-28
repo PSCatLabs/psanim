@@ -141,10 +141,9 @@ layer (`0.5 { ... } faded`) around the same drawing, at 1280x720, `psanim
 bench` (median ms a frame, three runs each, all shown), measured on
 2026-11-27 on the same M4 while other jobs were running (load average
 about 42), so the numbers are loose and only their ratios mean much.
-The last column was measured with the first version of #109, which ran
-a `faded` inside a group as a group; until PSCat lets psanim see an open
-group (PSCatLabs/pscat#1494) such a `faded` is a layer again, and loses
-its fade.
+The last column is a `faded` inside a group, which runs as a group of its
+own; it was measured with the first version of #109 and not again since
+psanim began asking PSCat whether a group is open.
 
 | The drawing | Bare | `faded` | Group | `faded` inside a group |
 |---|---|---|---|---|

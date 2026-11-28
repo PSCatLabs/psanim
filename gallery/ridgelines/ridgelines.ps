@@ -19,10 +19,9 @@
 %   - the heal: marks at alpha m inside a group at alpha a/m, m tweened
 %     from a (each peak on its own: seams) to 1 (one group: none), so a
 %     single peak keeps the same strength throughout.
-%   - the fog fades in through its group's `/Alpha`, not a `faded`
-%     inside the group: psanim cannot yet see a group from the host
-%     (PSCatLabs/pscat#1494), and a layer opened inside one would lose
-%     its effect.
+%   - the fog fades in through its group's `/Alpha`: a `faded` inside
+%     the group would work too (it runs as a group of its own), at more
+%     cost.
 %   - a group inside a motion: the title `enters` with `/rise`, its two
 %     lines one group. (Not a motion inside a group, which would lose
 %     its motion while it moves: the group goes inside.)

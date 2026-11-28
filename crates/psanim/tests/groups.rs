@@ -24,12 +24,10 @@
 //!   the one a fresh movie draws;
 //! - a parallel render of a movie with groups is the single-thread render.
 //!
-//! **Pending PSCatLabs/pscat#1494.** Whether a group is open is asked of
-//! the interpreter in one place (`crates/psanim/src/groups.rs`), and PSCat
-//! 0.8.0 cannot answer yet; until it can, psanim sees no group, and
-//! behaves inside one as it did before groups existed. The tests that need
-//! the answer are `#[ignore]`d with that reason; `.groupfaded`'s own rules
-//! are tested now by calling it directly.
+//! Whether a group is open is asked of the interpreter in one place
+//! (`crates/psanim/src/groups.rs`, PSCat's `open_group_count` and
+//! `innermost_group_serial`, PSCatLabs/pscat#1494). `.groupfaded`'s own
+//! rules are also tested by calling it directly.
 //!
 //! Tolerances. psanim composites a layer at 8 bits a channel
 //! (`raster::composite`); PSCat composites a group through its 16-bit
@@ -219,7 +217,6 @@ fn a_group_inside_a_layer_matches_the_layer_without_it() {
 // --- a psanim layer inside a group -------------------------------------------------
 
 #[test]
-#[ignore = "needs PSCat to tell a host which transparency groups are open (PSCatLabs/pscat#1494); until then psanim cannot see a group"]
 fn faded_and_blended_inside_a_group_run_as_groups() {
     for mode in MODES {
         // Before the fix this drew the discs at full strength: the layer
@@ -296,7 +293,6 @@ const REFUSED: &[(&str, &str)] = &[
 ];
 
 #[test]
-#[ignore = "needs PSCat to tell a host which transparency groups are open (PSCatLabs/pscat#1494); until then psanim cannot see a group"]
 fn other_layers_and_effects_inside_a_group_are_refused_and_the_next_frame_is_clean() {
     for (body, word) in REFUSED {
         let body = body.replace("SHAPES", SHAPES);
@@ -370,7 +366,6 @@ fn a_group_inside_a_motion_matches_the_motion_without_it() {
 }
 
 #[test]
-#[ignore = "needs PSCat to tell a host which transparency groups are open (PSCatLabs/pscat#1494); until then psanim cannot see a group"]
 fn a_motion_inside_a_group_is_refused_while_it_moves() {
     for mode in MODES {
         let enters = grouped(
@@ -409,7 +404,6 @@ fn a_motion_inside_a_group_is_refused_while_it_moves() {
 // --- unbalanced groups ---------------------------------------------------------------
 
 #[test]
-#[ignore = "needs PSCat to tell a host which transparency groups are open (PSCatLabs/pscat#1494); until then psanim cannot see a group"]
 fn a_body_that_leaves_a_group_open_or_closes_one_it_did_not_open_is_an_error() {
     let open = format!("<< /Alpha 0.5 >> begingroup {SHAPES}");
     for mode in MODES {
@@ -470,7 +464,6 @@ fn a_body_that_leaves_a_group_open_or_closes_one_it_did_not_open_is_an_error() {
 }
 
 #[test]
-#[ignore = "needs PSCat to tell a host which transparency groups are open (PSCatLabs/pscat#1494); until then psanim cannot see a group"]
 fn a_group_left_open_at_the_end_of_the_scene_is_an_error_and_the_next_frame_is_clean() {
     let scene = format!(
         "frame 5 eq {{ << /Alpha 0.5 >> begingroup {SHAPES} }} {{ 0.5 {{ {SHAPES} }} faded }} ifelse"
@@ -604,7 +597,6 @@ fn a_parallel_render_with_groups_is_the_single_thread_render() {
 }
 
 #[test]
-#[ignore = "needs PSCat to tell a host which transparency groups are open (PSCatLabs/pscat#1494); until then psanim cannot see a group"]
 fn groups_inside_a_component() {
     let comp = |scene: &str| {
         format!("/part << /Size [40 30] /Duration 2 /Scene {{ {scene} }} >> component")
@@ -782,7 +774,6 @@ const PATTERN: &str = "/pat << /PatternType 1 /PaintType 1 /TilingType 1 /BBox [
 /// must still run as a group (the fade kept). With the prelude's counting
 /// it was lost silently.
 #[test]
-#[ignore = "needs PSCat to tell a host which transparency groups are open (PSCatLabs/pscat#1494); until then psanim cannot see a group"]
 fn a_patterns_endgroup_does_not_hide_the_pages_group() {
     for mode in MODES {
         same(
@@ -804,7 +795,6 @@ fn a_patterns_endgroup_does_not_hide_the_pages_group() {
 /// as it found, but not the same one. Telling them apart needs the group's
 /// identity, not the count.
 #[test]
-#[ignore = "needs PSCat to tell a host which transparency groups are open (PSCatLabs/pscat#1494); until then psanim cannot see a group"]
 fn a_body_that_swaps_the_fades_group_for_another_is_refused() {
     for mode in MODES {
         let e = error(
@@ -849,7 +839,6 @@ fn a_caught_errors_hint_does_not_describe_a_later_one() {
 /// Finding 5, as the review found it: the `groupnesting` a `stopped`
 /// caught must not become the kind of the `undefined` that escapes.
 #[test]
-#[ignore = "needs PSCat to tell a host which transparency groups are open (PSCatLabs/pscat#1494); until then psanim cannot see a group"]
 fn a_caught_groupnesting_does_not_describe_a_later_error() {
     let e = error(
         Mode::Pure,
@@ -865,7 +854,6 @@ fn a_caught_groupnesting_does_not_describe_a_later_error() {
 /// `faded` inside it runs as one. (The prelude's counting could not see
 /// this one; the interpreter's will.)
 #[test]
-#[ignore = "needs PSCat to tell a host which transparency groups are open (PSCatLabs/pscat#1494); until then psanim cannot see a group"]
 fn a_group_opened_through_systemdict_is_seen() {
     let direct = format!(
         "<< >> systemdict /begingroup get exec 0.5 {{ {SHAPES} }} faded systemdict /endgroup get exec"
