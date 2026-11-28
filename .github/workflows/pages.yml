@@ -12,9 +12,12 @@ on:
 permissions:
   contents: read
 
+# A newer push to a pull request replaces its run. On main a run in
+# progress is left to finish (a deploy takes about 50 minutes, and a string
+# of merges would otherwise cancel every one); at most one more waits.
 concurrency:
   group: pages-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:

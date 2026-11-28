@@ -404,7 +404,7 @@ def build_reference():
 GALLERY_ORDER = [
     "orrery", "afterglow", "paper-boat", "tidewater", "murmuration", "taiji", "chalk-proof",
     "tesseract", "lissajous", "halftone", "neon", "ripple", "letter", "epicycles", "one-frame",
-    "birthday", "canon", "circle-area", "end-credits", "fresh", "heron", "how-it-works",
+    "birthday", "canon", "circle-area", "complete-the-square", "end-credits", "fresh", "heron", "how-it-works",
     "buildfarm", "morph-clock", "campfire", "ship-it", "salt-roads", "twiddle", "departures",
     "news-sign", "kayaks", "huzzah", "builds-passed", "signage", "banner", "turing", "automata",
     "logo",
