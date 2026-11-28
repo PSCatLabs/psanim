@@ -171,6 +171,21 @@ flicker usually comes from seeding with `frame` or `now`, from `wiggle`
 at too high a frequency, or from `filmgrain` (which is meant to move).
 For per-item constants use `i hash01`.
 
+## A persistent mark comes out heavier than it should
+
+Something was painted on the kept canvas twice.
+
+- **An "it ended this frame" test on times.** `now dt sub t lt now t ge
+  and` looks true on exactly one frame. In floating point `now dt sub`
+  is not exactly the last frame's `now`, so it can be true on two. To do
+  a thing once, compare frame numbers: `frame t dt div 1e-6 sub ceiling
+  cvi eq`, in the scene (`dt`, not `fps`: under `--fps` a persistent
+  scene still steps at the declared rate, while `fps`, and `dt` in
+  setup, report the output's).
+- **A growing stroke regrown on the kept canvas.** Chalk and other
+  translucent media stack. Keep it once when it is finished and grow it
+  in `overlay` (ink.md, "Dry media").
+
 ## It is slow
 
 `psanim bench movie.ps` gives milliseconds per frame (`check` times

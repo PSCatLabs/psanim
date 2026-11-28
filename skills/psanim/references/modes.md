@@ -122,7 +122,8 @@ feedback. Draw only what is new this frame.
   ground (paper), paint it yourself under `frame 0 eq { ... } if`.
 - `rand` is reseeded the same way every frame, so call `srand` yourself
   when a mark's texture must not depend on which frame draws it.
-- Inside the scene, `now dt sub` is the previous frame's time: an
+- Inside the scene, `now dt sub` is the previous frame's time (to
+  rounding: to act once, compare `frame` numbers, pitfalls.md): an
   incremental painter needs both ends of the frame's interval.
 - **Seeking is not free.** A frame is reached by painting every frame
   before it since the last checkpoint, and checkpoints live only as long
@@ -135,7 +136,8 @@ feedback. Draw only what is new this frame.
 One whole stroke per frame is easy (stroke number `frame`). A wash that
 takes two seconds to cross the page is the real problem, because a
 textured or translucent stroke cannot simply be drawn "a bit longer"
-each frame: its texture would change and its alpha would stack. The
+each frame: its texture would change and its alpha would stack (dry
+media are the exception for texture: they grow exactly, ink.md). The
 recipe that works:
 
 1. Describe each stroke by a procedure that paints *all* of it, plus a
