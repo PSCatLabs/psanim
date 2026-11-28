@@ -126,11 +126,18 @@ Full reasoning in `docs/architecture.md`.
 14. **A persistent movie counts its own steps** (#107, #121, #122). Its
     scene steps at the declared FPS whatever `--fps` it is shown at;
     `steprate`, `stepnow` and `t stepat` say so in setup, the scene and
-    the overlay alike (`fps` stays the rate frames are shown at). Every
-    step starts from the canvas's 8-bit pixels: PSCat's 16-bit shadow of
-    composited fills is dropped first, because the overlay and the
-    checkpoints drop it anyway, and a canvas that kept it only sometimes
-    differed by a level between playing and seeking. pkink's `paintplan`
+    the overlay alike (`fps` stays the rate frames are shown at). PSCat
+    composites fills through a 16-bit shadow of the canvas that is lost
+    whenever the canvas is swapped (the overlay, a checkpoint), so a
+    canvas that kept it only sometimes differed by a level or two between
+    playing and seeking. The engine now drops it where either path might:
+    before every step of a movie with an overlay, and before each step a
+    checkpoint starts from in one without. Dropping it every step in all
+    movies was tried and rejected: modes.md's veil, faint fills laid each
+    step, then stalls in 8 bits (17,806 pixels left more than 10 levels
+    off the ground after 5 s, against 8,384); with the rule above it
+    fades as before (8,392). Movies with an overlay stalled that way
+    already (pitfalls.md). pkink's `paintplan`
     is built on both: each stroke kept once, whole, on the step that
     finishes it (each unit composited from 8-bit pixels too), the strokes
     in progress regrown in the overlay. The last frame is the board

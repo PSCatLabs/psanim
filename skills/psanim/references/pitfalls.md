@@ -191,6 +191,20 @@ Something was painted on the kept canvas twice.
   light touch: 1.09 to 1.85 times at `/Touch` 0.5 to 0.3
   (PSCatLabs/pscat#1487). Regrow from 0 where nothing is kept.
 
+## A veil never quite fades
+
+A faint fill laid every step (`0.04 setalpha` over the whole canvas, to
+fade a trail) moves each pixel by less than half a level once it is
+close to the ground, and an 8-bit canvas then stops. PSCat composites
+fills through a 16-bit shadow that keeps it going, but a persistent movie
+with an `overlay` starts every step from the 8-bit pixels (the shadow is
+dropped so that playing and seeking agree), so there the trail stalls short
+of the ground: modes.md's trail, every step started from 8 bits, left
+17,806 pixels more than 10 levels off after 5 s, against 8,384 with the
+shadow kept. Veil less often with a stronger alpha
+(`frame 4 mod 0 eq { 0.15 setalpha ... }`), or keep the veil in a movie
+without an overlay.
+
 ## A painted stroke jumps when it is finished
 
 `paintplan` shows a stroke in the overlay as `/Paint` draws it at `u`,
