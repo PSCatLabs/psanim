@@ -141,8 +141,11 @@ agent with the report it came from (summarised in
    frame; `check` could flag both (a long run of identical frames
    mid-film; a region that goes blank and refills). And a template is a
    place where one review pays many times: both models made the same
-   film from it, so fixing a template fixes every film made from it. The
-   revised templates are waiting for their second blind review.
+   film from it, so fixing a template fixes every film made from it. It
+   took three rounds: after blind review and revision, both templates
+   rank first in their sets, and the template tests now catch the poem
+   template's round-2 defects (two notes legible at once, a card left
+   empty, unfinished sentences, the closing hold) mechanically.
 
 ## Next: the engine
 
