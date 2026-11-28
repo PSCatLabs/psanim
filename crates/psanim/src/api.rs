@@ -126,6 +126,24 @@ pub const API: &[ApiEntry] = &[
     ),
     e(
         "clock",
+        "steprate",
+        "-  steprate  num",
+        "The rate the movie steps at: for a persistent movie its declared FPS, whatever `--fps` it is rendered or shown at (its canvas is painted one step a declared frame), for a simulation its /StepRate, otherwise the frame rate. `fps` is the rate frames are shown at.",
+    ),
+    e(
+        "clock",
+        "stepnow",
+        "-  stepnow  int",
+        "The last step run at this moment: in a persistent movie's scene the step being painted (its `frame`), in its overlay the last step the kept canvas holds, in a simulation's scene the last tick applied (-1 before the first), in a pure movie the frame. In the overlay, under any `--fps`, `t stepat stepnow le` says whether the scene has painted the step that reaches t.",
+    ),
+    e(
+        "clock",
+        "stepat",
+        "t  stepat  int",
+        "The step on which movie time t is reached: the first whose time is at or after t (a t within a millionth of a step after a step's time counts as that step's), 0 for t at or before 0. `t stepat stepnow eq` in a persistent scene is true on exactly one step for any t: the way to do something once when a time is crossed, which `now dt sub` cannot say exactly in floating point.",
+    ),
+    e(
+        "clock",
         "duration",
         "-  duration  seconds",
         "The movie's length.",

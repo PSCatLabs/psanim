@@ -18,7 +18,7 @@ use std::sync::atomic::AtomicBool;
 use pscat::host::Value;
 use pscat::{Interp, Limits, Page, PsError};
 
-use crate::ctx::{Ctx, Running, mix64};
+use crate::ctx::{Canvas, Ctx, Running, last_step_at, mix64};
 use crate::error::{Error, Phase, closest};
 use crate::raster::Accumulator;
 use crate::signals::Signals;
@@ -457,9 +457,9 @@ fn collect_byte_font_text(interp: &Interp, into: &mut ByteFontReport, lines: boo
 /// The vocabulary's native operators that a program is likely to shadow
 /// by accident: short, ordinary words.
 const NATIVE_WORDS: &[&str] = &[
-    "now", "progress", "span", "frame", "fps", "dt", "duration", "width", "height", "turns",
-    "ease", "tween", "ramp", "between", "clamp", "remap", "signal", "param", "grain", "vignette",
-    "wiggle", "fmod",
+    "now", "progress", "span", "frame", "fps", "dt", "steprate", "stepnow", "stepat", "duration",
+    "width", "height", "turns", "ease", "tween", "ramp", "between", "clamp", "remap", "signal",
+    "param", "grain", "vignette", "wiggle", "fmod",
 ];
 
 /// The most printed text a movie keeps between calls of `take_output`.
@@ -686,6 +686,15 @@ impl Movie {
             c.base_dir = options.base_dir.clone();
             c.running = Running::Setup;
             c.begin_moment(0, 0.0, 1.0 / decl.fps);
+            // Known before the program runs, so setup can count steps too.
+            c.step_rate = if decl.persist {
+                decl.declared_fps
+            } else {
+                decl.fps
+            };
+            // A persistent movie's setup is before its first step, which is
+            // a step of the declared rate: `dt` there is that step's.
+            c.dt = 1.0 / c.step_rate;
         }
         configure(&mut interp, &ctx, options)?;
         interp
@@ -753,6 +762,11 @@ impl Movie {
             decl.declared_fps
         } else {
             decl.step_rate
+        };
+        ctx.borrow_mut().step_rate = if mode == Mode::Pure {
+            decl.fps
+        } else {
+            tick_rate
         };
         // A persistent movie may define `overlay`: drawn over each frame
         // shown, never kept.
@@ -1049,13 +1063,14 @@ impl Movie {
                 }
             },
             Mode::Stateful => {
-                let ticks = (time * self.meta.tick_rate + 1e-9).floor().max(0.0) as u64;
+                let ticks = last_step_at(time, self.meta.tick_rate).max(0) as u64;
                 self.seek(ticks)?;
                 // The drawing runs between a save and a restore of its own,
                 // so it cannot change the simulation's state.
                 self.exec(phase, "save")?;
                 let guard = self.pop_save(phase)?;
                 self.begin(Running::Frame, index as i64, time, 1.0 / self.meta.fps);
+                self.ctx.borrow_mut().step = ticks as i64 - 1;
                 let drawn = self
                     .exec(phase, &self.draw_program(true))
                     .and_then(|()| self.check_stack(phase, &self.scene.clone()));
@@ -1067,7 +1082,7 @@ impl Movie {
             }
             Mode::Persistent => {
                 // Frame j of the declared rate is painted by tick j.
-                let ticks = (time * self.meta.tick_rate + 1e-9).floor().max(0.0) as u64 + 1;
+                let ticks = last_step_at(time, self.meta.tick_rate).max(0) as u64 + 1;
                 self.seek(ticks)?;
                 if let Some(overlay) = self.overlay.clone() {
                     // Draw the overlay on a copy; the painting is set aside.
@@ -1084,6 +1099,11 @@ impl Movie {
                     self.exec(phase, "cleardictstack save")?;
                     let guard = self.pop_save(phase)?;
                     self.begin(Running::Frame, index as i64, time, 1.0 / self.meta.fps);
+                    {
+                        let mut c = self.ctx.borrow_mut();
+                        c.step = ticks as i64 - 1;
+                        c.canvas = Canvas::Overlay;
+                    }
                     let program = format!(
                         "clear cleardictstack grestoreall initgraphics {} srand {overlay}",
                         self.meta.seed
@@ -1357,6 +1377,7 @@ impl Movie {
             self.exec(phase, "cleardictstack save")?;
             let guard = self.pop_save(phase)?;
             self.begin(Running::Frame, tick as i64, time, dt);
+            self.ctx.borrow_mut().canvas = Canvas::Kept;
             let drawn = self
                 .exec(phase, &self.draw_program(false))
                 .and_then(|()| self.check_stack(phase, &self.scene.clone()));

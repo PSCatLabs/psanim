@@ -1873,3 +1873,53 @@ fn setup_output_is_no_frames_whatever_the_thread_count() {
     assert_eq!(outs[0], outs[1]);
     assert_eq!(outs[0][0], "(frame)\n");
 }
+
+/// A persistent movie that prints, in setup, the scene and the overlay,
+/// what it is told about its steps.
+const STEPS: &str = "<< /Size [16 16] /Duration 2 /FPS 30 /Persist true >> animation
+    (setup ) print steprate =only ( ) print dt 30 mul =only ( ) print stepnow == 
+    /scene { frame 6 eq { (scene ) print steprate =only ( ) print stepnow =only ( ) print frame == } if
+      1.8 stepat stepnow eq { (kept ) print stepnow == } if } def
+    /overlay { (overlay ) print steprate =only ( ) print stepnow == } def";
+
+#[test]
+fn a_persistent_movie_counts_its_steps_at_the_declared_rate_under_any_fps() {
+    // #122: under --fps 20 the scene still steps at 30, and setup, the
+    // scene and the overlay agree on it.
+    let mut m = Movie::load(
+        STEPS,
+        &Options {
+            fps: Some(20.0),
+            ..Options::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(m.take_output(), "setup 30.0 1.0 0\n");
+    m.render_at(0.2).unwrap();
+    // 0.2 s is step 6 at 30.
+    assert_eq!(m.take_output(), "scene 30.0 6 6\noverlay 30.0 6\n");
+    // Frame 7 at 20 fps is 0.35 s: the canvas holds step 10.
+    m.render_frame(7).unwrap();
+    assert_eq!(m.take_output(), "overlay 30.0 10\n");
+}
+
+#[test]
+fn stepat_is_true_on_exactly_one_step() {
+    // #121: `now dt sub` at step 55 is not exactly step 54's `now`, so a
+    // test built on it fires on both. 1.8 s is reached on step 54 alone.
+    let mut m = Movie::load(STEPS, &Options::default()).unwrap();
+    m.render_frame(59).unwrap();
+    let out = m.take_output();
+    assert_eq!(out.matches("kept").count(), 1, "{out}");
+    assert!(out.contains("kept 54\n"), "{out}");
+    let eval = |expr: &str| eval_at("", expr, 0);
+    assert_eq!(eval("1.8 stepat") as i64, 18, "at 10 fps");
+    assert_eq!(eval("0.15 stepat") as i64, 2);
+    assert_eq!(eval("-3 stepat") as i64, 0);
+    assert_eq!(eval("steprate") as i64, 10);
+    assert_eq!(
+        eval_at("", "stepnow", 7) as i64,
+        7,
+        "a pure movie's step is its frame"
+    );
+}

@@ -625,6 +625,25 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
         i.push_real(ctx.borrow().dt);
         Ok(())
     });
+    reg(interp, ctx, "steprate", |i, ctx| {
+        i.push_real(ctx.borrow().step_rate);
+        Ok(())
+    });
+    reg(interp, ctx, "stepnow", |i, ctx| {
+        i.push_int(ctx.borrow().step);
+        Ok(())
+    });
+    reg(interp, ctx, "stepat", |i, ctx| {
+        let t = i.pop_f64()?;
+        if !t.is_finite() {
+            return fail(ctx, PsError::Rangecheck, "stepat takes a time in seconds");
+        }
+        let c = ctx.borrow();
+        let k = crate::ctx::step_reaching(t, c.step_rate).clamp(0, i64::from(i32::MAX));
+        drop(c);
+        i.push_int(k);
+        Ok(())
+    });
     reg(interp, ctx, "duration", |i, ctx| {
         i.push_real(ctx.borrow().movie_clock().dur);
         Ok(())
