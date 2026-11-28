@@ -65,6 +65,31 @@ pub const LIBRARIES: &[(&str, &str, &str)] = &[
     ),
 ];
 
+/// PSCat's pixel faces as pkpixel names them, with the file that defines
+/// each: read from the `.pxfaces` table in `lib/pkpixel.ps`, the one place
+/// the names are kept.
+pub fn pixel_faces() -> Vec<(&'static str, &'static str)> {
+    let src = LIBRARIES
+        .iter()
+        .find(|l| l.0 == "pkpixel")
+        .map(|l| l.1)
+        .unwrap_or_default();
+    let Some(start) = src.find("/.pxfaces <<") else {
+        return Vec::new();
+    };
+    src[start..]
+        .lines()
+        .skip(1)
+        .take_while(|l| !l.trim_start().starts_with(">>"))
+        .filter_map(|l| {
+            let l = l.trim_start().strip_prefix('/')?;
+            let (name, rest) = l.split_once(char::is_whitespace)?;
+            let file = rest.trim_start().strip_prefix('(')?.split_once(')')?.0;
+            Some((name, file))
+        })
+        .collect()
+}
+
 fn spec_from(i: &mut Interp, ctx: &Shared) -> Result<Spec, PsError> {
     let v = i.pop_value()?;
     match Spec::parse(&v) {

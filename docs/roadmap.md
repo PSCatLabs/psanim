@@ -92,9 +92,15 @@ agent with the report it came from (summarised in
    and Heron each wrote this from scratch (about 60 lines each).
    `revealband` is its first brick.
 2. **Equations as objects.** Run lists set a line and bring it in term
-   by term. Missing: matching terms between two lines so one equation
-   *becomes* the next (terms slide, cancel, appear), and mathkit's TeX
-   layout exposed per term so it can be used the same way.
+   by term, and `morphruns` (#104) makes one line become the next: terms
+   are paired by content in order or by tag (`[/as /key run]`), slide,
+   cross-fade when a tag joins different glyphs, and leave or arrive;
+   a chain of lines is one progress number, and a tagged term can hold
+   still (an aligned derivation). Still missing: mathkit's TeX layout
+   exposed per term so displayed formulas (radicals, big fractions,
+   matrices) can be matched the same way; colour per term inside a run
+   list (today a term is marked by drawing over its `runbox`); and
+   pairing a term with two (one 3 becoming two halves).
 3. **Soft and ragged reveals**: a feathered or noisy edge for `spotlight`,
    wipes and wash fronts, which now cut hard.
 4. **Typography**: tracking as an option of `kinetic` and as a motion
@@ -102,11 +108,10 @@ agent with the report it came from (summarised in
    returned; a flow layout (stack lines top-down with gaps) so fitted
    lines place their neighbours; vertical and rotated text in a box;
    outline type as a state.
-5. **Charts**: labels on a series (a name at the end of its line, kept
-   clear of its neighbours; the model comparison's authors placed these
-   by hand with `plotpoint`); a tracer (a point riding a series with its readout), unit
-   charts (a waffle of cells), cross-fading ticks, stacked and grouped
-   bars, a ruler outside a plot frame.
+5. **Charts**: unit charts (a waffle of cells), stacked and grouped
+   bars, a ruler outside a plot frame. Done: names at line ends kept
+   clear of each other (`serieslabels`) and a tracer with its readout
+   (`tracer`, `lineat`), #105; cross-fading ticks (`plotaxes /Fade`).
 6. **Diagrams**: a layered layout for graphs given as data; a section
    header / lower-third word; labels along curved edges.
 7. **Motion**: vector motions when a pivot is given (no rasterization);

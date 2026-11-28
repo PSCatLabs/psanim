@@ -184,7 +184,10 @@ about 3 to 6 ms each; paintkit watercolour strokes, tens of ms each.
 Cures, in order:
 
 1. Move anything that does not depend on time into setup (loading
-   libraries, building arrays of points, L-system strings).
+   libraries, building arrays of points, L-system strings, fonts that
+   come from files: `/crt /Phosphor pixelface def`, `/Diode7 pixelfont`).
+   A frame starts from the VM as setup left it, so whatever a scene loads
+   it loads again every frame.
 2. Fewer, larger layers: one `glowing` around many shapes, not one per
    shape.
 3. Preview at `--scale 0.5`; render final frames on all cores (the
@@ -224,6 +227,13 @@ render larger.
 The text fonts are ASCII. A string containing "π", "→", "≠" or any other
 non-ASCII character shows a blank for it, with no error. Use pktype's
 `/pi sym`, `/arrow sym`, `/neq sym`, or a run list (`showruns`).
+
+## My pixel font came out as Helvetica
+
+`/Phosphor findfont` (or Pinpoint, Diode) before the face's file has run
+gives a substitute font, with no error, and keeps it under the face's
+name. Load it with `/Phosphor pixelface` (pkpixel) in setup, which
+replaces the substitute with the face; see [type.md](type.md#pixel-faces-terminals-printers-led-signs).
 
 ## Single blank frames between sections
 

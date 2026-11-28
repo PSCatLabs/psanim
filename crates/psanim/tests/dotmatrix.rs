@@ -3,6 +3,17 @@
 
 use psanim::{Movie, Options};
 
+/// The name pkpixel's table gives the face in PSCat's `lib/fonts/{file}.ps`
+/// (the first, if the file defines several), without the slash.
+fn face(file: &str) -> &'static str {
+    let path = format!("lib/fonts/{file}.ps");
+    psanim::pixel_faces()
+        .into_iter()
+        .find(|(_, f)| *f == path)
+        .map(|(n, _)| n)
+        .unwrap_or_else(|| panic!("no face for {path} in pkpixel's table"))
+}
+
 const W: usize = 720;
 const H: usize = 640;
 
@@ -160,6 +171,38 @@ fn near_letter_quality_is_a_second_pass_that_fills_between_the_dots() {
     let d1 = duration(&format!("{RED} {text} /Quality /Draft"));
     let d2 = duration(&format!("{RED} {text} /Quality /NLQ"));
     assert!(d2 > d1 + 0.05, "{d2} {d1}");
+}
+
+#[test]
+fn the_pinpoint_face_prints_its_own_letters_in_the_same_cells() {
+    let text = "/Text (MOW 0042 gjpqy) /Speed 200 /Tear /none";
+    let own = at(&mut movie(&format!("{RED} {text}")), 5.0).ink();
+    let pin = at(
+        &mut movie(&format!("{RED} {text} /Face /{}", face("pinpoint"))),
+        5.0,
+    )
+    .ink();
+    assert!(!own.is_empty() && !pin.is_empty());
+    assert!(own != pin, "the faces print differently");
+    // the same characters across: the line spans the same cells, give or take one
+    let span = |v: &[(usize, usize)]| {
+        let xs = v.iter().map(|p| p.0);
+        xs.clone().max().unwrap() - xs.min().unwrap()
+    };
+    let (a, b) = (span(&own) as f64, span(&pin) as f64);
+    assert!((a - b).abs() < 15.0, "{a} {b}");
+}
+
+#[test]
+fn an_unknown_face_is_an_error_that_names_the_faces() {
+    let src = "<< /Size [100 100] /Duration 1 >> animation
+         /x /dotmatrix << /Params << /Face /Courier >> >> instance
+         /scene { } def";
+    let e = Movie::load(src, &Options::default())
+        .err()
+        .expect("a font that is not a pixel face must fail")
+        .to_string();
+    assert!(e.contains(&format!("/{}", face("pinpoint"))), "{e}");
 }
 
 #[test]

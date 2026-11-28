@@ -1495,6 +1495,292 @@ fn equations_are_runs_that_can_be_shown_whole_or_term_by_term() {
     assert!(ink_at(&mut m, 0.0).unwrap().4 > 100);
 }
 
+// --- one equation becoming the next (morphruns) -------------------------------------
+
+const EQ_FONT: &str = "/Times-Roman 20 face 1 1 1 setrgbcolor";
+
+/// A movie whose scene sets the font, moves to (x, 60) and runs `body`.
+fn eq_movie(setup: &str, x: u32, body: &str) -> Movie {
+    load(&format!(
+        "{setup} /scene {{ {EQ_FONT} {x} 60 moveto {body} }} def"
+    ))
+}
+
+#[test]
+fn morphruns_is_exactly_the_first_line_at_0_and_the_second_at_1() {
+    let lines = "/A [ (2) [/it (x)] ( + ) [/as /n (6)] ( = ) (10) ] def
+                 /A0 [ (2) [/it (x)] ( + ) (6) ( = ) (10) ] def
+                 /B [ (2) [/it (x)] ( = ) (10) ( ) [/as /n [/sub (6)]] ] def";
+    let at = |body: &str| pixels(&mut eq_movie(lines, 20, body), 0.0);
+    let a = at("A showruns");
+    let b = at("B showruns");
+    assert_ne!(a, b);
+    assert_eq!(
+        a,
+        at("A0 showruns"),
+        "a tag does not change how a term looks"
+    );
+    assert_eq!(
+        at("[ (1) [ ( ) /minus [/it (x)] ] ] showruns"),
+        at("[ (1) ( ) /minus [/it (x)] ] showruns"),
+        "a group is set as its runs"
+    );
+    assert_eq!(
+        at("[ (1) ( ) /minus [/it (x)] ] showruns"),
+        at("[ [ (1) [ ( ) /minus [/it (x)] ] ] [ (2) ] ] 0 morphruns"),
+        "and morphruns sets a group as its runs"
+    );
+    assert_eq!(a, at("[A B] 0 morphruns"), "at 0, the first line");
+    assert_eq!(b, at("[A B] 1 morphruns"), "at 1, the second line");
+    assert_ne!(a, at("[A B] 0.5 morphruns"));
+    // Centred on the current point, and clamped outside 0..1.
+    let centred = |body: &str| pixels(&mut eq_movie(lines, 100, body), 0.0);
+    assert_eq!(
+        centred("A dup runwidth 2 div neg 0 rmoveto showruns"),
+        centred("[A B] -0.5 /center morphruns")
+    );
+    assert_eq!(
+        centred("B dup runwidth 2 div neg 0 rmoveto showruns"),
+        centred("[A B] 1.5 << /Align /center >> morphruns")
+    );
+    // The current point is kept.
+    let n = nums(&eval_at(
+        lines,
+        &format!("{EQ_FONT} 20 60 moveto [A B] 0.3 /center morphruns currentpoint == =="),
+        0.0,
+    ));
+    assert_eq!(n, [60.0, 20.0]);
+}
+
+#[test]
+fn morphruns_is_showruns_at_its_ends_for_every_run_form_and_alignment() {
+    // Superscripts, subscripts, fractions (with a sign in them), a group, a
+    // tag around a group, a tag inside a group, and a tag both lines share.
+    let lines = "/F1 [ [/as /eq (=)] [ /minus [/frac (1) /pi] ] [/sup (2)] ] def
+                 /F2 [ [/it (x)] [/sup (2)] [/sub (k)] [/frac (1) (2)] [/as /eq ( = )]
+                       [/as /g [ [/as /h [/it (y)]] [/sup /pi] ]] ] def";
+    // Each line, and where `/eq` alignment puts its start: the anchor less
+    // the runs before the tag and half the tag.
+    let cases = [
+        ("F1", "[ (=) ] runwidth 2 div"),
+        (
+            "F2",
+            "[ [/it (x)] [/sup (2)] [/sub (k)] [/frac (1) (2)] ] runwidth ( = ) stringwidth pop 2 div add",
+        ),
+    ];
+    for (l, before) in cases {
+        let m = if l == "F1" { "F2" } else { "F1" };
+        let at = |x: u32, body: &str| pixels(&mut eq_movie(lines, x, body), 0.0);
+        // Left: the current point is the start.
+        let plain = at(20, &format!("{l} showruns"));
+        assert!(plain.iter().any(|c| *c > 8), "{l} shows");
+        assert_eq!(
+            plain,
+            at(20, &format!("[{l} {m}] 0 morphruns")),
+            "{l} left, at 0"
+        );
+        assert_eq!(
+            plain,
+            at(20, &format!("[{m} {l}] 1 morphruns")),
+            "{l} left, at 1"
+        );
+        assert_eq!(
+            plain,
+            at(20, &format!("[{l} {l}] 0.5 /l morphruns")),
+            "{l} to itself"
+        );
+        // Right: the current point is the end.
+        let right = at(190, &format!("{l} dup runwidth neg 0 rmoveto showruns"));
+        assert_eq!(
+            right,
+            at(190, &format!("[{l} {m}] 0 /right morphruns")),
+            "{l} right, at 0"
+        );
+        assert_eq!(
+            right,
+            at(190, &format!("[{m} {l}] 1 /r morphruns")),
+            "{l} right, at 1"
+        );
+        // Centre.
+        let centre = at(
+            100,
+            &format!("{l} dup runwidth 2 div neg 0 rmoveto showruns"),
+        );
+        assert_eq!(
+            centre,
+            at(100, &format!("[{l} {m}] 0 /center morphruns")),
+            "{l} centre"
+        );
+        assert_eq!(
+            centre,
+            at(100, &format!("[{m} {l}] 1 /c morphruns")),
+            "{l} centre, at 1"
+        );
+        // A tag: its centre on the current point.
+        let pinned = at(100, &format!("{before} neg 0 rmoveto {l} showruns"));
+        assert_ne!(pinned, centre, "{l}: the pin is not the centre");
+        for body in [
+            format!("[{l} {l}] 0 /eq morphruns"),
+            format!("[{l} {l}] 1 /eq morphruns"),
+            format!("[{l} {m}] 0 /eq morphruns"),
+            format!("[{m} {l}] 1 << /Align /eq >> morphruns"),
+        ] {
+            assert_eq!(pinned, at(100, &body), "{body}");
+        }
+    }
+}
+
+#[test]
+fn the_run_words_check_their_operands_and_leave_no_dictionary_open() {
+    // Each call fails; afterwards the dictionary stack is as it was and the
+    // operand stack holds what it held plus the word's own operands.
+    let cases = [
+        ("[ [(a)] [(b)] ] 0.5 /eq morphruns", 3, "a tag no line has"),
+        (
+            "[ [(a) [/as /eq (=)]] [(b)] ] 1 << /Align /eq >> morphruns",
+            3,
+            "a tag one line lacks",
+        ),
+        (
+            "[ [(a)] ] (x) morphruns",
+            2,
+            "a progress that is not a number",
+        ),
+        (
+            "[ [(a)] ] 0 << /Arc (x) >> morphruns",
+            3,
+            "an option that is not a number",
+        ),
+        (
+            "[ [(a)] ] 0 3 morphruns",
+            3,
+            "an alignment that is not a name",
+        ),
+        ("[ (a) ] 0 morphruns", 2, "a line that is not a run list"),
+        ("[ [ [/as /k] ] ] 0 morphruns", 2, "a tag with no run"),
+        ("[ [/as /k] ] showruns", 1, "a tag with no run"),
+        (
+            "[ [ (a) /nosuch ] ] showruns",
+            1,
+            "an unknown sign in a group",
+        ),
+        (
+            "[ [/frac (1)] ] runwidth",
+            1,
+            "a fraction with no denominator",
+        ),
+        ("[ [/sup] ] showruns", 1, "a superscript with nothing in it"),
+        ("[ (a) ] 3 showrun", 2, "an index past the end"),
+        ("[ (a) ] -1 runbox", 2, "a negative index"),
+        (
+            "[ (a) ] 0 showrun newpath [ (a) ] showruns",
+            1,
+            "no current point",
+        ),
+        (
+            "newpath [ [(a)] [(b)] ] 0.5 morphruns",
+            2,
+            "no current point",
+        ),
+    ];
+    for (call, operands, why) in cases {
+        let out = eval_at(
+            "",
+            &format!(
+                "{EQ_FONT} 20 60 moveto countdictstack == mark (S) {{ {call} }} stopped == counttomark == countdictstack == cleartomark"
+            ),
+            0.0,
+        );
+        let lines: Vec<&str> = out.lines().collect();
+        assert_eq!(lines.len(), 4, "{why}: {out}");
+        assert_eq!(lines[1], "true", "{why}: `{call}` fails");
+        assert_eq!(
+            lines[0], lines[3],
+            "{why}: the dictionary stack is as it was"
+        );
+        assert_eq!(
+            lines[2],
+            (1 + operands).to_string(),
+            "{why}: only the operands of `{call}` are left"
+        );
+    }
+}
+
+#[test]
+fn a_matched_term_slides_between_its_two_places() {
+    let lines = "/L [ [ (a) (        ) ] [ (        ) (a) ] ] def";
+    let m = |u: f64| eq_ink(lines, &format!("L {u} morphruns")).unwrap();
+    let (a0, a5, a1) = (m(0.0), m(0.5), m(1.0));
+    assert!(a1.0 > a0.0 + 20, "{a0:?} {a1:?}");
+    assert!(
+        a5.0 > a0.0 + 5 && a5.0 + 5 < a1.0,
+        "half way: {a0:?} {a5:?} {a1:?}"
+    );
+    // It is the same term moving, at full strength, not two fading.
+    assert!(a5.4 * 10 > a0.4 * 8, "{a0:?} {a5:?}");
+}
+
+/// Where the ink of `body` falls, the line starting at (20, 60).
+fn eq_ink(setup: &str, body: &str) -> Option<(u32, u32, u32, u32, usize)> {
+    ink_at(&mut eq_movie(setup, 20, body), 0.0)
+}
+
+#[test]
+fn a_term_with_no_partner_leaves_and_a_new_one_arrives() {
+    let lines = "/L [ [ (a) ] [ (            ) (b) ] ] def";
+    let at = |u: f64| eq_ink(lines, &format!("L {u} morphruns"));
+    let (a, b) = (at(0.0).unwrap(), at(1.0).unwrap());
+    assert!(a.2 < b.0, "{a:?} {b:?}");
+    let early = at(0.05).unwrap();
+    assert!(early.2 <= a.2 + 1, "b has not begun to arrive: {early:?}");
+    let late = at(0.95).unwrap();
+    assert!(late.0 + 1 >= b.0, "a has gone: {late:?}");
+    // Half way, a is fading out and b fading in.
+    let mid = at(0.5).unwrap();
+    assert!(mid.0 <= a.0 + 1 && mid.2 + 1 >= b.2, "{mid:?}");
+}
+
+#[test]
+fn the_kth_copy_of_a_term_is_the_kth_copy_unless_a_tag_says_otherwise() {
+    // x + x becomes x. Untagged, the first x stays and the rest leave; with
+    // a tag, the second x is the one that stays, and slides into place.
+    let plain = "/L [ [ [/it (x)] ( + ) [/it (x)] ] [ [/it (x)] ] ] def";
+    let tagged = "/L [ [ [/it (x)] ( + ) [/as /k [/it (x)]] ] [ [/as /k [/it (x)]] ] ] def";
+    let p = eq_ink(plain, "L 0.7 morphruns").unwrap();
+    let t = eq_ink(tagged, "L 0.7 morphruns").unwrap();
+    let home = eq_ink(plain, "L 1 morphruns").unwrap();
+    assert_eq!(
+        (p.0, p.2),
+        (home.0, home.2),
+        "the first x held still: {p:?}"
+    );
+    assert!(
+        t.0 > home.0 + 3,
+        "the second x is on its way: {t:?} {home:?}"
+    );
+}
+
+#[test]
+fn a_chain_of_lines_is_one_progress_number() {
+    let lines = "/L1 [ (2) [/it (x)] ( + ) (6) ( = ) (10) ] def
+                 /L2 [ (2) [/it (x)] ( = ) (10) ( ) /minus ( 6) ] def
+                 /L3 [ [/it (x)] ( = ) (2) ] def
+                 /L [ L1 L2 L3 ] def";
+    let at = |body: &str| pixels(&mut eq_movie(lines, 20, body), 0.0);
+    let shown: Vec<_> = ["L1", "L2", "L3"]
+        .iter()
+        .map(|l| at(&format!("{l} showruns")))
+        .collect();
+    for (k, want) in shown.iter().enumerate() {
+        assert_eq!(&at(&format!("L {k} morphruns")), want, "line {k}");
+    }
+    assert_eq!(at("L 7 morphruns"), shown[2], "held at the last line");
+    for s in ["0.5", "1.5"] {
+        let mid = at(&format!("L {s} morphruns"));
+        assert!(shown.iter().all(|l| *l != mid), "{s} is in between");
+    }
+}
+
 #[test]
 fn a_path_straightens_without_changing_length() {
     let out = eval_at(
@@ -1649,6 +1935,241 @@ fn edges_take_sides_and_waypoints_and_charts_take_marks() {
         "/scene {{ {frame} [ 80 ] << /Grow 0.5 /Stagger 0 /Count true >> bars }} def"
     ));
     assert!(pixels(&mut m, 0.0) != pixels(&mut n, 0.0));
+}
+
+/// The box of pixels in one colour channel only (that channel above 100,
+/// the others below 60), as (x0, y0, x1, y1), rows from the top.
+fn channel_box(f: &Frame, ch: usize) -> Option<(u32, u32, u32, u32)> {
+    let mut b: Option<(u32, u32, u32, u32)> = None;
+    for y in 0..f.height {
+        for x in 0..f.width {
+            let o = ((y * f.width + x) * 4) as usize;
+            let px = &f.premultiplied[o..o + 3];
+            if px[ch] > 100 && (0..3).all(|c| c == ch || px[c] < 60) {
+                b = Some(match b {
+                    None => (x, y, x + 1, y + 1),
+                    Some((x0, y0, x1, y1)) => (x0.min(x), y0.min(y), x1.max(x + 1), y1.max(y + 1)),
+                });
+            }
+        }
+    }
+    b
+}
+
+const PLOT: &str = "[ 20 20 120 80 ] [ 0 10 ] [ 0 100 ] plotframe";
+
+#[test]
+fn a_line_is_read_between_its_points_and_a_tracer_sits_on_it() {
+    let pts = "/pts [ [0 10] [4 50] [10 20] ] def";
+    let at = |x: &str| nums(&eval_at(pts, &format!("{PLOT} pts {x} lineat =="), 0.0))[0];
+    assert_eq!(at("0"), 10.0, "at a data point, the data");
+    assert_eq!(at("4"), 50.0);
+    assert_eq!(at("10"), 20.0);
+    assert!((at("2") - 30.0).abs() < 1e-9, "half-way, half-way");
+    assert!((at("7") - 35.0).abs() < 1e-9);
+    assert_eq!(at("-3"), 10.0, "beyond the ends, the end values");
+    assert_eq!(at("12"), 20.0);
+    // Values spread across the frame, as seriesline takes them.
+    let v = nums(&eval_at(
+        "",
+        &format!("{PLOT} [ 0 40 100 ] 2.5 lineat =="),
+        0.0,
+    ))[0];
+    assert!((v - 20.0).abs() < 1e-9, "{v}");
+    // The tracer's dot is where plotpoint puts the data, at a point and between.
+    for (x, y) in [(4.0, 50.0), (2.0, 30.0), (7.0, 35.0)] {
+        let mut m = load(&format!(
+            "<< /bg [0 0 0] >> usetheme {pts}
+             /scene {{ {PLOT} pts {x} << /Role [1 1 1] /Radius 4 /Drop false /Readout false >> tracer }} def"
+        ));
+        let (x0, y0, x1, y1, _) = ink_at(&mut m, 0.0).unwrap();
+        let want = (20.0 + x / 10.0 * 120.0, 120.0 - (20.0 + y / 100.0 * 80.0));
+        let got = ((x0 + x1) as f64 / 2.0, (y0 + y1) as f64 / 2.0);
+        assert!(
+            (got.0 - want.0).abs() <= 1.0 && (got.1 - want.1).abs() <= 1.0,
+            "tracer at {x}: {got:?}, plotpoint says {want:?}"
+        );
+    }
+    // Along the drawing, it is at the drawn end of `0 u trimpath`.
+    let n = nums(&eval_at(
+        pts,
+        &format!(
+            "{PLOT} pts plotline 0 0.37 trimpath currentpoint == == newpath
+             pts 0.37 .lineend pop aload pop == =="
+        ),
+        0.0,
+    ));
+    assert!(
+        (n[0] - n[2]).abs() < 1e-6 && (n[1] - n[3]).abs() < 1e-6,
+        "{n:?}"
+    );
+    // With a readout, more is drawn.
+    let mut a = load(&format!(
+        "{pts} /scene {{ {PLOT} pts 2 << /Readout false >> tracer }} def"
+    ));
+    let mut b = load(&format!(
+        "{pts} /scene {{ {PLOT} pts 2 << /XDecimals 0 /Suffix (%) >> tracer }} def"
+    ));
+    assert!(ink_at(&mut b, 0.0).unwrap().4 > ink_at(&mut a, 0.0).unwrap().4);
+}
+
+#[test]
+fn names_at_line_ends_are_kept_apart_in_order() {
+    // Values moved apart: in order, at least the gap, the least they can be.
+    let n = nums(&eval_at("", "[ 50.4 50 90 ] 10 0 100 .spread ==", 0.0));
+    assert!(
+        (n[0] - 55.2).abs() < 1e-9 && (n[1] - 45.2).abs() < 1e-9,
+        "the close pair is centred on its mean: {n:?}"
+    );
+    assert_eq!(n[2], 90.0, "one that was clear does not move");
+    let n = nums(&eval_at("", "[ 99 98 ] 10 0 100 .spread ==", 0.0));
+    assert!(
+        (n[0] - 100.0).abs() < 1e-9 && (n[1] - 90.0).abs() < 1e-9,
+        "kept inside: {n:?}"
+    );
+    // Continuous while the order holds: a small change in the values, the
+    // same way round, moves the labels a little.
+    let a = nums(&eval_at("", "[ 50 50.01 ] 10 0 100 .spread ==", 0.0));
+    let b = nums(&eval_at("", "[ 50 50.02 ] 10 0 100 .spread ==", 0.0));
+    assert!((a[0] - b[0]).abs() < 0.02 && (a[1] - b[1]).abs() < 0.02);
+
+    // Two lines that end one unit apart: two names, right of the frame,
+    // in the lines' order, not overlapping.
+    let series = "/s [ [ [0 0] [10 50] ] [ [0 100] [10 51] ] ] def
+                  /o << /Roles [ [1 0 0] [0 1 0] ] /Size 12 /Leader false >> def";
+    let mut m = load(&format!(
+        "{series} /scene {{ {PLOT} s [ (ab) (cd) ] o dup /Draw 0 1 ramp put serieslabels }} def"
+    ));
+    let f = m.render_at(0.4).unwrap();
+    assert!(
+        channel_box(&f, 0).is_none() && channel_box(&f, 1).is_none(),
+        "not yet: the lines are not finished"
+    );
+    let f = m.render_at(2.0).unwrap();
+    let (r, g) = (channel_box(&f, 0).unwrap(), channel_box(&f, 1).unwrap());
+    assert!(r.0 >= 140 && g.0 >= 140, "right of the frame: {r:?} {g:?}");
+    assert!(
+        g.3 <= r.1,
+        "the higher line's name above the lower's, clear of it: {g:?} {r:?}"
+    );
+    let end = 120.0 - (20.0 + 0.505 * 80.0);
+    let mid = (g.1 + r.3) as f64 / 2.0;
+    assert!((mid - end).abs() < 3.0, "centred on the ends: {mid} {end}");
+    // Riding: the name travels with the drawn end.
+    let mut m = load(&format!(
+        "{series} /scene {{ {PLOT} s [ (ab) (cd) ] o dup /Draw 0.5 put dup /Ride true put serieslabels }} def"
+    ));
+    let f = m.render_at(0.0).unwrap();
+    let r = channel_box(&f, 0).unwrap();
+    assert!(r.0 > 80 && r.2 < 144, "half-way along: {r:?}");
+}
+
+#[test]
+fn a_line_of_no_length_drawn_in_part_is_its_start() {
+    // A line of one point, or of repeated points, has no length: a part of
+    // it drawn is its start, not an error.
+    for expr in [
+        "[[[4 50]]] [(a)] << /Draw 0.5 >> serieslabels",
+        "[[[4 50] [4 50] [4 50]]] [(a)] << /Draw 0.5 /Ride true >> serieslabels",
+        "[[4 50]] 0.5 << /Along true /Draw 0 >> tracer",
+        "[[4 50]] 0.5 << /Along true >> tracer",
+        "[[4 50] [4 50]] 0.5 << /Along true >> tracer",
+    ] {
+        assert_eq!(
+            eval_at("", &format!("{PLOT} {expr} (ok) ="), 0.0),
+            "ok",
+            "{expr}"
+        );
+    }
+}
+
+#[test]
+fn empty_lines_are_skipped() {
+    for expr in [
+        "[[]] [(a)] << /Draw 0 >> serieslabels",
+        "[[] [[0 0] [10 50]]] [(a) (b)] << >> serieslabels",
+        "[] 0 << /Draw 0 >> tracer",
+        "[] 3 << >> tracer",
+    ] {
+        assert_eq!(
+            eval_at("", &format!("{PLOT} {expr} (ok) ="), 0.0),
+            "ok",
+            "{expr}"
+        );
+    }
+}
+
+#[test]
+fn a_chart_word_that_fails_leaves_no_dictionary_open_and_the_graphics_state_alone() {
+    // A word that fails ends the dictionaries it began and leaves the
+    // graphics state as it was, so a caller that stops the error can go on.
+    for expr in [
+        "[[[0 0] [10 50]]] [] << >> serieslabels",
+        "[[[0 0] [10 50]]] [ 7 ] << >> serieslabels",
+        "[[[0 0] [10 50]]] [(a)] << /Roles /nosuch >> serieslabels",
+        "[[0 0] [10 50]] 5 << /Role /nosuch >> tracer",
+        "[[0 0] [10 50]] 5 << /XDecimals (x) >> tracer",
+        "[] 2 lineat",
+        "[[0 0] [5 10] [3 4]] 4 lineat",
+    ] {
+        let n = nums(&eval_at(
+            "",
+            &format!(
+                "{PLOT} 0.2 setalpha countdictstack == {{ {expr} }} stopped == countdictstack == currentalpha == clear"
+            ),
+            0.0,
+        ));
+        assert_eq!(n[0], n[1], "{expr}: dictionaries left open: {n:?}");
+        assert!((n[2] - 0.2).abs() < 1e-6, "{expr}: alpha changed: {n:?}");
+    }
+}
+
+#[test]
+fn lineat_reads_tiny_intervals_and_refuses_what_it_cannot_read() {
+    // lineat's contract: no points, or x going back, is a rangecheck.
+    for pts in ["[]", "[[0 0] [5 10] [3 4]]"] {
+        assert_eq!(
+            eval_at(
+                "",
+                &format!("{{ {pts} 2 lineat }} stopped pop $error /errorname get == clear"),
+                0.0
+            ),
+            "/rangecheck"
+        );
+    }
+    // A tiny interval is still an interval.
+    let v = nums(&eval_at(
+        "",
+        "[[0 0] [0.0000000000001 10]] 0.00000000000005 lineat ==",
+        0.0,
+    ))[0];
+    assert!((v - 5.0).abs() < 1e-6, "{v}");
+}
+
+#[test]
+fn too_many_names_for_the_range_close_up_inside_it() {
+    // Too many names for the range: the gap shrinks evenly, inside it.
+    let n = nums(&eval_at("", "[ 0 1 2 3 ] 10 0 20 .spread ==", 0.0));
+    for (got, want) in n.iter().zip([0.0, 20.0 / 3.0, 40.0 / 3.0, 20.0]) {
+        assert!((got - want).abs() < 1e-9, "{n:?}");
+    }
+}
+
+#[test]
+fn a_line_of_one_point_drawn_up_to_x_is_complete_once_x_reaches_it() {
+    let p = |x: &str| {
+        nums(&eval_at(
+            "",
+            &format!("{PLOT} [[4 50]] << /X {x} >> .lineend == pop"),
+            0.0,
+        ))[0]
+    };
+    assert_eq!((p("3"), p("4"), p("10")), (0.0, 1.0, 1.0));
+    let mut m = load(&format!(
+        "/scene {{ {PLOT} [[[4 50]]] [(a)] << /X 10 /Roles [[1 0 0]] /Size 12 >> serieslabels }} def"
+    ));
+    let f = m.render_at(0.0).unwrap();
+    assert!(channel_box(&f, 0).is_some(), "its name is shown");
 }
 
 #[test]
@@ -1862,6 +2383,210 @@ fn a_pixel_font_falls_back_and_the_nine_row_font_has_descenders() {
     let low = |v: Vec<f64>| v.iter().any(|m| (*m as u32) & 0x180 != 0);
     assert!(!low(widths("7", 103)));
     assert!(low(widths("9", 103)));
+}
+
+/// The name pkpixel gives the face that PSCat's `lib/fonts/{file}.ps` defines
+/// first: the tests read names from pkpixel's table, so a rename is one line.
+fn face(file: &str) -> String {
+    let path = format!("lib/fonts/{file}.ps");
+    psanim::pixel_faces()
+        .into_iter()
+        .find(|(_, f)| *f == path)
+        .map(|(n, _)| format!("/{n}"))
+        .unwrap_or_else(|| panic!("no face for {path} in pkpixel's table"))
+}
+
+/// The columns a glyph's rows (top first, '#' lit) make, padded to `width`.
+fn columns_of(rows: &[String], width: usize) -> Vec<u64> {
+    (0..width)
+        .map(|c| {
+            rows.iter()
+                .enumerate()
+                .filter(|(_, r)| r.as_bytes().get(c) == Some(&b'#'))
+                .map(|(i, _)| 1u64 << i)
+                .sum()
+        })
+        .collect()
+}
+
+#[test]
+fn every_glyph_of_every_pixel_face_converts_to_its_bitmap() {
+    let faces = psanim::pixel_faces();
+    assert_eq!(faces.len(), 6, "pkpixel's table: {faces:?}");
+    for (name, _) in &faces {
+        // For each printable code: the face's rows (through its Encoding), then
+        // the columns pixelfont made; the face's cell when it is monospaced.
+        let out = eval_at(
+            &format!("/F /{name} pixelface def /P /{name} pixelfont def"),
+            "F /Proportional known { F /Proportional get } { false } ifelse
+             { (cell 0\n) print } { (cell ) print F /Cell get 1 sub == } ifelse
+             32 1 126 { /cd exch def
+               (R) print F /Bitmaps get F /Encoding get cd get get { (|) print print } forall (\n) print
+               (C) print P cd pixelcols { ( ) print 20 string cvs print } forall (\n) print
+             } for",
+            0.0,
+        );
+        let mut lines = out.lines();
+        let cell: usize = lines
+            .next()
+            .and_then(|l| l.strip_prefix("cell "))
+            .and_then(|n| n.trim().parse().ok())
+            .unwrap_or_else(|| panic!("/{name}: {out}"));
+        let mut code = 32;
+        while let (Some(r), Some(c)) = (lines.next(), lines.next()) {
+            let rows: Vec<String> = r
+                .strip_prefix('R')
+                .unwrap()
+                .split('|')
+                .skip(1)
+                .map(String::from)
+                .collect();
+            let got: Vec<u64> = c
+                .strip_prefix('C')
+                .unwrap()
+                .split_whitespace()
+                .map(|n| n.parse().unwrap())
+                .collect();
+            let natural = rows.first().map_or(1, |r| r.len().max(1));
+            let width = if cell > 0 { natural.max(cell) } else { natural };
+            assert_eq!(
+                got,
+                columns_of(&rows, width),
+                "/{name} code {code}: rows {rows:?}"
+            );
+            if code == 32 {
+                // the space: blank, and as wide as the face says
+                assert!(
+                    got.iter().all(|m| *m == 0) && !got.is_empty(),
+                    "/{name} space {got:?}"
+                );
+                if cell > 0 {
+                    assert_eq!(
+                        got.len(),
+                        cell,
+                        "/{name}: a monospaced space fills the cell"
+                    );
+                }
+            }
+            code += 1;
+        }
+        assert_eq!(code, 127, "/{name}: every printable code");
+    }
+}
+
+#[test]
+fn a_pscat_pixel_face_gives_its_bitmaps_as_columns() {
+    let (diode7, diode5) = (face("diode7"), face("diode5"));
+    let (phosphor, pinpoint) = (face("phosphor"), face("pinpoint"));
+    // Diode7's A: a crossbar on row 4 (pkpixel's is on row 3), five lamps wide.
+    let out = eval_at(
+        "",
+        &format!("{diode7} pixelfont 65 pixelcols {{ == }} forall"),
+        0.0,
+    );
+    assert_eq!(nums(&out), vec![126.0, 17.0, 17.0, 17.0, 126.0], "{out}");
+    let out = eval_at("", "7 pixelfont 65 pixelcols { == } forall", 0.0);
+    assert_eq!(nums(&out), vec![126.0, 9.0, 9.0, 9.0, 126.0], "{out}");
+    // Heights by /Rows.
+    let out = eval_at(
+        "",
+        &format!(
+            "[{phosphor} {pinpoint} {diode7} {diode5}] {{ pixelfont /Rows get == }} forall 9 pixelfont /Rows get =="
+        ),
+        0.0,
+    );
+    assert_eq!(nums(&out), vec![13.0, 9.0, 8.0, 5.0, 9.0], "{out}");
+    let out = eval_at(
+        "",
+        &format!("{phosphor} pixelfont (Hi) pixeltext length =="),
+        0.0,
+    );
+    assert_eq!(nums(&out), vec![15.0], "{out}");
+    // Diode5 has no lower case: 'a' is 'A'. The faces borrow psanim's degree sign.
+    let cols = |e: &str| eval_at("", &format!("{e} {{ == }} forall"), 0.0);
+    assert_eq!(
+        cols(&format!("{diode5} pixelfont 97 pixelcols")),
+        cols(&format!("{diode5} pixelfont 65 pixelcols"))
+    );
+    let degree = cols(&format!("{diode7} pixelfont 176 pixelcols"));
+    assert!(!degree.is_empty());
+    assert_ne!(degree, cols(&format!("{diode7} pixelfont 63 pixelcols")));
+    // pixelface loads the face's file; any other font that exists is findfont.
+    let out = eval_at("", &format!("{phosphor} pixelface /Bitmaps known =="), 0.0);
+    assert_eq!(out, "true");
+    let out = eval_at("", "/Courier pixelface /FontName get ==", 0.0);
+    assert_eq!(out, "/Courier");
+}
+
+#[test]
+fn a_substitute_cached_by_findfont_does_not_stop_the_face_loading() {
+    // findfont on a face never loaded caches a substitute under its name.
+    let phosphor = face("phosphor");
+    let out = eval_at(
+        "",
+        &format!("{phosphor} findfont pop {phosphor} pixelface /Bitmaps known =="),
+        0.0,
+    );
+    assert_eq!(out, "true");
+}
+
+#[test]
+fn a_bad_face_is_an_error_that_names_the_faces_and_leaves_no_dictionary_open() {
+    for bad in [
+        "/NoSuchFace pixelfont",
+        "/Courier pixelfont",
+        "/Courrier pixelface",
+        "/Courier /Courier << >> pixelvariant",
+    ] {
+        let out = eval_at(
+            "",
+            &format!(
+                "countdictstack /c0 exch def mark {{ {bad} }} stopped /ok exch def cleartomark ok == countdictstack c0 sub =="
+            ),
+            0.0,
+        );
+        assert_eq!(nums(&out), vec![0.0], "{bad}: {out}");
+        assert!(out.starts_with("true"), "{bad} must fail: {out}");
+    }
+    // Uncaught, the error says which names it takes.
+    let mut m = load("/scene { /Phosfor pixelface pop } def");
+    let e = m.render_at(0.0).expect_err("an error").to_string();
+    for (name, _) in psanim::pixel_faces() {
+        assert!(e.contains(&format!("/{name}")), "{e}");
+    }
+}
+
+#[test]
+fn loading_a_face_defines_nothing_in_the_movies_dictionaries() {
+    // The font files define pf-variant and a ...Dict; pkpixel runs them privately.
+    let all: String = psanim::pixel_faces()
+        .iter()
+        .map(|(n, _)| format!("/{n} pixelface pop "))
+        .collect();
+    let out = eval_at(
+        "/pf-variant 123 def /PhosphorDict 7 def /Diode5Dict (mine) def",
+        &format!("{all} /pf-variant load == PhosphorDict == Diode5Dict == /PinpointDict where =="),
+        0.0,
+    );
+    assert_eq!(
+        out.split_whitespace().collect::<Vec<_>>(),
+        ["123", "7", "(mine)", "false"],
+        "{out}"
+    );
+    // The dials are still there, through pixelvariant.
+    let out = eval_at(
+        &format!(
+            "/Round {} << /DotShape /round >> pixelvariant",
+            face("phosphor")
+        ),
+        "/Round findfont dup /DotShape get == /Bitmaps known ==",
+        0.0,
+    );
+    assert_eq!(
+        out.split_whitespace().collect::<Vec<_>>(),
+        ["/round", "true"],
+        "{out}"
+    );
 }
 
 #[test]

@@ -2,6 +2,17 @@
 
 use psanim::{CATALOG, Movie, Options, catalog};
 
+/// The name pkpixel's table gives the face in PSCat's `lib/fonts/{file}.ps`
+/// (the first, if the file defines several), without the slash.
+fn face(file: &str) -> &'static str {
+    let path = format!("lib/fonts/{file}.ps");
+    psanim::pixel_faces()
+        .into_iter()
+        .find(|(_, f)| *f == path)
+        .map(|(n, _)| n)
+        .unwrap_or_else(|| panic!("no face for {path} in pkpixel's table"))
+}
+
 fn has_ink(px: &[u8]) -> bool {
     px.chunks_exact(4).any(|p| p[3] > 0)
 }
@@ -463,6 +474,24 @@ fn the_pixel_font_sets_text_exactly() {
         still("A", 7),
         [
             ".###.", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"
+        ]
+        .map(|r| format!(".{r}."))
+    );
+    // /Font /Diode7 sets it in PSCat's LED face: its A has the crossbar a row lower.
+    let diode = led_rows(
+        7,
+        7,
+        &[
+            ("Text", text("A")),
+            ("Effect", text("static")),
+            ("Font", text(face("diode7"))),
+        ],
+        0.1,
+    );
+    assert_eq!(
+        diode,
+        [
+            ".###.", "#...#", "#...#", "#...#", "#####", "#...#", "#...#"
         ]
         .map(|r| format!(".{r}."))
     );

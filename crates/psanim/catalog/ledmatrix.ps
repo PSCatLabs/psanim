@@ -49,7 +49,7 @@
 /Repeat true param dup type /booleantype ne { 0 ne } if /dorepeat exch def  % start the list again at the end
 /Cell null param dup null ne /hascell exch def /cellp exch def                                    % a procedure { col row -- level }: a pattern drawn under the text
 /text text0 null eq { hascell { () } { (PSANIM LED MATRIX) } ifelse } { text0 } ifelse def
-/Font 0 param cvi /fontov exch def                                  % rows of the pixel font, 5 or 7 (0: by the grid)
+/Font 0 param dup type /stringtype eq { dup 0 get 57 le { cvi } { cvn } ifelse } if dup type /nametype ne { cvi } if /fontov exch def % rows of the pixel font, 5 or 7 (0: by the grid), or a PSCat pixel face: /Diode7 or /Diode5
 /Clock [9 41] param aload pop cvi /cmin exch def cvi /chour exch def % the time /time shows when the sign starts: hour minute
 /ClockRate 4 param /crate exch def                                 % seconds for the /time clock to advance a minute
 /Temp 68 param cvi /temp exch def                                   % degrees for /temp
@@ -61,9 +61,16 @@
 % the other pixel-font entries): 7 rows high for grids of 7 rows or more and 5 for
 % lower grids (lower case is set as capitals there). A character is a few column
 % bit masks, and a picture is the same data.
+% /Font /Diode7 sets it from PSCat's LED face instead (its lower case hangs a row
+% below the baseline, which a 7 row grid leaves off).
 /pkpixel use
-/fh fontov 0 gt { fontov } { nr0 ovr 0 gt { pop ovr } if 7 ge { 7 } { 5 } ifelse } ifelse def
-/fnt fh 7 ge { 7 } { 5 } ifelse pixelfont def
+fontov type /nametype eq {
+  /fnt fontov pixelfont def
+  /fh fnt /Rows get def
+} {
+  /fh fontov 0 gt { fontov } { nr0 ovr 0 gt { pop ovr } if 7 ge { 7 } { 5 } ifelse } ifelse def
+  /fnt fh 7 ge { 7 } { 5 } ifelse pixelfont def
+} ifelse
 
 % ---- the grid, the items and their timeline: before the declaration -------------
 /ncols ovc 0 gt { ovc } { nc0 } ifelse def
