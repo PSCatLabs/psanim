@@ -224,8 +224,8 @@ fn content_past_a_limit_fails_with_a_message_naming_the_field() {
         ),
         (
             "process.ps",
-            "/loop [ 1 1 (again) (the same step) ]",
-            "/loop: from and to must be different steps",
+            "/pathback [ 1 1 (again) (the same step) ]",
+            "/pathback: from and to must be different steps",
         ),
         (
             "process.ps",
@@ -237,6 +237,17 @@ fn content_past_a_limit_fails_with_a_message_naming_the_field() {
             "/summary (a closing line that goes on and on, far past the width of the frame and then further still, until no legible size will hold it on one line)",
             "/summary is too long for one line",
         ),
+        (
+            "process.ps",
+            "/why (a reason that goes on and on, far past the width of the column beside the steps and onto a second line, \
+             and then a third line, which this template does not allow)",
+            "/why is too long for two lines beside the steps",
+        ),
+        (
+            "process.ps",
+            "/pathback [ 2 0 (back) (a line for the path back that goes on and on, far past the width of the frame and then further still, until no legible size will hold it) ]",
+            "/pathback: what happens is too long for one line",
+        ),
     ];
     for (template, params, message) in cases {
         let e = refused(template, params);
@@ -245,4 +256,282 @@ fn content_past_a_limit_fails_with_a_message_naming_the_field() {
             "{template} with {params}: expected `{message}`, got:\n{e}"
         );
     }
+}
+
+/// Load `template` placed as a component with the given /Params.
+fn with_params(template: &str, params: &str) -> Result<Movie, String> {
+    load(&format!(
+        "/tpl ({template}) component\n/film /tpl << /Params << {params} >> >> instance\n\
+         << /Size [640 360] /Duration /film componentduration >> animation\n\
+         /scene {{ /film << >> place }} def\n"
+    ))
+}
+
+fn template_source(template: &str) -> String {
+    std::fs::read_to_string(dir().join(template)).unwrap()
+}
+
+/// The template run on its own, with `extra` put just before the line
+/// that ends its CONTENT block: what an author who edits the copy gets.
+fn standalone(template: &str, extra: &str) -> Result<Movie, String> {
+    let source = template_source(template);
+    let marker = "% ===================== nothing below here needs to change";
+    assert!(
+        source.contains(marker),
+        "{template}: no end of CONTENT block"
+    );
+    load(&source.replacen(marker, &format!("{extra}\n{marker}"), 1))
+}
+
+fn expect_refused(result: Result<Movie, String>, what: &str, message: &str) {
+    match result {
+        Ok(_) => panic!("{what}: accepted"),
+        Err(e) => assert!(
+            e.contains(&format!("content: {message}")),
+            "{what}: expected `content: {message}`, got:\n{e}"
+        ),
+    }
+}
+
+const THEMES: [&str; 6] = [
+    "/paper",
+    "/midnight",
+    "/dusk",
+    "/blueprint",
+    "/poster",
+    "/terminal",
+];
+
+#[test]
+fn a_film_longer_than_90_seconds_is_refused() {
+    let many = "a ".repeat(75);
+    let notes: String = (0..5)
+        .map(|_| format!("[ 0 (little snail) (image) ({many}) ] "))
+        .collect();
+    expect_refused(
+        with_params("poem.ps", &format!("/notes [ {notes}]")),
+        "five notes of 75 words",
+        "the film would run",
+    );
+    let lines: String = (0..8)
+        .map(|i| format!("[ (s{i}) ({}) ] ", "a ".repeat(30)))
+        .collect();
+    expect_refused(
+        with_params(
+            "process.ps",
+            &format!(
+                "/steps [ {lines}] /why ({many}) /summary ({})",
+                "a ".repeat(30)
+            ),
+        ),
+        "eight steps of 30 words",
+        "the film would run",
+    );
+}
+
+#[test]
+fn an_unbroken_word_wider_than_the_card_is_refused() {
+    let w = |n| "W".repeat(n);
+    expect_refused(
+        with_params("poem.ps", &format!("/reading ({})", w(200))),
+        "a 200-W reading",
+        "/reading has a word too long",
+    );
+    expect_refused(
+        with_params(
+            "poem.ps",
+            &format!("/notes [ [ 0 (little snail) (image) ({}) ] ]", w(160)),
+        ),
+        "a 160-W note",
+        "note 0: what it does has a word too long",
+    );
+}
+
+/// The names a template reads from /Params, from its `/x /x x param def` lines.
+fn content_fields(template: &str) -> Vec<String> {
+    template_source(template)
+        .lines()
+        .filter_map(|l| {
+            let l = l.trim();
+            let name = l.strip_prefix('/')?.split_whitespace().next()?;
+            (l.ends_with(" param def") && l.starts_with(&format!("/{name} /{name} {name} param")))
+                .then(|| name.to_string())
+        })
+        .collect()
+}
+
+#[test]
+fn no_content_field_is_a_postscript_operator_or_a_psanim_word() {
+    for template in ["poem.ps", "process.ps"] {
+        let fields = content_fields(template);
+        assert!(fields.len() >= 5, "{template}: found only {fields:?}");
+        for f in &fields {
+            assert!(
+                !psanim::api::API.iter().any(|e| e.name == f.as_str()),
+                "{template}: content field /{f} is a psanim word"
+            );
+            let probe = format!(
+                "systemdict /{f} known {{ /{f}-is-an-operator undefined }} if\n\
+                 << /Size [64 36] /Duration 1 >> animation /scene {{ }} def\n"
+            );
+            if let Err(e) = load(&probe) {
+                panic!("{template}: content field /{f} is a PostScript operator: {e}");
+            }
+        }
+    }
+}
+
+#[test]
+fn the_library_words_still_work_after_the_content_block() {
+    // A content field that shadowed `loop` broke every library helper
+    // that loops, such as the width of a line of emoji text.
+    for template in ["poem.ps", "process.ps"] {
+        if let Err(e) = standalone(template, "") {
+            panic!("{template}: {e}");
+        }
+        let source = template_source(template) + "\n(hello) emojitextwidth pop\n";
+        if let Err(e) = load(&source) {
+            panic!("{template} with a library word appended: {e}");
+        }
+    }
+}
+
+#[test]
+fn empty_text_is_refused_by_name() {
+    let cases: &[(&str, &str, &str)] = &[
+        (
+            "poem.ps",
+            "/poem [ () (x) ] /notes [ [ 1 (x) (image) (why) ] ]",
+            "line 0 of /poem must be text",
+        ),
+        (
+            "poem.ps",
+            "/notes [ [ 0 () (image) (why) ] ]",
+            "note 0: the words must be text",
+        ),
+        (
+            "poem.ps",
+            "/notes [ [ 0 (snail) (image) () ] ]",
+            "note 0: what it does must be text",
+        ),
+        ("poem.ps", "/reading ( )", "/reading must be text"),
+        (
+            "process.ps",
+            "/steps [ [(a) ()] [(b) (x)] [(c) (x)] ] /key 1 /pathback [ ]",
+            "step 0: what happens must be text",
+        ),
+        (
+            "process.ps",
+            "/steps [ [() (x)] [(b) (x)] [(c) (x)] ] /key 1 /pathback [ ]",
+            "step 0: the name must be text",
+        ),
+        ("process.ps", "/why ()", "/why must be text"),
+        ("process.ps", "/summary ()", "/summary must be text"),
+        (
+            "process.ps",
+            "/pathback [ 2 0 () (x) ]",
+            "/pathback: the label must be text",
+        ),
+    ];
+    for (template, params, message) in cases {
+        expect_refused(
+            with_params(template, params),
+            &format!("{template} {params}"),
+            message,
+        );
+    }
+}
+
+#[test]
+fn reading_time_counts_words_not_spaces() {
+    let spaced = |n: usize| format!("A{}B", " ".repeat(n));
+    // The card wraps a long run of spaces away; a line in the foot keeps
+    // them, so fewer there.
+    let pairs = [
+        ("poem.ps", "/reading", 198),
+        ("process.ps", "/summary", 40),
+        ("process.ps", "/why", 40),
+    ];
+    for (template, field, n) in pairs {
+        let d = |text: &str| {
+            with_params(template, &format!("{field} ({text})"))
+                .unwrap_or_else(|e| panic!("{template} {field}: {e}"))
+                .meta()
+                .duration
+        };
+        let (a, b) = (d(&spaced(n)), d("A B"));
+        assert!(
+            (a - b).abs() < 0.05,
+            "{template} {field}: 2 words separated by {n} spaces give {a} s, \"A B\" gives {b} s"
+        );
+    }
+}
+
+#[test]
+fn an_overlong_path_back_label_is_blamed_on_the_label() {
+    expect_refused(
+        with_params(
+            "process.ps",
+            "/pathback [ 2 0 (Wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww) (Back again.) ]",
+        ),
+        "a 38-character unbroken label",
+        "/pathback: the label is too long",
+    );
+    // No message ever offers a limit below one character.
+    for template in ["poem.ps", "process.ps"] {
+        for params in [
+            "/heading (WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW)",
+            "/summary (WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW)",
+        ] {
+            if let Err(e) = with_params(template, params) {
+                assert!(!e.contains("about -"), "{template} {params}: {e}");
+            }
+        }
+    }
+}
+
+#[test]
+fn the_default_content_plays_under_every_theme() {
+    for template in ["poem.ps", "process.ps"] {
+        for theme in THEMES {
+            if let Err(e) = with_params(template, &format!("/look {theme}")) {
+                panic!("{template} under {theme}: {e}");
+            }
+        }
+    }
+}
+
+#[test]
+fn every_film_holds_still_for_its_last_two_and_a_half_seconds() {
+    let mut failures = Vec::new();
+    for p in files("poem").into_iter().chain(files("process")) {
+        let name = p.file_name().unwrap().to_string_lossy().into_owned();
+        let mut m = load(&std::fs::read_to_string(&p).unwrap()).unwrap();
+        let meta = m.meta().clone();
+        let last = meta.frames - 1;
+        let first = last - (2.5 * meta.fps).round() as u64;
+        let end = pixels(&mut m, last).unwrap();
+        for k in [first, (first + last) / 2, last - 1] {
+            if pixels(&mut m, k).unwrap() != end {
+                failures.push(format!(
+                    "{name}: frame {k} differs from the last ({last}); the hold is shorter than 2.5 s"
+                ));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn a_template_edited_in_place_refuses_bad_content() {
+    expect_refused(
+        standalone("poem.ps", "/notes [ ] def"),
+        "poem.ps with no notes",
+        "/notes has 0 notes; this template takes 1 to 5",
+    );
+    expect_refused(
+        standalone("process.ps", "/key 99 def"),
+        "process.ps with /key 99",
+        "/key must be a step number from 0 to",
+    );
 }
