@@ -1699,6 +1699,24 @@ pub const API: &[ApiEntry] = &[
     ),
     e(
         "pkchart",
+        "serieslabels",
+        "[ pts ... ] [ (name) ... ] opts  serieslabels  -",
+        "Name each line at its end, in its colour, so no legend is needed: the names are moved apart where lines end close together (in order, as little as possible, with a short leader when one is moved) and kept within the frame's height; when more names end together than fit in it, the gap between them shrinks evenly so they stay inside (and overlap). Names slide as the ends move, as long as the ends keep their order; where two ends cross, their names trade places. Each pts is what `plotline` takes ([ [x y] ... ]) or `seriesline` takes ([ y ... ]). Line i is in role i of /Roles: stroke it with `chartroles i get ink`. opts: << /Roles chartroles /Draw u (or [ u ... ], one per line: how much is drawn, the number given to `0 u trimpath`) /X x (instead: the lines are drawn up to data x, e.g. clipped there) /Ride false (true: each name rides its line's drawn end; otherwise it fades in at the end as the line completes) /Size 3 vmin /Face /title /Gap (between baselines, 1.2 x /Size) /Pad (from the line's end, 0.7 x /Size) /Leader true >>. An empty series is skipped. Names are written right of the frame's box: inset the box to leave room for them.",
+    ),
+    e(
+        "pkchart",
+        "tracer",
+        "pts x opts  tracer  -",
+        "A point riding a line at data x, read between the data points: a dot on the line, a dashed drop to the x axis and its value beside it (to the left near the frame's right edge). Tween x to move it. opts: << /Along false (true: x is the drawn fraction, as for `0 u trimpath`, so the tracer leads the pen) /Role /accent /Radius 0.9 vmin /Size 3 vmin /Draw u (brought in, 0..1) /Decimals 0 /Prefix () /Suffix () (the value, as `fmtnum` writes it) /XDecimals n (write x before the value, as `fmtfixed` does: a year; the value is then the line's at x as written, so the pair shown is a true reading while the dot glides) /Drop true /Readout true /Plate true (a backing in /bg under the readout, so it reads over lines) >>. An empty series draws nothing.",
+    ),
+    e(
+        "pkchart",
+        "lineat",
+        "pts x  lineat  y",
+        "The line through the points read at data x: straight between data points, the end value beyond either end. pts as for `plotline` or `seriesline`; the points must be in increasing x (equal x is a step), and no points, or x going back, is a rangecheck. For a readout of your own: `pts year lineat 1 fmtnum show`.",
+    ),
+    e(
+        "pkchart",
         "chartroles",
         "-  chartroles  [ /role ... ]",
         "The roles marks cycle through when none are given.",
