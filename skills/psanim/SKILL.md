@@ -148,10 +148,10 @@ is too low: an entrance is three tweens, a diagram is arithmetic. The
 | (core) | `spec { ... } particles`: sparks, fireworks, confetti, snow; bursts and streams under gravity, drag and wind, every particle a function of time | [patterns.md](references/patterns.md#particles-without-state) |
 | (core) | `cellgrid`, `cellsteps`, `cellrows`, `cellcolors`: cellular automata (Life, Brian's Brain, Rule 30) run natively, in a pure movie; the `/automaton` catalog entry | [modes.md](references/modes.md#cellular-automata-a-simulation-that-stays-pure) |
 | (core) | `playlist`, `playlistduration`, `weektime`: a screen that cycles through scenes for ever, with transitions, a schedule and a safe area | [signage.md](references/signage.md) |
-| `pktype` | text in boxes, wrapping, `kinetic` type, counters, captions, end credits | [type.md](references/type.md) |
+| `pktype` | text in boxes, wrapping, `kinetic` type, counters, captions, end credits, lines of maths and one equation becoming the next (`morphruns`) | [type.md](references/type.md) |
 | `pkdiagram` | `node`, `edge` (with flowing pulses), `group`, `note`, `circled` | [explain.md](references/explain.md) |
 | `pkcode` | `codeblock` (typing, focus), `codediff` | [explain.md](references/explain.md) |
-| `pkchart` | `plotframe`, `plotaxes`, `bars`, `hbars`, `plotline`, `donut`; dashboards: `stattile`, `dial`, `horizon`, `sparkline`, `heatmap`, `statuslight` | [explain.md](references/explain.md) |
+| `pkchart` | `plotframe`, `plotaxes`, `bars`, `hbars`, `plotline`, `serieslabels`, `tracer`, `donut`; dashboards: `stattile`, `dial`, `horizon`, `sparkline`, `heatmap`, `statuslight` | [explain.md](references/explain.md) |
 | `pkink` | tapered strokes, `revealalong`, `around`, gradients | [ink.md](references/ink.md) |
 | `pkfigure` | a rig for characters that dance: `dancepose` from a beat, `squashed`, `limb`, `eye`, `mouth`, `spring` | [figure.md](references/figure.md) |
 | `pkpixel` | a pixel font for dot-matrix work: `7 pixelfont`, then `pixelcols` and `pixeltext` give a character's or a line's dot columns as bit masks; the LED matrix, LED sign and dot-matrix printer entries share it. `/Phosphor pixelface` loads one of PSCat's pixel faces (terminal, printer, LED) | [type.md](references/type.md#pixel-faces-terminals-printers-led-signs), [vocabulary-libraries.md](references/vocabulary-libraries.md) |
@@ -243,7 +243,7 @@ number still passes `check`). So:
 | animate a number | `a b /cubic-out tween v0 v1 between` (inside a step, a and b count from the step's start) |
 | type that moves | `(TEXT) box /c placetext (TEXT) /glyphs 0.05 /mask-up kinetic` |
 | a diagram | `(label) box /surface node`, `boxA boxB << /Draw u /Label (x) /Pulse u >> edge` |
-| a chart | `box [x0 x1] [y0 y1] plotframe`, `<< >> plotaxes`, `[v ...] << /Grow u >> bars`, `pts plotline 0 u trimpath stroke`, `x y << /Label (x) >> plotmark` |
+| a chart | `box [x0 x1] [y0 y1] plotframe`, `<< >> plotaxes`, `[v ...] << /Grow u >> bars`, `pts plotline 0 u trimpath stroke`, `lines names << /Draw u >> serieslabels`, `pts x << >> tracer`, `x y << /Label (x) >> plotmark` |
 | a dashboard | catalog panels `/stat` `/gauge` `/horizon` `/timeseries` `/status` `/counter` reading `/Signal /cpu` from `--signals day.csv`; by hand `v box << /Thresholds [/good 70 /warn 90 /bad] >> stattile`, `/cpu 3 60 signalseries` |
 | code | `/src (...) /rust codetokens def` in setup, `src box << /Reveal u /Focus [2] >> codeblock` |
 | a sign | `/arrow sym`, `/neq sym`, `/pi sym` (a non-ASCII character in a string is a silent blank) |
@@ -273,9 +273,10 @@ From blind reviews of finished films, the defects that recur:
 - **An ending that is still moving, or already gone.** End on the
   finished picture, everything arrived and nothing leaving, for at least
   a second unless the brief says otherwise. Look at the last frame.
-- **A line with no name.** Put a series' name at the end of its line
-  (`x y plotpoint` gives the place, then `placetext`), not in a legend
-  the eye has to travel to.
+- **A line with no name.** Name each series at the end of its line with
+  `serieslabels` (it keeps names that end close together apart), not in
+  a legend the eye has to travel to, and stroke line i in `chartroles i
+  get` so each name is in its line's colour.
 
 Before using a word you have not seen in an example, run `psanim api
 NAME`: a plausible name that does not exist is the commonest first error.

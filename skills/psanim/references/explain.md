@@ -216,6 +216,40 @@ canvasbox 16 vmin inset  zoom [0 120] [0 40] between  [0 100] plotframe      % t
 tbl n 2 div valueat 1 fmtnum (%) strcat showright
 ```
 
+**Name a line at its end, not in a legend.** `serieslabels` takes the
+lines (what `plotline` or `seriesline` takes) and their names, and
+writes each name just right of its line's end, in its line's colour:
+line i is in `chartroles i get`, so stroke it in that. Where lines end
+close together the names are moved apart, in order, as little as they
+need, with a short leader to the end that was left. Inset the frame on
+the right to leave room for them. A `tracer` is a dot riding one line at
+a data x, read straight between the points, with its value beside it
+and a drop to the axis; tween x to move it. `pts x lineat` is the same
+reading as a number.
+
+```postscript
+/a [ 12 18 25 31 40 47 52 ] def  /b [ 30 33 31 38 42 45 51 ] def  /c [ 20 15 22 19 26 24 29 ] def
+/lines [ a b c ] def
+ground
+[ 60 50 440 260 ] [2017 2023] [0 60] plotframe
+<< /XTicks 6 /Size 12 >> plotaxes
+/u 0.3 2.6 /cubic-inout tween def
+0 1 2 { /i exch def chartroles i get ink 2.5 setlinewidth
+  lines i get seriesline 0 u trimpath stroke } for
+lines [ (north) (south) (east) ] << /Draw u /Size 15 >> serieslabels
+a 2.8 3.6 /cubic-inout tween 2023 2020 between
+  << /XDecimals 0 /Suffix ( units) /Size 13 /Draw 2.6 3 ramp >> tracer
+```
+
+`/Draw u` is the number given to `trimpath`: each name fades in as its
+line completes. `/Ride true` makes the names ride the drawn ends
+instead; where two lines cross while drawn, their names trade places
+there (names slide only while the ends keep their order). To draw several lines up to the same year, clip them at that
+year's `plotpoint` x and pass `/X year` instead of `/Draw` (the gallery's
+`gallery/catching-up/catching-up.ps` does this). With
+`/XDecimals` the tracer writes x too (a year) and reads the line at x as
+written, so the pair it shows is a true reading while the dot glides.
+
 Bar labels show the true value, fading in; `/Count true` makes them
 count up with the bar. `/Accent [i]` mutes every bar but those.
 

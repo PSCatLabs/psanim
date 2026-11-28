@@ -18,7 +18,7 @@
   /times (\264) /div (\270) /dot (\327) /infinity (\245) /degree (\260)
   /arrow (\256) /larrow (\254) /uparrow (\255) /downarrow (\257) /implies (\336)
   /sum (\345) /product (\325) /sqrt (\326) /integral (\362) /partial (\266)
-  /in (\316) /bullet (\267)
+  /in (\316) /bullet (\267) /minus (\055)
   /alpha (a) /beta (b) /gamma (g) /delta (d) /epsilon (e) /theta (q) /lambda (l)
   /mu (m) /pi (p) /rho (r) /sigma (s) /tau (t) /phi (f) /omega (w)
   /Delta (D) /Sigma (S) /Pi (P) /Omega (W)
@@ -494,29 +494,43 @@ end
 %   [/it (r)]         italic, as variables are set
 %   [/sup x] [/sub x] raised or lowered and smaller; x is (text) or /name
 %   [/frac a b]       a over b; each is (text) or /name
+%   [/as /key run]    run, tagged: draws as run; `morphruns` matches it by key
+%   [ run run ... ]   a group: a run list set as one term
 % e.g.  [ (Area = ) /pi [/it (r)] [/sup (2)] ]
 /.runbase {              % x -> draws (text) or /name at the current point
   dup type /nametype eq { sym } { show } ifelse
 } bind def
 /.runbasew { dup type /nametype eq { symwidth } { stringwidth pop } ifelse } bind def
+% run .rungroup? -> bool     an array that is not [/it ..] [/sup ..] [/sub ..] [/frac ..] [/as ..]
+/.rungroup? {
+  dup length 0 eq { pop true } {
+    0 get dup type /nametype eq {
+      dup /it eq 1 index /sup eq or 1 index /sub eq or 1 index /frac eq or exch /as eq or not
+    } { pop true } ifelse
+  } ifelse
+} bind def
 /.runw {                 % run -> width
   dup type /arraytype ne { .runbasew } {
+  dup .rungroup? { .runsw } {
     4 dict begin
       /rn-r exch def /rn-k rn-r 0 get def
+      rn-k /as eq { rn-r 2 get .runw } {
       rn-k /it eq { currentfont /Times-Italic fontsize face rn-r 1 get stringwidth pop exch setfont } {
       rn-k /frac eq {
         rn-r 1 get .runbasew rn-r 2 get .runbasew max 0.62 mul fontsize 0.24 mul add
       } {
         rn-r 1 get .runbasew 0.62 mul
-      } ifelse } ifelse
+      } ifelse } ifelse } ifelse
     end
-  } ifelse
+  } ifelse } ifelse
 } bind def
 /.rundraw {              % run -     at the current point; advances it
   dup type /arraytype ne { .runbase } {
+  dup .rungroup? { .runsdraw } {
     8 dict begin
       /rn-r exch def /rn-k rn-r 0 get def /rn-f currentfont def /rn-s fontsize def
       currentpoint /rn-y exch def /rn-x exch def
+      rn-k /as eq { rn-r 2 get .rundraw } {
       rn-k /it eq { /Times-Italic rn-s face rn-r 1 get show rn-f setfont } {
       rn-k /frac eq {
         /rn-w rn-r .runw def
@@ -532,18 +546,57 @@ end
         0 rn-k /sup eq { rn-s 0.40 mul } { rn-s -0.16 mul } ifelse rmoveto
         rn-r 1 get .runbase
         rn-f setfont currentpoint pop rn-y moveto
-      } ifelse } ifelse
+      } ifelse } ifelse } ifelse
     end
-  } ifelse
+  } ifelse } ifelse
 } bind def
 % runs runwidth -> w
-/runwidth { 0 exch { .runw add } forall } bind def
+% x .runbaseok? -> bool     a string, or the name of a sign in `symbols`
+/.runbaseok? {
+  dup type /stringtype eq { pop true } {
+    dup type /nametype eq { symbols exch known } { pop false } ifelse
+  } ifelse
+} bind def
+% run .runok? -> bool       a run of one of the forms above, all the way down
+/.runok? {
+  dup type /arraytype ne { .runbaseok? } {
+    dup .rungroup? { .runsok? } {
+      dup 0 get
+      dup /as eq { pop dup length 3 ge { 2 get .runok? } { pop false } ifelse } {
+      dup /it eq { pop dup length 2 ge { 1 get type /stringtype eq } { pop false } ifelse } {
+      /frac eq
+        { dup length 3 ge { dup 1 get .runbaseok? exch 2 get .runbaseok? and } { pop false } ifelse }
+        { dup length 2 ge { 1 get .runbaseok? } { pop false } ifelse } ifelse
+      } ifelse } ifelse
+    } ifelse
+  } ifelse
+} bind def
+% runs .runsok? -> bool
+/.runsok? {
+  dup type /arraytype eq { true exch { .runok? and } forall } { pop false } ifelse
+} bind def
+% The public words check their operands before opening a dictionary, so an
+% error leaves the dictionary stack as it was and the operands on the stack.
+% runs i .runiok? -> runs i bool
+/.runiok? {
+  2 copy exch dup .runsok? {
+    length 1 index type /integertype eq { 1 index gt exch 0 ge and } { pop pop false } ifelse
+  } { pop pop false } ifelse
+} bind def
+/.runsw { 0 exch { .runw add } forall } bind def
+/.runsdraw { { .rundraw } forall } bind def
+/runwidth { dup .runsok? not { /runwidth errordict /typecheck get exec } if .runsw } bind def
 % runs showruns -          show the whole line at the current point
-/showruns { { .rundraw } forall } bind def
+/showruns {
+  dup .runsok? not { /showruns errordict /typecheck get exec } if
+  currentpoint pop pop .runsdraw
+} bind def
 % runs i showrun -         show only run i, at the place it has in the line
 %                          that starts at the current point: bring an
 %                          equation in term by term, each with its own motion
 /showrun {
+  .runiok? not { /showrun errordict /rangecheck get exec } if
+  currentpoint pop pop
   4 dict begin
     /sr-i exch def /sr-r exch def
     currentpoint /sr-y exch def /sr-x exch def
@@ -554,6 +607,8 @@ end
 % runs i runbox -> box     the box of run i in the line that starts at the
 %                          current point, for a marker, a ring or a note
 /runbox {
+  .runiok? not { /runbox errordict /rangecheck get exec } if
+  currentpoint pop pop
   4 dict begin
     /sr-i exch def /sr-r exch def
     currentpoint /sr-y exch def /sr-x exch def
@@ -561,6 +616,194 @@ end
       sr-y fontsize 0.22 mul sub
       sr-r sr-i get .runw
       fontsize 0.98 mul ]
+  end
+} bind def
+
+% --- one equation becoming the next ---------------------------------------------------
+% a b .runeq -> bool     two runs are the same term ([/it (x)] equals [/it (x)])
+/.runeq {
+  2 copy type exch type eq not { pop pop false } {
+    dup type /arraytype eq {
+      2 copy length exch length eq {
+        4 dict begin
+          /re-b exch def /re-a exch def /re-ok true def
+          0 1 re-a length 1 sub {
+            /re-i exch def
+            re-ok { re-a re-i get re-b re-i get .runeq not { /re-ok false def } if } if
+          } for
+          re-ok
+        end
+      } { pop pop false } ifelse
+    } { eq } ifelse
+  } ifelse
+} bind def
+% run .runkey -> key or null
+/.runkey {
+  dup type /arraytype eq {
+    dup length 3 eq { dup 0 get /as eq } { false } ifelse { 1 get } { pop null } ifelse
+  } { pop null } ifelse
+} bind def
+% The rest run inside morphruns's dictionary (mr-al mr-cx mr-cy mr-u ...).
+% runs .mrstart -> x     where the line starts, given the alignment
+/.mrstart {
+  mr-al /left eq mr-al /l eq or { pop mr-cx } {
+  mr-al /center eq mr-al /c eq or { runwidth 2 div mr-cx exch sub } {
+  mr-al /right eq mr-al /r eq or { runwidth mr-cx exch sub } {
+    /mr-pr exch def /mr-px 0 def /mr-pf false def
+    mr-pr {
+      /mr-t exch def
+      mr-pf not {
+        mr-t .runkey mr-al eq
+          { /mr-pf true def /mr-px mr-px mr-t .runw 2 div add def }
+          { /mr-px mr-px mr-t .runw add def } ifelse
+      } if
+    } forall
+    mr-cx mr-px sub
+  } ifelse } ifelse } ifelse
+} bind def
+% runs .mrshow -     the line as showruns sets it, aligned
+/.mrshow { dup .mrstart mr-cy moveto showruns } bind def
+% runs .mrlay -> [ [run x w key] ... ]
+/.mrlay {
+  /mr-r exch def
+  /mr-x mr-r .mrstart def
+  [ mr-r {
+      /mr-t exch def /mr-w mr-t .runw def
+      [ mr-t mr-x mr-w mr-t .runkey ]
+      /mr-x mr-x mr-w add def
+    } forall ]
+} bind def
+% run x y alpha .mrterm -
+/.mrterm {
+  dup 0.002 gt {
+    gsave dup 1 lt { currentalpha mul setalpha } { pop } ifelse
+    moveto .rundraw grestore
+  } { pop pop pop pop } ifelse
+} bind def
+% entryA entryB .mrsame -> bool     may these two entries be the same term?
+/.mrsame {
+  /mr-eb exch def /mr-ea exch def
+  mr-eb 3 get null eq
+    { mr-ea 3 get null eq { mr-ea 0 get mr-eb 0 get .runeq } { false } ifelse }
+    { mr-ea 3 get mr-eb 3 get eq } ifelse
+} bind def
+% lines k u: the in-between of line k and line k+1
+/.mrtween {
+  /mr-A mr-L mr-k get .mrlay def
+  /mr-B mr-L mr-k 1 add get .mrlay def
+  /mr-mA [ mr-A { pop -1 } forall ] def
+  /mr-mB [ mr-B { pop -1 } forall ] def
+  % each term of B takes the first term of A not yet taken that has its tag,
+  % or, untagged, the same content: the k-th x becomes the k-th x
+  0 1 mr-B length 1 sub {
+    /mr-j exch def /mr-i -1 def
+    0 1 mr-A length 1 sub {
+      /mr-ii exch def
+      mr-i 0 lt { mr-mA mr-ii get 0 lt {
+        mr-A mr-ii get mr-B mr-j get .mrsame { /mr-i mr-ii def } if
+      } if } if
+    } for
+    mr-i 0 ge { mr-mA mr-i mr-j put mr-mB mr-j mr-i put } if
+  } for
+  /mr-em fontsize def
+  /mr-out mr-u 0.6 div 0 1 clamp def
+  /mr-in mr-u 0.4 sub 0.6 div 0 1 clamp def
+  % terms of A: moving (and changing, if a tag joins different content) or leaving
+  0 1 mr-A length 1 sub {
+    /mr-i exch def /mr-a mr-A mr-i get def /mr-j mr-mA mr-i get def
+    mr-j 0 ge {
+      /mr-b mr-B mr-j get def
+      /mr-dx mr-b 1 get mr-b 2 get 2 div add  mr-a 1 get mr-a 2 get 2 div add  sub def
+      /mr-dy mr-dx 0 lt { -1 } { 1 } ifelse
+             mr-dx abs 0.25 mul mr-em 0.6 mul min mul mr-arc mul
+             mr-u 180 mul sin mul def
+      mr-a 0 get mr-b 0 get .runeq {
+        mr-a 0 get mr-a 1 get mr-dx mr-u mul add mr-cy mr-dy add 1 .mrterm
+      } {
+        mr-a 0 get mr-a 1 get mr-dx mr-u mul add mr-cy mr-dy add 1 mr-u sub .mrterm
+        mr-b 0 get mr-b 1 get mr-dx 1 mr-u sub mul sub mr-cy mr-dy add mr-u .mrterm
+      } ifelse
+    } {
+      mr-a 0 get mr-a 1 get mr-cy mr-rise mr-em mul mr-out mul add 1 mr-out sub .mrterm
+    } ifelse
+  } for
+  % terms of B that are new: arriving
+  0 1 mr-B length 1 sub {
+    /mr-j exch def
+    mr-mB mr-j get 0 lt {
+      /mr-b mr-B mr-j get def
+      mr-b 0 get mr-b 1 get mr-cy mr-rise mr-em mul 1 mr-in sub mul sub mr-in .mrterm
+    } if
+  } for
+} bind def
+% [ runs runs ... ] s morphruns -
+% [ runs runs ... ] s /align morphruns -
+% [ runs runs ... ] s opts morphruns -
+%   One equation becoming the next. s runs from 0 (the first line, exactly as
+%   showruns sets it) to n-1 (the last); between k and k+1, terms of line k
+%   slide to their places in line k+1, terms with no partner fade away, new
+%   ones fade in. A term is matched to the first unmatched equal term, so the
+%   second x of one line is the second x of the next; [/as /key run] tags a
+%   term, and terms with the same tag are matched whatever they show (the
+%   glyphs cross-fade as they move). opts: /Align /left /center /right (or
+%   /l /c /r), or a tag that every line has (that term's centre stays on the
+%   current point); /Arc 1 (0: move in
+%   straight lines); /Rise 0.25 (ems a term drifts as it fades). The current
+%   point is kept.
+% lines s opts|null .mrerr -> errorname|null     what is wrong with the operands
+%   (the dictionary is closed before it returns: nothing in it can fail)
+/.mrerr {
+  12 dict begin
+    /me-o exch def /me-s exch def /me-L exch def
+    /me-e null def
+    me-s type dup /integertype ne exch /realtype ne and { /me-e /typecheck def } if
+    me-L type /arraytype ne { /me-e /typecheck def } {
+      me-L { .runsok? not { /me-e /typecheck def } if } forall
+    } ifelse
+    /me-al /left def
+    me-o type /nametype eq { /me-al me-o def } if
+    me-o type /dicttype eq {
+      me-o /Align known { /me-al me-o /Align get def } if
+      [ /Arc /Rise ] {
+        dup me-o exch known {
+          me-o exch get type dup /integertype ne exch /realtype ne and { /me-e /typecheck def } if
+        } { pop } ifelse
+      } forall
+    } if
+    me-o type dup /nulltype ne 1 index /nametype ne and exch /dicttype ne and { /me-e /typecheck def } if
+    me-e null eq me-al type /nametype ne and { /me-e /typecheck def } if
+    me-e null eq {
+      false [ /left /center /right /l /c /r ] { me-al eq or } forall not {
+        % a tag: every line must have it
+        me-L { false exch { .runkey me-al eq or } forall not { /me-e /rangecheck def } if } forall
+      } if
+    } if
+    me-e
+  end
+} bind def
+/morphruns {
+  dup type /nametype eq 1 index type /dicttype eq or
+    { 3 copy .mrerr } { 2 copy null .mrerr } ifelse
+  dup null eq { pop } { /morphruns exch errordict exch get exec } ifelse
+  currentpoint pop pop
+  40 dict begin
+    dup type /nametype eq { 1 dict dup /Align 4 -1 roll put } if
+    dup type /dicttype eq { /mr-o exch def } { /mr-o 0 dict def } ifelse
+    /mr-s exch def /mr-L exch def
+    /mr-al mr-o /Align /left .opt def
+    /mr-arc mr-o /Arc 1 .opt def
+    /mr-rise mr-o /Rise 0.25 .opt def
+    currentpoint /mr-cy exch def /mr-cx exch def
+    /mr-n mr-L length def
+    mr-n 2 lt { mr-n 1 eq { mr-L 0 get .mrshow } if } {
+      /mr-k mr-s floor cvi 0 max mr-n 2 sub min def
+      /mr-u mr-s mr-k sub 0 1 clamp def
+      mr-u 0 le { mr-L mr-k get .mrshow } {
+      mr-u 1 ge { mr-L mr-k 1 add get .mrshow } {
+        .mrtween
+      } ifelse } ifelse
+    } ifelse
+    mr-cx mr-cy moveto
   end
 } bind def
 

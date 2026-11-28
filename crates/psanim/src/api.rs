@@ -1293,7 +1293,7 @@ pub const API: &[ApiEntry] = &[
         "pktype",
         "sym",
         "/name  sym  -",
-        "Show a mathematical sign or Greek letter at the current point at the current font's size, keeping the font: /neq /le /ge /approx /pm /times /div /dot /infinity /degree /arrow /larrow /uparrow /downarrow /implies /sum /product /sqrt /integral /in /bullet, and /alpha /beta /gamma /delta /epsilon /theta /lambda /mu /pi /rho /sigma /tau /phi /omega /Delta /Sigma /Pi /Omega. The text fonts have no such characters: a non-ASCII character in a string shows as a blank. `(kiwi ) show /neq sym ( plum) show`.",
+        "Show a mathematical sign or Greek letter at the current point at the current font's size, keeping the font: /neq /le /ge /approx /pm /times /div /dot /infinity /degree /arrow /larrow /uparrow /downarrow /implies /sum /product /sqrt /integral /in /bullet /minus (a true minus sign, wider than the hyphen), and /alpha /beta /gamma /delta /epsilon /theta /lambda /mu /pi /rho /sigma /tau /phi /omega /Delta /Sigma /Pi /Omega. The text fonts have no such characters: a non-ASCII character in a string shows as a blank. `(kiwi ) show /neq sym ( plum) show`.",
     ),
     e(
         "pktype",
@@ -1311,7 +1311,7 @@ pub const API: &[ApiEntry] = &[
         "pktype",
         "showruns",
         "runs  showruns  -",
-        "Show a line of mixed type at the current point, in the current font and colour. A run list is an array of (text), /name (a sign from `symbols`: /pi /times ...), [/it (r)] (italic, as variables are set), [/sup x], [/sub x] and [/frac a b]: `[ (Area = ) /pi [/it (r)] [/sup (2)] ] showruns`.",
+        "Show a line of mixed type at the current point, in the current font and colour. A run list is an array of (text), /name (a sign from `symbols`: /pi /times ...), [/it (r)] (italic, as variables are set), [/sup x], [/sub x] and [/frac a b]: `[ (Area = ) /pi [/it (r)] [/sup (2)] ] showruns`. [/as /key run] tags a term for `morphruns` and draws as the run; an array of runs, `[ /minus (5) ]`, is a group set as one term.",
     ),
     e(
         "pktype",
@@ -1324,6 +1324,12 @@ pub const API: &[ApiEntry] = &[
         "runwidth",
         "runs  runwidth  w",
         "The width of a run list in the current font, for centring it.",
+    ),
+    e(
+        "pktype",
+        "morphruns",
+        "[ runs runs ... ] s  morphruns  -    or  [ runs ... ] s /align|opts  morphruns  -",
+        "One equation becoming the next, at the current point. s goes from 0 (the first line, exactly as `showruns` sets it) to n-1 (the last): between k and k+1, terms of line k slide to their places in line k+1, terms with no partner fade away and new ones fade in. A term matches the first unmatched equal term of the other line, so the second x stays the second x; tag terms `[/as /key run]` to pair them otherwise, or to pair terms that look different (`[/as /n (+ 6)]` becoming `[/as /n (- 6)]` slides and cross-fades). No clock: make s with `keyframes`, holding each line, `[1 0  2.5 1 /cubic-inout  5 1  6.5 2 /cubic-inout] keyframes`. opts: /Align /left /center /right (or /l /c /r), or a tag every line has, whose centre then stays on the current point (an aligned derivation); /Arc 1 (terms crossing lift apart; 0 for straight); /Rise 0.25 (ems a leaving or arriving term drifts). Keeps the current point.",
     ),
     e(
         "pktype",
@@ -1690,6 +1696,24 @@ pub const API: &[ApiEntry] = &[
         "plotmark",
         "x y opts  plotmark  -",
         "Mark a data point: a dot, dashed drop lines to both axes, and a label on a leader line. opts: << /Label (23 people) /Side /ne /Draw u /Drop true /Role /accent /Radius r /Size s >> (/Side is where the label sits: /n /s /e /w /ne /nw /se /sw; /Size defaults to 3 vmin). The one-call form of the annotation every data story needs.",
+    ),
+    e(
+        "pkchart",
+        "serieslabels",
+        "[ pts ... ] [ (name) ... ] opts  serieslabels  -",
+        "Name each line at its end, in its colour, so no legend is needed: the names are moved apart where lines end close together (in order, as little as possible, with a short leader when one is moved) and kept within the frame's height; when more names end together than fit in it, the gap between them shrinks evenly so they stay inside (and overlap). Names slide as the ends move, as long as the ends keep their order; where two ends cross, their names trade places. Each pts is what `plotline` takes ([ [x y] ... ]) or `seriesline` takes ([ y ... ]). Line i is in role i of /Roles: stroke it with `chartroles i get ink`. opts: << /Roles chartroles /Draw u (or [ u ... ], one per line: how much is drawn, the number given to `0 u trimpath`) /X x (instead: the lines are drawn up to data x, e.g. clipped there) /Ride false (true: each name rides its line's drawn end; otherwise it fades in at the end as the line completes) /Size 3 vmin /Face /title /Gap (between baselines, 1.2 x /Size) /Pad (from the line's end, 0.7 x /Size) /Leader true >>. An empty series is skipped. Names are written right of the frame's box: inset the box to leave room for them.",
+    ),
+    e(
+        "pkchart",
+        "tracer",
+        "pts x opts  tracer  -",
+        "A point riding a line at data x, read between the data points: a dot on the line, a dashed drop to the x axis and its value beside it (to the left near the frame's right edge). Tween x to move it. opts: << /Along false (true: x is the drawn fraction, as for `0 u trimpath`, so the tracer leads the pen) /Role /accent /Radius 0.9 vmin /Size 3 vmin /Draw u (brought in, 0..1) /Decimals 0 /Prefix () /Suffix () (the value, as `fmtnum` writes it) /XDecimals n (write x before the value, as `fmtfixed` does: a year; the value is then the line's at x as written, so the pair shown is a true reading while the dot glides) /Drop true /Readout true /Plate true (a backing in /bg under the readout, so it reads over lines) >>. An empty series draws nothing.",
+    ),
+    e(
+        "pkchart",
+        "lineat",
+        "pts x  lineat  y",
+        "The line through the points read at data x: straight between data points, the end value beyond either end. pts as for `plotline` or `seriesline`; the points must be in increasing x (equal x is a step), and no points, or x going back, is a rangecheck. For a readout of your own: `pts year lineat 1 fmtnum show`.",
     ),
     e(
         "pkchart",
