@@ -385,7 +385,7 @@ end
 % --- libraries ------------------------------------------------------------------
 % /pkmotion use      load one of psanim's libraries, once. They are part of
 %                    the program, not files: `psanim api --libs` lists them.
-/.pk << /used 16 dict /cur 32 array /depth 0 /beats 1 dict /storylen 0 >> def
+/.pk << /used 16 dict /cur 32 array /depth 0 /beats 1 dict /beatx 1 dict /storylen 0 >> def
 .pk /cur get 0 0 put
 /use {
   dup type /stringtype eq { cvn } if
@@ -460,15 +460,34 @@ end
 
 % --- storyboards: named stretches of the film ------------------------------------------
 % [ /name seconds /name seconds ... ] storyboard     name the film's beats.
+% [ /a 4 [1 /dissolve] /b 3 ] storyboard              ... with a transition between
+%   two: it overlaps them as in a reel (b starts 1 s before a ends; the film is 6 s).
+% .pk /beatx holds, for each beat with a transition, << /in [d /kind] /out [d /kind] >>.
 /storyboard {
+  dup .storycheck                    % checked before a dictionary is opened
   8 dict begin
     /sb-a exch def /sb-t 0 def
     sb-a length 2 idiv 1 add dict /sb-d exch def
-    0 2 sb-a length 2 sub { /sb-i exch def
-      sb-d sb-a sb-i get [ sb-t  sb-a sb-i 1 add get sb-t add ] put
-      /sb-t sb-t sb-a sb-i 1 add get add def
-    } for
-    .pk /beats sb-d put  .pk /storylen sb-t put
+    4 dict /sb-x exch def  /sb-n null def  /sb-l null def  /sb-p null def
+    sb-a {
+      dup type /arraytype eq { /sb-p exch def } {         % [d /kind]: into the next beat
+      dup type /nametype eq { /sb-n exch def } {          % /name ...
+        /sb-s exch def                                     % ... seconds
+        sb-p null ne {
+          /sb-t sb-t sb-p 0 get sub def                    % it starts d earlier
+          sb-l /out sb-n /in 2 {
+            /sb-k exch def /sb-b exch def
+            sb-x sb-b known not { sb-x sb-b 2 dict put } if
+            sb-x sb-b get sb-k sb-p put
+          } repeat
+          /sb-p null def
+        } if
+        sb-d sb-n [ sb-t  sb-s sb-t add ] put
+        /sb-t sb-t sb-s add def
+        /sb-l sb-n def
+      } ifelse } ifelse
+    } forall
+    .pk /beats sb-d put  .pk /storylen sb-t put  .pk /beatx sb-x put
   end
 } bind def
 /storylength { .pk /storylen get } bind def
@@ -478,11 +497,51 @@ end
 } bind def
 /beat     { .beatget 0 get } bind def                    % /name -> start time
 /beatspan { .beatget aload pop } bind def                % /name -> start end
+% /name -> dict|null    the beat's transitions, if it has any
+/.beatx   { .pk /beatx null .dget dup null eq { exch pop } { exch 2 copy known { get } { pop pop null } ifelse } ifelse } bind def
 % /name proc inbeat      run proc during the beat, on its own clock,
 %                        whatever time scopes are open.
-/inbeat   { exch beatspan 3 -1 roll [ 4 1 roll /during cvx ] cvx globally } bind def
+/inbeat {
+  1 index .beatx null eq
+    { exch beatspan 3 -1 roll [ 4 1 roll /during cvx ] cvx globally }
+    { true .beatplay } ifelse
+} bind def
 % /name proc frombeat    run proc from the beat's start to the end of the film.
-/frombeat { exch beat exch [ 3 1 roll /after cvx ] cvx globally } bind def
+%                        It comes in with the transition into the beat, and is
+%                        never taken away by the one out of it.
+/frombeat {
+  1 index .beatx dup null eq { pop false } { /in known } ifelse
+    { false .beatplay }
+    { exch beat exch [ 3 1 roll /after cvx ] cvx globally } ifelse
+} bind def
+% /name proc inbeat? .beatplay     a beat with a transition: in the transition's
+% time, its body is one side of it (A with nothing for B, or nothing for A with
+% B) on the clock it always has, so a transition that draws A and then B
+% (all of `transitions` do) is split between the two beats' `inbeat` calls.
+/.beatplay {
+  12 dict begin
+    /bp-in exch def /bp-p exch def /bp-n exch def
+    bp-n beatspan /bp-e exch def /bp-s exch def
+    /bp-x bp-n .beatx def
+    /bp-t globaltime def
+    % the body as plain `inbeat` or `frombeat` runs it
+    bp-in { [ bp-s bp-e /bp-p load /during cvx ] } { [ bp-s /bp-p load /after cvx ] } ifelse cvx /bp-c exch def
+    /bp-r null def
+    bp-x /in known {
+      bp-x /in get aload pop /bp-k exch def /bp-d exch def
+      bp-t bp-s sub bp-d div /bp-u exch def
+      bp-u 0 ge bp-u 1 lt and { /bp-r [ {} /bp-c load bp-u bp-k ] def } if
+    } if
+    bp-r null eq bp-in and bp-x /out known and {
+      bp-x /out get aload pop /bp-k exch def /bp-d exch def
+      bp-t bp-e bp-d sub sub bp-d div /bp-u exch def
+      bp-u 0 ge bp-u 1 lt and { /bp-r [ /bp-c load {} bp-u bp-k ] def } if
+    } if
+    bp-r null eq { /bp-c load false } { bp-r aload pop true } ifelse
+  end                                % the body runs with no dictionary open
+  { [ 5 1 roll transitions exch get /exec cvx ] cvx } if
+  globally
+} bind def
 
 % --- scripts: one thing after another -------------------------------------------------
 % A script keeps a cursor: the time the next step starts. `then` runs its
@@ -620,7 +679,7 @@ end
     dup /.isinst true put
     dup /.comps 8 dict put            % the components it defines are its own
     dup /.pls 4 dict put              % and so are its playlists
-    dup /.pk << /used .pk /used get /cur 32 array /depth 0 /beats 1 dict /storylen 0 /bpm 120 >>
+    dup /.pk << /used .pk /used get /cur 32 array /depth 0 /beats 1 dict /beatx 1 dict /storylen 0 /bpm 120 >>
     dup /cur get 0 0 put put
   pop
   .compst /n get 16 ge { (components are set up more than 16 deep: does one load itself?) .comperror } if

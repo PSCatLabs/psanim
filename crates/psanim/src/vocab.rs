@@ -471,6 +471,88 @@ fn straighten(poly: &pathmath::Poly, u: f64, anchor: f64) -> Vec<(f64, f64)> {
     out
 }
 
+/// A storyboard is `/name seconds` pairs, with `[seconds /transition]`
+/// between two of them. A transition overlaps the beats beside it, as in a
+/// reel, so it is no longer than either, and a beat is no shorter than the
+/// transitions into and out of it together (only two beats are ever on
+/// screen at once).
+pub(crate) fn check_storyboard(
+    items: &[Value],
+    is_transition: &dyn Fn(&str) -> bool,
+) -> Result<(), String> {
+    const SHAPE: &str =
+        "storyboard: the entries are /name seconds, with [seconds /transition] between two beats";
+    let mut seen: Vec<&str> = Vec::new();
+    // The beat before (name, seconds, the transition into it), and a
+    // transition waiting for the beat after it.
+    let mut prev: Option<(&str, f64, f64)> = None;
+    let mut pending: Option<f64> = None;
+    let mut k = 0;
+    while k < items.len() {
+        match &items[k] {
+            Value::Name(n) => {
+                let Some(secs) = items
+                    .get(k + 1)
+                    .and_then(|v| v.as_f64())
+                    .filter(|s| *s >= 0.0)
+                else {
+                    return Err(format!(
+                        "storyboard: /{n} needs its length after it, in seconds (0 or more)"
+                    ));
+                };
+                if seen.contains(&n.as_str()) {
+                    return Err(format!("storyboard: there are two beats named /{n}"));
+                }
+                seen.push(n);
+                let lead = pending.take().unwrap_or(0.0);
+                if let Some((p, psecs, pin)) = prev
+                    && lead > 0.0
+                {
+                    if lead > psecs || lead > secs {
+                        return Err(format!(
+                            "storyboard: the transition between /{p} and /{n} is longer than one of them"
+                        ));
+                    }
+                    if pin + lead > psecs {
+                        return Err(format!(
+                            "storyboard: /{p} is shorter than the transitions into and out of it together"
+                        ));
+                    }
+                }
+                prev = Some((n, secs, lead));
+                k += 2;
+            }
+            Value::Array(a) => {
+                let [d, Value::Name(t)] = a.as_slice() else {
+                    return Err(SHAPE.into());
+                };
+                let Some(d) = d.as_f64().filter(|d| *d > 0.0) else {
+                    return Err(format!(
+                        "storyboard: a transition [seconds /{t}] lasts more than 0 seconds"
+                    ));
+                };
+                if !is_transition(t) {
+                    return Err(format!(
+                        "storyboard: /{t} is not a transition (a key of `transitions`; define your own before the storyboard)"
+                    ));
+                }
+                if prev.is_none() || pending.is_some() {
+                    return Err(format!(
+                        "storyboard: the transition [{d} /{t}] must come between two beats"
+                    ));
+                }
+                pending = Some(d);
+                k += 1;
+            }
+            _ => return Err(SHAPE.into()),
+        }
+    }
+    if pending.is_some() {
+        return Err("storyboard: the last entry is a transition with no beat after it".into());
+    }
+    Ok(())
+}
+
 pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
     // --- libraries ----------------------------------------------------------
     reg(interp, ctx, ".libsource", |i, ctx| {
@@ -514,6 +596,29 @@ pub(crate) fn install(interp: &mut Interp, ctx: &Shared) {
                 "the storyboard has no beat /{name}. Declare beats with [ /name seconds ... ] storyboard, before `animation`."
             ),
         )
+    });
+
+    // array .storycheck -    the checks `storyboard` makes before it opens a
+    // dictionary, so a malformed storyboard leaves none open.
+    reg(interp, ctx, ".storycheck", |i, ctx| {
+        let Value::Array(items) = i.pop_value()? else {
+            return fail(
+                ctx,
+                PsError::Typecheck,
+                "storyboard takes an array: [ /name seconds [seconds /transition] /name seconds ... ]",
+            );
+        };
+        let known: Vec<String> = match i.lookup("transitions") {
+            Some(Value::Dict(entries)) => entries.into_iter().map(|(k, _)| k).collect(),
+            _ => crate::ops::TRANSITIONS
+                .iter()
+                .map(|t| t.to_string())
+                .collect(),
+        };
+        match check_storyboard(&items, &|n| known.iter().any(|k| k == n)) {
+            Ok(()) => Ok(()),
+            Err(msg) => fail(ctx, PsError::Rangecheck, msg),
+        }
     });
 
     // --- viewports ----------------------------------------------------------

@@ -650,7 +650,7 @@ pub const API: &[ApiEntry] = &[
         "reel",
         "transitions",
         "-  transitions  dict",
-        "The dictionary of transitions. To define your own, put a procedure there: `transitions /t-shutter { ... } put`, then use `[dur /t-shutter]` in a reel. Name it with a `t-` prefix, or define it before the reel is measured with reelduration: otherwise reelduration counts the entry as a clip, and loading the movie fails, naming it. It is called with `procA procB u`: draw the frame that is u (0 to 1, linear) of the way from A to B. A and B are ready-made procedures that draw each clip with its own clock still running; call them inside gsave/grestore with whatever clip, transform or layer the transition needs.",
+        "The dictionary of transitions. To define your own, put a procedure there: `transitions /t-shutter { ... } put`, then use `[dur /t-shutter]` in a reel (or between a storyboard's beats, defined before the storyboard). Name it with a `t-` prefix, or define it before the reel is measured with reelduration: otherwise reelduration counts the entry as a clip, and loading the movie fails, naming it. It is called with `procA procB u`: draw the frame that is u (0 to 1, linear) of the way from A to B. A and B are ready-made procedures that draw each clip with its own clock still running; call them inside gsave/grestore with whatever clip, transform or layer the transition needs. Between storyboard beats each beat's `inbeat` draws its own side (A with an empty B, then an empty A with B), so a transition used there must draw A's part and then B's part, neither depending on the other, as every built-in one does.",
     ),
     e(
         "input",
@@ -782,14 +782,14 @@ pub const API: &[ApiEntry] = &[
     e(
         "story",
         "storyboard",
-        "[ /name seconds /name seconds ... ]  storyboard  -",
-        "Name the stretches of the film, in order. Call it before `animation` and use `storylength` for /Duration; then place things by beat name instead of by second, so retiming the film is editing one list.",
+        "[ /name seconds [seconds /transition] /name seconds ... ]  storyboard  -",
+        "Name the stretches of the film, in order. Call it before `animation` and use `storylength` for /Duration; then place things by beat name instead of by second, so retiming the film is editing one list. Between two beats the picture cuts, unless a transition is written between them: `[ /intro 4 [0.6 /dissolve] /main 8 ]`, any name in `transitions`, defined before the storyboard. As in a reel it overlaps the two beats: the next beat starts that many seconds before this one ends, so the film is shorter by it, and each beat keeps its full length and its clock. Each beat with a transition must paint its own ground (`ground` or `backdrop` first), and its `inbeat` calls come in the storyboard's order. A beat lasts at least the transitions into and out of it together.",
     ),
     e(
         "story",
         "storylength",
         "-  storylength  seconds",
-        "The total length of the storyboard.",
+        "The total length of the storyboard: the beats added up, less the transitions between them.",
     ),
     e(
         "story",
@@ -801,19 +801,19 @@ pub const API: &[ApiEntry] = &[
         "story",
         "beatspan",
         "/name  beatspan  a b",
-        "The start and end of the named beat, on the movie's clock: operands for `during` at the top level of a scene.",
+        "The start and end of the named beat, on the movie's clock: operands for `during` at the top level of a scene. With a transition the spans of two beats overlap by its length.",
     ),
     e(
         "story",
         "inbeat",
         "/name proc  inbeat  -",
-        "Run proc during the named beat, with the clock starting from 0 at the beat's start and `span` its length, whatever time scopes are open.",
+        "Run proc during the named beat, with the clock starting from 0 at the beat's start and `span` its length, whatever time scopes are open. In a transition into or out of the beat, proc is that side of it: the incoming beat drawn over the outgoing one, both on their own clocks.",
     ),
     e(
         "story",
         "frombeat",
         "/name proc  frombeat  -",
-        "Run proc from the start of the named beat to the end of the film, with the clock starting from 0 there: for something a beat introduces that then stays.",
+        "Run proc from the start of the named beat to the end of the film, with the clock starting from 0 there: for something a beat introduces that then stays. It comes in with the transition into the beat, if there is one, and no later transition takes it away.",
     ),
     e(
         "story",

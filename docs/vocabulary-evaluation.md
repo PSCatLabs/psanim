@@ -98,7 +98,7 @@ column is what was done about it the same day.
 | painting only the new part of a translucent stroke | heron | `revealband` |
 | a stroke scheduler for a persistent canvas (about 60 lines) | heron | **not built**: first item of the [roadmap](roadmap.md) |
 | a camera inside a region under fixed furniture | how-it-works | documented: `lookat` inside `within` |
-| transitions between storyboard beats | birthday, circle-area, how-it-works | **not built**; the blank-frame trap is documented |
+| transitions between storyboard beats | birthday, circle-area, how-it-works | built later: `[seconds /transition]` between two beats of a `storyboard` (how-it-works now uses it) |
 | tracking, cap-height fitting, vertical text | fresh | **not built** |
 | a tracer on a series, unit charts, cross-fading ticks | birthday | **not built** |
 

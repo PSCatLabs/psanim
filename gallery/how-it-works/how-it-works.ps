@@ -1,11 +1,15 @@
 %!PS
-% Poster: 25.5
+% Poster: 24.3
 % How psanim works
 % An architecture explainer of psanim, written in psanim: one program with a
 % scene procedure, a clock set once per frame, time scopes, frames that fan
 % out across cores, and the stack from program to video.
 
-[ /title 4  /program 10.5  /clock 12.5  /scopes 11.5  /fanout 10.5  /stack 12.5  /summary 8 ] storyboard
+% Each section dissolves into the next: a transition overlaps the two beats
+% beside it, so the film is 6 x 0.6 s shorter than the beats added up.
+[ /title 4  [0.6 /dissolve]  /program 10.5  [0.6 /dissolve]  /clock 12.5  [0.6 /dissolve]
+  /scopes 11.5  [0.6 /dissolve]  /fanout 10.5  [0.6 /dissolve]  /stack 12.5  [0.6 /dissolve]
+  /summary 8 ] storyboard
 << /Size [1280 720] /Duration storylength /FPS 30
    /Title (How psanim works)
    /Description (An animated architecture explainer of psanim itself: a movie is one PostScript program, a frame is a function of its time, time scopes re-base the clock, frames render in any order on every core, and the stack from program to video.)
@@ -349,13 +353,14 @@
 } def
 
 /scene {
-  ground
+  % each section paints its own ground, so the one going out is covered as the
+  % next dissolves in over it; the progress bar is drawn after, over both
+  /title   { ground beat-title } inbeat
+  /program { ground beat-program } inbeat
+  /clock   { ground beat-clock } inbeat
+  /scopes  { ground beat-scopes } inbeat
+  /fanout  { ground beat-fanout } inbeat
+  /stack   { ground beat-stack } inbeat
+  /summary { ground beat-summary } inbeat
   progress-bar
-  /title   { beat-title } inbeat
-  /program { beat-program } inbeat
-  /clock   { beat-clock } inbeat
-  /scopes  { beat-scopes } inbeat
-  /fanout  { beat-fanout } inbeat
-  /stack   { beat-stack } inbeat
-  /summary { beat-summary } inbeat
 } def
